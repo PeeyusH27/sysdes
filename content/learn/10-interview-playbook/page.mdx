@@ -1,0 +1,181 @@
+import { interviewPlan, interviewFramework } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Use the same structure every time: **requirements, numbers, API and data model, high-level design, two deep dives, trade-offs and a summary**, in about 45 minutes. State every choice as "X because Y, at the cost of Z", and when you get stuck, go back to the requirements and the numbers.
+</TLDR>
+
+## Why it matters
+
+Knowing the pieces is half the job. A repeatable structure shows seniority.
+
+Interviewers see many candidates answer the same question, and they score against a rubric: did you clarify scope, quantify it, produce a design that works end to end, go deep where it's risky, and reason about trade-offs? A fixed structure makes sure you hit every row of that rubric even when you're nervous. It also frees your working memory for the actual problem, because you never have to wonder what to do next.
+
+## The 45-minute plan
+
+The time split: **5 minutes** on requirements, **5** on estimation and APIs, **15** on the high-level design, **15** on deep dives, and **5** on trade-offs and wrap-up. Press play to see the phases fill in; the markers are your checkpoints.
+
+<Timeline spec={interviewPlan} />
+
+| By minute | Phase | What should be on the board |
+|---|---|---|
+| 5 | Requirements | 3–5 functional requirements, non-functional ones with numbers, an out-of-scope list |
+| 10 | Estimation + API | Average and peak QPS, storage, read:write ratio; the 3–5 endpoints that matter |
+| 25 | High-level design | Components, labelled arrows, a numbered request flow, the data model |
+| 40 | Deep dives | Two areas in depth, each with its failure modes |
+| 45 | Wrap-up | Trade-offs, the next bottleneck, what you'd do with more time |
+
+If you're behind at a checkpoint, say so and move on: "I'll keep the data model brief so we have time for the deep dives." Managing the clock out loud is itself a senior signal.
+
+## The framework as a checklist
+
+<FlowDiagram spec={interviewFramework} />
+
+<Steps>
+  <Step title="Requirements">
+    Ask who the users are, what they do, and what matters most. Write down **functional** requirements (3–5 features), **non-functional** ones **with numbers** (latency, availability, consistency, scale), and what's **out of scope**. Confirm them before you draw anything.
+  </Step>
+  <Step title="Estimation">
+    Turn users into QPS and bytes: average and peak QPS, the read:write ratio, and storage over the retention period. Then say what the numbers **imply**: "4,000 reads/s and 40 writes/s, so this is read-heavy: caching will matter more than write throughput."
+  </Step>
+  <Step title="API">
+    The 3–5 endpoints that matter, with methods, key parameters and status codes. Mention idempotency keys for writes and cursor pagination for lists.
+  </Step>
+  <Step title="Data model">
+    Tables or keys, and the access pattern that decides the store: "every read is a lookup by `code`, so a key-value table keyed by code".
+  </Step>
+  <Step title="High-level design">
+    Boxes and arrows for the simplest design that meets the requirements. Number the request flow and walk one request through it end to end. Breadth first: everything should work before anything is optimised.
+  </Step>
+  <Step title="Deep dives">
+    Pick the two riskiest areas (or the ones the interviewer steers you to) and go deep: the algorithm, the data structure, the numbers, and **what happens when it fails**.
+  </Step>
+  <Step title="Trade-offs and wrap-up">
+    Name what you chose and what it cost, where the next bottleneck is, and what you'd do with more time. Finish with a 30-second summary of the design.
+  </Step>
+</Steps>
+
+The estimation step is four formulas. Practise them until you can do them out loud with round numbers:
+
+<CodeTabs files={['snippets/back-of-envelope.js']} />
+
+## Frontend variant: RADIO
+
+Frontend system design interviews (an autocomplete, a news feed client, a chat UI) use the same idea with different stages:
+
+| Letter | Stage | What to cover |
+|---|---|---|
+| R | Requirements | Features, devices, offline support, accessibility, performance targets |
+| A | Architecture | Component tree, where state lives, server vs client rendering |
+| D | Data model | Client state shape, normalised entities, what's cached or persisted |
+| I | Interface | APIs between components and with the server: props, events, endpoints, pagination |
+| O | Optimizations | Performance (virtualisation, code splitting), network, accessibility, i18n, security |
+
+Try it on the [typeahead](/questions/typeahead) and [infinite feed](/questions/infinite-feed) questions.
+
+## Practise with a timer
+
+Pick a question and run the clock. The timer prompts each phase and shows a checklist of what should be done by then.
+
+<InterviewTimer />
+
+## What interviewers look for
+
+The same question is asked at every level; what changes is the bar.
+
+| Signal | Mid | Senior | Staff |
+|---|---|---|---|
+| Requirements | Asks some questions | Drives scope, states non-functional requirements with numbers | Reframes the problem, spots hidden requirements |
+| Design | A working design | Clean components, data flow, scaling | Evolution path, organisational and operational concerns |
+| Deep dive | One area | Two areas in depth, with failure modes | Picks the riskiest area and quantifies it |
+| Trade-offs | Names some | Justifies choices, and when to switch | Cost, complexity and team impact |
+
+## Talking through trade-offs
+
+Say what you chose, what you gave up, and when you would choose differently. Interviewers score reasoning, not a perfect answer. Two sentence templates cover almost every decision:
+
+- "I'll use **X** because **Y**. The cost is **Z**. If **W** changes, I'd switch to **V**."
+- "We could do **A** or **B**. A is simpler, B scales further. Given our 4K QPS, A is enough for now."
+
+Filled in with decisions from the case studies:
+
+- "I'll return a **302** because we promised click analytics. The cost is that every click reaches our servers. If analytics stop mattering, I'd switch to a 301 and let the CDN serve it."
+- "We could use **one counter** or **range allocation**. One counter is simpler; ranges remove the hot spot. At 40 writes/s either works, so I'd start with ranges only because it's a few lines more."
+- "I'll put SMS on **separate priority queues** because an OTP can't wait behind a campaign. The cost is more queues and workers to run. If we only ever sent transactional messages, one queue per channel would do."
+
+## Drawing conventions
+
+- **Consistent shapes**: one shape for services, one for data stores, one for queues. Don't invent new ones halfway through.
+- **Label every arrow** with what flows over it (`GET /:code`, "click event", "replication").
+- **Number the request flow** (1, 2, 3…) so you and the interviewer can talk about "step 4" instead of pointing.
+- **Keep assumptions in a corner box**: the numbers and decisions you'll refer back to (4K QPS, 100:1 reads, 7-character codes).
+- Left to right for the request path, and data stores at the bottom or the right, as in the diagrams on this site.
+
+## Common mistakes
+
+<Callout kind="warning">
+- Jumping to tools ("Kafka, Cassandra, Kubernetes") before the requirements.
+- Skipping requirements, then designing for the wrong problem.
+- Ignoring failure modes: every box can die, and every network call can time out.
+- Over-engineering: sharding and multi-region for 40 writes/s.
+- Never quantifying scale, so no choice can be justified.
+</Callout>
+
+Three situations deserve a prepared response:
+
+- **Pushback.** "Good point. If that matters, I'd change…" Treat it as a hint, not an attack. Restate the concern, weigh it against the requirements, then either defend with numbers or adapt explicitly.
+- **A gap in your knowledge.** "I don't know X in detail, but here's how I'd reason about it…" Reasoning from first principles scores far better than bluffing.
+- **Getting stuck.** Go back to the requirements and the numbers, simplify (one region, one server), then scale step by step out loud. Switch the framework diagram above to **Getting unstuck** to see the move.
+
+## Practice plan
+
+Work through the questions in this order: [URL shortener](/learn/case-url-shortener), [rate limiter](/questions/rate-limiter), [notification system](/learn/case-notification-system), [chat](/questions/chat), [news feed](/questions/news-feed), then payments. Redo each one aloud on a timer.
+
+- **Spaced repetition.** Redo each question after **3, 7 and 21 days**. The second attempt shows what you actually remember; the third makes it stick.
+- **Record yourself.** Listening back reveals long silences, filler words and the moments you skipped the numbers.
+- **Practise with the [playground](/playground/url-shortener).** Build the design on a canvas and get graded before you look at the reference.
+- **Score every run** from 1 to 4 on each dimension below, and watch the trend rather than any single score.
+
+| Dimension | 1: needs work | 4: strong |
+|---|---|---|
+| Requirements | Starts drawing immediately | Scope and numbers agreed within 5 minutes |
+| Estimation | No numbers | QPS, storage and what they imply |
+| API and data model | Vague endpoints | Clear endpoints, keys and access patterns |
+| High-level design | Boxes without a flow | A numbered flow that works end to end |
+| Deep dives | Stays at the surface | Two areas in depth |
+| Failure modes | Not mentioned | What breaks, how it's detected, how it recovers |
+| Trade-offs | Choices stated as facts | Each choice with its cost and when to switch |
+| Communication | Draws in silence | Thinks aloud, checks in, manages the clock |
+
+## Printable checklist
+
+Print this or keep it next to you while practising. It's also on the [cheatsheet](/cheatsheet).
+
+- [ ] Requirements: functional, non-functional with numbers, out of scope
+- [ ] Numbers: average and peak QPS, storage, read:write ratio
+- [ ] API: the endpoints that matter, with status codes
+- [ ] Data model: tables or keys, and the access pattern
+- [ ] Diagram with a numbered request flow
+- [ ] 2 deep dives
+- [ ] Failure modes: what breaks, and what happens then
+- [ ] Trade-offs: what you chose, what it cost, when you'd switch
+- [ ] Summary in 30 seconds
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="How do you handle an ambiguous problem?">
+    Ask clarifying questions, write down functional and non-functional requirements, state assumptions explicitly, and confirm them before designing. Ambiguity is usually deliberate: the interviewer wants to see you narrow the scope.
+  </FollowUp>
+  <FollowUp q="The interviewer pushes back on your choice. What do you do?">
+    Treat it as a hint. Restate their concern, weigh it against your requirements, and either defend with numbers or adapt explicitly.
+  </FollowUp>
+  <FollowUp q="How deep should you go?">
+    Breadth first, until the end-to-end design works. Then go deep where the risk is highest, or where the interviewer steers you.
+  </FollowUp>
+  <FollowUp q="What if you get stuck?">
+    Go back to the requirements and numbers, simplify (one region, one server), then scale step by step out loud.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

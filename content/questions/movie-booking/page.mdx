@@ -1,0 +1,202 @@
+import { architecture, bookingSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Seats move `available → held → booked`. One **conditional UPDATE** holds all the requested seats or none, and Postgres row locking guarantees exactly one winner per seat. Payment uses an idempotency key; the webhook confirms the booking with another conditional update ("still held by me") and refunds if the hold was lost. Expired holds count as free, seat maps update live over SSE, and launch-day spikes go through a waiting room that admits users at a controlled rate.
+</TLDR>
+
+<Requirements
+  functional={['Browse shows and seat maps', 'Hold seats for 5 minutes, pay, confirm', 'Release seats on expiry or payment failure', 'Cancel a booking']}
+  nonFunctional={['Never double-book, ever', 'Seat maps fresh within about 1–2 s', 'Survive 100× spikes for big releases', 'Idempotent payments']}
+  outOfScope={['Recommendations', 'Dynamic pricing', 'Refund policy details']} />
+
+The core test is **concurrency**: two people must never buy the same seat. Everything else (payments, live seat maps, launch spikes) is built around that one invariant.
+
+## Clarifying questions
+
+- What's the maximum number of seats per booking?
+- How long is a hold?
+- Is payment confirmed synchronously, or by the provider's webhook?
+- Do we need waitlists for sold-out shows?
+- Assigned seating, or general admission (a counter, not seats)?
+
+## Capacity estimate
+
+| Quantity | Estimate |
+|---|---|
+| Bookings | 10M per month ≈ **4 per second** on average |
+| Launch spike | 500K people in the first minutes of a blockbuster release |
+| Seat-map reads, no CDN | 500K viewers refreshing every 5 s ≈ **100K requests/s** |
+| Seat-map reads, 1 s CDN cache | About 1 origin request per show per second, per edge |
+| Admitted shoppers | 200 per second per hot show, through the waiting room |
+| Hold writes | A few hundred conditional UPDATEs per second: easy for one primary |
+
+The average is tiny; the **spike** is the design problem. The seat map is read far more than it's written, so cache the snapshot and push changes instead of letting every viewer query the database.
+
+## API
+
+| Method | Path | Result |
+|---|---|---|
+| GET | `/shows/:id/seats` | Seat-map snapshot (CDN-cached for 1–2 s) |
+| GET | `/shows/:id/seats/stream` | SSE stream of seat changes |
+| POST | `/shows/:id/holds` | `{ seats }` → `201 { holdId, expiresAt }`, or `409` if taken |
+| POST | `/payments` | `{ holdId }` + `Idempotency-Key` → payment intent |
+| POST | `/webhooks/payments` | The provider confirms → booking confirmed or refunded |
+| DELETE | `/holds/:id` | Release early |
+
+During a launch, the hold endpoint also requires an admission token from the waiting room.
+
+## Data model
+
+<CodeBlock src="snippets/schema.sql" title="schema.sql" />
+
+A `shows(id, movie, screen, starts_at)` table sits beside these; the interesting part is the seat's state machine:
+
+- `available → held`: a hold (sets `held_by` and `held_until`).
+- `held → booked`: payment confirmed (sets `booking_id`, clears `held_until`).
+- `held → available`: expired, released, or payment failed.
+- `booked` is final unless the booking is cancelled.
+
+The primary key `(show_id, seat_no)` means one row per seat per show, which is exactly the unit Postgres locks.
+
+## Architecture
+
+Play **Hold, pay, confirm**, then **Seat taken**, **Late payment refunded** and **Launch-day spike**.
+
+<FlowDiagram spec={architecture} />
+
+The same flow as a sequence. Pick **a seat taken** at the hold, or one of the three payment outcomes:
+
+<SequenceDiagram spec={bookingSequence} />
+
+Watch the race that matters most: Alice and Bob click A5 at the same moment, and each one's conditional UPDATE plays out. Bob's waits for the row lock, re-checks the condition after Alice commits, and matches 0 rows.
+
+<SeatRace />
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Seat selection, hold time, payment, and the no double booking rule.
+  </Step>
+  <Step title="Model seat states">
+    `available`, `held`, `booked`, plus a `held_until` timestamp.
+  </Step>
+  <Step title="Prevent double booking">
+    One conditional UPDATE decides the winner atomically.
+  </Step>
+  <Step title="Handle expiry">
+    Release holds by job or TTL when payment never arrives.
+  </Step>
+  <Step title="Scale launches">
+    Waiting room, cached seat maps, and writes on the primary.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="State the invariant aloud">
+    "A seat is booked at most once." Everything else serves it. Interviewers want to hear it before any boxes appear.
+  </Step>
+  <Step title="Seat state machine">
+    `available → held` (hold), `held → booked` (payment confirmed), `held → available` (expired or released). `booked` is final unless cancelled.
+  </Step>
+  <Step title="Hold atomically">
+
+One statement for all the requested seats. If `rowCount` doesn't match the number of seats, roll back: all or nothing.
+
+```sql
+UPDATE seats SET status = 'held', held_by = $1, held_until = now() + interval '5 minutes'
+WHERE show_id = $2 AND seat_no = ANY($3)
+  AND (status = 'available' OR (status = 'held' AND held_until < now()))
+```
+
+Note the brackets: only an **expired hold** counts as free. The classic bug writes `status = 'available' OR held_until < now()`, which also matches **booked** seats whose old `held_until` has passed.
+
+</Step>
+  <Step title="Why it's safe">
+    Under READ COMMITTED, Postgres locks each row it updates. A concurrent transaction waits on that lock, then **re-evaluates the WHERE clause** against the committed row. Alice's hold makes the condition false for Bob, so he matches 0 rows. No application lock, no `SELECT … FOR UPDATE` round trip.
+  </Step>
+  <Step title="Payment">
+    Create the payment intent with `Idempotency-Key = holdId`, so double clicks can't charge twice. The provider's webhook (verified, possibly retried, possibly late) drives confirmation, not the browser's redirect.
+  </Step>
+  <Step title="Confirm">
+    Insert the booking with `ON CONFLICT (payment_id) DO NOTHING` (a retried webhook becomes a no-op), then `UPDATE seats … WHERE status = 'held' AND held_by = me`. If the hold was lost, roll back and refund. The refund must be idempotent too. A failed payment releases the seats with the same `held_by = me` guard.
+  </Step>
+  <Step title="Expiry">
+    Lazy: expired holds already count as available in the hold query, so correctness never depends on a timer. A sweeper also frees them every 30 s, so seat maps look right, and publishes the change.
+  </Step>
+  <Step title="Live seat map">
+    The CDN serves a 1–2 s snapshot. Changes are published to Redis and pushed over SSE. Each API instance holds **one** Redis subscription and fans out to its viewers locally. See [polling, SSE and WebSockets](/deep-dives/polling-sse-websockets) for why SSE fits one-way updates.
+  </Step>
+  <Step title="Launch spikes">
+
+- A waiting room (FIFO) admits N users per second with admission tokens; the booking API rejects requests without one.
+- Cache the seat map at the CDN.
+- Rate-limit per account (see the [rate limiter](/questions/rate-limiter)).
+- Add a CAPTCHA when joining the queue, against bots.
+- Pre-scale the API and database before the release.
+
+</Step>
+  <Step title="Redis holds?">
+    `SET NX PX` per seat (a Lua script for several seats) is fast. But the database must stay the source of truth for bookings, so use Redis as a front-line filter for mega-launches, not the final arbiter.
+  </Step>
+</Steps>
+
+## Implementation
+
+<CodeTabs files={['snippets/hold-seats.js', 'snippets/confirm-booking.js', 'snippets/expiry-sweeper.js', 'snippets/seat-stream.js', 'snippets/waiting-room.js', 'snippets/hold-seats.lua']} />
+
+Notes on the code:
+
+- `holdSeats` dedupes the seat list first; otherwise `['A5', 'A5']` could never match a `rowCount` of 2. It publishes only **after** `COMMIT`, so viewers never see a hold that was rolled back.
+- `confirmBooking` checks `held_by` but not `held_until`: if the hold expired a moment ago and neither another user nor the sweeper has reclaimed the seats, the late payment still books them. Otherwise it rolls back and refunds.
+- `joinQueue` uses `ZADD NX`, so refreshing the page keeps your original place. Positions are approximate (a re-join burns a sequence number), which is fine for a progress bar.
+- `hold-seats.lua` keeps all seat keys of a show in one Redis Cluster slot with a hash tag, so the multi-key check-and-set stays atomic.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Payment webhook arrives after the hold expired | The seat may already belong to someone else | Book if still held by me; otherwise roll back and refund automatically |
+| The webhook is retried | Duplicate booking | `UNIQUE (payment_id)` + `ON CONFLICT DO NOTHING` |
+| Double-clicking Pay | Two charges | Idempotency key = holdId at the payment provider |
+| DB failover mid-hold | The transaction errors | The client retries the hold: the same seats get held again or come back as taken |
+| Launch-day herd | The DB is overwhelmed | Waiting room, cached seat map, per-account rate limits, CAPTCHA |
+| Sweeper stops running | Seat maps show stale holds | Harmless for correctness (expired holds count as free); alert on its lag |
+
+## Trade-offs
+
+| Choice | Pros | Cons | Choose when |
+|---|---|---|---|
+| Conditional UPDATE vs `SELECT … FOR UPDATE` then UPDATE | One round trip, short locks | Less flexible logic | Default |
+| DB holds vs Redis holds | One source of truth | More DB writes | Normal load; add the Redis filter for mega-launches |
+| A visible countdown vs silently extending holds | Fair and predictable | Some lost sales | Default; extend only while payment is in flight |
+| SSE vs polling for seat maps | Fresh within a second, cheap | A connection per viewer | Popular shows; polling the CDN is fine for quiet ones |
+
+<Callout kind="tip" title="Build it">
+Draw this design in the [ticket booking playground challenge](/playground/ticket-booking): a waiting room before the booking service, a database with a replica, an SSE or pub/sub path for seat updates, and the payment provider as an external node with a webhook back.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What if payment succeeds after the hold expires?">
+    If the seats are still held by the same user (not yet reclaimed), confirm the booking anyway. If someone else took them, roll back and refund automatically, and tell the user. The UI shows the countdown to make this rare.
+  </FollowUp>
+  <FollowUp q="Seat-level or show-level locking?">
+    Seat-level (row) locks let thousands of people book different seats at the same time. A show-level lock would serialise every booking for a show, which is exactly the hot spot you want to avoid.
+  </FollowUp>
+  <FollowUp q="How do you survive a launch-day thundering herd?">
+    A waiting room with admission tokens; seat maps served from the CDN and SSE instead of database reads; per-account limits; a pre-scaled database and API; and an admission rate you tune from database metrics.
+  </FollowUp>
+  <FollowUp q="How do you stop bots from grabbing all the seats?">
+    A CAPTCHA or device attestation when joining the queue, purchase limits per account and per card, velocity checks, and delayed release of suspicious holds.
+  </FollowUp>
+  <FollowUp q="How would you suggest the best available seats?">
+    Score seats by distance from the centre of the screen and by row preference, and find contiguous runs of N free seats in the cached seat map. Then hold them through the same conditional UPDATE; if it loses a race, pick the next best run.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

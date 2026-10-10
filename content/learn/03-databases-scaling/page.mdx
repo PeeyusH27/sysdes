@@ -1,0 +1,192 @@
+import { primaryReplica, replicaQuiz } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Pick a store by its **access pattern**, index for the queries you actually run, and know your **isolation level**. Scale reads with replicas, and send a user's reads to the primary right after they write, because replicas lag. Shard only when indexes, caching and replicas run out, using a high-cardinality key that matches your main query.
+</TLDR>
+
+## Why it matters
+
+Data outlives servers and is the hardest part to scale. Choose storage by access pattern, then scale reads with replicas and writes with shards.
+
+Stateless services scale by adding copies. Data can't simply be copied, because every copy must agree, and the database is where correctness lives: lost orders and double bookings happen here. So the usual order of moves is the cheapest first: **indexes → a bigger machine → a cache → read replicas → sharding**. Each step adds operational cost, and interviewers listen for whether you take them in order.
+
+<FlowDiagram spec={primaryReplica} />
+
+## How storage engines work
+
+Under every database is a storage engine, and the two main designs make opposite trade-offs:
+
+- A **B-tree** keeps data sorted in fixed-size pages and updates them in place. Reads walk a shallow tree (3–4 levels for billions of rows), so they're fast and predictable. This is what Postgres and MySQL use.
+- An **LSM tree** (log-structured merge tree) never updates in place. Writes go to an in-memory table and a log, get flushed as sorted, immutable files, and background **compaction** merges those files. Writes are sequential and very fast; reads may have to check several files. This is what Cassandra and RocksDB use.
+
+| | B-tree | LSM tree |
+|---|---|---|
+| Write | Update the page in place, plus a WAL record | Append to memory and the WAL; flush sorted files; compact later |
+| Read | One walk down the tree | Memory, then several files (Bloom filters skip most) |
+| Best at | Read-heavy and mixed workloads, range scans | Write-heavy ingest: events, messages, time series |
+| Costs | Random writes, page splits, fragmentation | Compaction CPU and I/O; slower, less predictable reads |
+| Used by | Postgres, MySQL InnoDB, SQL Server | Cassandra, RocksDB, ScyllaDB, HBase |
+
+## Transactions and isolation levels
+
+A transaction groups statements so they all happen or none do (atomicity) and survive a crash once committed (durability). **Isolation** decides what concurrent transactions can see of each other, and weaker levels allow these anomalies:
+
+- **Dirty read**: you see another transaction's uncommitted change, which might still roll back.
+- **Non-repeatable read**: you read the same row twice and get different values, because someone committed in between.
+- **Phantom**: you re-run a range query and new rows appear that another transaction inserted.
+- **Write skew**: two transactions read the same rows, each decides based on them, and each writes a *different* row. Both commit, and together they break a rule. Classic example: two doctors on call each check "is someone else on call?", see yes, and both go off call.
+
+| Level | Dirty read | Non-repeatable read | Phantom | Write skew |
+|---|---|---|---|---|
+| Read committed (Postgres default) | Prevented | Possible | Possible | Possible |
+| Repeatable read (MySQL InnoDB default) | Prevented | Prevented | Possible by the SQL standard; Postgres's snapshot prevents it | Possible |
+| Serializable | Prevented | Prevented | Prevented | Prevented |
+
+Use **SERIALIZABLE**, or explicit locks (`SELECT … FOR UPDATE`), for invariants that span rows (on-call scheduling, double booking), and retry on serialization failures. Often a constraint is simpler still: `UNIQUE (room_id, slot)` makes a double booking impossible at any isolation level.
+
+<CodeBlock src="snippets/serializable-retry.js" />
+
+## Indexes
+
+B-tree indexes speed reads but slow writes and use memory. Composite indexes follow the leftmost-prefix rule. Index for the queries you run, not for the columns you have:
+
+- **Composite indexes and the leftmost prefix.** An index on `(user_id, created_at)` is sorted by user, then by time within each user. It serves `WHERE user_id = ?` and `WHERE user_id = ? ORDER BY created_at`, but not a filter on `created_at` alone. Put equality columns first, then the range or sort column.
+- **Covering indexes.** `INCLUDE (total)` stores extra columns in the index, so a query can be answered from the index alone (an index-only scan).
+- **Partial indexes.** `WHERE status = 'pending'` indexes only the rows you actually query: smaller and cheaper to maintain.
+- **Every index has a write cost.** Each `INSERT` updates every index on the table, and each index competes for memory. Drop the ones `pg_stat_user_indexes` says are never used.
+- **Read `EXPLAIN ANALYZE`.** Look for a `Seq Scan` on a big table, a large gap between estimated and actual rows (stale statistics: run `ANALYZE`), and sorts spilling to disk.
+- **Build indexes online.** A plain `CREATE INDEX` blocks writes for the whole build; on a large table use `CREATE INDEX CONCURRENTLY`.
+
+<CodeBlock src="snippets/indexes.sql" />
+
+## Modeling: normalize, then denormalize
+
+**Normalize first**: store each fact in one place, so an update can't leave two copies disagreeing. Then **denormalize for hot reads** once you know them: keep a `comment_count` on posts instead of counting on every page view, or copy the author's name into feed items. Every copy is something you must keep in sync, in the same transaction or through an event.
+
+The most common performance bug in data access is the **N+1 query**: load 20 posts (1 query), then each post's author (20 more). Fix it with a join, with one batched query (`WHERE id = ANY($1)`), or, in GraphQL resolvers, with DataLoader, which collects every lookup made in the same tick into one query:
+
+<CodeBlock src="snippets/dataloader.js" />
+
+## SQL vs NoSQL
+
+SQL gives joins and ACID transactions. NoSQL gives flexible schemas and easier horizontal scale. Pick by access patterns, and combine them when needed.
+
+| Store | Shape | Pick it for | Examples |
+|---|---|---|---|
+| Relational | Tables, joins, transactions | Orders, payments, anything with invariants or ad-hoc queries | Postgres, MySQL |
+| Key-value | Get and put by key | Sessions, carts, caches, counters | Redis, DynamoDB |
+| Wide-column | Partition key plus sorted clustering key | Huge, append-heavy data read by key and time: feeds, messages | Cassandra, ScyllaDB, Bigtable |
+| Document | JSON documents | Nested entities read whole: catalogs, profiles | MongoDB |
+| Search | Inverted index | Full-text search, filters, facets | Elasticsearch, OpenSearch |
+
+Most real systems use several: Postgres for orders, Redis for sessions, a search index for the catalog. The [choosing a data store deep dive](/deep-dives/choosing-a-data-store) walks through the decision with a store chooser.
+
+## Replication
+
+Replicas add read capacity and failover. Async replication can lag, so read your own writes from the primary.
+
+**How long a commit waits** decides how much you can lose:
+
+| Mode | A commit waits for | If the primary dies | Write latency |
+|---|---|---|---|
+| Async | The primary's own disk | The last few writes can be lost | Lowest |
+| Semi-sync | At least one replica to receive the change | Nothing lost, if that replica survives | Plus one network round trip |
+| Sync | The replicas to confirm | Nothing lost | Highest; one slow replica stalls every write |
+
+**Topologies:**
+
+- **Leader–follower** (single leader): one primary takes all writes and the followers replay its log. Simple, with no write conflicts. The default for Postgres and MySQL.
+- **Multi-leader**: each region has a leader that accepts writes and replicates to the others. Writes are fast everywhere, but two regions can change the same row at once, and the conflict needs a rule (last write wins, merge functions, CRDTs).
+- **Leaderless**: clients write to and read from several replicas, with quorums (R + W > N). Cassandra and Dynamo-style stores work this way; see [Consistency and CAP](/learn/consistency-cap).
+
+**Problems caused by lag**, and their fixes:
+
+- **Read-your-writes**: a user saves something, reads from a replica that hasn't caught up, and their change seems lost. Route that user's reads to the primary for a few seconds after a write (code below), or read at a log position: the client keeps the LSN of its write, and the replica waits until it has replayed that far.
+- **Monotonic reads**: two reads hit different replicas, the second one further behind, and data goes back in time (a comment appears, then vanishes). Pin each user to one replica, for example by hashing the user id.
+- Monitor lag (`replay_lag` in `pg_stat_replication`) and take a replica out of rotation when it falls too far behind.
+
+<FlowDiagram spec={primaryReplica} scenario="stale-read" />
+
+Try it: raise the lag, write, and read straight away. Then switch read-your-writes on.
+
+<ReplicationLag />
+
+<CodeBlock src="snippets/read-your-writes.js" />
+
+## Failover
+
+When the primary dies, a replica has to take over. Switch the diagram above to **Failover** to watch the steps:
+
+1. **Detect.** Heartbeats fail several times in a row, ideally confirmed by a quorum of observers, so a network blip doesn't trigger a failover.
+2. **Promote** the replica with the most recent log position.
+3. **Reconfigure** clients: move the DNS name, virtual IP or proxy (PgBouncer, HAProxy) to the new primary, and re-point the other replicas at it.
+4. **Fence the old primary.** If it comes back still believing it's the primary, two nodes accept writes and the data diverges: **split brain**. Fencing makes that impossible: power it off (STONITH), revoke its network or storage access, or use fencing tokens (an epoch number that storage checks on every write).
+
+Two numbers describe the result. **RPO** (recovery point objective) is how much data you can lose: with async replication, the writes that hadn't shipped yet. **RTO** (recovery time objective) is how long you're down: tens of seconds with automated failover (Patroni, RDS Multi-AZ, Orchestrator), much longer by hand. Managed services such as RDS Multi-AZ keep a synchronous standby so that RPO is close to zero.
+
+## Sharding
+
+Split data by a high-cardinality key. Hash gives even spread; range supports scans but risks hot shards. Consistent hashing eases rebalancing.
+
+Shard when one primary can't keep up with **writes** or **data size** after indexes, caching, replicas and a bigger machine: typically several terabytes or tens of thousands of writes per second. Sharding is a one-way door: every query now has to know its shard.
+
+| Strategy | How | Good | Bad |
+|---|---|---|---|
+| Hash | `hash(key) % N`, or a hash ring | Even spread | Range scans hit every shard; modulo resharding moves most keys |
+| Range | Each shard owns a key range | Range scans, easy splits | Sequential keys (time, auto-increment ids) make one hot shard |
+| Directory | A lookup table maps key to shard | Full control; move one big tenant | The directory is a dependency: cache it |
+
+**Choosing a shard key:**
+
+- **High cardinality**: many distinct values (`user_id`, not `country`).
+- **Even spread** of both data and traffic: no single key carries a large share of the load.
+- **Matches the main query**: the hot queries include the key, so each one hits a single shard.
+- **Avoids hot ranges**: no monotonically increasing key with range sharding, or every new write lands on the last shard.
+
+What gets harder: cross-shard queries and joins (scatter-gather), cross-shard transactions (avoid them, or use sagas), hot keys (a celebrity's rows: split the key), and resharding. With `hash % N`, going from 4 to 5 shards moves about 80% of users; consistent hashing, or many virtual shards mapped onto fewer machines, moves only a small slice. The [sharding strategies deep dive](/deep-dives/sharding-strategies) shows this on a live hash ring.
+
+<CodeBlock src="snippets/shard-for.js" />
+
+## Backups and point-in-time recovery
+
+**Replicas are not backups**: a `DROP TABLE` or a bad migration reaches every replica within milliseconds.
+
+- **Base backups plus WAL archiving.** Take a full physical backup regularly (`pg_basebackup` or a disk snapshot) and archive every write-ahead log segment to object storage (pgBackRest, WAL-G). To recover, restore the base backup and replay the WAL up to any moment: "restore to 14:31:59, just before the bad deploy".
+- **Logical dumps** (`pg_dump`) suit small databases and migrations, but are slow to restore at scale.
+- **Restore drills.** An untested backup is a hope. Restore into a scratch environment on a schedule, time it (that time is your real RTO), and check the data.
+- Keep copies in another region and account, so one mistake or breach can't delete both.
+
+## Place the read replica
+
+<DiagramQuiz spec={replicaQuiz} slot="replica" options={["cache", "database", "queue", "lb"]} answer="database" explain="It's a read replica: a database that receives the primary's change stream and serves reads. A cache also absorbs reads, but the app fills it on a miss; it isn't fed by replication from the primary." />
+
+<Callout kind="warning">
+- Indexing every column.
+- Sharding before trying indexes, caching and replicas.
+- Reading from a replica right after a write.
+- Choosing a monotonically increasing shard key.
+- Never testing a restore.
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="How would you shard a users table, and what can go wrong?">
+    Hash `user_id` to choose a shard so single-user queries hit one node. The risks are hot keys, cross-shard queries and joins (for example "find users by email", which needs a global index or a lookup table), and resharding cost, which consistent hashing and a directory service reduce.
+  </FollowUp>
+  <FollowUp q="How do you handle replication lag?">
+    Route a user's reads to the primary for a few seconds after they write (read-your-writes). Or pin a session to one replica (monotonic reads). Or read at a log position: the client sends the LSN of its write, and the replica waits until it has caught up to that LSN. Also monitor lag and pull replicas that fall too far behind.
+  </FollowUp>
+  <FollowUp q="SQL or NoSQL for orders vs an activity feed?">
+    Orders need transactions, constraints and ad-hoc queries, so SQL. An activity feed is huge, append-heavy and read by key and time, so a wide-column or key-value store, or Redis for the hot part.
+  </FollowUp>
+  <FollowUp q="How do you stop two people booking the same slot?">
+    A unique constraint, a conditional `UPDATE … WHERE status = 'available'` that checks the affected row count, or SERIALIZABLE with retry. A check-then-insert at READ COMMITTED races: both transactions see the slot free, and both insert.
+  </FollowUp>
+  <FollowUp q="How do you add an index to a 500M-row table without downtime?">
+    `CREATE INDEX CONCURRENTLY`, which doesn't block writes (it takes longer, and a failed build leaves an invalid index to drop and retry). Watch replication lag while it builds, and verify with `EXPLAIN`. Then remove indexes it makes redundant.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

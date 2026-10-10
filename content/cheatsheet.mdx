@@ -1,0 +1,74 @@
+## Numbers to remember
+
+Approximate values: good enough for estimates, always say "I'd measure".
+
+| Quantity | Value | Shortcut |
+|---|---|---|
+| Seconds per day | 86,400 ≈ 10⁵ | 1M requests/day ≈ 12/s |
+| Seconds per month | ≈ 2.6M | 100M/month ≈ 40/s |
+| Seconds per year | ≈ 31.5M | |
+| 2¹⁰ / 2²⁰ / 2³⁰ / 2⁴⁰ | ≈ thousand / million / billion / trillion | KB → MB → GB → TB |
+| Main memory reference | ~100 ns | |
+| SSD random read | ~100 µs | |
+| Round trip inside a datacenter | ~0.5 ms | |
+| Redis GET over the network | ~0.5–1 ms | |
+| Indexed database read | ~1–10 ms | |
+| HDD seek | ~10 ms | |
+| Cross-continent round trip | ~100–150 ms | |
+| One Redis instance | ~100K simple ops/s | |
+| One Postgres primary | thousands to tens of thousands of simple queries/s | depends on the query |
+| Typical web API instance | hundreds to a few thousand req/s | measure yours |
+
+## Formulas
+
+| What | Formula |
+|---|---|
+| Average QPS | DAU × actions per user ÷ 86,400 |
+| Peak QPS | average × 2–5 (10+ for launches and sales) |
+| Storage | writes/day × bytes × days retained × replicas |
+| Bandwidth | QPS × payload size |
+| Cache memory (80/20) | daily reads × 20% × item size |
+| Servers | peak QPS ÷ (per-server QPS × target utilization ~0.6) |
+| Average latency with a cache | h·c + (1−h)·(c+d) |
+| Serial availability | a₁ × a₂ × … |
+| Parallel availability | 1 − (1−a₁)(1−a₂)… |
+| Quorum overlap | R + W > N |
+| Little's law | items in system = arrival rate × time in system |
+
+## Availability
+
+| Availability | Downtime per year | Per month |
+|---|---|---|
+| 99% | 3.65 days | 7.3 h |
+| 99.9% | 8.77 h | 43.8 min |
+| 99.99% | 52.6 min | 4.4 min |
+| 99.999% | 5.26 min | 26 s |
+
+## Decision tables
+
+| If you need… | Reach for |
+|---|---|
+| Transactions, constraints, ad-hoc queries | PostgreSQL / MySQL |
+| Flexible documents read together | MongoDB |
+| Key lookups at huge scale | Redis, DynamoDB |
+| Write-heavy, time-ordered data | Cassandra / ScyllaDB |
+| Files and media | S3 + CDN |
+| Full-text search | Elasticsearch / OpenSearch |
+| Analytics over events | ClickHouse |
+| Fire-and-forget jobs with retries | A work queue (SQS, RabbitMQ, BullMQ) |
+| Ordered, replayable event streams | Kafka |
+| Server → browser updates | SSE |
+| Two-way real time | WebSockets |
+| Provider → your server events | Webhooks |
+
+## The 45-minute interview checklist
+
+- [ ] Functional and non-functional requirements, scope cut aloud
+- [ ] Numbers: QPS, peak, storage, bandwidth
+- [ ] API: endpoints, status codes, pagination, idempotency
+- [ ] Data model and the store for each part
+- [ ] Diagram with a numbered request flow
+- [ ] Two deep dives where the risk is highest
+- [ ] Failure modes: what breaks, what the user sees, how you recover
+- [ ] Trade-offs: what you chose, what you gave up, when you'd switch
+- [ ] One-minute summary

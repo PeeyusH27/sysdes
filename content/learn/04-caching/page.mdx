@@ -1,0 +1,146 @@
+import { cacheAside, cacheLayers } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Put a cache in front of anything read far more often than it changes. Default to **cache-aside** with a **jittered TTL**, delete (don't update) keys on write, and protect hot keys from stampedes with a per-key lock. Measure the hit ratio: going from 90% to 99% cuts database load by 10×.
+</TLDR>
+
+## Why it matters
+
+Memory is about 50× faster than a database round trip. A cache with a high hit ratio cuts latency **and** protects the database, which is usually the hardest part of the system to scale. The catch: every cached value is a copy, and copies go stale.
+
+<FlowDiagram spec={cacheAside} />
+
+## Where caches live
+
+A request can be answered at many layers before it reaches your database. Each layer you add absorbs a share of the traffic.
+
+<FlowDiagram spec={cacheLayers} />
+
+| Layer | Typical latency | What to cache there |
+|---|---|---|
+| Browser | 0 ms | Static assets, `GET` responses with `Cache-Control` |
+| CDN edge | 10–30 ms | Public pages, images, API responses that are the same for everyone |
+| Reverse proxy | ~1 ms | Rendered pages, rate-limit counters |
+| In-process memory | microseconds | Tiny, very hot, read-only data (feature flags, config) |
+| Redis / Memcached | ~1 ms | Shared per-entity data: products, sessions, counters |
+| Database buffer pool | ms | Hot pages, automatically |
+
+## What to cache and how to name it
+
+Cache data that is **read often, changes rarely, and is expensive to compute**. Design keys deliberately:
+
+- Include everything the value depends on: `product:42:v3:en-IN` (id, version, locale).
+- Never put per-user data in a shared CDN cache; use `Cache-Control: private` for it.
+- Keep values small; a 2 MB value turns a 1 ms cache hit into a 20 ms one.
+
+## Caching patterns
+
+<Steps>
+  <Step title="Cache-aside (lazy loading)">
+    The app checks the cache, reads the database on a miss, then fills the cache with a TTL. Simple, and if the cache dies you only get slower. **The default choice.**
+  </Step>
+  <Step title="Read-through">
+    The cache library or CDN loads from the origin itself on a miss. Same behaviour as cache-aside, less code in your app.
+  </Step>
+  <Step title="Write-through">
+    Every write goes to the database and the cache together, so reads are always fresh. Writes cost double, and rarely read data wastes memory.
+  </Step>
+  <Step title="Write-behind (write-back)">
+    Write to the cache now and flush to the database later in batches. Very fast writes, but a crash can lose unflushed data. Good for counters and metrics.
+  </Step>
+  <Step title="Write-around">
+    Writes go only to the database; the next read misses and loads it. Good for data that is written once and rarely read.
+  </Step>
+  <Step title="Refresh-ahead">
+    Refresh hot keys shortly before they expire, so readers never see a miss. Great for a handful of very hot, predictable keys.
+  </Step>
+</Steps>
+
+The [caching techniques deep dive](/deep-dives/caching-techniques) compares all six side by side with code.
+
+## Eviction and TTL
+
+When memory is full the cache must drop something. **LRU** drops the least recently used key; **LFU** drops the least frequently used. In Redis this is `maxmemory-policy`: `allkeys-lru` for a pure cache, `volatile-lru` if some keys must never be evicted.
+
+TTLs bound staleness. Choose them by how costly a stale read is: **seconds** for prices and stock, **minutes** for product pages, **hours** for configuration. Always add jitter so keys written together don't expire together.
+
+<LRUViz />
+
+## Invalidation and the classic race
+
+"There are only two hard things in computer science: cache invalidation and naming things." The safe default is **delete on write**: update the database, then `DEL` the key, and let the next read load the truth. Updating the cache instead can leave an older value last when two writers race.
+
+Even delete-on-write has one race. Switch the diagram above to **Write race** to watch it: a slow reader loads the old row, the writer updates the database and deletes the key, and then the slow reader writes the old value back. Fixes:
+
+- Keep a **short TTL** as a safety net, so staleness is bounded.
+- Do a **delayed second delete** (delete again ~1 s after the write).
+- Use **versioned keys** (`user:42:v7`) so old entries are simply never read.
+- Drive invalidation from the database's change stream (CDC) instead of application code.
+
+## Failure modes
+
+| Failure | What happens | Fix |
+|---|---|---|
+| **Stampede** | A hot key expires and thousands of requests hit the database at once | Per-key lock (single flight), refresh-ahead |
+| **Penetration** | Requests for ids that don't exist always miss and always hit the database | Cache "not found" briefly; a Bloom filter in front |
+| **Avalanche** | Many keys expire together (or the cache restarts) | Jittered TTLs, staggered warm-up |
+| **Hot key** | One key gets 100K+ reads/s and saturates one cache node | In-process L1 cache, replicate the key as `key#1…#N` |
+
+Switch the first diagram to **Stampede** to see the lock in action.
+
+## The numbers: hit ratio vs latency
+
+Average latency is `h·c + (1−h)·(c+d)`: a hit costs the cache lookup, a miss costs the lookup **plus** the database. The curve is very non-linear: most of the gain comes in the last few percent.
+
+<LatencyHitRatio />
+
+## HTTP caching for frontend developers
+
+Browsers and CDNs are caches too, and they're free.
+
+- `Cache-Control: public, max-age=60` lets browsers and CDNs reuse a response for 60 s; `private` keeps it out of shared caches; `no-store` disables caching.
+- `ETag` + `If-None-Match` lets the server answer `304 Not Modified` with no body when the client's copy is still valid.
+- Fingerprinted static assets (`app.3f9a1c.js`) can be cached for a year with `immutable`, because a new build gets a new file name.
+- `stale-while-revalidate=300` serves a stale copy instantly while fetching a fresh one in the background.
+- `Vary: Accept-Language` tells caches that the response differs per header value.
+
+## Code
+
+<CodeTabs files={['snippets/get-product.js', 'snippets/lru.js', 'snippets/swr.js', 'snippets/etag.js']} />
+
+`get-product.js` fixes three bugs in the classic version: it bounds the retries while another request holds the lock, releases the lock safely with a compare-and-delete script, and caches "not found" briefly.
+
+## Sizing and monitoring
+
+Size the cache to hold the **working set**: often the hottest 20% of keys serve 80% of reads. Watch four numbers: **hit ratio**, **evictions per second**, **memory used**, and **p99 latency**. A falling hit ratio with rising evictions means the cache is too small.
+
+<Callout kind="warning">
+- Caching without a TTL.
+- Updating the cache on write instead of deleting the key.
+- Caching per-user responses at the CDN.
+- Never measuring the hit ratio.
+- Treating the cache as the source of truth.
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="How do you prevent a cache stampede?">
+    Take a per-key lock so one request rebuilds the value while the others wait briefly and retry, add jitter to TTLs, and refresh the hottest keys early (refresh-ahead) so they never expire under load. Inside one process, share the in-flight promise (single flight).
+  </FollowUp>
+  <FollowUp q="Do you delete or update the cache on write?">
+    Delete. With concurrent writers, updating can leave the older value last. Deleting forces the next read to load the truth from the database. Keep a TTL as a safety net for the rare races that remain.
+  </FollowUp>
+  <FollowUp q="How do you choose a TTL?">
+    By how costly a stale read is: seconds for prices and inventory, minutes for product pages, hours for configuration. Add random jitter so keys don't expire together.
+  </FollowUp>
+  <FollowUp q="Would you cache a write-heavy key?">
+    Rarely. The hit ratio collapses and invalidation dominates. Prefer batching writes (write-behind counters), or cache the read-heavy aggregate (the like **count**, not each like).
+  </FollowUp>
+  <FollowUp q="A single key gets 200K reads/s. What do you do?">
+    Add an in-process L1 cache with a short TTL on every app server, replicate the key across N cache keys and read a random copy, and serve it from the CDN if the data is public.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

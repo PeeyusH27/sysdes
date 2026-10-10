@@ -1,0 +1,182 @@
+import type { FlowSpec } from "@/components/diagram/types";
+
+export const feedArchitecture: FlowSpec = {
+  id: "feed-architecture",
+  title: "News feed with hybrid fan-out",
+  description:
+    "Posts by normal authors are pushed into each active follower's cached feed by fan-out workers. Celebrity posts are only written to the author's timeline and merged in at read time. Reads hydrate post ids through a post cache.",
+  nodes: [
+    { id: "author", label: "Author", kind: "client", col: 0, row: 0 },
+    { id: "postsvc", label: "Post service", kind: "service", col: 1, row: 0 },
+    { id: "queue", label: "Fan-out queue", kind: "queue", col: 2, row: 0, sub: "1 msg per 1K" },
+    { id: "workers", label: "Fan-out workers", kind: "worker", col: 3, row: 0, sub: "×N, autoscaled" },
+    { id: "postsdb", label: "Posts DB", kind: "database", col: 1, row: 1, sub: "+ read replicas", note: "The source of truth for post bodies, sharded by post id." },
+    { id: "celeb", label: "Celeb timelines", kind: "cache", col: 2, row: 1, sub: "posts:<author>", note: "Every author has a capped timeline of their newest 800 post ids; the feed API reads only the celebrities' ones at read time." },
+    { id: "feedcache", label: "Feed cache", kind: "cache", col: 3, row: 1, sub: "feed:<user> ZSET", note: "One sorted set per active user, score = createdAt, capped at 800 ids." },
+    { id: "reader", label: "Reader", kind: "client", col: 0, row: 2 },
+    { id: "feedapi", label: "Feed API", kind: "service", col: 2, row: 2, sub: "merge + hydrate" },
+    { id: "postcache", label: "Post cache", kind: "cache", col: 3, row: 2, sub: "post:<id>" },
+    { id: "cdn", label: "CDN", kind: "cdn", col: 0, row: 3, sub: "images + video" },
+  ],
+  edges: [
+    { from: "author", to: "postsvc", label: "POST /posts" },
+    { from: "postsvc", to: "postsdb", label: "insert" },
+    { from: "postsvc", to: "celeb", label: "ZADD" },
+    { from: "postsvc", to: "queue", label: "≤ 100K", style: "async" },
+    { from: "queue", to: "workers", style: "async" },
+    { from: "workers", to: "feedcache", label: "ZADD ×N" },
+    { from: "reader", to: "feedapi", label: "GET /feed" },
+    { from: "feedapi", to: "feedcache" },
+    { from: "feedapi", to: "celeb", label: "pull" },
+    { from: "feedapi", to: "postcache", label: "hydrate" },
+    { from: "feedapi", to: "postsdb", label: "on miss" },
+    { from: "reader", to: "cdn", label: "media" },
+  ],
+  scenarios: [
+    {
+      id: "normal-post",
+      name: "Normal user posts",
+      steps: [
+        { edge: "author>postsvc", caption: "Maya, who has 300 followers, posts a photo. POST /posts reaches the post service." },
+        { edge: "postsvc>postsdb", caption: "The post is written to the Posts DB, the source of truth." },
+        { edge: "postsvc>celeb", caption: "Its id is also added to Maya's own author timeline, posts:maya. Every author has one, capped at 800 ids." },
+        { edge: "postsvc>queue", caption: "Maya is under the 100K-follower threshold, so fan-out jobs are enqueued: one message per 1,000 followers, so just one here." },
+        { edge: "author>postsvc", reverse: true, tone: "ok", caption: "Maya gets 201 Created right away and sees her own post. Delivery to followers continues in the background." },
+        { edge: "queue>workers", caption: "A fan-out worker takes the job and drops followers who haven't opened the app in 30 days.", mark: [{ node: "workers", state: "busy" }] },
+        {
+          edge: "workers>feedcache",
+          caption: "For each active follower: ZADD feed:ID with the post's timestamp, then trim to the newest 800. Pipelined, a batch of 1,000 takes milliseconds.",
+          with: [{ edge: "workers>feedcache", caption: "" }, { edge: "workers>feedcache", caption: "" }],
+        },
+        { edge: "workers>feedcache", tone: "ok", caption: "Within a second or two the post sits at the top of every active follower's cached feed.", mark: [{ node: "workers", state: null }, { node: "feedcache", state: "ok" }] },
+      ],
+    },
+    {
+      id: "celebrity-post",
+      name: "Celebrity posts",
+      steps: [
+        { edge: "author>postsvc", caption: "A celebrity with 30M followers posts.", mark: [{ node: "feedcache", state: null }] },
+        { edge: "postsvc>postsdb", caption: "The post is stored in the Posts DB as usual." },
+        { edge: "postsvc>celeb", caption: "Its id goes into the celebrity's timeline, posts:celeb. That's the only feed-related write.", mark: [{ node: "celeb", state: "hit" }] },
+        {
+          edge: "author>postsvc",
+          reverse: true,
+          tone: "ok",
+          caption: "Over 100K followers, so no fan-out at all: 30M ZADDs would take minutes and flood Redis. One row plus one ZADD, and the post is live.",
+        },
+        { edge: "reader>feedapi", caption: "Later, one of the 30M followers opens their feed." },
+        { edge: "feedapi>celeb", caption: "The feed API pulls the celebrity's newest posts at read time. Millions of readers hit this one key, so it is also cached in-process for a few seconds." },
+        { edge: "feedapi>celeb", reverse: true, tone: "ok", caption: "The celebrity's post is merged into the page by timestamp, as if it had been pushed.", mark: [{ node: "celeb", state: null }] },
+        { edge: "reader>feedapi", reverse: true, tone: "ok", caption: "The follower sees the post seconds after it was published, and no fan-out ever ran." },
+      ],
+    },
+    {
+      id: "open-feed",
+      name: "User opens feed",
+      steps: [
+        { edge: "reader>feedapi", caption: "Sam opens the app: GET /feed?limit=20." },
+        {
+          edge: "feedapi>feedcache",
+          caption: "In parallel, the feed API reads the newest 20 ids (with scores) from feed:sam and from the timeline of each celebrity Sam follows.",
+          with: [{ edge: "feedapi>celeb", caption: "" }],
+          mark: [{ node: "feedapi", state: "busy" }],
+        },
+        {
+          edge: "feedapi>feedcache",
+          reverse: true,
+          tone: "ok",
+          caption: "Pushed ids and pulled ids come back, each with its timestamp.",
+          with: [{ edge: "feedapi>celeb", reverse: true, tone: "ok", caption: "" }],
+        },
+        { edge: "feedapi>postcache", caption: "Merge newest first, drop duplicates, cut to 20. Then hydrate: fetch the 20 post bodies from the post cache." },
+        { edge: "feedapi>postcache", reverse: true, tone: "miss", caption: "18 hits and 2 misses.", mark: [{ node: "postcache", state: "miss" }] },
+        { edge: "feedapi>postsdb", caption: "The 2 missing posts are read from a Posts DB replica and written back to the post cache for an hour.", mark: [{ node: "postcache", state: null }] },
+        { edge: "feedapi>postsdb", reverse: true, caption: "Rows returned. Deleted posts are filtered out here, so a post deleted after fan-out simply disappears." },
+        {
+          edge: "reader>feedapi",
+          reverse: true,
+          tone: "ok",
+          caption: "The page is lightly ranked and 20 posts return with nextCursor, the last timestamp. Well under 200 ms.",
+          mark: [{ node: "feedapi", state: null }],
+        },
+        { edge: "reader>cdn", caption: "Images and video load from the CDN, never through the feed API." },
+      ],
+    },
+  ],
+};
+
+export const pushVsPull: FlowSpec = {
+  id: "push-vs-pull",
+  title: "Fan-out on write vs fan-out on read",
+  description:
+    "Push writes a post id into every follower's feed so a read is one lookup. Pull writes once to the author's timeline and merges every followed author's timeline at read time.",
+  nodes: [
+    { id: "author", label: "Author", kind: "client", col: 0, row: 1 },
+    { id: "postsvc", label: "Post service", kind: "service", col: 1, row: 1 },
+    { id: "feeds", label: "Follower feeds", kind: "cache", col: 2, row: 0, sub: "1 ZSET/follower" },
+    { id: "timelines", label: "Author timelines", kind: "cache", col: 2, row: 2, sub: "1 ZSET/author" },
+    { id: "feedapi", label: "Feed API", kind: "service", col: 3, row: 1 },
+    { id: "reader", label: "Reader (Ben)", kind: "client", col: 4, row: 1 },
+  ],
+  edges: [
+    { from: "author", to: "postsvc" },
+    { from: "postsvc", to: "feeds", label: "× followers" },
+    { from: "postsvc", to: "timelines", label: "× 1" },
+    { from: "feedapi", to: "feeds", label: "1 read" },
+    { from: "feedapi", to: "timelines", label: "× followees" },
+    { from: "reader", to: "feedapi" },
+  ],
+  scenarios: [
+    {
+      id: "push",
+      name: "Push (fan-out on write)",
+      steps: [
+        { edge: "author>postsvc", caption: "An author with 200 followers posts." },
+        {
+          edge: "postsvc>feeds",
+          caption: "Fan-out on write: the post id is written into all 200 follower feeds. 200 writes for one post, done in the background.",
+          with: [{ edge: "postsvc>feeds", caption: "" }, { edge: "postsvc>feeds", caption: "" }],
+          mark: [{ node: "feeds", state: "busy" }],
+        },
+        { edge: "reader>feedapi", caption: "Later, Ben opens his feed.", mark: [{ node: "feeds", state: null }] },
+        { edge: "feedapi>feeds", caption: "One read: the newest 20 ids from feed:ben. His feed is already assembled." },
+        { edge: "feedapi>feeds", reverse: true, tone: "ok", caption: "The ids come back in about a millisecond.", mark: [{ node: "feeds", state: "hit" }] },
+        {
+          edge: "reader>feedapi",
+          reverse: true,
+          tone: "ok",
+          caption: "Cheap, fast reads; expensive writes. An author with 30M followers would need 30M writes for every post.",
+          mark: [{ node: "feeds", state: null }],
+        },
+      ],
+    },
+    {
+      id: "pull",
+      name: "Pull (fan-out on read)",
+      steps: [
+        { edge: "author>postsvc", caption: "The same author posts." },
+        { edge: "postsvc>timelines", caption: "Fan-out on read: one write, to the author's own timeline. Nothing else.", mark: [{ node: "timelines", state: "ok" }] },
+        { edge: "reader>feedapi", caption: "Ben opens his feed. He follows 300 people.", mark: [{ node: "timelines", state: null }] },
+        {
+          edge: "feedapi>timelines",
+          caption: "The feed API reads the recent posts of all 300 followed authors…",
+          with: [{ edge: "feedapi>timelines", caption: "" }, { edge: "feedapi>timelines", caption: "" }],
+          mark: [{ node: "feedapi", state: "busy" }],
+        },
+        {
+          edge: "feedapi>timelines",
+          reverse: true,
+          caption: "…then merges 300 lists, sorts them and keeps the top 20. Always fresh, but every feed open costs hundreds of lookups.",
+          with: [{ edge: "feedapi>timelines", reverse: true, caption: "" }, { edge: "feedapi>timelines", reverse: true, caption: "" }],
+        },
+        {
+          edge: "reader>feedapi",
+          reverse: true,
+          tone: "miss",
+          caption: "Cheap writes, slow reads. Real systems combine both: push for most authors, pull for celebrities.",
+          mark: [{ node: "feedapi", state: null }],
+        },
+      ],
+    },
+  ],
+};
