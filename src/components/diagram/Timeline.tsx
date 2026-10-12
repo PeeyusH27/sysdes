@@ -54,7 +54,8 @@ export function Timeline({ spec, seconds = 6 }: { spec: TimelineSpec; seconds?: 
 
   return (
     <figure ref={box} className="flow timeline">
-      <div className="flow-scroll">
+      {/* Focusable so keyboard users can scroll it sideways when it is wider than the column. */}
+      <div className="flow-scroll" tabIndex={0} role="group" aria-labelledby={`${uid}t`}>
         <svg viewBox={`0 0 ${W} ${height}`} role="img" aria-labelledby={`${uid}t`} style={{ width: "100%", maxWidth: W, minWidth: 520 }}>
           <title id={`${uid}t`}>{spec.title}</title>
           {ticks.map((v) => (

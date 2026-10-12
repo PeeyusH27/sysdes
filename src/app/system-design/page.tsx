@@ -4,6 +4,8 @@ import { deepDives, learnSteps, questions } from "@content/registry";
 import { requestJourney } from "@content/home";
 import { FlowDiagram } from "@/components/diagram/FlowDiagram";
 import { CapacityCalculator } from "@/components/widgets/CapacityCalculator";
+import { shorts } from "@content/shorts";
+import { ShortsStrip } from "@/components/content/HubBits";
 import { ContinueLearning } from "../home-client";
 
 export const metadata = {
@@ -61,6 +63,12 @@ export default function SystemDesignHome() {
           <p>Drag components onto a canvas, connect them, simulate traffic, and get graded on challenges.</p>
         </Link>
       </div>
+
+      <ShortsStrip
+        count={shorts.filter((s) => s.track === "Building blocks").length}
+        label="building blocks: Bloom filters, HyperLogLog, gossip, Raft, LSM trees, sagas, OAuth and more"
+        href={`/shorts?s=${shorts.find((s) => s.track === "Building blocks")?.id ?? ""}`}
+      />
 
       <ContinueLearning />
 

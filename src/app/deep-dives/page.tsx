@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { ArrowRight, Clock } from "lucide-react";
 import { deepDives } from "@content/registry";
+import { shorts } from "@content/shorts";
+import { DoneBadge, ShortsStrip } from "@/components/content/HubBits";
 
 export const metadata = { title: "Deep dives", description: "The techniques that come up again and again." };
 
@@ -13,17 +16,27 @@ export default function DeepDivesIndex() {
         </h1>
         <p className="lede">Caching, sharding, storage, real-time delivery, connections and request flows: each with an animated diagram, a simulator, a comparison table and code cards.</p>
       </header>
-      <div className="grid-auto">
+      <ShortsStrip count={shorts.filter((s) => s.track === "System design" && s.source?.startsWith("/deep-dives/")).length} label="these techniques" />
+      <div className="grid-auto" style={{ marginTop: 18 }}>
         {deepDives.map((d) => (
-          <Link key={d.slug} href={`/deep-dives/${d.slug}`} className="card card-link">
-            <span className="eyebrow">Deep dive {d.order} · {d.minutes} min</span>
-            <h3 style={{ margin: "6px 0 6px", fontSize: 18 }}>{d.title}</h3>
-            <p className="muted" style={{ margin: "0 0 10px", fontSize: 14.5 }}>{d.summary}</p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          <Link key={d.slug} href={`/deep-dives/${d.slug}`} className="card card-link topic-card">
+            <span className="tc-top">
+              <span className="tc-num">{String(d.order).padStart(2, "0")}</span>
+              <span className="tc-min">
+                <Clock size={12} aria-hidden /> {d.minutes} min
+              </span>
+              <DoneBadge href={`/deep-dives/${d.slug}`} />
+            </span>
+            <h3>{d.title}</h3>
+            <p>{d.summary}</p>
+            <span className="tags">
               {d.tags.slice(0, 4).map((t) => (
                 <span key={t} className="tag">{t}</span>
               ))}
-            </div>
+            </span>
+            <span className="tc-go">
+              Open deep dive <ArrowRight size={14} aria-hidden />
+            </span>
           </Link>
         ))}
       </div>

@@ -69,7 +69,44 @@ test("reduced motion renders no travelling packets", async ({ page }) => {
   await expect(figure.locator(".flow-caption")).not.toHaveText("");
 });
 
-const auditPaths = ["/", "/system-design", "/learn", "/questions", "/deep-dives", "/playground/url-shortener", "/dsa", "/dsa/patterns", "/dsa/problems", "/dsa/problems/three-sum", ...allPages().map((p) => p.href.split("#")[0])];
+test("lesson sections are cards you can tick off and flip through", async ({ page }) => {
+  await page.goto("/learn/caching");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  const bar = page.locator(".reader-bar");
+  const first = page.locator(".sec-card").first();
+  await expect(first.getByRole("heading", { level: 2 })).toHaveText("Why it matters");
+  await first.getByRole("button", { name: "Got it" }).click();
+  await expect(first.getByRole("button", { name: "Got it" })).toHaveAttribute("aria-pressed", "true");
+  await expect(bar).toContainText("Where caches live");
+  await expect(page.locator(".section-map")).toContainText("1 of 12 ticked");
+
+  await bar.getByRole("button", { name: /Cards/ }).click();
+  await expect(page.locator(".sec-card:visible")).toHaveCount(1);
+  await expect(page.locator(".sec-card[data-active]")).toHaveAttribute("data-sec", "where-caches-live");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".sec-card[data-active]")).toHaveAttribute("data-sec", "what-to-cache-and-how-to-name-it");
+  await page.getByRole("navigation", { name: "Section cards" }).getByRole("button", { name: /Failure modes/ }).click();
+  await expect(page.locator(".sec-card[data-active]")).toHaveAttribute("data-sec", "failure-modes");
+
+  await page.reload();
+  await expect(page.locator(".sec-card:visible")).toHaveCount(1);
+  await bar.getByRole("button", { name: /Scroll/ }).click();
+  await expect(page.locator(".sec-card:visible")).toHaveCount(12);
+});
+
+test("arrow keys inside a diagram still drive the diagram in Cards mode", async ({ page }) => {
+  await page.goto("/learn/caching");
+  await page.locator(".reader-bar").getByRole("button", { name: /Cards/ }).click();
+  const card = page.locator(".sec-card[data-active]");
+  await expect(card).toHaveAttribute("data-sec", "why-it-matters");
+  await card.locator(".flow-scroll").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(card.locator(".step-count").first()).toHaveText(/^1 \//);
+  await expect(card).toHaveAttribute("data-sec", "why-it-matters");
+});
+
+const auditPaths = ["/", "/shorts", "/system-design", "/learn", "/questions", "/deep-dives", "/playground/url-shortener", "/dsa", "/dsa/patterns", "/dsa/problems", "/dsa/problems/three-sum", ...allPages().map((p) => p.href.split("#")[0])];
 for (const path of [...new Set(auditPaths)]) {
   test(`no serious accessibility violations on ${path}`, async ({ page }) => {
     await page.goto(path);

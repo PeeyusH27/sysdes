@@ -1,0 +1,154 @@
+/* Lesson reader: section cards, the sticky reader bar, Cards mode and the live "On this page" map.
+   Sections are server-rendered `.sec-card`s (src/lib/mdx/rehype-section-cards.mjs); src/components/layout/Reader.tsx
+   adds data-mode / data-active / data-dir. Without JS the page is a plain stack of cards. */
+
+/* ------------------------------------------------------------------ lesson hero */
+.lesson-hero { position: relative; margin-top: 18px; padding: 26px 28px 22px !important; border: 1px solid var(--border); border-radius: var(--radius-lg); background:
+  radial-gradient(700px 240px at 0% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%),
+  radial-gradient(500px 220px at 100% 0%, color-mix(in srgb, var(--k-client) 10%, transparent), transparent 70%),
+  var(--card); box-shadow: var(--shadow); overflow: hidden; }
+.lesson-hero h1 { margin-top: 6px !important; }
+.lesson-hero .lede { font-size: 18px; line-height: 1.6; }
+.lesson-hero .meta-row .tag { background: color-mix(in srgb, var(--card) 70%, transparent); }
+@media (max-width: 640px) { .lesson-hero { padding: 20px 18px 16px !important; border-radius: 18px; } }
+
+/* ------------------------------------------------------------------ section cards */
+.sec-card {
+  --kind: var(--accent);
+  position: relative; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 20px 26px 18px; box-shadow: var(--shadow); scroll-margin-top: 136px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.sec-card[data-kind=visual] { --kind: var(--k-client); }
+.sec-card[data-kind=code] { --kind: var(--k-gateway); }
+.sec-card[data-kind=practice] { --kind: var(--accent-2); }
+.sec-card::before { content: ""; position: absolute; left: -1px; top: 26px; width: 4px; height: 34px; border-radius: 0 4px 4px 0; background: var(--kind); }
+.sec-card:hover { border-color: color-mix(in srgb, var(--kind) 30%, var(--border)); }
+.prose > .sec-card { margin-top: 22px; }
+.sec-card > * + * { margin-top: 1em; }
+.sec-card > :last-child { margin-bottom: 0; }
+@media (max-width: 640px) { .sec-card { padding: 16px 16px 14px; border-radius: 18px; } .sec-card::before { top: 20px; height: 28px; } }
+
+.sec-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sec-n { font: 700 12.5px var(--font-mono); letter-spacing: .04em; color: var(--kind); background: color-mix(in srgb, var(--kind) 12%, transparent); border-radius: 8px; padding: 2px 8px; }
+.sec-kind { display: inline-flex; align-items: center; gap: 5px; font: 600 11.5px var(--font-sans); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.sec-kind svg { color: var(--kind); }
+.sec-tick { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font: 650 12px var(--font-sans); color: var(--good-ink); background: color-mix(in srgb, var(--good) 12%, transparent); border-radius: 999px; padding: 2px 10px 2px 7px; animation: pop-in .35s var(--ease-spring); }
+.sec-card > h2 { margin: 8px 0 4px !important; font-size: clamp(22px, 2.6vw, 27px); letter-spacing: -.015em; scroll-margin-top: 140px; }
+
+/* readable measure + skimmable emphasis inside cards */
+.sec-card > p, .sec-card > ul, .sec-card > ol, .sec-card > blockquote { max-width: 74ch; }
+.sec-card > ul > li::marker { color: var(--kind); }
+.sec-card > ol > li::marker { color: var(--kind); font-weight: 700; }
+.prose :is(p, li) > strong { background: linear-gradient(transparent 60%, color-mix(in srgb, var(--accent) 20%, transparent) 0); border-radius: 2px; padding: 0 .08em; }
+.sec-card > h3::before { content: ""; display: inline-block; vertical-align: .18em; width: 8px; height: 8px; margin-right: 10px; border-radius: 2px; background: var(--kind); transform: rotate(45deg); }
+
+/* things that are already cards, inside a card: flatter, so they read as part of it */
+.sec-card :is(.flow:not(.flow--compact), .widget, .chart, .quiz, .followups, .table-wrap, .callout, .code-block, .code-tabs, .req-grid section) { box-shadow: none; }
+.sec-card .flow:not(.flow--compact) { padding-left: 10px; padding-right: 10px; }
+
+/* footer: tick and move on */
+.sec-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 22px !important; padding-top: 14px; border-top: 1px dashed var(--border); }
+.got-btn { display: inline-flex; align-items: center; gap: 9px; font: 650 14px var(--font-sans); padding: 6px 16px 6px 7px; border-radius: 999px; border: 1.5px solid var(--border-strong); background: var(--card); color: var(--fg); cursor: pointer; transition: border-color .15s, background .2s, transform .15s; }
+.got-btn:hover { border-color: var(--accent); }
+.got-btn:active { transform: scale(.96); }
+.got-box { position: relative; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--border-strong); display: grid; place-items: center; color: transparent; transition: background .2s, border-color .2s, color .2s; }
+.got-btn:hover .got-box { color: color-mix(in srgb, var(--accent) 55%, transparent); border-color: var(--accent); }
+.got-btn[aria-pressed=true] { background: color-mix(in srgb, var(--accent) 11%, var(--card)); border-color: var(--accent); }
+.got-btn[aria-pressed=true] .got-box { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); animation: pop-in .45s var(--ease-spring); }
+.got-btn[aria-pressed=true] .got-box::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--accent); animation: burst .6s ease-out forwards; pointer-events: none; }
+.sec-next { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; border: 0; background: none; color: var(--fg); font: 600 14px var(--font-sans); cursor: pointer; padding: 6px 4px; border-radius: 8px; text-align: left; }
+.sec-next .muted { font-weight: 500; }
+.sec-next svg { transition: transform .2s var(--ease-out); color: var(--accent); }
+.sec-next:hover svg { transform: translateX(3px); }
+@keyframes pop-in { 0% { transform: scale(.55); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes burst { from { transform: scale(1); opacity: .8; } to { transform: scale(2.1); opacity: 0; } }
+
+/* reveal on scroll: CSS only, so nothing waits for JS and nothing is hidden without it */
+@keyframes sec-reveal { from { opacity: .3; transform: translateY(30px) scale(.985); } }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    :root:not([data-motion=reduce]) .reader[data-mode=scroll] .sec-card { animation: sec-reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 30%; }
+  }
+}
+
+/* ------------------------------------------------------------------ Cards mode */
+.reader[data-mode=cards] .sec-card:not([data-active]) { display: none; }
+.reader[data-mode=cards] .sec-card[data-active] {
+  min-height: 46vh; margin-bottom: 22px; animation: deck-next .45s var(--ease-out) both;
+  /* two cards peeking out underneath */
+  box-shadow: 0 10px 0 -5px var(--card), 0 10px 0 -4px var(--border), 0 20px 0 -10px var(--card), 0 20px 0 -9px var(--border), var(--shadow);
+}
+.reader[data-mode=cards][data-dir=prev] .sec-card[data-active] { animation-name: deck-prev; }
+@keyframes deck-next { from { opacity: 0; transform: translateX(48px) rotate(.8deg); } }
+@keyframes deck-prev { from { opacity: 0; transform: translateX(-48px) rotate(-.8deg); } }
+
+.deck-nav { position: sticky; bottom: 12px; z-index: 20; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; margin-top: 18px; padding: 8px; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--card) 86%, transparent); backdrop-filter: blur(12px) saturate(1.4); box-shadow: var(--shadow-lg); }
+.deck-dots { list-style: none; padding: 0 !important; margin: 0 !important; display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: wrap; }
+.deck-dots li { margin: 0 !important; display: flex; }
+.deck-dots button { width: 9px; height: 9px; padding: 0; border-radius: 999px; border: 0; background: var(--border-strong); cursor: pointer; transition: width .3s var(--ease-out), background .2s; }
+.deck-dots button[data-got=true] { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.deck-dots button[aria-current=step] { width: 26px; background: var(--accent); }
+.deck-dots button:hover { background: var(--accent); }
+.deck-hint { grid-column: 1 / -1; margin: -2px 0 2px !important; text-align: center; font-size: 12px; color: var(--muted); display: none; }
+@media (hover: hover) and (min-width: 900px) { .deck-nav { border-radius: 22px; } .deck-hint { display: block; } }
+.deck-count { display: none; font: 600 13px var(--font-mono); color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) {
+  .deck-nav .btn { padding: 8px 12px; }
+  .deck-dots { display: none !important; }
+  .deck-count { display: block; grid-column: 2; grid-row: 1; }
+}
+
+/* ------------------------------------------------------------------ reader bar */
+.reader-bar { position: sticky; top: 66px; z-index: 30; display: flex; align-items: center; gap: 8px; margin: 16px 0 4px; padding: 6px 6px 6px 8px; border: 1px solid var(--border); border-radius: 18px; background: color-mix(in srgb, var(--card) 86%, transparent); backdrop-filter: blur(12px) saturate(1.4); box-shadow: var(--shadow); }
+.reader-bar.is-celebrating { border-color: var(--good); animation: glow 1.2s ease-out 2; }
+@keyframes glow { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 22%, transparent), var(--shadow); } }
+.rb-progress { flex: none; display: grid; }
+.rb-where { position: relative; flex: 1; min-width: 0; }
+.rb-current { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 6px; width: 100%; border: 0; background: transparent; color: var(--fg); text-align: left; padding: 3px 8px; border-radius: 10px; cursor: pointer; }
+.rb-current:hover:not(:disabled) { background: var(--card-2); }
+.rb-current:disabled { opacity: 1; cursor: default; }
+.rb-current small { grid-column: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); line-height: 1.3; }
+.rb-title { grid-column: 1; font-weight: 650; font-size: 14.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: title-in .35s var(--ease-out); }
+.rb-chev { grid-column: 2; grid-row: 1 / span 2; color: var(--muted); transition: transform .2s; }
+.rb-current[aria-expanded=true] .rb-chev { transform: rotate(180deg); }
+@keyframes title-in { from { opacity: 0; transform: translateY(6px); } }
+.rb-menu { position: absolute; left: 0; top: calc(100% + 10px); width: min(420px, calc(100vw - 40px)); max-height: 60vh; overflow: auto; list-style: none; margin: 0; padding: 6px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--card); box-shadow: var(--shadow-lg); animation: menu-in .18s var(--ease-out); }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+.rb-menu button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--fg); text-align: left; font-size: 14px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.rb-menu button:hover, .rb-menu button[aria-current=step] { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.rb-menu button[aria-current=step] { font-weight: 650; }
+.rb-menu-n { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; border: 1px solid var(--border-strong); color: var(--muted); }
+.rb-menu-n[data-got=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.rb-party { flex: none; color: var(--accent-2); animation: pop-in .5s var(--ease-spring); }
+.rb-step { display: flex; gap: 2px; }
+.rb-mode { flex: none; }
+.rb-mode button { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+@media (max-width: 560px) { .rb-mode button span { display: none; } .rb-mode button { padding: 6px 8px; } .reader-bar { top: 64px; } .rb-step { display: none; } }
+
+.progress-ring { display: block; overflow: visible; }
+.pr-track { fill: none; stroke: var(--border); stroke-width: 3.5; }
+.pr-fill { fill: none; stroke: var(--accent); stroke-width: 3.5; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset .7s var(--ease-out), stroke .3s; }
+.progress-ring[data-full=true] .pr-fill { stroke: var(--good); }
+.progress-ring text { font: 700 11px var(--font-sans); fill: var(--fg); }
+
+/* ------------------------------------------------------------------ live "On this page" */
+.section-map ul { border-left: 0; display: grid; gap: 2px; }
+.section-map a { display: flex; gap: 9px; align-items: flex-start; padding: 5px 8px; margin-left: 0; border-left: 0; border-radius: 9px; line-height: 1.4; transition: background .15s, color .15s; }
+.section-map a:hover { background: var(--card); border-left-color: transparent; }
+.section-map li[data-active] a { color: var(--fg); background: var(--card); font-weight: 600; box-shadow: inset 0 0 0 1px var(--border); }
+.sm-dot { flex: none; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--border-strong); display: grid; place-items: center; transition: background .2s, border-color .2s; }
+.section-map li[data-active] .sm-dot { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.section-map li[data-got] .sm-dot { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.sm-progress { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--muted); }
+
+/* ------------------------------------------------------------------ motion off */
+@media (prefers-reduced-motion: reduce) {
+  .reader .sec-card, .rb-title, .rb-menu, .sec-tick, .got-box, .got-box::after, .rb-party, .reader-bar.is-celebrating { animation: none !important; }
+}
+:root[data-motion=reduce] :is(.reader .sec-card, .rb-title, .rb-menu, .sec-tick, .got-box, .got-box::after, .rb-party, .reader-bar.is-celebrating) { animation: none !important; }
+
+@media print {
+  .sec-card { box-shadow: none; break-inside: auto; }
+  .reader[data-mode=cards] .sec-card:not([data-active]) { display: block; }
+}

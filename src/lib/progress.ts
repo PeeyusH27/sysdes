@@ -9,6 +9,10 @@ type Progress = {
   recent: string[];
   reduceMotion: boolean;
   challenge: Record<string, number>;
+  /** "Got it" per lesson section, keyed `${pathname}#${sectionId}`. */
+  sections: Record<string, number>;
+  /** Lessons read as one long page, or one section card at a time. */
+  readerMode: "scroll" | "cards";
   toggleDone: (href: string) => void;
   markDone: (href: string) => void;
   saveQuiz: (href: string, score: number) => void;
@@ -16,6 +20,8 @@ type Progress = {
   visit: (href: string) => void;
   setReduceMotion: (v: boolean) => void;
   saveChallenge: (slug: string, percent: number) => void;
+  toggleSection: (key: string) => void;
+  setReaderMode: (mode: "scroll" | "cards") => void;
 };
 
 export const useProgress = create<Progress>()(
@@ -27,6 +33,8 @@ export const useProgress = create<Progress>()(
       recent: [],
       reduceMotion: false,
       challenge: {},
+      sections: {},
+      readerMode: "scroll",
       toggleDone: (href) =>
         set((s) => {
           const done = { ...s.done };
@@ -45,6 +53,14 @@ export const useProgress = create<Progress>()(
       visit: (href) => set((s) => ({ recent: [href, ...s.recent.filter((r) => r !== href)].slice(0, 8) })),
       setReduceMotion: (v) => set({ reduceMotion: v }),
       saveChallenge: (slug, percent) => set((s) => ({ challenge: { ...s.challenge, [slug]: Math.max(percent, s.challenge[slug] ?? 0) } })),
+      toggleSection: (key) =>
+        set((s) => {
+          const sections = { ...s.sections };
+          if (sections[key]) delete sections[key];
+          else sections[key] = Date.now();
+          return { sections };
+        }),
+      setReaderMode: (readerMode) => set({ readerMode }),
     }),
     { name: "sds-progress", version: 1 },
   ),

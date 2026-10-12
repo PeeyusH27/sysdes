@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { ArrowRight, Clock } from "lucide-react";
 import { learnSteps } from "@content/registry";
+import { shorts } from "@content/shorts";
+import { DoneBadge, ShortsStrip } from "@/components/content/HubBits";
 import { MetroMap } from "./metro";
 
 export const metadata = { title: "HLD path", description: "Ten steps from requirements to case studies." };
@@ -18,14 +21,22 @@ export default function LearnIndex() {
         </p>
       </header>
       <MetroMap />
+      <ShortsStrip count={shorts.filter((s) => s.track === "System design" && s.source?.startsWith("/learn/")).length} label="the HLD path" />
       <div className="grid-auto" style={{ marginTop: 18 }}>
         {learnSteps.map((s) => (
-          <Link key={s.slug} href={`/learn/${s.slug}`} className="card card-link">
-            <span className="eyebrow">
-              Step {s.order} · {s.minutes} min
+          <Link key={s.slug} href={`/learn/${s.slug}`} className="card card-link topic-card">
+            <span className="tc-top">
+              <span className="tc-num">{String(s.order).padStart(2, "0")}</span>
+              <span className="tc-min">
+                <Clock size={12} aria-hidden /> {s.minutes} min
+              </span>
+              <DoneBadge href={`/learn/${s.slug}`} />
             </span>
-            <h3 style={{ margin: "6px 0 6px", fontSize: 18 }}>{s.title}</h3>
-            <p className="muted" style={{ margin: 0, fontSize: 14.5 }}>{s.summary}</p>
+            <h3>{s.title}</h3>
+            <p>{s.summary}</p>
+            <span className="tc-go">
+              Step {s.order} <ArrowRight size={14} aria-hidden />
+            </span>
           </Link>
         ))}
       </div>

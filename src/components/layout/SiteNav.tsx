@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Menu, Moon, Network, Search, Sun, Wind } from "lucide-react";
+import { Menu, Moon, Network, Search, Sun, Wind, Zap } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useHydrated } from "@/lib/hooks";
 import { useProgress } from "@/lib/progress";
@@ -12,6 +12,7 @@ import { CommandMenu } from "./CommandMenu";
 const TRACKS = [
   { href: "/dsa", label: "DSA", match: ["/dsa"] },
   { href: "/system-design", label: "System Design", match: ["/system-design", "/learn", "/deep-dives", "/questions", "/playground", "/cheatsheet", "/glossary"] },
+  { href: "/shorts", label: "Shorts", match: ["/shorts"] },
 ];
 const SUB: Record<string, { href: string; label: string }[]> = {
   "/dsa": [
@@ -26,6 +27,7 @@ const SUB: Record<string, { href: string; label: string }[]> = {
     { href: "/playground", label: "Playground" },
     { href: "/cheatsheet", label: "Cheatsheet" },
   ],
+  "/shorts": [],
 };
 const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
@@ -64,8 +66,9 @@ export function SiteNav() {
             {TRACKS.map((t) => {
               const active = t.match.some((m) => under(pathname, m));
               return (
-                <div key={t.href} className={cn("nav-track", active && "is-active")}>
+                <div key={t.href} className={cn("nav-track", active && "is-active", t.href === "/shorts" && "nav-track--shorts")}>
                   <Link href={t.href} className="nav-track-link" aria-current={pathname === t.href ? "page" : active ? "true" : undefined} onClick={() => setOpen(false)}>
+                    {t.href === "/shorts" && <Zap size={14} aria-hidden />}
                     {t.label}
                   </Link>
                   {active &&
@@ -79,6 +82,9 @@ export function SiteNav() {
             })}
           </div>
         </nav>
+        <Link href="/shorts" className="shorts-btn" aria-label="Shorts" aria-current={under(pathname, "/shorts") ? "page" : undefined} onClick={() => setOpen(false)}>
+          <Zap size={15} aria-hidden /> <span>Shorts</span>
+        </Link>
         <button type="button" className="search-btn" onClick={() => setSearchOpen(true)} aria-label="Search (Ctrl+K)">
           <Search size={15} aria-hidden /> <span className="label">Search</span> <kbd>⌘K</kbd>
         </button>

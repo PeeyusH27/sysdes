@@ -1,6 +1,7 @@
 import type { MDXComponents } from "mdx/types";
 import Link from "next/link";
 import { Callout, FollowUp, FollowUps, Requirements, Step, Steps, TLDR } from "@/components/content/Blocks";
+import { LessonSection } from "@/components/content/LessonSection";
 import { CodeBlock, CodeTabs, Pre } from "@/components/content/CodeBlock";
 import { Quiz } from "@/components/content/Quiz";
 import { BarChart } from "@/components/charts/BarChart";
@@ -42,6 +43,8 @@ const components = {
     ) : (
       <input {...props} />
     ),
+  // Added around every `##` section by the rehype-section-cards plugin, not written in MDX.
+  LessonSection,
   TLDR,
   Callout,
   Requirements,

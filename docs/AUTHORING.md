@@ -31,6 +31,14 @@ Do not edit `content/registry.ts`, `src/mdx-components.tsx`, or anything outside
 - Leave a blank line after an opening component tag if you want markdown (lists, bold) inside it, as in the example.
 - End question pages with `<FollowUps>` then `<Quiz items={quiz} />`. End lessons/deep dives with interview Q&A (`<FollowUps>`) then `<Quiz items={quiz} />`.
 
+## Sections become cards
+
+Every `##` section is wrapped in a numbered card automatically (`src/lib/mdx/rehype-section-cards.mjs`), with a reading-time estimate, a kind label (Read, Interactive, Code or Practice) and a "Got it" button. Readers can switch between scrolling the page and flipping one card at a time. So:
+
+- Keep each `##` section about one idea. A section that takes more than about 4 minutes to read is a sign it should be split.
+- Never write `<LessonSection>` yourself; the plugin adds it.
+- Content before the first `##` (the `<TLDR>`) stays outside the cards.
+
 ## Components available in MDX
 
 | Component | Props |
@@ -72,6 +80,10 @@ and `import type { QuizItem } from "@/components/content/Quiz";` in `quiz.ts`.
 - If a snippet needs Redis/DB/Express (`redis`, `pool`, `db`, `app`, `queue`), make its **first line** `// @display-only: needs …` (it's hidden from readers and tells tests to skip it).
 - Pure snippets (algorithms, calculators, data structures) **must** have a sibling `name.test.js` using `import { test, expect } from 'vitest'`. Verify every number you claim in comments.
 - Fix the source bugs listed in `docs/plan/README.md` §5; never port the buggy versions.
+
+## Shorts
+
+`/shorts` is a swipeable feed of one-minute summaries. Each short lives in `content/shorts/` (`system-design.ts`, `deep-dives-questions.ts`, `dsa.ts`) and follows the `Short` type in `content/shorts/types.ts`: a hook, 3–5 bullets, 1–3 "go deeper" groups, optional code (10 lines max) and a `source` link to the page section it summarises. When you change a lesson, update its shorts too. `npx vitest run tests/shorts.test.ts` checks the lengths, the formatting (only `**bold**` and `` `code` ``), and that every `source` anchor exists.
 
 ## Check your work (run often)
 

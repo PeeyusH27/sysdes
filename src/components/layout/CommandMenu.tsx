@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import MiniSearch from "minisearch";
-import { Binary, BookOpen, Boxes, Braces, Code2, FileQuestion, Library } from "lucide-react";
+import { Binary, BookOpen, Boxes, Braces, Code2, FileQuestion, Library, Zap } from "lucide-react";
 
 type Doc = { id: string; title: string; section: string; summary: string; tags: string; body: string };
 
@@ -23,7 +23,7 @@ function loadIndex() {
   return indexPromise;
 }
 
-const ICONS: Record<string, typeof BookOpen> = { Learn: BookOpen, "Deep dives": Library, Questions: FileQuestion, Reference: Boxes, Patterns: Binary, JavaScript: Braces, Problems: Code2 };
+const ICONS: Record<string, typeof BookOpen> = { Learn: BookOpen, "Deep dives": Library, Questions: FileQuestion, Reference: Boxes, Patterns: Binary, JavaScript: Braces, Problems: Code2, Shorts: Zap };
 
 export function CommandMenu({ onClose }: { onClose: () => void }) {
   const router = useRouter();

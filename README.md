@@ -5,6 +5,8 @@ A Next.js site for interview preparation with two tracks:
 - **DSA** (`/dsa`): a JavaScript-for-DSA cheat sheet with runnable snippets, 22 patterns explained step by step with animations synced to the code, and practice problems solved in an in-browser editor. Tests run in a Web Worker, solved problems are tracked, and a step-by-step solution unlocks after the first wrong submission.
 - **System design** (`/system-design`): a 10-step HLD path, 6 deep dives and 7 interview questions with detailed JavaScript answers. Diagrams are animated SVG you can play, pause and step through; widgets simulate load balancers, caches, queues and more; and a drag-and-drop playground lints, simulates and grades your designs.
 
+Every lesson is a stack of section cards you can tick off, or flip through one at a time in Cards mode. **Shorts** (`/shorts`) cover both tracks as one-minute bullet-point cards: on a phone you swipe sideways for the next one and scroll down to read more; on desktop you use the arrows or ←/→.
+
 The implementation plans are in [`docs/plan/`](docs/plan/README.md) (the DSA track is [`07-dsa-track.md`](docs/plan/07-dsa-track.md)). Content conventions are in [`docs/AUTHORING.md`](docs/AUTHORING.md) and [`docs/AUTHORING-DSA.md`](docs/AUTHORING-DSA.md).
 
 ## Run it
@@ -42,6 +44,10 @@ npx playwright test          # end-to-end (builds must exist: run `npm run build
 | `content/dsa/patterns/<NN-slug>/` | Pattern lessons: `page.mdx`, `viz.ts` (animation traces), `quiz.ts`, `snippets/` |
 | `content/dsa/js/` | Cheat sheet topics (`<NN-id>.mdx`) and their runnable snippets |
 | `content/dsa/problems/<slug>/` | Problems: `problem.json` (tests), `statement.md`, `solution.md`, `solution.js` |
+| `content/shorts/` | One-minute shorts for `/shorts` (schema in `types.ts`, validated by `tests/shorts.test.ts`) |
+| `src/lib/mdx/rehype-section-cards.mjs` | Wraps every `##` section of an MDX page in a `LessonSection` card |
+| `src/components/layout/Reader.tsx` | Lesson reader: section progress, Scroll / Cards modes, the live "On this page" map |
+| `src/components/shorts/` | The shorts deck (swipe / keys / URL), home-page teaser |
 | `src/components/algo/` | Algorithm animation engine: `defineTrace` + view builders, `AlgoPlayer` |
 | `src/components/dsa/`, `src/lib/dsa/` | Problem workspace, CodeMirror editor, runner client, progress store, problem loader |
 | `public/dsa-runner.js` | The sandboxed test runner (Web Worker in the browser, evaluated directly in tests) |

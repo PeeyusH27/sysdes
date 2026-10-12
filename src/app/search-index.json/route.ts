@@ -1,4 +1,5 @@
 import { allPages } from "@content/registry";
+import { shorts } from "@content/shorts";
 import { mdxToPlainText, readContent } from "@/lib/content";
 import { loadProblems } from "@/lib/dsa/load";
 
@@ -25,5 +26,13 @@ export async function GET() {
       body: (await readContent(`dsa/problems/${p.slug}/statement.md`)).replace(/[`*_#>|]/g, " ").slice(0, 3000),
     })),
   );
-  return Response.json([...docs, ...problems]);
+  const shortDocs = shorts.map((s) => ({
+    id: `/shorts?s=${s.id}`,
+    title: s.title.replace(/[`*]/g, ""),
+    section: "Shorts",
+    summary: s.hook.replace(/[`*]/g, ""),
+    tags: `${s.track} ${s.topic}`,
+    body: [...s.points, ...s.more.flatMap((g) => g.points)].join(" ").replace(/[`*]/g, ""),
+  }));
+  return Response.json([...docs, ...problems, ...shortDocs]);
 }

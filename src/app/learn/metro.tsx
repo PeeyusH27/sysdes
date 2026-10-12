@@ -26,7 +26,8 @@ export function MetroMap() {
   return (
     <div className="metro card" style={{ padding: "8px 8px 4px" }}>
       <div style={{ overflowX: "auto" }}>
-        <svg viewBox={`0 0 ${W} 220`} role="group" aria-label="HLD path map" style={{ minWidth: 760 }}>
+        {/* 50 extra units on the right: the last case-study station and its label sit past W - 60. */}
+        <svg viewBox={`0 0 ${W + 50} 220`} role="group" aria-label="HLD path map" style={{ minWidth: 760 }}>
           <path d={path} className="line-base" />
           {doneUpTo > 0 && <path d={`M60,70 H${pos.get(lastDone.slug)!.x}`} className="line-done" />}
           <path d={`M${branchX},70 C${branchX + 40},70 ${branchX + 20},170 ${pos.get(cases[0].slug)!.x - 30},170 H${pos.get(cases.at(-1)!.slug)!.x}`} className="line-base" />

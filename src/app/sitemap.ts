@@ -14,6 +14,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/dsa/js",
     "/dsa/patterns",
     "/dsa/problems",
+    "/shorts",
     ...allPages()
       .map((p) => p.href)
       .filter((h) => !h.includes("#")),

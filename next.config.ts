@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 import createMDX from "@next/mdx";
 
 const nextConfig: NextConfig = {
@@ -14,11 +15,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Turbopack needs remark/rehype plugins as strings (they run in Rust land)
+// Turbopack needs remark/rehype plugins as strings (they run in Rust land). A string is resolved from each MDX
+// file's folder, so local plugins must be absolute paths.
 const withMDX = createMDX({
   options: {
     remarkPlugins: ["remark-gfm"],
-    rehypePlugins: ["rehype-slug"],
+    rehypePlugins: ["rehype-slug", path.join(process.cwd(), "src/lib/mdx/rehype-section-cards.mjs")],
   },
 });
 

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { PageActions, ReadingProgress, SideList } from "./PageChrome";
+import { DeckNav, Reader, ReaderBar, SectionMap } from "./Reader";
 
 export interface DocNavItem {
   href: string;
@@ -37,52 +39,45 @@ export function DocLayout({
   return (
     <div className="container container-wide">
       <ReadingProgress />
-      <div className={wide ? "lesson lesson--wide" : "lesson"}>
-        <SideList title={sideTitle} items={side} />
-        <article className="lesson-main">
-          <header className="page-head" style={{ paddingTop: 24 }}>
-            <div className="eyebrow">{eyebrow}</div>
-            <h1>{title}</h1>
-            {lede && <p className="lede">{lede}</p>}
-            {meta && <div className="meta-row">{meta}</div>}
-            <PageActions />
-          </header>
-          <div className="prose">{children}</div>
-          {nextNote && <p className="next-note">Next: {nextNote}</p>}
-          <nav className="prev-next" aria-label="Previous and next">
-            {prev ? (
-              <Link className="card card-link" href={prev.href}>
-                <small>← Previous</small>
-                {prev.title}
-              </Link>
-            ) : (
-              <span />
-            )}
-            {next && (
-              <Link className="card card-link next" href={next.href}>
-                <small>Next →</small>
-                {next.title}
-              </Link>
-            )}
-          </nav>
-        </article>
-        <aside className="toc" aria-label="On this page" hidden={wide}>
-          {headings.length > 0 && (
-            <>
-              <h2>On this page</h2>
-              <ul>
-                {headings
-                  .filter((h) => h.depth === 2)
-                  .map((h) => (
-                    <li key={h.id}>
-                      <a href={`#${h.id}`}>{h.text}</a>
-                    </li>
-                  ))}
-              </ul>
-            </>
-          )}
-        </aside>
-      </div>
+      <Reader>
+        <div className={wide ? "lesson lesson--wide" : "lesson"}>
+          <SideList title={sideTitle} items={side} />
+          <article className="lesson-main">
+            <header className="page-head lesson-hero">
+              <div className="eyebrow">{eyebrow}</div>
+              <h1>{title}</h1>
+              {lede && <p className="lede">{lede}</p>}
+              {meta && <div className="meta-row">{meta}</div>}
+              <PageActions />
+            </header>
+            <ReaderBar />
+            <div className="prose">{children}</div>
+            <DeckNav />
+            {nextNote && <p className="next-note">Next: {nextNote}</p>}
+            <nav className="prev-next" aria-label="Previous and next">
+              {prev ? (
+                <Link className="card card-link" href={prev.href}>
+                  <small>
+                    <ArrowLeft size={13} aria-hidden /> Previous
+                  </small>
+                  {prev.title}
+                </Link>
+              ) : (
+                <span />
+              )}
+              {next && (
+                <Link className="card card-link next" href={next.href}>
+                  <small>
+                    Next <ArrowRight size={13} aria-hidden />
+                  </small>
+                  {next.title}
+                </Link>
+              )}
+            </nav>
+          </article>
+          <SectionMap headings={headings} hidden={wide} />
+        </div>
+      </Reader>
     </div>
   );
 }

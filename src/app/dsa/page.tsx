@@ -7,6 +7,8 @@ import { problemRows } from "@/lib/dsa/load";
 import { SolvedBar, SolvedCount } from "@/components/dsa/SolvedCount";
 import { NextProblem } from "@/components/dsa/NextProblem";
 import { PatternDone } from "@/components/dsa/PatternDone";
+import { ShortsStrip } from "@/components/content/HubBits";
+import { shorts } from "@content/shorts";
 
 export const metadata = {
   title: "DSA track",
@@ -78,6 +80,8 @@ export default function DsaHome() {
           </Link>
         </li>
       </ol>
+
+      <ShortsStrip count={shorts.filter((s) => s.track === "DSA" || s.track === "JavaScript").length} label="DSA patterns and JavaScript" />
 
       <NextProblem rows={rows.map((r) => ({ slug: r.slug, title: r.title, difficulty: r.difficulty, pattern: r.patterns[0] }))} />
 

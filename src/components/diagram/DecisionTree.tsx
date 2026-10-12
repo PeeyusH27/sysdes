@@ -73,7 +73,8 @@ export function DecisionTree({ spec }: { spec: DecisionSpec }) {
       if (e.key === "y" || e.key === "Y") answer(true);
       if (e.key === "n" || e.key === "N") answer(false);
     }}>
-      <div className="flow-scroll">
+      {/* Focusable so keyboard users can scroll it sideways when it is wider than the column. */}
+      <div className="flow-scroll" tabIndex={0} role="group" aria-labelledby={`${uid}t`}>
         <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${uid}t`} style={{ width: "100%", maxWidth: width, minWidth: Math.min(width, 640) }}>
           <title id={`${uid}t`}>{spec.title}</title>
           {placed.filter((p) => p.parent).map((p) => {
