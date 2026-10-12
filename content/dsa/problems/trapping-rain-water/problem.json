@@ -1,0 +1,28 @@
+{
+  "title": "Trapping Rain Water",
+  "difficulty": "Hard",
+  "patterns": ["two-pointers", "stack", "prefix-sum"],
+  "js": ["numbers-math", "arrays"],
+  "order": 6,
+  "summary": "Given an elevation map of bars, compute how much rain water is trapped between them.",
+  "fn": "trap",
+  "params": ["height"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]], "expected": 6, "explain": "Water sits above indices 2 (1 unit), 4 (1), 5 (2), 6 (1) and 9 (1): 6 units in total." },
+    { "args": [[4, 2, 0, 3, 2, 5]], "expected": 9 },
+    { "args": [[1]], "expected": 0, "explain": "A single bar can't hold water." },
+    { "args": [[3, 0, 3]], "expected": 3 },
+    { "args": [[5, 4, 3, 2, 1]], "expected": 0 },
+    { "args": [[2, 0, 2, 0, 2]], "expected": 4 },
+    { "args": [[4, 2, 3]], "expected": 1 },
+    { "args": [[0, 7, 1, 4, 6]], "expected": 7 },
+    { "args": [[5, 2, 1, 2, 1, 5]], "expected": 14 }
+  ],
+  "hints": [
+    "Think about one index at a time. How high can water stand above index i?",
+    "Water above i is min(highest bar on its left, highest bar on its right) - height[i]. Precomputing both maxima is O(n) time and O(n) space.",
+    "To use O(1) space, keep leftMax and rightMax while two pointers walk inward. Whichever side has the smaller max is settled: that max is the bottleneck."
+  ],
+  "complexity": { "time": "O(n): one pass with two pointers", "space": "O(1)" }
+}

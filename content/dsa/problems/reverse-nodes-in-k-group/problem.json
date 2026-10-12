@@ -1,0 +1,31 @@
+{
+  "title": "Reverse Nodes in k-Group",
+  "difficulty": "Hard",
+  "patterns": ["linked-list-reversal"],
+  "js": ["linked-list-tree-nodes", "destructuring-spread"],
+  "order": 6,
+  "summary": "Reverse a linked list k nodes at a time, leaving a final group shorter than k untouched.",
+  "fn": "reverseKGroup",
+  "params": ["head", "k"],
+  "types": { "params": ["ListNode", "number"], "returns": "ListNode" },
+  "io": { "args": ["list", null], "returns": "list" },
+  "tests": [
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8], 3], "expected": [3, 2, 1, 6, 5, 4, 7, 8], "explain": "Groups [1, 2, 3] and [4, 5, 6] are reversed. Only 7 and 8 are left, fewer than 3, so they stay in order." },
+    { "args": [[1, 2, 3, 4, 5], 1], "expected": [1, 2, 3, 4, 5], "explain": "Groups of one node are already reversed: the list doesn't change." },
+    { "args": [[1, 2, 3, 4], 4], "expected": [4, 3, 2, 1], "explain": "k equals the length, so the whole list is one group and is fully reversed." },
+    { "args": [[1, 2, 3, 4, 5], 2], "expected": [2, 1, 4, 3, 5] },
+    { "args": [[1], 1], "expected": [1] },
+    { "args": [[1, 2], 3], "expected": [1, 2] },
+    { "args": [[1, 2, 3, 4, 5, 6], 2], "expected": [2, 1, 4, 3, 6, 5] },
+    { "args": [[1, 2, 3, 4, 5, 6], 3], "expected": [3, 2, 1, 6, 5, 4] },
+    { "args": [[], 2], "expected": [] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7], 7], "expected": [7, 6, 5, 4, 3, 2, 1] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], 4], "expected": [4, 3, 2, 1, 8, 7, 6, 5, 12, 11, 10, 9, 16, 15, 14, 13, 20, 19, 18, 17, 24, 23, 22, 21, 25] }
+  ],
+  "hints": [
+    "Handle one group at a time. Before reversing a group, check that k nodes actually exist ahead; if not, stop.",
+    "Keep a pointer to the node just before the current group (start it on a dummy). Reverse the k nodes after it with prev/curr/next.",
+    "Reconnect: the group's old first node is now its tail, so it must point to the node after the group, and the node before the group must point to the new first node. The old first node is the \"before\" of the next group."
+  ],
+  "complexity": { "time": "O(n): every node is counted once and reversed once", "space": "O(1): a few pointers (a recursive solution uses O(n / k) stack)" }
+}

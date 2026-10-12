@@ -1,0 +1,28 @@
+{
+  "title": "Design Add and Search Words",
+  "difficulty": "Medium",
+  "patterns": ["trie"],
+  "js": ["classes", "map-set", "recursion"],
+  "order": 3,
+  "summary": "Store words and answer searches where a dot stands for any single letter.",
+  "kind": "design",
+  "className": "WordDictionary",
+  "tests": [
+    { "ops": ["WordDictionary", "addWord", "addWord", "addWord", "search", "search", "search", "search"], "args": [[], ["cat"], ["cut"], ["dog"], ["c.t"], ["..g"], ["ca"], ["...."]], "expected": [null, null, null, null, true, true, false, false], "explain": "\"c.t\" matches cat and cut, \"..g\" matches dog. \"ca\" is only a prefix, and no word has four letters." },
+    { "ops": ["WordDictionary", "search", "addWord", "search", "search"], "args": [[], ["."], ["a"], ["."], [".."]], "expected": [null, false, null, true, false], "explain": "A dot must match exactly one letter: \".\" fails on an empty dictionary, then matches \"a\"; \"..\" needs two letters." },
+    { "ops": ["WordDictionary", "addWord", "addWord", "addWord", "search", "search", "search"], "args": [[], ["ab"], ["ac"], ["bd"], [".d"], [".c"], [".e"]], "expected": [null, null, null, null, true, true, false], "explain": "For \".d\" the search first tries the a branch, finds no d after it, backs up and succeeds through b." },
+    { "ops": ["WordDictionary", "addWord", "search", "search", "search"], "args": [[], ["bake"], ["bak"], ["bak."], ["bake."]], "expected": [null, null, false, true, false] },
+    { "ops": ["WordDictionary", "addWord", "addWord", "addWord", "search", "search", "search", "search", "search", "search"], "args": [[], ["mad"], ["pad"], ["bad"], ["pad"], ["bad"], [".ad"], ["b.."], ["..d"], ["m.x"]], "expected": [null, null, null, null, true, true, true, true, true, false] },
+    { "ops": ["WordDictionary", "addWord", "search", "search", "search", "search", "search"], "args": [[], ["hello"], ["....."], ["h...."], ["....o"], ["...."], ["hell."]], "expected": [null, null, true, true, true, false, true] },
+    { "ops": ["WordDictionary", "addWord", "addWord", "search", "search"], "args": [[], ["x"], ["x"], ["x"], ["y"]], "expected": [null, null, null, true, false] },
+    { "ops": ["WordDictionary", "addWord", "addWord", "addWord", "addWord", "search", "search", "addWord", "search", "search", "search", "search"], "args": [[], ["at"], ["and"], ["an"], ["add"], ["a"], [".at"], ["bat"], [".at"], ["an."], ["a.d"], ["b."]], "expected": [null, null, null, null, null, false, false, null, true, true, true, false] },
+    { "ops": ["WordDictionary", "addWord", "search", "addWord", "search", "search", "addWord", "addWord", "search", "search", "search", "search", "search", "search", "search", "addWord", "search", "search", "search", "search", "search", "search", "search", "addWord", "search", "search", "addWord", "search", "search", "search", "addWord"], "args": [[], ["aa"], ["a."], ["ab"], [".a"], [".b"], ["cbca"], ["aacc"], ["..c."], ["aa"], ["a"], [".b"], ["a..c"], [".b"], ["..d."], ["acc"], ["a.."], ["..c"], [".da"], ["aa.."], ["b."], ["aa"], ["bb."], ["ba"], [".bba"], ["ac"], ["cc"], ["b."], ["..."], [".b"], ["cb"]], "expected": [null, null, true, null, true, true, null, null, true, true, false, true, true, true, false, null, true, true, false, true, false, true, false, null, false, false, null, true, true, true, null] },
+    { "ops": ["WordDictionary", "addWord", "search", "addWord", "addWord", "search", "search", "addWord", "search", "search", "search", "search", "search", "search", "search", "addWord", "search", "search", "search", "search", "addWord", "search", "search", "addWord", "search", "search", "search", "search", "search", "addWord", "addWord", "search", "addWord", "search", "search", "search", "search", "addWord", "search", "search", "addWord"], "args": [[], ["bcac"], [".b."], ["ab"], ["caa"], ["a."], ["bcac"], ["a"], [".."], ["bc.c"], ["ca."], ["."], ["a"], ["b..."], ["ab"], ["bacb"], ["b"], ["b..b"], ["a"], ["a"], ["baa"], [".a"], [".a.d"], ["cbb"], ["..."], ["bc.c"], ["a."], ["b."], ["ad.."], ["accc"], ["bcb"], ["."], ["cba"], ["a"], ["cb."], ["b."], [".c."], ["cb"], ["."], ["b.b"], ["cb"]], "expected": [null, null, false, null, null, true, true, null, true, true, true, true, true, true, true, null, false, true, true, true, null, false, false, null, true, true, true, false, false, null, null, true, null, true, true, false, true, null, true, true, null] }
+  ],
+  "hints": [
+    "Without dots this is an ordinary trie lookup. What changes when one character can be anything?",
+    "At a '.', you don't know which edge to take, so try every child. That turns the walk into a DFS on (node, position in the word).",
+    "Return true as soon as one branch matches, and false only after every child has failed. When the word is used up, the node must be marked as the end of a word."
+  ],
+  "complexity": { "time": "addWord is O(L). search is O(L) without dots; with dots it can visit every node down to depth L", "space": "O(total characters added) for the trie, plus O(L) recursion" }
+}

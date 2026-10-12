@@ -16,3 +16,27 @@ export async function highlight(code: string, lang = "js") {
     defaultColor: false,
   });
 }
+
+/** Like `highlight`, but every line gets data-line="n" (1-based) so a player can mark the current line. */
+export async function highlightLines(code: string, lang = "js") {
+  highlighter ??= createHighlighter({ themes: ["github-light", "github-dark"], langs: [...LANGS] });
+  const l = ALIASES[lang] ?? lang;
+  const h = await highlighter;
+  return h.codeToHtml(code, {
+    lang: (LANGS as readonly string[]).includes(l) ? l : "text",
+    themes: { light: "github-light", dark: "github-dark" },
+    defaultColor: false,
+    transformers: [
+      {
+        // The panel scrolls, so keyboard users must be able to focus it.
+        pre(node) {
+          node.properties.tabindex = "0";
+          node.properties["aria-label"] = "Code";
+        },
+        line(node, line) {
+          node.properties["data-line"] = line;
+        },
+      },
+    ],
+  });
+}

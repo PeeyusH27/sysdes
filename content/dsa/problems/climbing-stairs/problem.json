@@ -1,0 +1,29 @@
+{
+  "title": "Climbing Stairs",
+  "difficulty": "Easy",
+  "patterns": ["dp-1d"],
+  "js": ["recursion", "arrays"],
+  "order": 1,
+  "summary": "Count the different ways to climb n steps when each move climbs one or two steps.",
+  "fn": "climbStairs",
+  "params": ["n"],
+  "types": { "params": ["number"], "returns": "number" },
+  "tests": [
+    { "args": [2], "expected": 2, "explain": "Two single steps, or one double step." },
+    { "args": [3], "expected": 3, "explain": "1 + 1 + 1, 1 + 2 and 2 + 1. Order matters, so 1 + 2 and 2 + 1 are different climbs." },
+    { "args": [5], "expected": 8, "explain": "The last move lands on step 5 from step 4 (5 ways to get there) or from step 3 (3 ways): 5 + 3 = 8." },
+    { "args": [1], "expected": 1 },
+    { "args": [4], "expected": 5 },
+    { "args": [6], "expected": 13 },
+    { "args": [10], "expected": 89 },
+    { "args": [20], "expected": 10946 },
+    { "args": [35], "expected": 14930352 },
+    { "args": [45], "expected": 1836311903 }
+  ],
+  "hints": [
+    "Look at the very last move onto step n. Where could you have been standing just before it?",
+    "ways(n) = ways(n - 1) + ways(n - 2). Plain recursion on that is exponential and times out at n = 45: memoize it, or fill an array from the bottom up.",
+    "Each value needs only the two before it. Start from ways(0) = 1 and ways(1) = 1 and roll two variables up to n."
+  ],
+  "complexity": { "time": "O(n): one pass from step 2 to step n", "space": "O(1): only the last two counts are kept" }
+}

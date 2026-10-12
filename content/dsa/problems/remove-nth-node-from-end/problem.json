@@ -1,0 +1,30 @@
+{
+  "title": "Remove Nth Node From End of List",
+  "difficulty": "Medium",
+  "patterns": ["linked-list-reversal", "two-pointers"],
+  "js": ["linked-list-tree-nodes"],
+  "order": 3,
+  "summary": "Delete the n-th node counted from the end of a linked list in a single pass.",
+  "fn": "removeNthFromEnd",
+  "params": ["head", "n"],
+  "types": { "params": ["ListNode", "number"], "returns": "ListNode" },
+  "io": { "args": ["list", null], "returns": "list" },
+  "tests": [
+    { "args": [[1, 2, 3, 4, 5], 2], "expected": [1, 2, 3, 5], "explain": "The 2nd node from the end holds 4. Unlink it: 3 now points to 5." },
+    { "args": [[1], 1], "expected": [], "explain": "Removing the only node leaves an empty list." },
+    { "args": [[1, 2], 2], "expected": [2], "explain": "n equals the length, so the head itself is removed." },
+    { "args": [[1, 2], 1], "expected": [1] },
+    { "args": [[1, 2, 3, 4, 5], 5], "expected": [2, 3, 4, 5] },
+    { "args": [[1, 2, 3, 4, 5], 1], "expected": [1, 2, 3, 4] },
+    { "args": [[10, 20, 30], 2], "expected": [10, 30] },
+    { "args": [[7, 7, 7, 7], 3], "expected": [7, 7, 7] },
+    { "args": [[4, 3, 2, 1], 4], "expected": [3, 2, 1] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], 17], "expected": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30] }
+  ],
+  "hints": [
+    "To delete a node you need the node just before it. Counting the length first takes two passes. Can a fixed gap between two pointers do it in one?",
+    "Start both pointers on a dummy node placed before the head. Move fast n + 1 steps ahead, then move both until fast is null.",
+    "Now slow sits right before the node to delete: slow.next = slow.next.next. The dummy makes deleting the head (n = length) work without a special case."
+  ],
+  "complexity": { "time": "O(n): fast walks the list once", "space": "O(1): two pointers and a dummy node" }
+}

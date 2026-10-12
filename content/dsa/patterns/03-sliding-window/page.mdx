@@ -1,0 +1,157 @@
+import { fixedWindow, longestWindow, windowMaxDeque } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+A sliding window keeps one contiguous range `[left, right]` plus a running summary of it (a sum, letter counts, a set) and **updates the summary as the edges move** instead of recomputing every subarray. Fixed windows move both edges together; variable windows **grow on the right and shrink on the left** to keep a validity rule true. Each element enters once and leaves once, so O(n · k) or O(n²) becomes O(n).
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- The answer is a **contiguous** subarray or substring (not a subsequence, not any subset).
+- The question asks for the **longest**, **shortest**, or **number of** ranges that satisfy a rule.
+- The rule has a bound: "**at most** k distinct", "sum **at least** target", "**no** repeats", "contains **all** of".
+- A **fixed size** k is given: "every window of length k", "k consecutive days".
+- The values are **non-negative**, so growing a range never makes its sum smaller.
+
+</Callout>
+
+| Variant | Window | How the edges move | Classic problems |
+|---|---|---|---|
+| Fixed size | always exactly `k` wide | both edges move together: one element enters, one leaves | maximum average subarray, permutation in string, anagrams in a string |
+| Longest valid | as wide as the rule allows | extend `right`; **while invalid**, move `left`; then record | longest substring without repeats, character replacement, at most k distinct |
+| Shortest valid | as narrow as the rule allows | extend `right`; **while valid**, record and move `left` | minimum size subarray sum, minimum window substring |
+| Monotonic deque | fixed or variable | a deque keeps the candidates for the window's max or min | sliding window maximum, shortest subarray with sum at least k (with negatives) |
+
+## The core idea: update, don't recompute
+
+Two neighbouring windows overlap almost completely. Moving the window one step changes it by **one element entering and one element leaving**, so its summary changes by two cheap operations. That is the whole trick for fixed windows: the brute force re-adds k values per window, the sliding window adds one and subtracts one.
+
+<AlgoViz trace={fixedWindow} />
+
+Variable windows need one more ingredient: a rule that is **monotonic** in the window's size.
+
+- For "at most" rules (at most k distinct, no repeats), **shrinking a valid window keeps it valid**. So when the window turns invalid, every window that starts at the same `left` and reaches further right is invalid too. `left` can move forward **for good**.
+- For "at least" rules (sum at least target, contains all of t), **growing a valid window keeps it valid**. Once `[left, right]` is valid, extending it only makes it longer, so it can't beat the length just recorded. Again `left` is finished.
+
+Neither pointer ever moves backwards, so together they make at most 2n moves: O(n), even though the code has a `while` inside a `for`.
+
+## Step by step
+
+<Steps>
+  <Step title="Check that a window fits">
+    The answer must be contiguous, and the rule must be monotonic: shrinking keeps a valid window valid (longest), or growing does (shortest). Sums with negative numbers fail this test: use [Prefix Sums](/dsa/patterns/prefix-sum) instead.
+  </Step>
+  <Step title="Choose the window's state">
+    The smallest summary that answers "is the window valid?" in O(1): a running sum, a `Map` of counts (its `size` is the number of distinct values), a `Set`, or a `missing` counter for "contains all of".
+  </Step>
+  <Step title="Write add(right) and remove(left)">
+    They are mirror images. Write both before the loop logic, and make sure `remove` really undoes `add` (delete map keys whose count reaches 0).
+  </Step>
+  <Step title="Decide when left moves">
+    Fixed: once the window is wider than k. Longest: **while** the window is invalid. Shortest: **while** the window is valid.
+  </Step>
+  <Step title="Record at the right moment">
+    Fixed: once the window is full (`right >= k - 1`). Longest: **after** the shrink loop. Shortest: **inside** the shrink loop, before each `left++`.
+  </Step>
+</Steps>
+
+## Template 1: fixed-size window
+
+Build the first window of size `k`, then slide: add `nums[right]`, subtract `nums[right - k]`.
+
+<CodeTabs files={['snippets/fixed-window.js']} />
+
+<ProblemLink slug="maximum-average-subarray" /> is this template divided by `k`. <ProblemLink slug="permutation-in-string" /> slides a window of `s1.length` and keeps letter counts instead of a sum.
+
+## Template 2: longest valid window
+
+Grow `right` every step. If the new element breaks the rule, move `left` until the rule holds again. After that, the window is the longest valid window **ending at `right`**, and the best of those is the answer.
+
+<AlgoViz trace={longestWindow} />
+
+<CodeTabs files={['snippets/longest-window.js']} />
+
+<ProblemLink slug="longest-substring-without-repeating-characters" /> uses the rule "no character twice". <ProblemLink slug="longest-repeating-character-replacement" /> uses "window length minus the top letter count is at most k".
+
+## Template 3: shortest valid window
+
+Grow `right` until the window becomes valid. Then squeeze: **while** it is still valid, record its length and move `left`. When it stops being valid, go back to growing.
+
+<CodeTabs files={['snippets/shortest-window.js']} />
+
+<ProblemLink slug="minimum-size-subarray-sum" /> is this template. <ProblemLink slug="minimum-window-substring" /> keeps the same loop but tracks validity with a `need` map and a single `missing` counter, so checking "does the window contain all of t?" stays O(1).
+
+## Template 4: monotonic deque for window max or min
+
+A sum can be updated when an element leaves; a **maximum** can't, because you don't know the runner-up. A deque fixes that. It holds indices whose values **decrease** from front to back:
+
+- Before pushing `i`, pop every back index whose value is not bigger than `nums[i]`. Those elements are older **and** no bigger, so they can never be a window's maximum again.
+- When the front index slides out of the window, drop it from the front.
+- The front is always the current window's maximum.
+
+<AlgoViz trace={windowMaxDeque} />
+
+<CodeTabs files={['snippets/window-max.js']} />
+
+Every index is pushed once and popped at most once, so the whole scan is O(n). Flip the comparison for a window minimum. The same structure, run over prefix sums, finds the shortest subarray with sum at least k when the array has negative numbers.
+
+## Try it
+
+<RunCode src="snippets/try-it.js" />
+
+## Complexity
+
+| Variant | Time | Extra space |
+|---|---|---|
+| Fixed window | O(n) | O(1) for a sum, O(k) for counts |
+| Longest or shortest valid window | O(n): each index enters once and leaves at most once | O(a) for counts over an alphabet of size a |
+| Monotonic deque | O(n): each index is pushed and popped at most once | O(k) |
+| Brute force, for comparison | O(n · k) fixed, O(n²) or worse variable | O(1) |
+
+## JavaScript you'll use
+
+<JsRef to={["map-set", "strings", "stack-queue-deque"]} />
+
+```js
+const len = right - left + 1;                 // window length with inclusive ends
+count.set(ch, (count.get(ch) ?? 0) + 1);      // a character enters
+if (count.get(out) === 1) count.delete(out);  // one leaves: delete at zero,
+else count.set(out, count.get(out) - 1);      // so count.size = number of distinct
+const counts = new Array(26).fill(0);         // lowercase letters only: faster than a Map
+counts[s.charCodeAt(i) - 97]++;
+let head = 0;                                 // deque front: dq[head++] instead of dq.shift()
+```
+
+The JavaScript trap: `count.size` counts **keys**, including keys whose count dropped to 0. If you decrement without deleting, the window looks like it holds more distinct characters than it does.
+
+<Callout kind="warning">
+
+- Off-by-one window sizes: the length is `right - left + 1`, and the first full window of size k ends at index `k - 1`.
+- Recording at the wrong moment: after the shrink loop for longest, inside it for shortest.
+- Shrinking with `if` instead of `while`, which leaves the window invalid when several elements must go.
+- Forgetting to undo the leaving element's effect (or leaving zero counts in the map).
+- Using a window on sums with negative numbers, where moving an edge has no predictable effect.
+- Recomputing the summary from scratch every step (`slice`, `reduce`, a fresh `Set`), which quietly brings back O(n · k).
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="Why does the window break with negative numbers, and what replaces it?">
+    The window relies on "adding makes the sum bigger, removing makes it smaller". With negatives, a sum that is too big might drop by **adding** an element, so neither pointer has a safe move. For "count subarrays with sum k", use prefix sums with a hash map (O(n)). For "shortest subarray with sum at least k" with negatives, keep a monotonic deque of prefix-sum indices (O(n)).
+  </FollowUp>
+  <FollowUp q="How do you count subarrays with exactly k distinct values?">
+    "Exactly k" isn't monotonic, but "at most k" is. Count windows with at most k distinct: in the longest template, every valid window ending at `right` is counted by adding `right - left + 1`. Then exactly(k) = atMost(k) - atMost(k - 1). Two O(n) passes.
+  </FollowUp>
+  <FollowUp q="Sliding window maximum: why a deque instead of a heap?">
+    A max-heap of `[value, index]` works: pop the top while its index has left the window. That is O(n log n) and simple to explain. The monotonic deque is O(n), because a popped element is gone for good and each index is pushed and popped at most once. Mention the heap, then give the deque.
+  </FollowUp>
+  <FollowUp q="How would you keep a moving average over a live stream?">
+    Keep the last k values in a ring buffer (an array of size k and a write index) and a running sum: add the new value, subtract the one it overwrites. Each update is O(1) with O(k) memory. With floating-point values, the running sum slowly drifts, so recompute it from the buffer every so often.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

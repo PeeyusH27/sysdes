@@ -1,0 +1,30 @@
+{
+  "title": "Product of Array Except Self",
+  "difficulty": "Medium",
+  "patterns": ["prefix-sum"],
+  "js": ["arrays"],
+  "order": 4,
+  "summary": "For every position, compute the product of all the other numbers, without using division.",
+  "fn": "productExceptSelf",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "number[]" },
+  "tests": [
+    { "args": [[2, 3, 4, 5]], "expected": [60, 40, 30, 24], "explain": "answer[0] = 3 × 4 × 5 = 60, answer[1] = 2 × 4 × 5 = 40, answer[2] = 2 × 3 × 5 = 30, answer[3] = 2 × 3 × 4 = 24." },
+    { "args": [[3, 0, 2]], "expected": [0, 6, 0], "explain": "Every product except the one that skips the 0 includes the 0. Skipping index 1 gives 3 × 2 = 6." },
+    { "args": [[0, 0, 4]], "expected": [0, 0, 0], "explain": "Two zeros: every product includes at least one of them." },
+    { "args": [[5, 7]], "expected": [7, 5] },
+    { "args": [[-2, -3, 4]], "expected": [-12, -8, 6] },
+    { "args": [[1, 1, 1, 1]], "expected": [1, 1, 1, 1] },
+    { "args": [[2, -1, 0, 3]], "expected": [0, 0, -6, 0] },
+    { "args": [[-1, -1, -1, -1, -1]], "expected": [1, 1, 1, 1, 1] },
+    { "args": [[1, 2, 3, 4, 5, 6]], "expected": [720, 360, 240, 180, 144, 120] },
+    { "args": [[-1, 1, 1, -1, 1, 2, -2, 0, 1, -2, 2, 2, -2, 2, 1, -2, 1, 1, -1, 1]], "expected": [0, 0, 0, 0, 0, 0, 0, -256, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { "args": [[1, -3, 1, -3, 2, -2, 3, -3, 1, -2, 2, -1, 3, -1, 1, -2, 2, -1, 3, -3]], "expected": [139968, -46656, 139968, -46656, 69984, -69984, 46656, -46656, 139968, -69984, 69984, -139968, 46656, -139968, 139968, -69984, 69984, -139968, 46656, -46656] }
+  ],
+  "hints": [
+    "The product of everything except nums[i] is (product of everything left of i) × (product of everything right of i).",
+    "Those are prefix and suffix products, the multiplicative version of prefix sums. Build the left products in one pass from the left.",
+    "Then walk from the right with a single running variable for the right product, multiplying it into the answer. That keeps extra space at O(1) besides the output."
+  ],
+  "complexity": { "time": "O(n): two passes", "space": "O(1) extra besides the output array" }
+}

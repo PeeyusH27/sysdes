@@ -1,0 +1,32 @@
+{
+  "title": "Binary Search",
+  "difficulty": "Easy",
+  "patterns": ["binary-search"],
+  "js": ["numbers-math", "arrays"],
+  "order": 1,
+  "summary": "Find the index of a target in a sorted array of distinct numbers in O(log n) time, or report that it is missing.",
+  "fn": "search",
+  "params": ["nums", "target"],
+  "types": { "params": ["number[]", "number"], "returns": "number" },
+  "tests": [
+    { "args": [[-4, 1, 3, 7, 10, 15], 7], "expected": 3, "explain": "7 sits at index 3." },
+    { "args": [[-4, 1, 3, 7, 10, 15], 2], "expected": -1, "explain": "2 would belong between 1 and 3, but it isn't in the array, so the answer is -1." },
+    { "args": [[6], 6], "expected": 0, "explain": "With one element, the only possible index is 0." },
+    { "args": [[6], 2], "expected": -1 },
+    { "args": [[1, 4], 4], "expected": 1 },
+    { "args": [[1, 4], 1], "expected": 0 },
+    { "args": [[2, 5, 8, 13, 21], -3], "expected": -1 },
+    { "args": [[2, 5, 8, 13, 21], 40], "expected": -1 },
+    { "args": [[2, 5, 8, 13, 21], 21], "expected": 4 },
+    { "args": [[-30, -12, -7, -1], -12], "expected": 1 },
+    { "args": [[-253, -246, -238, -230, -219, -212, -210, -203, -195, -189, -182, -171, -165, -156, -147, -144, -141, -136, -130, -124, -116, -113, -105, -97, -91, -80, -70, -60, -55, -47, -43, -41, -31, -19, -14, -11, -1, 4, 12, 20, 31, 34, 45, 56, 62, 64, 66, 77, 84, 91], 4], "expected": 37 },
+    { "args": [[-253, -246, -238, -230, -219, -212, -210, -203, -195, -189, -182, -171, -165, -156, -147, -144, -141, -136, -130, -124, -116, -113, -105, -97, -91, -80, -70, -60, -55, -47, -43, -41, -31, -19, -14, -11, -1, 4, 12, 20, 31, 34, 45, 56, 62, 64, 66, 77, 84, 91], -115], "expected": -1 }
+  ],
+  "samples": 3,
+  "hints": [
+    "The array is sorted. Looking at one middle element tells you which half the target must be in.",
+    "Keep a range [lo, hi] that still might contain the target. Compare nums[mid] with the target and throw away the half that can't contain it.",
+    "Loop while lo <= hi (the range is not empty). Move lo to mid + 1 or hi to mid - 1, never to mid itself, or the loop can stall."
+  ],
+  "complexity": { "time": "O(log n): the range halves on every step", "space": "O(1)" }
+}

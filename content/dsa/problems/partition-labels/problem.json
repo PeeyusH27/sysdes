@@ -1,0 +1,31 @@
+{
+  "title": "Partition Labels",
+  "difficulty": "Medium",
+  "patterns": ["greedy", "intervals"],
+  "js": ["strings", "map-set"],
+  "order": 5,
+  "summary": "Cut a string into as many pieces as possible so that every letter appears in only one piece, and return the piece sizes.",
+  "fn": "partitionLabels",
+  "params": ["s"],
+  "types": { "params": ["string"], "returns": "number[]" },
+  "tests": [
+    { "args": ["abacdcde"], "expected": [3, 4, 1], "explain": "\"aba\" holds every a and b, \"cdcd\" holds every c and d, and the e at the end is alone. Any other cut would split some letter across two pieces." },
+    { "args": ["xyzx"], "expected": [4], "explain": "The x at both ends forces the whole string into a single piece." },
+    { "args": ["abc"], "expected": [1, 1, 1], "explain": "No letter repeats, so every letter can be its own piece." },
+    { "args": ["q"], "expected": [1] },
+    { "args": ["aaaa"], "expected": [4] },
+    { "args": ["eaebfgfh"], "expected": [3, 1, 3, 1] },
+    { "args": ["mississippi"], "expected": [1, 10] },
+    { "args": ["ababcdcdefe"], "expected": [4, 4, 3] },
+    { "args": ["abcabcxyzyz"], "expected": [6, 1, 4] },
+    { "args": ["abcdefghijklmnopqrstuvwxyza"], "expected": [27] },
+    { "args": ["ccabaddefeghheggijijoklmlkmnolk"], "expected": [2, 3, 2, 9, 4, 11] }
+  ],
+  "samples": 3,
+  "hints": [
+    "The first piece must contain the first letter, and therefore its last occurrence too. And every letter in between drags in its own last occurrence.",
+    "Precompute the last index of every letter. Then scan, stretching end = max(end, last[s[i]]).",
+    "When i reaches end, nothing inside the current piece appears later: close the piece (its size is end - start + 1) and start the next one at i + 1."
+  ],
+  "complexity": { "time": "O(n): two passes over the string", "space": "O(1): at most 26 last positions" }
+}

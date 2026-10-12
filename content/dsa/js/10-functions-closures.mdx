@@ -1,0 +1,90 @@
+Most solutions are one main function plus a helper or two. Knowing how JavaScript functions capture variables lets you write a recursive DFS helper that updates an outer `best` without threading it through every call, and pass comparators and predicates into sorts, heaps and binary searches.
+
+### Declarations, expressions and arrows
+
+All three create ordinary function values. The differences that matter in DSA code are **hoisting** and the **arrow return rules**. Arrows also have no `this` of their own, which you only care about inside class methods (see [Classes for data structures](/dsa/js#classes)); for standalone helpers, `this` never comes up.
+
+```js
+function add(a, b) { return a + b; }    // declaration: hoisted, callable anywhere in its scope
+const mul = function (a, b) { return a * b; }; // expression: usable only after this line
+const sq = (x) => x * x;                // arrow, no braces: the expression is returned
+const sum = (a, b) => { return a + b; }; // arrow with braces: needs an explicit return
+const pair = (a, b) => ({ a, b });      // object literal: wrap it in parentheses
+```
+
+<RunCode src="snippets/functions-kinds.js" />
+
+Use whichever style you like for the main function, but be consistent: declarations let you put helpers at the bottom of the file, while `const` arrows must be defined before the line that first calls them runs.
+
+### Default and rest parameters
+
+A default kicks in when the argument is missing or `undefined`. It is evaluated **on every call** and can refer to earlier parameters, so `function dfs(node, depth = 0)` and `function solve(nums, lo = 0, hi = nums.length - 1)` are idiomatic. Rest parameters (`...rest`) collect extra arguments into a real array.
+
+<RunCode src="snippets/functions-params.js" />
+
+Coming from Python: a default `[]` or `new Map()` is **not** shared between calls in JavaScript. Each call that omits the argument gets a fresh one.
+
+### Closures that hold state
+
+A function keeps access to the variables that were in scope where it was **created**, even after the outer function has returned. That gives you private state without a class: counters, id generators and memo caches.
+
+<RunCode src="snippets/functions-closures.js" />
+
+Each call to `makeCounter()` creates a new `count`, so two counters never interfere. The last example is the classic `var` trap: `var` is function-scoped, so every closure sees the same `j`, which is 3 when they finally run.
+
+### Nested helper functions: the DFS idiom
+
+Define the recursive helper **inside** the main function. It can read the input and read or write the accumulators (`best`, `result`, `visited`, `path`) through the closure, so its own parameters are only the things that change per call, like the current node or index.
+
+<RunCode src="snippets/functions-dfs-helper.js" />
+
+Two rules keep this idiom correct. Declare the accumulator with `let` (or as an array or Map) **outside** the helper, and assign to it rather than to a parameter: reassigning a parameter only changes the helper's local copy. When you store a mutable `path` in the result, push a **copy** (`[...path]`), or every entry ends up pointing at the same emptied array.
+
+### Returning multiple values
+
+A function returns one value, so return an array or an object and destructure it at the call site. Arrays are shorter for fixed-position tuples; objects are self-describing when there are three or more fields.
+
+```js
+function minMax(nums) {
+  let lo = Infinity, hi = -Infinity;
+  for (const x of nums) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
+  return [lo, hi];
+}
+const [lo, hi] = minMax([4, 1, 7]);      // lo = 1, hi = 7
+
+// Tree DP often returns two answers per node: with and without this node.
+function rob(node) {
+  if (!node) return [0, 0];              // [best if robbed, best if skipped]
+  const [lRob, lSkip] = rob(node.left);
+  const [rRob, rSkip] = rob(node.right);
+  return [node.val + lSkip + rSkip, Math.max(lRob, lSkip) + Math.max(rRob, rSkip)];
+}
+
+function balance(node) {                 // object: named fields read better
+  if (!node) return { height: 0, ok: true };
+  const l = balance(node.left), r = balance(node.right);
+  const ok = l.ok && r.ok && Math.abs(l.height - r.height) <= 1;
+  return { height: 1 + Math.max(l.height, r.height), ok };
+}
+const { ok } = balance(root);
+```
+
+### Passing comparators and callbacks
+
+Functions are values, so a generic routine can take the problem-specific part as an argument: a comparator for `sort` or a heap, a predicate for a binary search on the answer, a key function for grouping. A comparator returns a **negative** number when `a` should come first, **positive** when `b` should, and `0` for a tie (more in [Sorting and comparators](/dsa/js#sorting)).
+
+<RunCode src="snippets/functions-callbacks.js" />
+
+Methods are the exception: `seen.add` on its own forgets which Set it belongs to, so pass `(x) => seen.add(x)` instead.
+
+<Callout kind="warning" title="Functions and closures gotchas">
+
+- `arr.map((x) => { x * 2 })` returns an array of `undefined`: braces need `return`.
+- `() => { a: 1 }` is a block with a label, not an object. Write `() => ({ a: 1 })`.
+- Calling a `const` arrow before its definition runs throws `ReferenceError`. Declarations are hoisted; arrows are not.
+- A helper that does `count++` on a **parameter** never changes the caller's `count`. Keep counters in an outer `let` or return them.
+- `result.push(path)` stores the same array every time. Push `[...path]`.
+- `var` in a `for` loop shares one variable across all closures created in it. Use `let`.
+- `nums.forEach(set.add)` throws: wrap methods in an arrow.
+
+</Callout>

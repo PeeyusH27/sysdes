@@ -1,0 +1,79 @@
+JavaScript has a single `number` type: a 64-bit float that stores integers exactly up to 2^53. That covers almost every interview problem, but `/` never rounds for you, `%` keeps the sign of negatives, and a product of two large values loses digits without any warning.
+
+### Integer division and rounding
+
+`a / b` always produces a float, so pick a rounding explicitly. `Math.floor` rounds down and `Math.trunc` rounds toward zero: they agree for positives and differ for negatives. `x | 0` and `~~x` truncate as well, but they squeeze the value into 32 bits first, so they wrap around above about 2.1 billion.
+
+<RunCode src="snippets/numbers-division.js" />
+
+For a binary search midpoint, `lo + Math.floor((hi - lo) / 2)` is correct for every safe integer. `(lo + hi) >> 1` is a fine shortcut for array indices but breaks when you binary search over a large answer range. Unlike Java or C++, `lo + hi` itself never overflows here; precision only runs out past 2^53.
+
+### Modulo with negative numbers
+
+`%` is a remainder, not a mathematical modulo: `-7 % 3` is `-1`. That breaks circular-array indexing, hash buckets and "is it odd?" tests on negatives. Add the modulus back to land in range.
+
+<RunCode src="snippets/numbers-modulo.js" />
+
+### Infinity and number limits
+
+`Infinity` and `-Infinity` are ordinary numbers: they compare, add and pass through `Math.min`/`Math.max` correctly, which makes them the natural starting value for a running minimum or maximum and for "unreached" cells in a DP table.
+
+```js
+let best = Infinity;                        // running minimum: any real value beats it
+let most = -Infinity;                       // running maximum
+const dist = new Array(n).fill(Infinity);   // "not reached yet" in shortest paths and min-cost DP
+Infinity + 5 === Infinity;                  // true: adding a cost to an unreached state is safe
+return best === Infinity ? -1 : best;       // "never updated" becomes the required -1
+Number.MAX_SAFE_INTEGER;                    // a finite alternative when a sentinel must stay an integer
+```
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `Number.MAX_SAFE_INTEGER` | 2^53 − 1 ≈ 9.007e15 | every integer up to here is exact |
+| `Number.MAX_VALUE` | ≈ 1.8e308 | largest finite number (integers that big are approximate) |
+| `Number.MIN_VALUE` | 5e-324 | smallest **positive** number, not the most negative one |
+| `Number.EPSILON` | ≈ 2.2e-16 | gap between 1 and the next float |
+| 32-bit signed range | −2^31 to 2^31 − 1 | what bitwise operators and `x \| 0` work in |
+
+### Safe integers and BigInt
+
+Sums are rarely a problem: 10^5 values of up to 10^9 add up to 10^14, far below 2^53 ≈ 9 × 10^15. Products are: two values near 10^9 multiply to 10^18, and the low digits silently vanish. Factorials past 18!, Fibonacci numbers past F(78) and `2 ** n` past n = 53 overflow the same way.
+
+When a problem says "return the answer modulo 1e9 + 7", reduce after every addition. For multiplications, convert to `BigInt`, multiply, take the remainder and convert back. BigInt arithmetic is exact at any size but slower than numbers, can't be mixed with numbers in arithmetic, and doesn't work with `Math.*`.
+
+<RunCode src="snippets/numbers-bigint.js" />
+
+### Floating point and parsing
+
+Floats can't represent most decimals exactly, so never compare computed decimals with `===`: check `Math.abs(a - b) < 1e-9`. `toFixed(2)` is for display and returns a string. To read numbers out of strings, `Number(s)` insists on the whole string being numeric, while `parseInt(s, 10)` reads leading digits and stops. Always pass the radix to `parseInt`.
+
+<RunCode src="snippets/numbers-float-parse.js" />
+
+### Math helpers and huge arrays
+
+```js
+Math.abs(-3)                  // 3
+Math.min(a, b), Math.max(a, b)
+Math.sqrt(49)                 // 7  (Number.isInteger(Math.sqrt(x)) tests a perfect square)
+Math.pow(2, 10), 2 ** 10      // 1024 both ways
+(-2) ** 2                     // 4  (-2 ** 2 is a SyntaxError: add parentheses)
+Math.sign(-5)                 // -1
+Math.hypot(3, 4)              // 5  distance from the origin to (3, 4)
+Math.log2(1024)               // 10
+Math.floor(Math.random() * n) // random integer from 0 to n - 1
+```
+
+`Math.max(...arr)` is handy for small arrays, but spreading turns every element into a function argument, and engines cap the argument count (somewhere between about 65,000 and 500,000, depending on the engine). Inputs of 10^5 or more are common in hidden tests, so use a loop or `reduce` there.
+
+<RunCode src="snippets/numbers-max-of-array.js" />
+
+<Callout kind="warning" title="Numbers and Math gotchas">
+
+- `Math.floor(-7 / 2)` is `-4`, `Math.trunc(-7 / 2)` is `-3`. Know which one the problem means ("round toward zero" is trunc).
+- `-7 % 3` is `-1`. Use `((a % m) + m) % m` for indices and buckets, and test odd numbers with `x % 2 !== 0`.
+- `(a * b) % MOD` is wrong once `a * b` passes 2^53. Use `BigInt` for the multiplication.
+- `x | 0`, `~~x` and `>> 1` wrap around above 2^31 − 1.
+- `Math.max(...arr)` throws `RangeError` on huge arrays, and `Math.max()` of nothing is `-Infinity`.
+- `toFixed` returns a string, `Number('')` is `0`, and `parseInt` without a radix invites surprises.
+
+</Callout>

@@ -1,0 +1,76 @@
+Palindromes, anagrams, substring windows and parsing problems all run on strings. JavaScript strings are **immutable** sequences of UTF-16 code units: reading a character is O(1), but every "change" builds a new string, so knowing what copies is what keeps a loop O(n).
+
+### Reading characters and immutability
+
+Index with `s[i]` or `s.at(i)` (which accepts negatives: `s.at(-1)` is the last character). An index past the end gives `undefined`, not an error. You can't assign to `s[i]`: strict mode throws a `TypeError` and sloppy mode silently ignores it. Build a new string, or work on an array of characters and join it back.
+
+<RunCode src="snippets/strings-basics.js" />
+
+Interview inputs are almost always ASCII, where one character is one code unit. Emoji and some other symbols take two: `for...of` and `[...s]` handle them, `s[i]` and `s.length` don't.
+
+### Character codes and the array of 26
+
+`s.charCodeAt(i)` turns a character into a number and `String.fromCharCode(code)` turns it back. Subtracting `97` (the code of `'a'`) maps lowercase letters to `0..25`, which is what makes a plain array of 26 counters work as a fast, fixed-size frequency table. Use `codePointAt` only if you must handle emoji.
+
+<RunCode src="snippets/strings-char-codes.js" />
+
+```js
+const isLower = (ch) => ch >= 'a' && ch <= 'z';
+const isDigit = (ch) => ch >= '0' && ch <= '9';
+const isAlnum = (ch) => /[a-z0-9]/i.test(ch);   // letters or digits, any case
+const counts = new Array(26).fill(0);           // 'a'..'z'; use 128 for any ASCII character
+counts[ch.charCodeAt(0) - 97]++;
+```
+
+### Slicing, searching and splitting
+
+`slice(start, end)` copies the characters from `start` up to, but not including, `end`, and accepts negative indices counted from the end. `substring` looks similar but swaps reversed arguments and treats negatives as 0; `substr` is deprecated. Prefer `slice` everywhere.
+
+```js
+s.slice(i, j)                 // characters i..j-1 (a new string)
+s.indexOf(t), s.lastIndexOf(t) // first / last position, or -1
+s.includes(t), s.startsWith(t), s.endsWith(t)
+s.split(','), s.split('')     // to an array ([...s] for characters)
+arr.join(''), arr.join(' ')   // back to a string
+s.trim(), s.toLowerCase(), s.toUpperCase()
+s.repeat(3), s.padStart(8, '0'), s.replaceAll('a', 'b')
+```
+
+<RunCode src="snippets/strings-slicing.js" />
+
+### Building strings efficiently
+
+In principle `result += ch` copies the whole string each time, which would make a loop O(n²). Modern engines optimise plain appends, so a short `+=` loop is fine in practice, but you can't rely on it in a complexity argument, and it doesn't help when you need to change characters in the middle. The idiom that is linear everywhere: push pieces into an array (or use it as a stack) and call `join('')` once at the end.
+
+<RunCode src="snippets/strings-building.js" />
+
+### Comparing and sorting strings
+
+`===`, `<` and `>` compare strings character by character by code unit. So every uppercase letter sorts before every lowercase one and `'10' < '9'`. That's exactly what the default `sort()` does too. Use `a.localeCompare(b)` when you need dictionary order, and lowercase both sides for case-insensitive comparisons.
+
+<RunCode src="snippets/strings-compare.js" />
+
+### What string operations cost
+
+| Operation | Cost |
+|---|---|
+| `s[i]`, `s.at(i)`, `s.length`, `charCodeAt` | O(1) |
+| `slice`, `substring`, `trim`, `toLowerCase`, `repeat` | O(length of the result) |
+| `split`, `join`, `[...s]`, `for...of` | O(n) |
+| `indexOf`, `includes` for a pattern of length m | O(n · m) worst case, usually much faster |
+| `s === t`, `s < t` | O(length) worst case |
+| `[...s].sort().join('')` | O(n log n) |
+| `s += t` in a loop | O(n) per step in theory, often optimised; use an array and `join` to be safe |
+
+Calling `slice` or `includes` inside a loop over the same string quietly multiplies the cost by n: an O(n) loop around them is O(n²).
+
+<Callout kind="warning" title="String gotchas">
+
+- `s[i] = 'x'` never changes a string. Convert to an array, edit it, `join('')`.
+- String comparison is by code unit, not dictionary order: `'Z' < 'a'`, `'10' < '9'`, and `['b', 'A'].sort()` gives `['A', 'b']`.
+- `str.split(' ')` on text with repeated spaces produces empty strings. Use `s.trim().split(/\s+/)`.
+- `'7' + 1` is `'71'`. Convert digits with `Number(ch)` or `ch.charCodeAt(0) - 48`.
+- `s.slice(i)` and `s.includes(t)` are O(n), not O(1): calling them in a loop is a hidden nested loop.
+- `charCodeAt(0) - 97` assumes lowercase letters. Uppercase or other characters give negative or out-of-range indices: normalise with `toLowerCase()` or size the array for all ASCII (128).
+
+</Callout>

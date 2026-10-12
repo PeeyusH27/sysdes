@@ -1,0 +1,138 @@
+import { pairSum, removeDuplicates, sortedSquares } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+Two pointers replace a nested loop with a single pass: two indices move through the data, and **every step rules out at least one element for good**. Use **opposite ends** on sorted or mirrored input, **read/write** pointers to filter or compact in place, and **one pointer per input** to merge. Time drops from O(n²) to O(n), usually with O(1) extra space.
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- The input is **sorted**, or you are allowed to sort it.
+- You need a **pair or triplet** that meets a condition on its sum, difference or product.
+- The answer must be built **in place** or with **O(1) extra space**.
+- You compare a string or array with its **mirror image** (palindromes, reversing).
+
+</Callout>
+
+| Variant | Pointers start at | Which pointer moves | Classic problems |
+|---|---|---|---|
+| Opposite ends | `0` and `n - 1` | the end that can't be in the answer | pair sum, palindrome, container with most water |
+| Same direction (read/write) | both at the start | `read` every step, `write` only when a value is kept | remove duplicates, move zeroes |
+| One per input | the start of each input | the pointer whose value was just used | merge sorted arrays, squares of a sorted array |
+
+## The core idea: every step discards something
+
+Finding two numbers that sum to a target by brute force checks all `n(n - 1) / 2` pairs. In a **sorted** array you can do better, because the sum of the two ends tells you which end is useless:
+
+- If `nums[left] + nums[right]` is **too small**, then `nums[left]` plus the **largest** remaining value is still too small. `nums[left]` can't be in any pair, so drop it with `left++`.
+- If the sum is **too big**, `nums[right]` plus the **smallest** remaining value is still too big. Drop it with `right--`.
+
+Each comparison removes one index from play, so the scan ends after at most `n - 1` steps. Watch the discarded values fade out:
+
+<AlgoViz trace={pairSum} />
+
+That argument, "this element can never be part of an answer, so discard it", is what makes every two-pointer solution correct. If you can't state it for your problem, two pointers is probably the wrong tool.
+
+## Step by step
+
+<Steps>
+  <Step title="Decide what each pointer means">
+    Write it down in one sentence. "Everything left of `left` and right of `right` has been ruled out." or "Everything before `write` is the final answer so far." This sentence is your invariant.
+  </Step>
+  <Step title="Pick the starting positions">
+    Opposite ends start at `0` and `n - 1`. Read/write pointers both start at the beginning (often `write = 1` when the first element is always kept). One-per-input pointers start at index 0 of each input.
+  </Step>
+  <Step title="Choose which pointer moves, and prove it">
+    For each case in the loop, say which element is ruled out and why. Move exactly that pointer. Never move a pointer "just in case".
+  </Step>
+  <Step title="Handle a match">
+    Record the answer, then move the pointers so the loop makes progress. If duplicates matter, skip over equal values here.
+  </Step>
+  <Step title="Stop when the pointers meet">
+    For opposite ends, loop `while (left < right)`: a pair needs two different indices. Use `left <= right` only when each index is processed on its own, as in Trapping Rain Water.
+  </Step>
+</Steps>
+
+## Template 1: opposite ends
+
+Use it when the input is sorted, or symmetric like a palindrome. Sort first if the problem lets you; if it needs the **original indices** of an unsorted array, use a hash map instead (see [Hash Maps and Sets](/dsa/patterns/hashing)).
+
+<CodeTabs files={['snippets/opposite-ends.js']} />
+
+The same loop solves palindromes (compare `s[left]` with `s[right]`), reversing in place (swap and move both) and Container With Most Water (move the shorter wall). Only the body changes.
+
+## Template 2: read and write pointers
+
+`read` visits every element once. `write` marks where the next kept element goes, so `nums[0 … write - 1]` is always the finished part. Nothing is allocated and nothing is spliced.
+
+<AlgoViz trace={removeDuplicates} />
+
+<CodeTabs files={['snippets/read-write.js']} />
+
+Change the condition and the same template removes a value, moves zeroes to the end, or keeps at most two copies of each number (compare with `nums[write - 2]`).
+
+## Template 3: one pointer per input
+
+When the answer is built from two sorted sequences, or from the two ends of one sorted sequence, give each its own pointer and always take from the side that is "next" in order. This is the merge step of merge sort.
+
+<AlgoViz trace={sortedSquares} />
+
+<CodeTabs files={['snippets/two-inputs.js']} />
+
+## Try it
+
+<RunCode src="snippets/try-it.js" />
+
+## Complexity
+
+| Variant | Time | Extra space |
+|---|---|---|
+| Opposite ends on sorted input | O(n) | O(1) |
+| Opposite ends after sorting | O(n log n) for the sort | O(1) to O(n), depending on the engine's sort |
+| Read/write compaction | O(n) | O(1) |
+| Fix one element + opposite ends (3Sum) | O(n²) | O(1) besides the output |
+| Merge two sorted inputs | O(n + m) | O(n + m) for the output |
+
+## JavaScript you'll use
+
+<JsRef to={["sorting", "destructuring-spread", "arrays"]} />
+
+```js
+nums.sort((a, b) => a - b);                  // numeric sort: nums.sort() compares strings!
+[nums[i], nums[j]] = [nums[j], nums[i]];     // swap in place without a temp variable
+const last = nums.at(-1);                    // last element, same as nums[nums.length - 1]
+s[i].toLowerCase() === s[j].toLowerCase();   // case-insensitive character compare
+```
+
+"In place" means changing the array you were given. `nums = nums.filter(…)` only rebinds your local variable; the caller still sees the old array.
+
+<Callout kind="warning">
+
+- Calling `nums.sort()` without a comparator: `[10, 9, 1]` sorts to `[1, 10, 9]`.
+- Using `left <= right` for pairs, which pairs an element with itself.
+- Forgetting to move a pointer after recording a match: the loop never ends.
+- Skipping duplicates by comparing with the **next** element before using the current one, which loses answers like `[-1, -1, 2]`.
+- Returning a new array when the problem asks you to modify the input in place.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="Two Sum on an unsorted array: two pointers or a hash map?">
+    A hash map: one pass, O(n) time and O(n) space, and it keeps the original indices. Sorting first costs O(n log n) and scrambles the indices unless you sort pairs of `[value, index]`. Two pointers wins when the input is already sorted or when O(1) space is required.
+  </FollowUp>
+  <FollowUp q="How do you extend 3Sum to 4Sum, or to k numbers?">
+    Sort once, then fix numbers with nested loops until two remain, and finish with the opposite-ends walk. kSum costs O(n^(k-1)). Skip duplicate values at every level. Sums of interview-sized integers are exact in JavaScript (up to 2^53), so overflow is rarely a concern.
+  </FollowUp>
+  <FollowUp q="How do you know moving the shorter wall is safe in Container With Most Water?">
+    Every container that keeps the shorter wall and uses a partner further in is narrower, and its height is still capped by that shorter wall. So none can beat the current area, and the shorter wall can be discarded. That is the same "rule it out for good" argument as pair sum.
+  </FollowUp>
+  <FollowUp q="When does the two-pointer technique not apply?">
+    When moving a pointer can't safely discard anything: the condition isn't monotonic (unsorted data for a sum target), or you need every pair rather than one that satisfies a condition. Then reach for hashing, a sliding window with a different invariant, or a nested loop.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

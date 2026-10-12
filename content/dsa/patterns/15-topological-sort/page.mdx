@@ -1,0 +1,151 @@
+import { kahn, dfsColors } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+A **topological order** lists the nodes of a directed graph so that every edge points forward: each task comes after everything it depends on. One exists exactly when the graph has **no cycle**. **Kahn's algorithm** repeatedly takes a node with no remaining incoming edges; **DFS** lists nodes as they finish and reverses the list. Both run in O(V + E), and both detect cycles for free.
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- **Prerequisites, dependencies, "must happen before"**: courses, build steps, package installs, task scheduling.
+- "Return **an order** in which…", "is it **possible to finish**…", "does this **directed** graph have a **cycle**?"
+- The **minimum number of rounds, semesters or stages** when independent tasks can run in parallel.
+- An ordering has to be **inferred** from comparisons: an alien alphabet from sorted words, a ranking from results.
+
+</Callout>
+
+| Variant | How it works | Reports a cycle when | Classic problems |
+|---|---|---|---|
+| Kahn's algorithm (BFS) | queue the nodes with in-degree 0; placing one lowers its successors' in-degrees | fewer than V nodes are ever placed | course schedule, alien dictionary |
+| Kahn's, level by level | place the whole in-degree-0 set as one round | same | parallel courses, build stages |
+| DFS with three colours | append a node when it finishes, reverse at the end | an edge reaches a gray node (still on the path) | course schedule II, cycle detection |
+| Kahn's on reversed edges | peel off nodes whose out-degree is 0 | leftover nodes are on, or lead into, a cycle | eventual safe states |
+
+## The core idea: start with something that has no prerequisites
+
+Draw an edge `u → v` for "u must come before v". In a directed graph **without** a cycle, some node has **no incoming edges**. (If every node had one, you could walk backwards along incoming edges forever, and with finitely many nodes you'd eventually revisit one: a cycle.) That node can safely go first. Remove it and its outgoing edges; what's left still has no cycle, so again some node has no incoming edges. Repeat until nothing is left, and you have listed every node with every edge pointing forward.
+
+Kahn's algorithm does exactly this with a count per node, its **in-degree** (the number of incoming edges from nodes not yet placed), and a queue of nodes whose count is 0. "Removing" a node just decrements the counts of the nodes it points to. A node whose count reaches 0 has had all its prerequisites placed, so it joins the queue.
+
+<AlgoViz trace={kahn} />
+
+**Why a leftover node means a cycle.** If the queue empties before every node is placed, each leftover node still has an incoming edge, and it must come from another leftover node (edges from placed nodes were all removed). Walk backwards along those edges: you only ever visit leftover nodes, there are finitely many, so you must revisit one. That's a cycle. In the other direction, the nodes of a cycle each wait for another node of the same cycle, so none of them can ever be first to reach in-degree 0. So the check is one line: `order.length === n`.
+
+## Step by step
+
+<Steps>
+  <Step title="Fix the edge direction">
+    Decide that `u → v` means "u before v" and translate the input carefully. In Course Schedule, the pair `[a, b]` means **b** before **a**, so the edge is `b → a`. Getting this backwards silently reverses the answer.
+  </Step>
+  <Step title="Build the adjacency list and the in-degrees">
+    One pass over the edges: `adj[u].push(v)` and `indegree[v]++`. Include every node, even those without edges: they still need a place in the order.
+  </Step>
+  <Step title="Seed the queue">
+    Push every node whose in-degree is 0. If there are none and the graph isn't empty, there's a cycle.
+  </Step>
+  <Step title="Take, append, release">
+    Pop a node and append it to the order. Decrement the in-degree of each node it points to, and push the ones that reach 0.
+  </Step>
+  <Step title="Check for leftovers">
+    If the order holds all V nodes, it's a valid topological order. Otherwise return the problem's "impossible" value: `false`, `[]`, `-1` or `""`.
+  </Step>
+</Steps>
+
+## Template 1: Kahn's algorithm
+
+The default choice. It is iterative, so a long chain can't overflow the call stack; it produces the order directly; and the cycle check is a length comparison. It solves <ProblemLink slug="course-schedule" /> and <ProblemLink slug="course-schedule-ii" />, and, once you have built the graph of letters, <ProblemLink slug="alien-dictionary" />.
+
+<CodeTabs files={['snippets/kahn.js']} />
+
+There are usually many valid orders, and Kahn's returns one of them, depending on the order in which nodes are seeded and their edges are listed. If a problem asks for the **smallest** order in dictionary order, replace the queue with a min-heap so the smallest ready node is always taken first.
+
+## Template 2: DFS with three colours
+
+DFS reaches a topological order from the other end. A node **finishes** (every edge out of it has been fully explored) only after every node reachable from it has finished. So listing nodes in finishing order puts every edge pointing backwards, and reversing that list gives a topological order.
+
+Detecting a cycle needs **three** states, not two:
+
+- **white**: not visited yet;
+- **gray**: on the current DFS path, entered but not finished;
+- **black**: finished, along with everything reachable from it.
+
+An edge into a **gray** node goes back up the current path: a cycle. An edge into a **black** node is harmless. That node and everything after it are done, and this happens constantly in acyclic graphs (two courses sharing a prerequisite). A plain visited set can't tell these two cases apart.
+
+<AlgoViz trace={dfsColors} />
+
+<CodeTabs files={['snippets/dfs-topo.js']} />
+
+Three colours also answer "which nodes can reach a cycle?", which is the DFS approach to <ProblemLink slug="find-eventual-safe-states" />: a node is safe exactly when its DFS finishes black without ever meeting a gray node.
+
+## Template 3: Kahn's, level by level
+
+When independent tasks can run in parallel, process the queue in **rounds**. The current round is every node whose in-degree is 0 right now; placing all of them releases the next round. The number of rounds is the minimum number of semesters or stages, and it equals the number of nodes on the longest dependency chain. That's <ProblemLink slug="parallel-courses" />.
+
+<CodeTabs files={['snippets/kahn-levels.js']} />
+
+Run Kahn's on the **reversed** graph, counting out-degrees instead of in-degrees, and you peel nodes off from the dead ends backwards. Every node that gets peeled can't reach a cycle, which is the other way to solve <ProblemLink slug="find-eventual-safe-states" />.
+
+## Try it
+
+<RunCode src="snippets/try-it.js" />
+
+## Complexity
+
+| Algorithm | Time | Extra space |
+|---|---|---|
+| Kahn's algorithm | O(V + E): each node is queued once and each edge decremented once | O(V + E): adjacency list, in-degrees and queue |
+| DFS with three colours | O(V + E) | O(V + E), plus recursion up to V deep |
+| Kahn's, level by level | O(V + E) | O(V + E) |
+| Building the letter graph in Alien Dictionary | O(C): compare each pair of neighbouring words, C characters in total | O(1): at most 26 letters and 26² edges |
+
+## JavaScript you'll use
+
+<JsRef to={["graphs-in-js", "stack-queue-deque", "map-set"]} />
+
+```js
+const adj = Array.from({ length: n }, () => []);
+const indegree = new Array(n).fill(0);
+for (const [from, to] of edges) { adj[from].push(to); indegree[to]++; }
+const queue = [];
+for (let v = 0; v < n; v++) if (indegree[v] === 0) queue.push(v);
+for (let head = 0; head < queue.length; head++) { /* queue[head] is the next node of the order */ }
+const after = new Map();                                // letter → Set of letters that come after it
+if (!after.get(a).has(b)) { after.get(a).add(b); indegree.set(b, indegree.get(b) + 1); }
+```
+
+With a head-index queue, the queue itself **is** the order once the loop ends: `queue.slice(0, head)` holds every placed node. When nodes are strings (letters, package names), use Maps for the edges and in-degrees, and watch out for counting an edge twice in the in-degree while the Set stores it once: that node never reaches 0, and you report a cycle that doesn't exist.
+
+<Callout kind="warning">
+
+- Reversing the edge direction: `[a, b]` meaning "b before a" is the classic slip, and it returns the order backwards.
+- Detecting cycles in a **directed** graph with a plain visited set: reaching an already finished node isn't a cycle. Use three colours, or Kahn's leftover check.
+- Leaving out nodes that have no edges: they must still appear in the order and count towards V.
+- Returning a partial order when there's a cycle, instead of the "impossible" value.
+- Forgetting to reverse the DFS finishing order (or reversing it when you followed the edges backwards).
+- 1-based labels with arrays of size n: `indegree[n]` is `undefined`, and `undefined + 1` is `NaN`.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="Kahn's algorithm or DFS: which would you pick?">
+    Kahn's by default. It is iterative, so a 10,000-node chain can't overflow the call stack; the cycle check is a length comparison; and its level-by-level form answers "minimum number of rounds" questions directly. DFS is shorter if you already have recursive DFS written, and its colours tell you **which** nodes are on or lead into a cycle. Both are O(V + E).
+  </FollowUp>
+  <FollowUp q="How would you return the cycle itself, not just report that one exists?">
+    Use DFS with three colours and a parent array (or keep the current path on a stack). When an edge `u → v` reaches a gray node `v`, the cycle is `v`, the path from `v` down to `u`, and back to `v`: follow the parents from `u` until you reach `v`. Kahn's tells you which nodes are left over, but those include nodes that merely sit behind a cycle.
+  </FollowUp>
+  <FollowUp q="When is the topological order unique, and how can you check?">
+    It is unique exactly when every step is forced: in Kahn's algorithm, the queue never holds more than one node at a time. Equivalently, every pair of consecutive nodes in the order is joined by an edge, so one path runs through every node. Problems like "can the original sequence be reconstructed uniquely from these subsequences?" test exactly this.
+  </FollowUp>
+  <FollowUp q="Dependencies arrive one at a time, and you must report a cycle as soon as one appears. What changes?">
+    Re-running a full sort after every edge costs O(V + E) each time. For a new edge `u → v`, a cycle appears exactly when `v` can already reach `u`, so a single DFS or BFS from `v` looking for `u` answers it. For **undirected** graphs, union-find checks "does this edge close a cycle?" in near-constant time (see [Union-Find](/dsa/patterns/union-find)), but it can't handle edge directions.
+  </FollowUp>
+  <FollowUp q="Tasks have durations and independent ones run in parallel. How long does the whole project take?">
+    Process the nodes in topological order and compute `finish[v] = duration[v] + max(finish[u])` over the prerequisites `u` of `v` (0 if it has none). The answer is the largest `finish`. That's the longest path in a DAG, the **critical path**, and a topological order makes it O(V + E). With every duration equal to 1 it is exactly the number of rounds in level-by-level Kahn's.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

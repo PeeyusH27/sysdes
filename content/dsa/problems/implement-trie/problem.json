@@ -1,0 +1,28 @@
+{
+  "title": "Implement a Trie (Prefix Tree)",
+  "difficulty": "Medium",
+  "patterns": ["trie"],
+  "js": ["classes", "map-set", "strings"],
+  "order": 2,
+  "summary": "Build a Trie class that inserts words and answers whole-word and prefix lookups in time proportional to the query length.",
+  "kind": "design",
+  "className": "Trie",
+  "tests": [
+    { "ops": ["Trie", "insert", "search", "search", "startsWith", "insert", "search"], "args": [[], ["code"], ["code"], ["cod"], ["cod"], ["cod"], ["cod"]], "expected": [null, null, true, false, true, null, true], "explain": "After inserting \"code\", the path c-o-d exists, so startsWith(\"cod\") is true but search(\"cod\") is false. Once \"cod\" is inserted too, search finds it." },
+    { "ops": ["Trie", "insert", "insert", "search", "startsWith", "startsWith", "search"], "args": [[], ["car"], ["cart"], ["ca"], ["ca"], ["cars"], ["cart"]], "expected": [null, null, null, false, true, false, true], "explain": "\"ca\" is only a prefix. No stored word continues \"car\" with an s, so startsWith(\"cars\") is false." },
+    { "ops": ["Trie", "search", "startsWith"], "args": [[], ["a"], ["a"]], "expected": [null, false, false], "explain": "An empty trie contains no words and no prefixes." },
+    { "ops": ["Trie", "insert", "insert", "search", "startsWith"], "args": [[], ["echo"], ["echo"], ["echo"], ["echoes"]], "expected": [null, null, null, true, false] },
+    { "ops": ["Trie", "insert", "insert", "insert", "insert", "search", "search", "startsWith", "startsWith", "search"], "args": [[], ["tea"], ["ten"], ["to"], ["inn"], ["te"], ["inn"], ["t"], ["i"], ["in"]], "expected": [null, null, null, null, null, false, true, true, true, false] },
+    { "ops": ["Trie", "insert", "search", "startsWith", "search", "startsWith"], "args": [[], ["a"], ["a"], ["a"], ["aa"], ["b"]], "expected": [null, null, true, true, false, false] },
+    { "ops": ["Trie", "insert", "search", "insert", "search", "search", "search"], "args": [[], ["apple"], ["app"], ["app"], ["app"], ["apple"], ["appl"]], "expected": [null, null, false, null, true, true, false] },
+    { "ops": ["Trie", "insert", "startsWith", "startsWith", "search", "search"], "args": [[], ["zebra"], ["zebra"], ["zebras"], ["zebr"], ["zebra"]], "expected": [null, null, true, false, false, true] },
+    { "ops": ["Trie", "insert", "insert", "startsWith", "startsWith", "search", "search"], "args": [[], ["abc"], ["xyz"], ["abd"], ["x"], ["xy"], ["abc"]], "expected": [null, null, null, false, true, false, true] },
+    { "ops": ["Trie", "insert", "search", "insert", "startsWith", "search", "startsWith", "insert", "insert", "insert", "insert", "insert", "startsWith", "startsWith", "search", "insert", "insert", "search", "search", "startsWith", "startsWith", "insert", "startsWith", "search", "insert", "search", "startsWith", "startsWith", "search", "insert", "search", "search", "startsWith", "search", "startsWith", "search", "search", "search", "search", "insert", "insert"], "args": [[], ["b"], ["b"], ["c"], ["bb"], ["a"], ["ab"], ["c"], ["babaa"], ["baa"], ["bbbcb"], ["aba"], ["b"], ["aaba"], ["b"], ["b"], ["acaa"], ["ac"], ["acccb"], ["bba"], ["b"], ["ccb"], ["c"], ["ba"], ["bc"], ["bb"], ["b"], ["b"], ["cc"], ["abc"], ["bc"], ["b"], ["c"], ["bba"], ["b"], ["c"], ["bbbbb"], ["abab"], ["babab"], ["bab"], ["cb"]], "expected": [null, null, true, null, false, false, false, null, null, null, null, null, true, false, true, null, null, false, false, false, true, null, true, false, null, false, true, true, false, null, true, true, true, false, true, true, false, false, false, null, null] }
+  ],
+  "hints": [
+    "Each node needs a way to find its child for a given letter, and a flag that says whether a word ends exactly there.",
+    "insert walks from the root, creating missing children, and marks the last node. search and startsWith follow the same walk without creating anything.",
+    "search succeeds only if the walk completes and the final node is marked; startsWith succeeds as soon as the walk completes."
+  ],
+  "complexity": { "time": "O(L) per call, where L is the length of the word or prefix", "space": "O(total characters inserted) for the nodes" }
+}

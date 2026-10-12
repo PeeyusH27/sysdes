@@ -1,0 +1,170 @@
+import { heapPushPop, topK, kWayMerge } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+A **binary heap** keeps the smallest (or largest) item at its root: you can **peek** at it in O(1) and **push** or **pop** in O(log n), without ever sorting everything. Three patterns cover most heap problems: **top k** with a heap that never grows past k (O(n log k)), **k-way merge** with one entry per sorted input (O(N log k)), and **two heaps** that split a stream into halves for a running median. JavaScript has no built-in heap, so you write one short class and reuse it everywhere.
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- "The **k** largest / smallest / most frequent / closest", or "the **kth** largest".
+- **Merge k sorted** lists, arrays or streams.
+- A **running** answer over a stream: the median so far, the kth largest so far.
+- "Always process the **cheapest**, earliest or most urgent item next" (scheduling, Dijkstra).
+- You need the best item **again and again** while items keep arriving, so sorting once isn't enough.
+
+</Callout>
+
+| Variant | The heap holds | Heap type | Classic problems |
+|---|---|---|---|
+| Top k | the best k items so far | min-heap for the k largest, max-heap for the k smallest | kth largest, top k frequent, k closest points |
+| K-way merge | one current item per sorted input | min-heap by value | merge k sorted lists, kth smallest in a sorted matrix |
+| Two heaps | the lower half and the upper half | max-heap + min-heap | running median, sliding window median |
+| Best first | every pending item | ordered by priority | task scheduling, meeting rooms, Dijkstra |
+
+## The core idea: a tree that is only half sorted
+
+A heap is a **complete binary tree** (every level full except the last, which fills from the left) with one rule: **every parent comes before its children**. In a min-heap that means each parent is at most its children, so the minimum is always at the root. Nothing else is ordered: siblings and cousins can be in any order, and that laziness is what makes updates cheap.
+
+Because the tree is complete, it fits in a plain array with no pointers. The root is index 0, the children of index `i` are `2i + 1` and `2i + 2`, and its parent is `(i - 1) >> 1`. A heap of a million items is only 20 levels deep.
+
+- **push**: append the value as the last leaf, then **sift up**: swap it with its parent while it is smaller. Only the path to the root can be out of order, so that is at most one swap per level.
+- **pop**: take the root, move the last leaf into its place, then **sift down**: swap it with its **smaller** child while that child is smaller. Again at most one swap per level.
+
+Watch both operations on the tree and on the array underneath it:
+
+<AlgoViz trace={heapPushPop} />
+
+Popping everything returns the values in sorted order (that is heap sort), but that is rarely the point. A heap's strength is answering "what is the best item **right now**?" cheaply while items keep arriving and leaving.
+
+## Step by step
+
+<Steps>
+  <Step title="Ask what you need the best of, repeatedly">
+    A heap pays off when you need the minimum or maximum **many times** while the collection changes. If you need it once, a single pass or one sort is simpler.
+  </Step>
+  <Step title="Decide what goes into the heap">
+    Plain numbers, `[value, count]` pairs, points, list nodes, or `{ value, list, index }` records for a merge. Store whatever you need to act on an item when it comes out.
+  </Step>
+  <Step title="Write the comparator and check its direction">
+    `compare(a, b)` returns a negative number when `a` should come out first. For top k the direction is **inverted**: the k largest need a min-heap, because the item you evict is the smallest of the ones you keep.
+  </Step>
+  <Step title="Bound the size">
+    For top k, push and then pop whenever the heap holds more than k items. For k-way merge, the heap holds at most one item per input. A bounded heap turns O(n log n) into O(n log k).
+  </Step>
+  <Step title="Read the answer">
+    `peek()` for the kth best, pop everything for the top k (it comes out in reverse order), or combine the tops of two heaps for a median.
+  </Step>
+</Steps>
+
+## Template 1: a binary heap with a comparator
+
+Every heap problem starts from this class. A comparator lets the same code be a min-heap, a max-heap, or a heap of pairs ordered by any key.
+
+<CodeTabs files={['snippets/heap.js']} />
+
+```js
+new Heap((a, b) => a - b);          // min-heap of numbers
+new Heap((a, b) => b - a);          // max-heap of numbers
+new Heap((a, b) => a[1] - b[1]);    // pairs, smallest second element first
+new Heap((a, b) => a.val - b.val);  // linked list nodes by value
+```
+
+Practise writing it from memory until `siftUp` and `siftDown` come out right the first time: the practice problems here expect your own heap, and so do most interviews. Some platforms ship a priority queue, but you can't count on it.
+
+## Template 2: top k with a heap of size k
+
+To find the k **largest** values, keep a **min**-heap of at most k values. Its root is the weakest member of the current top k. Push each new value; if the heap now holds k + 1 values, pop the root, because k values are at least as big. When the walk ends, the heap holds the top k and its root is the kth largest.
+
+<AlgoViz trace={topK} />
+
+<CodeTabs files={['snippets/top-k.js']} />
+
+The mirror image, the k **smallest** by some key (closest points, cheapest items), uses a **max**-heap of size k. Practice: <ProblemLink slug="kth-largest-element-in-a-stream" />, <ProblemLink slug="kth-largest-element-in-an-array" />, <ProblemLink slug="top-k-frequent-elements" /> (count with a Map first, then top k by count) and <ProblemLink slug="k-closest-points-to-origin" />.
+
+## Template 3: k-way merge
+
+When the input is k **sorted** sequences, the next item of the merged output is always one of the k current heads. Keep the heads in a min-heap: pop the smallest, output it, and push the next item from the same sequence. The heap never holds more than k items.
+
+<AlgoViz trace={kWayMerge} />
+
+<CodeTabs files={['snippets/k-way-merge.js']} />
+
+Each heap entry must say where its successor is: an index into its array, or, for linked lists, just the node itself, since `node.next` is the successor. Practice: <ProblemLink slug="merge-k-sorted-lists" />.
+
+## Template 4: two heaps for a running median
+
+Split the numbers seen so far into a **lower half** in a max-heap and an **upper half** in a min-heap, and keep two rules:
+
+1. Every value in the lower half is at most every value in the upper half.
+2. The lower half holds as many values as the upper half, or one more.
+
+Then the median is the lower half's top when the count is odd, or the average of both tops when it is even. To add a number, push it into the lower half and move the lower half's top to the upper half (that restores rule 1); if the upper half is now bigger, move its top back (that restores rule 2). That is three heap operations per number, O(log n), and the median is O(1).
+
+<CodeTabs files={['snippets/two-heaps.js']} />
+
+Practice: <ProblemLink slug="find-median-from-data-stream" />.
+
+## Try it
+
+<RunCode src="snippets/try-it.js" />
+
+## Complexity
+
+| Operation or variant | Time | Extra space |
+|---|---|---|
+| `peek` | O(1) | O(1) |
+| `push`, `pop` on a heap of n items | O(log n): at most one swap per level | O(1) |
+| Build a heap from n items by pushing | O(n log n) (O(n) with bottom-up heapify) | O(n) |
+| Top k of n items | O(n log k): at most one push and one pop per item on a heap of k + 1 | O(k) |
+| K-way merge of N items from k inputs | O(N log k): every item is pushed and popped once | O(k) |
+| Running median | O(log n) per number added, O(1) per median | O(n) |
+
+## JavaScript you'll use
+
+<JsRef to={["heap", "classes", "sorting"]} />
+
+```js
+const parent = (i - 1) >> 1;                 // index of the parent: halve and round down
+const left = 2 * i + 1, right = 2 * i + 2;   // indices of the children
+[a[i], a[j]] = [a[j], a[i]];                 // swap two slots
+const byCount = (a, b) => a[1] - b[1];       // comparators return numbers, never booleans
+for (const entry of counts) heap.push(entry); // Map entries are [key, value] pairs
+```
+
+The main trap is faking a heap with an array: `arr.sort()` after every insert costs O(n log n) per operation, and `arr.shift()` to take the front is O(n). Both pass the small examples and time out on the hidden tests.
+
+<Callout kind="warning">
+
+- **Wrong direction for top k**: the k largest need a **min**-heap. A max-heap of size k keeps the k smallest.
+- **A comparator that returns a boolean**, like `(a, b) => a > b`. It must return a negative, zero or positive number.
+- **siftDown that only checks the left child**, or that swaps with the first smaller child instead of the **smaller of the two**.
+- **pop on a one-item heap** that writes the removed last item back into index 0, leaving a ghost value in an "empty" heap.
+- **Pushing `null`** list heads or other missing items, which crashes the comparator.
+- **Popping before pushing** when a size-k heap is full, which can evict a value that belongs in the top k.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="Kth largest element: heap, sort or quickselect?">
+    Sorting is O(n log n) and the simplest. A size-k min-heap is O(n log k) with O(k) memory, and it also works on a **stream** where you never see all the data at once. Quickselect is O(n) on average but O(n²) in the worst case unless the pivot is random, and it reorders the input. Mention all three, then code the heap (or quickselect, if the interviewer pushes for linear time).
+  </FollowUp>
+  <FollowUp q="Why can a heap be built in O(n) instead of O(n log n)?">
+    Bottom-up heapify calls siftDown on every non-leaf node, from the last one back to the root. Half of the nodes are leaves and need no work, a quarter can sink at most one level, an eighth at most two, and so on. The total, n/4 · 1 + n/8 · 2 + n/16 · 3 + …, stays below n. Pushing items one at a time doesn't get this bound, because each push may climb the whole height.
+  </FollowUp>
+  <FollowUp q="How would you change the priority of an item already in the heap, or delete it?">
+    A plain heap can't find an item quickly. Either keep a Map from item to its current index (updated on every swap) and sift up or down from that index after the change, or use **lazy deletion**: push the new version, mark the old one as stale, and discard stale items when they reach the top. Dijkstra's algorithm in JavaScript usually takes the lazy route.
+  </FollowUp>
+  <FollowUp q="Running median: what if every number is between 0 and 100? And over a sliding window?">
+    With a small range, a count array of 101 buckets gives O(1) inserts and a median in at most 101 steps, with no heaps. For a **sliding window** median, the heaps must also drop the number leaving the window: use lazy deletion (a Map of values waiting to be removed, cleaned up when they surface at a top) and balance the halves by their count of live values.
+  </FollowUp>
+  <FollowUp q="When is a heap the wrong tool?">
+    When you need everything in sorted order once (just sort), when you need to look up arbitrary values or ranges (a sorted array or a balanced tree does that), or when k is close to n (a size-k heap is then no better than sorting). A heap only promises fast access to one end.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

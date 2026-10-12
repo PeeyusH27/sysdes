@@ -1,0 +1,237 @@
+{
+  "title": "3Sum",
+  "difficulty": "Medium",
+  "patterns": [
+    "two-pointers"
+  ],
+  "js": [
+    "sorting",
+    "arrays"
+  ],
+  "order": 4,
+  "summary": "List every unique triplet of numbers that adds up to zero.",
+  "fn": "threeSum",
+  "params": [
+    "nums"
+  ],
+  "types": {
+    "params": [
+      "number[]"
+    ],
+    "returns": "number[][]"
+  },
+  "compare": "deep-unordered",
+  "tests": [
+    {
+      "args": [
+        [
+          -1,
+          0,
+          1,
+          2,
+          -1,
+          -4
+        ]
+      ],
+      "expected": [
+        [
+          -1,
+          -1,
+          2
+        ],
+        [
+          -1,
+          0,
+          1
+        ]
+      ],
+      "explain": "Two different triplets sum to 0. [-1, 0, 1] can be made with either -1, but it is listed once. The order of triplets, and of numbers inside a triplet, doesn't matter."
+    },
+    {
+      "args": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "expected": [],
+      "explain": "The only triplet sums to 2."
+    },
+    {
+      "args": [
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "expected": [
+        [
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "args": [
+        [
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "expected": [
+        [
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "args": [
+        [
+          -2,
+          0,
+          1,
+          1,
+          2
+        ]
+      ],
+      "expected": [
+        [
+          -2,
+          0,
+          2
+        ],
+        [
+          -2,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "args": [
+        [
+          1,
+          2,
+          -2,
+          -1
+        ]
+      ],
+      "expected": []
+    },
+    {
+      "args": [
+        [
+          3,
+          0,
+          -2,
+          -1,
+          1,
+          2
+        ]
+      ],
+      "expected": [
+        [
+          -2,
+          -1,
+          3
+        ],
+        [
+          -2,
+          0,
+          2
+        ],
+        [
+          -1,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "args": [
+        [
+          -4,
+          -2,
+          -2,
+          -2,
+          0,
+          1,
+          2,
+          2,
+          2,
+          3,
+          3,
+          4,
+          4,
+          6,
+          6
+        ]
+      ],
+      "expected": [
+        [
+          -4,
+          -2,
+          6
+        ],
+        [
+          -4,
+          0,
+          4
+        ],
+        [
+          -4,
+          1,
+          3
+        ],
+        [
+          -4,
+          2,
+          2
+        ],
+        [
+          -2,
+          -2,
+          4
+        ],
+        [
+          -2,
+          0,
+          2
+        ]
+      ]
+    },
+    {
+      "args": [
+        [
+          -1,
+          0,
+          1,
+          0
+        ]
+      ],
+      "expected": [
+        [
+          -1,
+          0,
+          1
+        ]
+      ]
+    }
+  ],
+  "hints": [
+    "Fix one number, nums[i]. Now you need two other numbers that add up to -nums[i]. Which earlier problem is that?",
+    "Sort first. Then for each i, run the opposite-ends two-pointer search on the part of the array to the right of i.",
+    "To avoid duplicate triplets, skip an i whose value equals the previous i's value, and after a match move both pointers past equal values."
+  ],
+  "complexity": {
+    "time": "O(n²): n choices of i, each with an O(n) two-pointer walk (the O(n log n) sort is smaller)",
+    "space": "O(1) extra besides the output (O(log n) to O(n) for the sort, depending on the engine)"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "title": "Merge Intervals",
+  "difficulty": "Medium",
+  "patterns": ["intervals"],
+  "js": ["sorting", "destructuring-spread", "arrays"],
+  "order": 2,
+  "summary": "Combine every group of overlapping intervals into one and return the non-overlapping result.",
+  "fn": "merge",
+  "params": ["intervals"],
+  "types": { "params": ["number[][]"], "returns": "number[][]" },
+  "compare": "unordered",
+  "tests": [
+    { "args": [[[1, 4], [2, 6], [8, 10], [9, 12]]], "expected": [[1, 6], [8, 12]], "explain": "[1, 4] and [2, 6] overlap and become [1, 6]. [8, 10] and [9, 12] become [8, 12]. The two groups don't touch." },
+    { "args": [[[5, 7], [1, 3], [3, 5]]], "expected": [[1, 7]], "explain": "The input isn't sorted. [1, 3] and [3, 5] share the point 3, which counts as overlapping, and [5, 7] shares 5 with [3, 5], so everything merges into [1, 7]." },
+    { "args": [[[1, 10], [2, 3], [4, 8]]], "expected": [[1, 10]], "explain": "[1, 10] already contains both of the other intervals." },
+    { "args": [[[4, 4]]], "expected": [[4, 4]] },
+    { "args": [[[1, 2], [3, 4]]], "expected": [[1, 2], [3, 4]] },
+    { "args": [[[6, 8], [1, 9], [2, 4], [4, 7]]], "expected": [[1, 9]] },
+    { "args": [[[0, 0], [0, 0]]], "expected": [[0, 0]] },
+    { "args": [[[1, 5], [6, 8], [10, 12], [7, 11]]], "expected": [[1, 5], [6, 12]] },
+    { "args": [[[2, 3], [4, 5], [6, 7], [8, 9], [1, 10]]], "expected": [[1, 10]] },
+    { "args": [[[3, 5], [1, 2]]], "expected": [[1, 2], [3, 5]] },
+    { "args": [[[15, 22], [26, 29], [44, 46], [58, 60], [33, 33], [24, 29], [74, 79], [32, 36], [14, 21], [41, 42], [93, 93], [57, 60], [87, 87], [107, 113], [77, 84], [19, 23], [34, 41], [13, 15], [44, 51], [97, 102], [95, 99], [29, 29], [81, 85], [113, 120], [18, 24], [4, 11], [72, 75], [67, 74], [118, 124], [71, 73]]], "expected": [[4, 11], [13, 29], [32, 42], [44, 51], [57, 60], [67, 85], [87, 87], [93, 93], [95, 102], [107, 124]] }
+  ],
+  "samples": 3,
+  "hints": [
+    "If the intervals were sorted by start, which intervals could a given interval possibly overlap with?",
+    "Sort by start. Keep the last interval of your answer open: each new interval either overlaps it (start <= its end) or starts a new group.",
+    "When they overlap, extend the end to the max of the two ends, not just the new end: [1, 10] followed by [2, 3] must stay [1, 10]."
+  ],
+  "complexity": { "time": "O(n log n): sorting, then one linear pass", "space": "O(n) for the output (plus the sort's own space)" }
+}

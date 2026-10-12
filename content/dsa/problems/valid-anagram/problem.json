@@ -1,0 +1,31 @@
+{
+  "title": "Valid Anagram",
+  "difficulty": "Easy",
+  "patterns": ["hashing"],
+  "js": ["map-set", "strings"],
+  "order": 2,
+  "summary": "Decide whether two words use exactly the same letters the same number of times.",
+  "fn": "isAnagram",
+  "params": ["s", "t"],
+  "types": { "params": ["string", "string"], "returns": "boolean" },
+  "tests": [
+    { "args": ["dusty", "study"], "expected": true, "explain": "Both words use d, u, s, t and y exactly once each." },
+    { "args": ["teeth", "theme"], "expected": false, "explain": "\"teeth\" has two t's and no m; \"theme\" has one t and an m." },
+    { "args": ["a", "ab"], "expected": false, "explain": "Different lengths can never be anagrams." },
+    { "args": ["listen", "silent"], "expected": true },
+    { "args": ["aacc", "ccac"], "expected": false },
+    { "args": ["a", "a"], "expected": true },
+    { "args": ["ab", "ba"], "expected": true },
+    { "args": ["abc", "abd"], "expected": false },
+    { "args": ["conversation", "voicesranton"], "expected": true },
+    { "args": ["aaab", "abbb"], "expected": false },
+    { "args": ["gdbfcfbdgbbegdcfafeedgcbbceeaafafeebeeef", "befeeedgbabdfbfceegeabggcbceafbefcdafedf"], "expected": true },
+    { "args": ["gdbfcfbdgbbegdcfafeedgcbbceeaafafeebeeef", "befeeedgbabdfbfceegeabggcbceafbefcdafeda"], "expected": false }
+  ],
+  "hints": [
+    "Two words are anagrams when every letter appears the same number of times in both. Order doesn't matter.",
+    "If the lengths differ, the answer is false straight away.",
+    "Count the letters of s (a Map, or an array of 26 counters), then subtract the letters of t. Any counter that drops below zero means false."
+  ],
+  "complexity": { "time": "O(n): one pass over each string", "space": "O(1): at most 26 counters (O(k) for an alphabet of size k)" }
+}

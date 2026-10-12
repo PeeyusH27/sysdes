@@ -1,0 +1,29 @@
+{
+  "title": "Kth Largest Element in a Stream",
+  "difficulty": "Easy",
+  "kind": "design",
+  "patterns": ["heaps"],
+  "js": ["heap", "classes"],
+  "order": 1,
+  "summary": "Design a class that reports the kth largest value seen so far every time a new number arrives.",
+  "className": "KthLargest",
+  "tests": [
+    { "ops": ["KthLargest", "add", "add", "add", "add", "add"], "args": [[3, [7, 1, 9, 4]], [5], [2], [8], [10], [6]], "expected": [null, 5, 5, 7, 8, 8], "explain": "k = 3. After adding 5 the values are 9, 7, 5, 4, 1, so the 3rd largest is 5. Adding 2 changes nothing at the top. After 8 the top three are 9, 8, 7; after 10 they are 10, 9, 8; 6 is too small to enter." },
+    { "ops": ["KthLargest", "add", "add", "add", "add", "add"], "args": [[1, []], [-3], [-5], [0], [0], [-1]], "expected": [null, -3, -3, 0, 0, 0], "explain": "With k = 1 the answer is simply the largest value so far. The class starts empty; duplicates count, so the second 0 keeps the answer at 0." },
+    { "ops": ["KthLargest", "add", "add", "add", "add"], "args": [[2, [5]], [3], [8], [6], [1]], "expected": [null, 3, 5, 6, 6], "explain": "The constructor gets fewer than k values. After adding 3 there are exactly two (5 and 3), so the 2nd largest is 3. Then 8 arrives: the top two are 8 and 5." },
+    { "ops": ["KthLargest", "add", "add", "add", "add"], "args": [[2, [4, 4, 4]], [4], [1], [5], [6]], "expected": [null, 4, 4, 4, 5] },
+    { "ops": ["KthLargest", "add", "add", "add", "add"], "args": [[4, [1, 2, 3]], [0], [5], [-2], [9]], "expected": [null, 0, 1, 1, 2] },
+    { "ops": ["KthLargest", "add", "add", "add", "add"], "args": [[3, [-10, -20, -30, -40]], [-25], [-5], [-35], [-1]], "expected": [null, -25, -20, -20, -10] },
+    { "ops": ["KthLargest", "add", "add", "add", "add", "add", "add", "add", "add"], "args": [[5, [-73, 53, 8, 29, -23, 39, 18, 93, -55, -85, -23, 59, -22, 75, -5, -78, -88, -17, -95, -61, 52, -46, -89, 30, -92, 18, -90, -13, 72, -13]], [38], [9], [51], [98], [85], [42], [37], [61]], "expected": [null, 53, 53, 53, 59, 72, 72, 72, 72] },
+    { "ops": ["KthLargest", "add", "add", "add", "add"], "args": [[2, [100, 90]], [50], [40], [30], [20]], "expected": [null, 90, 90, 90, 90] },
+    { "ops": ["KthLargest", "add", "add", "add", "add", "add"], "args": [[3, [0, 0]], [0], [1], [-1], [2], [2]], "expected": [null, 0, 0, 0, 0, 1] },
+    { "ops": ["KthLargest", "add", "add", "add", "add"], "args": [[6, [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]], [8], [9], [7], [9]], "expected": [null, 5, 5, 5, 6] },
+    { "ops": ["KthLargest", "add", "add", "add"], "args": [[1, [10000]], [-10000], [10000], [9999]], "expected": [null, 10000, 10000, 10000] }
+  ],
+  "hints": [
+    "Values below the kth largest can never become the answer again: new values only push the kth largest up. How many values do you really need to keep?",
+    "Keep just the k largest values in a min-heap. The heap's top, its smallest element, is then exactly the kth largest of everything seen.",
+    "In add, push the value, and if the heap now holds more than k values, pop once. Return the top. Feed the constructor's nums through the same steps."
+  ],
+  "complexity": { "time": "O(log k) per add, and O(n log k) to load the n starting values", "space": "O(k): the heap never holds more than k values" }
+}

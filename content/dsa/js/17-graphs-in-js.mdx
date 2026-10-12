@@ -1,0 +1,84 @@
+Graph problems arrive as an edge list, a grid of characters, or a map of names. The first few lines of every solution turn that into a structure you can traverse, and picking the right one (plus the right "visited" record) decides both speed and correctness.
+
+### Edge list to adjacency list
+
+An **adjacency list** stores, for each node, the nodes it links to. With nodes numbered `0 … n-1`, use an array of arrays built with `Array.from`, which calls the factory once per slot so every node gets its own list. For an **undirected** graph push each edge both ways; for a **directed** one push only `u → v`. When node labels are strings or huge sparse numbers, use a `Map` and create each list on first use.
+
+```js
+const graph = Array.from({ length: n }, () => []);
+for (const [u, v] of edges) {
+  graph[u].push(v);
+  graph[v].push(u);            // undirected only
+}
+for (const next of graph[node]) {} // neighbours of node
+```
+
+<RunCode src="snippets/graphs-adjacency.js" />
+
+If nodes are numbered from 1, allocate `n + 1` slots and ignore index 0 rather than shifting every label.
+
+### Weighted edges and adjacency matrices
+
+For weighted graphs store `[neighbour, weight]` pairs and destructure them in the loop. An **adjacency matrix** `m[u][v]` answers "is there an edge, and what does it cost?" in O(1) but takes n² memory: fine for n up to a couple of thousand and natural for dense graphs and all-pairs algorithms like Floyd-Warshall.
+
+<RunCode src="snippets/graphs-weighted.js" />
+
+Use `Infinity` for "no edge" in distance matrices: `Infinity + 5` is still `Infinity` and every real distance compares as smaller.
+
+### Grids as implicit graphs
+
+A grid needs no adjacency list: each cell's neighbours are computed from a **directions array**. Always check the bounds **before** reading the cell. `grid[-1]` is `undefined`, and `undefined[c]` throws a `TypeError`.
+
+```js
+const rows = grid.length, cols = grid[0].length;
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+for (const [dr, dc] of DIRS) {
+  const nr = r + dr, nc = c + dc;
+  if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+  // use grid[nr][nc]
+}
+```
+
+<RunCode src="snippets/graphs-grid.js" />
+
+Grids from judges are often arrays of **strings** like `'1'` and `'0'`, or arrays of strings per row (`["#..", ".#."]`), which are immutable. Compare with `'1'`, not `1`, and convert rows with `grid.map((row) => [...row])` when you need to mark cells.
+
+### Visited sets, boolean arrays and marking the grid
+
+Every traversal needs to remember where it has been. The options, from most flexible to leanest:
+
+| Option | Key | Notes |
+|---|---|---|
+| `Set` of strings | `` `${r},${c}` `` | works for anything, but builds a string per check |
+| `Set` of numbers | `r * cols + c` | no string building; still hashing |
+| Array or `Uint8Array(rows * cols)` | `r * cols + c` | O(1) index, compact, fastest |
+| Mark the grid in place | `grid[r][c] = '#'` | no extra memory, but destroys the input |
+
+The number key `r * cols + c` (multiply by the number of **columns**) is unique for every cell; decode it with `Math.floor(id / cols)` and `id % cols`. For BFS, mark a cell **when you enqueue it**, not when you dequeue it, or the same cell can be queued several times.
+
+<RunCode src="snippets/graphs-visited.js" />
+
+Marking the grid is the shortest code, so it is common in interviews. Say out loud that it mutates the input, and restore the cells afterwards in backtracking problems such as word search.
+
+### Graph representation costs
+
+| Representation | Memory | Neighbours of u | Is there an edge u–v? |
+|---|---|---|---|
+| Adjacency list (arrays) | O(V + E) | O(deg u) | O(deg u) |
+| Adjacency list of `Set`s | O(V + E) | O(deg u) | O(1) average |
+| Adjacency matrix | O(V²) | O(V) | O(1) |
+| Grid with a directions array | O(rows × cols) for the grid | O(4) or O(8) | O(1) |
+
+BFS and DFS over an adjacency list cost O(V + E); over a grid, O(rows × cols). Building the list from an edge list is O(V + E).
+
+<Callout kind="warning" title="Graph and grid gotchas">
+
+- `new Array(n).fill([])` gives every node the **same** neighbour list. Use `Array.from({ length: n }, () => [])`.
+- Forgetting the reverse edge in an undirected graph makes some nodes unreachable.
+- Reading `grid[nr][nc]` before the bounds check throws when `nr` is `-1` or `rows`.
+- Encoding cells with `r * rows + c` instead of `r * cols + c` collides on non-square grids.
+- `grid[r][c] === 1` on a grid of `'1'` strings is never true.
+- `grid[0].length` crashes on an empty grid: return early when `grid.length === 0`.
+- Deep recursive flood fill on a 1000 × 1000 grid can overflow the stack. Use an explicit stack or BFS.
+
+</Callout>

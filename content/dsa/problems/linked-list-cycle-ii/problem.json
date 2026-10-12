@@ -1,0 +1,30 @@
+{
+  "title": "Linked List Cycle II",
+  "difficulty": "Medium",
+  "patterns": ["fast-slow-pointers"],
+  "js": ["linked-list-tree-nodes", "map-set"],
+  "order": 5,
+  "summary": "Return the node where a linked list's cycle begins, or null if the list has no cycle, using O(1) extra space.",
+  "fn": "detectCycle",
+  "params": ["head"],
+  "types": { "params": ["ListNode"], "returns": "ListNode | null" },
+  "io": { "args": ["list-cycle"], "returns": "node-val" },
+  "tests": [
+    { "args": [[[4, 9, 2, 7], 1]], "expected": 9, "explain": "The tail (7) links back to index 1, so the cycle starts at the node holding 9. Return that node (the tests compare its value)." },
+    { "args": [[[10, 20], 0]], "expected": 10, "explain": "The second node links back to the head, so the cycle starts at the head." },
+    { "args": [[[5], -1]], "expected": null, "explain": "No cycle: return null." },
+    { "args": [[[], -1]], "expected": null },
+    { "args": [[[5], 0]], "expected": 5 },
+    { "args": [[[1, 2, 3, 4, 5, 6], 5]], "expected": 6 },
+    { "args": [[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0]], "expected": 1 },
+    { "args": [[[1, 2, 3, 4, 5, 6, 7, 8, 9], 4]], "expected": 5 },
+    { "args": [[[50, 96, 80, 36, 21, 34, 39, 33, 61, 77, 58, 90, 40, 52, 44, 85, 79, 64, 7, 72, 98, 28, 2, 76, 57, 17, 54, 97, 1, 26, 3, 5, 94, 55, 8, 62, 23, 71, 4, 68], 37]], "expected": 71 },
+    { "args": [[[50, 96, 80, 36, 21, 34, 39, 33, 61, 77, 58, 90, 40, 52, 44, 85, 79, 64, 7, 72, 98, 28, 2, 76, 57, 17, 54, 97, 1, 26, 3, 5, 94, 55, 8, 62, 23, 71, 4, 68], -1]], "expected": null }
+  ],
+  "hints": [
+    "First find out whether there is a cycle at all: run slow and fast pointers until they meet or fast reaches null.",
+    "Let F be the distance from the head to the cycle entry. When the pointers meet, the meeting point is exactly F steps (plus some whole laps) before the entry.",
+    "So put one pointer back on the head, leave the other at the meeting point, and move both one step at a time. They meet at the entry."
+  ],
+  "complexity": { "time": "O(n): two walks, each shorter than the list plus one lap", "space": "O(1): two pointers" }
+}

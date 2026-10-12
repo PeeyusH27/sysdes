@@ -1,0 +1,31 @@
+{
+  "title": "Non-overlapping Intervals",
+  "difficulty": "Medium",
+  "patterns": ["intervals", "greedy"],
+  "js": ["sorting", "destructuring-spread"],
+  "order": 4,
+  "summary": "Remove as few intervals as possible so that none of the remaining ones overlap.",
+  "fn": "eraseOverlapIntervals",
+  "params": ["intervals"],
+  "types": { "params": ["number[][]"], "returns": "number" },
+  "tests": [
+    { "args": [[[1, 3], [2, 4], [3, 5], [1, 5]]], "expected": 2, "explain": "Keep [1, 3] and [3, 5] (touching at 3 is fine) and remove [2, 4] and [1, 5]. No three of these intervals avoid each other, so 2 removals is the minimum." },
+    { "args": [[[4, 6], [4, 6], [4, 6], [4, 6]]], "expected": 3, "explain": "All four are the same interval, so only one of them can stay." },
+    { "args": [[[1, 2], [2, 3]]], "expected": 0, "explain": "The two intervals only touch at 2, which doesn't count as overlapping." },
+    { "args": [[[5, 9]]], "expected": 0 },
+    { "args": [[[1, 100], [2, 3], [4, 5], [6, 7]]], "expected": 1 },
+    { "args": [[[0, 2], [1, 3], [2, 4], [3, 5], [4, 6]]], "expected": 2 },
+    { "args": [[[-5, -1], [-3, 2], [0, 4]]], "expected": 1 },
+    { "args": [[[1, 3], [3, 6], [6, 9], [2, 7]]], "expected": 1 },
+    { "args": [[[7, 8], [1, 2], [4, 6], [2, 4]]], "expected": 0 },
+    { "args": [[[-13, -10], [3, 9], [-26, -20], [7, 13], [13, 18], [-23, -22], [-11, -10], [-28, -22], [-30, -29], [0, 5], [-10, -7], [-28, -24], [-22, -19], [-23, -21], [17, 18], [26, 31], [-8, -4], [20, 26], [29, 34], [-8, -2], [-2, 4], [-24, -23], [-30, -27], [23, 26], [27, 30]]], "expected": 13 },
+    { "args": [[[35, 46], [14, 16], [49, 57], [73, 78], [26, 30], [97, 98], [82, 86], [44, 54], [74, 81], [65, 74], [37, 43], [58, 62], [28, 34], [90, 100], [11, 21], [25, 30], [65, 67], [71, 82], [33, 45], [70, 76], [40, 50], [98, 107], [64, 67], [46, 57], [79, 86], [59, 60], [43, 49], [92, 98], [29, 34], [91, 102], [79, 89], [67, 74], [15, 16], [37, 49], [46, 47], [68, 70], [10, 17], [39, 50], [8, 9], [98, 105]]], "expected": 27 }
+  ],
+  "samples": 3,
+  "hints": [
+    "Removing the fewest is the same as keeping the most. How would you choose the largest set of intervals that don't overlap?",
+    "Among intervals that clash, keep the one that ends first: it leaves the most room for everything after it.",
+    "Sort by end. Walk through, keeping an interval when its start >= the end of the last kept one; otherwise count it as removed."
+  ],
+  "complexity": { "time": "O(n log n): the sort, then one pass", "space": "O(1) extra besides the sort" }
+}

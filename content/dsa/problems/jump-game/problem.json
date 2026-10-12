@@ -1,0 +1,31 @@
+{
+  "title": "Jump Game",
+  "difficulty": "Medium",
+  "patterns": ["greedy", "dp-1d"],
+  "js": ["numbers-math", "arrays"],
+  "order": 2,
+  "summary": "Each value says how far you may jump from that index. Decide whether you can reach the last index.",
+  "fn": "canJump",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "boolean" },
+  "tests": [
+    { "args": [[2, 0, 3, 0, 1]], "expected": true, "explain": "Jump from index 0 to index 2 (2 steps), then from index 2 jump 2 more steps to the last index." },
+    { "args": [[1, 1, 0, 2, 4]], "expected": false, "explain": "Every route lands on index 2, whose value is 0. Nothing before it can jump past it, so index 4 is out of reach." },
+    { "args": [[0]], "expected": true, "explain": "You start on the last index, so there is nothing to do." },
+    { "args": [[0, 1]], "expected": false },
+    { "args": [[4, 0, 0, 0, 0]], "expected": true },
+    { "args": [[3, 0, 0, 0, 1]], "expected": false },
+    { "args": [[1, 2, 0, 0, 1]], "expected": false },
+    { "args": [[2, 5, 0, 0]], "expected": true },
+    { "args": [[1, 1, 1, 1, 1, 1]], "expected": true },
+    { "args": [[4, 2, 0, 3, 0, 2, 0, 3, 3, 4, 3, 2, 1, 4, 1, 0, 0, 2, 2, 2, 0, 4, 0, 1, 3, 4, 4, 3, 3, 0, 0, 4, 0, 4, 1, 2, 0, 4, 1, 3]], "expected": true },
+    { "args": [[2, 4, 3, 4, 3, 1, 4, 1, 3, 2, 1, 1, 1, 2, 4, 4, 2, 2, 1, 3, 0, 0, 0, 0, 0, 0, 4, 4, 2, 3, 4, 2, 2, 2, 2, 2, 1, 3, 1, 3]], "expected": false }
+  ],
+  "samples": 3,
+  "hints": [
+    "You don't need to know which jumps to make, only how far you could possibly get. What is the furthest index reachable so far?",
+    "Scan left to right, keeping reach = the furthest index any visited position can jump to. If you arrive at an index beyond reach, you are stuck.",
+    "For each i: if i > reach, return false; otherwise reach = max(reach, i + nums[i]). If the loop finishes, the last index was reachable."
+  ],
+  "complexity": { "time": "O(n): one pass", "space": "O(1)" }
+}

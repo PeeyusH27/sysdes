@@ -1,0 +1,96 @@
+Trees, backtracking, divide and conquer and top-down dynamic programming are all recursion. JavaScript handles it well up to a few thousand levels, so you need to know where the stack limit is, how to memoize, and how to switch to a loop when the input is deep.
+
+### Base case and recursive case
+
+Every recursive function has the same two parts: a **base case** that answers the smallest input directly, and a **recursive case** that calls itself on a strictly smaller input and combines the result. Trust the recursive call to be correct for the smaller input; your job is only the combine step.
+
+```js
+function solve(input) {
+  if (isSmallest(input)) return directAnswer(input);  // base case(s) first
+  const sub = solve(smallerPart(input));              // must make progress
+  return combine(input, sub);
+}
+```
+
+<RunCode src="snippets/recursion-basics.js" />
+
+The indentation shows the call stack: each call waits for the one below it, and the answers flow back up in reverse order. For trees and lists the base case is almost always `node === null`.
+
+### Recursion depth limits
+
+Every pending call holds a **stack frame**. The engine's stack is small (about 1 MB in V8), which works out to **roughly 10,000 frames** for a tiny function and fewer when each frame has more parameters and locals. The exact number varies by engine and changes between versions, so treat anything above a few thousand levels as unsafe. Going over throws a catchable `RangeError: Maximum call stack size exceeded`.
+
+<RunCode src="snippets/recursion-depth.js" />
+
+What this means in practice:
+
+- Recursion over a **balanced tree** is always fine: depth is O(log n).
+- Recursion over a **linked list**, a **skewed tree**, or a **path through a big grid** can be as deep as n. If n can reach 10^4 or more, use a loop or an explicit stack.
+- You can't raise the limit in a browser or a judge (`node --stack-size` exists, but you rarely control the flags).
+
+**Tail calls are not optimised in practice.** ES2015 specified proper tail calls, but only Safari ships them. V8 (Chrome, Node) and Firefox still push a new frame for `return f(n - 1, acc)`, so rewriting into tail form does not save you. A tail-recursive function converts mechanically into a `while` loop: the parameters become loop variables.
+
+```js
+function sumTo(n, acc = 0) {     // tail call, but still one frame per level in V8
+  if (n === 0) return acc;
+  return sumTo(n - 1, acc + n);
+}
+function sumToLoop(n, acc = 0) { // the same steps with O(1) stack
+  while (n !== 0) {
+    acc += n;
+    n -= 1;
+  }
+  return acc;
+}
+```
+
+### Memoization with a Map or an array
+
+When the same arguments come up again and again (overlapping subproblems), cache each answer the first time you compute it. That is top-down dynamic programming, and it turns exponential recursions into polynomial ones.
+
+<RunCode src="snippets/recursion-memo.js" />
+
+Pick the cache by the shape of the state:
+
+| State | Cache | Check |
+|---|---|---|
+| One small integer `i` | `new Array(n + 1).fill(-1)` | `memo[i] !== -1` |
+| Two integers `(i, j)` | 2D array via `Array.from` | `memo[i][j] !== -1` |
+| Large, sparse or non-numeric | `new Map()` with key `` `${i},${j}` `` or `i * W + j` | `memo.has(key)` |
+
+Use a sentinel that can never be a real answer (`-1` for counts, `undefined` for anything). Never test `if (memo[i])`: a stored answer of `0` is falsy and gets recomputed every time.
+
+### Recursion to iteration with an explicit stack
+
+Any recursion can be run with your own array as the stack, which lives on the heap and can hold millions of entries. For DFS, push the start node, then loop: pop a node, process it, push its children. Push them in **reverse** of the order you want to visit them, since the last one pushed is popped first.
+
+<RunCode src="snippets/recursion-iterative.js" />
+
+Simple recursions on lists ("do something with this node, then recurse on `next`") don't even need a stack: they are a plain loop. Keep the recursive version when depth is bounded (balanced trees, backtracking over n ≤ 20 choices); it is shorter and easier to get right.
+
+### Passing indices instead of slicing
+
+`arr.slice(1)` copies the rest of the array, so recursing on slices costs O(n) per call and O(n²) overall, in both time and memory. Pass the **whole array plus indices** (`i`, or `lo` and `hi`) instead. The same goes for strings: engines can sometimes share memory for `s.slice(1)`, but indices are O(1) in every engine and make the cost obvious.
+
+<RunCode src="snippets/recursion-indices.js" />
+
+### Recursion costs
+
+| Approach | Time | Extra space |
+|---|---|---|
+| Plain recursion | number of calls × work per call | O(max depth) stack |
+| Two branches per call, depth n (naive Fibonacci, subsets) | O(2^n) | O(n) |
+| Memoized | number of distinct states × work per state | states + O(depth) |
+| Slicing the input each call | adds O(n) per call: often O(n²) total | O(n²) copied |
+| Explicit stack | same as the recursion | O(max stack size), on the heap |
+
+<Callout kind="warning" title="Recursion gotchas">
+
+- A base case that is never reached (`n` goes negative, an index skips past `length`) ends in `RangeError`.
+- `helper(node.left)` instead of `return helper(node.left)`: the answer is computed and then thrown away.
+- `if (memo[i])` treats a cached `0` as missing. Compare with the sentinel or use `memo.has`.
+- A memo declared **outside** the function survives between test cases and returns answers for the previous input. Create it inside the main function.
+- Memo keys that are arrays never match (they compare by reference). Build a string or number key.
+- Recursing over a 10^5-node list or skewed tree overflows the stack. Use a loop.
+
+</Callout>

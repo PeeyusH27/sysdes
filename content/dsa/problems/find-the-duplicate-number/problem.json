@@ -1,0 +1,29 @@
+{
+  "title": "Find the Duplicate Number",
+  "difficulty": "Medium",
+  "patterns": ["fast-slow-pointers", "binary-search"],
+  "js": ["arrays", "map-set"],
+  "order": 6,
+  "summary": "An array of n + 1 numbers from 1 to n has exactly one repeated value. Find it without modifying the array and with O(1) extra space.",
+  "fn": "findDuplicate",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[3, 1, 4, 2, 4]], "expected": 4, "explain": "4 appears twice; every other value appears once." },
+    { "args": [[2, 2, 2, 2]], "expected": 2, "explain": "The duplicate may repeat more than twice. Here 1 and 3 are missing and 2 fills their places." },
+    { "args": [[1, 1]], "expected": 1, "explain": "The smallest possible input: n = 1." },
+    { "args": [[1, 2, 3, 4, 5, 6, 3]], "expected": 3 },
+    { "args": [[5, 1, 5, 3, 2, 4]], "expected": 5 },
+    { "args": [[2, 5, 9, 6, 9, 3, 8, 9, 7, 1]], "expected": 9 },
+    { "args": [[1, 3, 4, 2, 1]], "expected": 1 },
+    { "args": [[4, 3, 1, 4, 2]], "expected": 4 },
+    { "args": [[7, 9, 7, 4, 2, 8, 7, 7, 1, 5]], "expected": 7 },
+    { "args": [[27, 6, 32, 29, 39, 15, 5, 14, 13, 1, 46, 20, 16, 43, 7, 37, 48, 47, 34, 21, 12, 41, 9, 31, 22, 45, 25, 35, 18, 26, 33, 44, 11, 4, 24, 17, 38, 49, 8, 36, 28, 2, 30, 37, 40, 10, 42, 3, 50, 23, 19]], "expected": 37 }
+  ],
+  "hints": [
+    "A Set finds the repeat in O(n) space, and sorting changes the array. Both break the rules. Think of each index as a node instead.",
+    "Draw an arrow from every index i to index nums[i]. Starting at index 0, you follow a path that must eventually loop. Where does the loop begin?",
+    "Two different indices point to the duplicate value, so the loop's entry is the duplicate. Find it with Floyd's algorithm: meet with slow and fast, then restart one pointer at 0 and step both by one."
+  ],
+  "complexity": { "time": "O(n): two Floyd walks over at most n + 1 indices", "space": "O(1): two indices, and the array is never written" }
+}

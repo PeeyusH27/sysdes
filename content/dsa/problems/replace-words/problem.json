@@ -1,0 +1,30 @@
+{
+  "title": "Replace Words",
+  "difficulty": "Medium",
+  "patterns": ["trie"],
+  "js": ["strings", "map-set"],
+  "order": 4,
+  "summary": "Shorten every word in a sentence to the shortest dictionary root it starts with.",
+  "fn": "replaceWords",
+  "params": ["dictionary", "sentence"],
+  "types": { "params": ["string[]", "string"], "returns": "string" },
+  "tests": [
+    { "args": [["pre", "un", "re"], "unhappy readers prefer reruns"], "expected": "un re pre re", "explain": "\"unhappy\" starts with \"un\", \"readers\" and \"reruns\" with \"re\", and \"prefer\" with \"pre\"." },
+    { "args": [["a", "aa", "aaa"], "aaaa aa a b"], "expected": "a a a b", "explain": "Every word made of a's starts with all three roots; the shortest, \"a\", wins. \"b\" has no root and stays." },
+    { "args": [["xyz"], "hello world"], "expected": "hello world", "explain": "No word starts with \"xyz\", so the sentence is unchanged." },
+    { "args": [["tree", "tr"], "trees trap tree"], "expected": "tr tr tr" },
+    { "args": [["run", "running"], "running runs run"], "expected": "run run run" },
+    { "args": [["abc"], "ab abc abcd"], "expected": "ab abc abc" },
+    { "args": [["e", "k", "c"], "keep"], "expected": "k" },
+    { "args": [["cat"], "cat"], "expected": "cat" },
+    { "args": [["bat", "ba", "b"], "bath bat ba b abba"], "expected": "b b b b abba" },
+    { "args": [["go", "gone", "goal"], "goalkeeper going gone g"], "expected": "go go go g" },
+    { "args": [["c", "bdd", "bad", "aa", "eca", "cab", "bab", "bbe", "edc", "d", "bd", "dce", "ced", "b", "aa"], "ccaea cbdd dbbdd ad e cea acedeae aead abceb aaac a baaeb cdbc ddebbcc acddedb eeb dddd bbeeaa abd ca ccce eeeccb cdeddc aadbcea e bbdc cd deccea aebe e"], "expected": "c c d ad e c acedeae aead abceb aa a b c d acddedb eeb d b abd c c eeeccb c aa e b c d aebe e" }
+  ],
+  "hints": [
+    "For each word you need the shortest root that is a prefix of it. Checking every root against every word is slow.",
+    "Put all the roots in a trie. Walking a word down the trie passes exactly the roots that are its prefixes, shortest first.",
+    "Walk each word letter by letter: stop at the first node marked as the end of a root and use that prefix. If the path breaks off first, keep the word unchanged."
+  ],
+  "complexity": { "time": "O(D + S): D letters to build the trie, then at most one trie step per letter of the sentence", "space": "O(D) for the trie, plus O(S) for the output" }
+}

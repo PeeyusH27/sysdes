@@ -1,0 +1,69 @@
+`Map` and `Set` are JavaScript's hash map and hash set. Lookups, inserts and deletes cost **O(1) on average**, which is why "use a hash map" turns so many O(n²) brute forces into O(n). Reach for them whenever you ask "have I seen this before?", "how many times?", or "which group does this belong to?".
+
+### Map basics
+
+```js
+const m = new Map();          // or new Map([[k1, v1], [k2, v2]])
+m.set(key, value);            // insert or overwrite, returns m
+m.get(key);                   // value, or undefined if missing
+m.has(key);                   // true / false
+m.delete(key);                // true if it was there
+m.size;                       // number of entries (a property, not a method)
+for (const [k, v] of m) {}    // entries in insertion order
+```
+
+<RunCode src="snippets/map-basics.js" />
+
+### Counting and grouping with a Map
+
+Three idioms cover most hash map problems: **count** occurrences, **group** items by a computed key, and **remember** something about values you've already passed (an index, a count, a prefix sum).
+
+<RunCode src="snippets/map-counting.js" />
+
+`(freq.get(ch) ?? 0) + 1` reads as "current count, or 0 if this is the first time". Use `??` rather than `||` when 0 is a meaningful stored value: `0 || fallback` picks the fallback.
+
+### Map or plain object?
+
+| | `Map` | `{}` object |
+|---|---|---|
+| Key types | anything; `1` and `'1'` stay different | strings and symbols only: `obj[1]` is `obj['1']` |
+| Size | `m.size`, O(1) | `Object.keys(o).length`, O(n) |
+| Order | insertion order | integer-like keys first, ascending, then insertion order |
+| Accidental keys | none | inherits `constructor`, `toString`… unless you use `Object.create(null)` |
+| Speed for frequent add/delete | built for it | fine for small, fixed shapes |
+
+Default to `Map` for counting and lookups. A plain object is fine for fixed records like `{ count: 0, best: -Infinity }`, and an **array of 26** is fastest when keys are lowercase letters: `counts[ch.charCodeAt(0) - 97]++`.
+
+### Set basics
+
+A `Set` stores unique values: perfect for "visited", "seen", and removing duplicates.
+
+<RunCode src="snippets/set-basics.js" />
+
+### Composite keys in a Map or Set
+
+Keys are compared with **SameValueZero**: primitives by value, objects and arrays **by reference**. Two separate `[0, 1]` arrays are two different keys, so encode pairs and coordinates as strings or numbers.
+
+<RunCode src="snippets/composite-keys.js" />
+
+### Map and Set costs
+
+| Operation | Average cost |
+|---|---|
+| `set`, `get`, `has`, `delete`, `add` | O(1) |
+| `size` | O(1) |
+| `[...m]`, `m.keys()`, iterating | O(n) |
+| `new Set(array)` | O(n) |
+| Building a string key like `` `${r},${c}` `` | O(length of the key) |
+
+"O(1) average" assumes good hashing, which the engine handles for you; worst cases don't come up in interview problems.
+
+<Callout kind="warning" title="Map and Set gotchas">
+
+- `m[key] = value` on a Map sets a **property**, not an entry: `m.get(key)` won't see it. Always use `set`/`get`.
+- `m.size()` throws: `size` is a property.
+- Array keys never match (`set.has([1, 2])` is false). Encode them.
+- `NaN` works as a key (SameValueZero treats `NaN` as equal to itself), and `-0` and `0` are the same key.
+- `JSON.stringify(new Map(...))` gives `{}`. Log the map directly or spread it: `[...m]`.
+
+</Callout>

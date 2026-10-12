@@ -1,0 +1,30 @@
+{
+  "title": "First Unique Character",
+  "difficulty": "Easy",
+  "patterns": ["hashing"],
+  "js": ["map-set", "strings"],
+  "order": 3,
+  "summary": "Return the index of the first character that appears exactly once in a string.",
+  "fn": "firstUniqChar",
+  "params": ["s"],
+  "types": { "params": ["string"], "returns": "number" },
+  "tests": [
+    { "args": ["swiss"], "expected": 1, "explain": "s appears three times. w (index 1) and i (index 2) appear once each, and w comes first." },
+    { "args": ["aabbcc"], "expected": -1, "explain": "Every character repeats, so there is no unique one." },
+    { "args": ["level"], "expected": 2, "explain": "l and e each appear twice; v at index 2 is the only character that appears once." },
+    { "args": ["z"], "expected": 0 },
+    { "args": ["abcabd"], "expected": 2 },
+    { "args": ["aabbccd"], "expected": 6 },
+    { "args": ["stress"], "expected": 1 },
+    { "args": ["abab"], "expected": -1 },
+    { "args": ["xxyz"], "expected": 2 },
+    { "args": ["qwertyuiopqwertyuiopqwertyuiopqwertyuiop"], "expected": -1 },
+    { "args": ["cddddbbbcdcbdbbbeabcabcdcdbddaabcdeabcdezedcba"], "expected": 40 }
+  ],
+  "hints": [
+    "Checking every character against every other character is O(n²). What could you compute once, up front?",
+    "Make one pass that counts how many times each character appears.",
+    "Then make a second pass over s in its original order and return the first index whose count is 1. Return -1 if none is."
+  ],
+  "complexity": { "time": "O(n): two passes over the string", "space": "O(1): at most 26 counters" }
+}

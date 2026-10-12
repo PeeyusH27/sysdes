@@ -1,0 +1,31 @@
+{
+  "title": "Kth Largest Element in an Array",
+  "difficulty": "Medium",
+  "patterns": ["heaps"],
+  "js": ["heap", "sorting"],
+  "order": 2,
+  "summary": "Return the kth largest value in an unsorted array without fully sorting it.",
+  "fn": "findKthLargest",
+  "params": ["nums", "k"],
+  "types": { "params": ["number[]", "number"], "returns": "number" },
+  "tests": [
+    { "args": [[3, 9, 1, 7, 5], 2], "expected": 7, "explain": "Sorted from largest: 9, 7, 5, 3, 1. The 2nd one is 7." },
+    { "args": [[4, 2, 4, 1, 3, 4], 3], "expected": 4, "explain": "Duplicates count separately: from largest the values are 4, 4, 4, 3, 2, 1, so the 3rd largest is still 4." },
+    { "args": [[8], 1], "expected": 8, "explain": "A single value is its own 1st largest." },
+    { "args": [[-1, -5, -3], 3], "expected": -5 },
+    { "args": [[5, 5, 5, 5], 2], "expected": 5 },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 10], "expected": 1 },
+    { "args": [[10, 9, 8, 7, 6, 5, 4, 3, 2, 1], 1], "expected": 10 },
+    { "args": [[2, 1], 2], "expected": 1 },
+    { "args": [[0, -2, 7, 7, 3, -2, 0], 4], "expected": 0 },
+    { "args": [[-6, -7, -12, 35, -45, -34, -6, -12, 0, 39, 42, 34, 41, -27, -40, -15, -46, -3, 15, -10, 25, -32, 36, -45, 8, -7, -33, 26, -15, 48, -11, -11, -33, -30, 28, -20, -21, -16, 17, -26], 17], "expected": -6 },
+    { "args": [[-7426, 9268, -5623, -103, -2721, -4083, -253, -2773, -4516, -7842, -6019, 3370, 2355, 3805, -4625, 85, -7654, 8851, -3073, -6197, 5412, -8002, -441, -959, 4381, -8009, 7695, 6376, 2863, 7615, -6812, 1182, -4245, 9432, -7726, -3930, -2673, 9149, 6190, 2644, 5785, 44, -5135, -8691, 3523, 868, 8796, 7801, -6992, 6522, -9283, 8860, 1904, -2429, 1238, 8378, 9636, 5527, 1806, -3651], 1], "expected": 9636 },
+    { "args": [[4, 1, 2, 0, 4, 5, 4, 5, 5, 4, 5, 4, 1, 1, 5, 4, 4, 1, 1, 0, 5, 4, 0, 1, 5, 0, 5, 2, 3, 1, 4, 2, 4, 5, 5, 0, 5, 5, 5, 5, 5, 3, 4, 3, 0, 1, 3, 5, 1, 5], 25], "expected": 4 }
+  ],
+  "hints": [
+    "Sorting and reading index k - 1 works in O(n log n). Can you avoid ordering values you will never look at?",
+    "Walk the array keeping only the k largest values seen so far in a min-heap: push each value, and pop whenever the heap grows past k.",
+    "After the walk the heap holds the k largest values, and its top (the smallest of them) is the answer. That is O(n log k)."
+  ],
+  "complexity": { "time": "O(n log k): each of the n values costs at most one push and one pop on a heap of size k", "space": "O(k) for the heap" }
+}

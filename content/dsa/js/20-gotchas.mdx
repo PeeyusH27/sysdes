@@ -1,0 +1,79 @@
+Most wrong answers on hidden tests aren't wrong algorithms. They are JavaScript behaving exactly as specified in a way you didn't expect: a shared row, a string sort, a float that is almost equal. Here are the classics, grouped, each with its fix. Run the snippets to see every one happen.
+
+### Array traps: shared rows, sorting and comparisons
+
+| Trap | What happens | Fix |
+|---|---|---|
+| `new Array(n).fill([])` | every row is the **same** array | `Array.from({ length: n }, () => [])` |
+| `nums.sort()` | numbers sorted as strings: `[1, 10, 100, 9]` | `nums.sort((a, b) => a - b)` |
+| `a === b` on arrays | compares references: `[1] === [1]` is false | compare lengths and elements, or `JSON.stringify` once |
+| `Math.max(...[])` | `-Infinity` (and `Math.min` gives `Infinity`) | handle the empty case first |
+| `strs.map(parseInt)` | the index is passed as the radix: `[1, NaN, NaN]` | `strs.map(Number)` or `(s) => parseInt(s, 10)` |
+| `const arr = []` | still mutable: `const` only blocks reassignment | copy (`[...arr]`) when you need a snapshot |
+
+<RunCode src="snippets/gotchas-arrays.js" />
+
+### Number and equality traps
+
+| Trap | What happens | Fix |
+|---|---|---|
+| `==` | converts types: `0 == ''` and `'1' == 1` are true | always `===` and `!==` |
+| `x === NaN` | always false: `NaN` equals nothing | `Number.isNaN(x)` |
+| `0.1 + 0.2 === 0.3` | false: binary floats can't store most decimals | compare `Math.abs(a - b) < 1e-9`, or work in integers (cents) |
+| `7 / 2` | `3.5`: there is no integer division | `Math.floor(a / b)` for non-negatives, `Math.trunc` to round toward zero |
+| `-7 % 3` | `-1`: the result keeps the sign of the left side | `((a % m) + m) % m` |
+| `obj[3] = …` | keys become strings: `Object.keys` gives `'3'` | a `Map` keeps number keys as numbers |
+
+<RunCode src="snippets/gotchas-numbers.js" />
+
+See [Numbers, Math and integer tricks](/dsa/js#numbers-math) and [Objects](/dsa/js#objects) for the details.
+
+### Mutation, iteration and off-by-one traps
+
+| Trap | What happens | Fix |
+|---|---|---|
+| `splice` while looping forward | the next element slides into `i` and is skipped | loop backwards, or build a new array with `filter` |
+| `sort`, `reverse`, `splice`, `fill` on the input | the caller's array changes too | copy first (`[...nums]`) or use `toSorted`, `toReversed` |
+| `arr[arr.length]` | `undefined`: the last index is `length - 1` | `arr.at(-1)` |
+| comparing `a[i]` with `a[i + 1]` | reads past the end on the last step | loop while `i + 1 < a.length` |
+| `for (let i = 1; i < n; i++)` vs `i <= n` | one element missed or one extra | dry-run the loop on n = 1 and n = 2 |
+| adding to a `Set`/`Map` while iterating it | new items are visited too | collect changes, apply after the loop |
+
+<RunCode src="snippets/gotchas-mutation.js" />
+
+Mutating the input is sometimes allowed (it saves memory), but if your solution needs the original order later, or a test reuses the same array, a sneaky `sort()` fails the next step.
+
+### Function, class and recursion traps
+
+| Trap | What happens | Fix |
+|---|---|---|
+| `(x) => { x * 2 }` | braces make a block: returns `undefined` | drop the braces or add `return` |
+| `helper(next)` instead of `return helper(next)` | the recursive answer is discarded | return it (or combine it) |
+| `Trie()` without `new` | `TypeError: Class constructor … cannot be invoked without 'new'` | `new Trie()` |
+| recursion 10^5 levels deep | `RangeError: Maximum call stack size exceeded` | loop or explicit stack ([Recursion](/dsa/js#recursion)) |
+| a memo or counter declared outside the function | carries values over between test cases | create state inside the function |
+| `result.push(path)` in backtracking | every entry is the same array, emptied at the end | `result.push([...path])` |
+
+<RunCode src="snippets/gotchas-functions.js" />
+
+### Debugging in the editor
+
+When a hidden test fails, shrink it: copy the failing input into a sample, then print what your code sees.
+
+- **Label your logs.** `console.log({ i, sum })` prints `{ i: 0, sum: 4 }`, so you never mix up which number is which.
+- **Maps and Sets print their contents** directly. Spread them (`[...freq]`) to see entries as arrays.
+- **`JSON.stringify(grid)`** prints a nested array on one compact line, and `row.join(' ')` per row lays a grid out. `JSON.stringify` turns Maps and Sets into `{}`, so don't use it on them.
+- **Log a few iterations, not all of them.** Thousands of lines slow the run and bury the one that matters (the editor keeps the first 200).
+- **Check invariants loudly**: `if (lo > hi) console.log('crossed', lo, hi)` beats staring at output.
+
+<RunCode src="snippets/gotchas-debugging.js" />
+
+<Callout kind="tip" title="Before you submit">
+
+- Empty input, one element, all equal, negatives, and the largest n from the constraints.
+- Every `sort` has a comparator; every arrow with braces has a `return`.
+- No `shift`, `includes`, `indexOf` or spread copy inside a loop over n.
+- No state left over at the top level of the file.
+- Debug `console.log` lines removed.
+
+</Callout>

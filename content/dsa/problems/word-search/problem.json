@@ -1,0 +1,31 @@
+{
+  "title": "Word Search",
+  "difficulty": "Medium",
+  "patterns": ["backtracking"],
+  "js": ["graphs-in-js", "recursion", "strings"],
+  "order": 5,
+  "summary": "Decide whether a word can be traced through neighbouring cells of a letter grid without reusing a cell.",
+  "fn": "exist",
+  "params": ["board", "word"],
+  "types": { "params": ["string[][]", "string"], "returns": "boolean" },
+  "tests": [
+    { "args": [[["S", "E", "E", "D"], ["T", "A", "R", "S"], ["O", "N", "E", "X"]], "STARE"], "expected": true, "explain": "S (row 0) → T below it → A to the right → R → E above R. Every step moves to a neighbouring cell." },
+    { "args": [[["S", "E", "E", "D"], ["T", "A", "R", "S"], ["O", "N", "E", "X"]], "TONES"], "expected": false, "explain": "T → O → N → E works, but no S touches that E, so the word can't be finished." },
+    { "args": [[["A", "B"], ["C", "D"]], "ABA"], "expected": false, "explain": "The board has only one A, and a cell can't be used twice in the same word." },
+    { "args": [[["Q"]], "Q"], "expected": true },
+    { "args": [[["Q"]], "q"], "expected": false },
+    { "args": [[["A", "B"], ["C", "D"]], "ABDC"], "expected": true },
+    { "args": [[["B", "B", "B", "B"], ["C", "C", "A", "A"], ["B", "B", "B", "C"]], "CBBA"], "expected": true },
+    { "args": [[["B", "A", "B", "A"], ["A", "C", "C", "C"], ["A", "C", "B", "B"]], "AACA"], "expected": true },
+    { "args": [[["A", "A", "A"], ["A", "A", "A"], ["A", "A", "A"]], "AAAAAAAAA"], "expected": true },
+    { "args": [[["A", "A", "A"], ["A", "A", "A"], ["A", "A", "A"]], "AAAAAAAAAA"], "expected": false },
+    { "args": [[["P", "L", "A", "N", "E"], ["O", "R", "B", "I", "T"], ["S", "T", "A", "R", "S"], ["M", "O", "O", "N", "S"]], "PLANETS"], "expected": true },
+    { "args": [[["P", "L", "A", "N", "E"], ["O", "R", "B", "I", "T"], ["S", "T", "A", "R", "S"], ["M", "O", "O", "N", "S"]], "MOONSTAR"], "expected": false }
+  ],
+  "hints": [
+    "Try every cell as the start of the word. From a cell that matches word[i], the next letter must be in one of its 4 neighbours.",
+    "Write dfs(r, c, i): fail if (r, c) is off the board or board[r][c] !== word[i]; succeed if i is the last index. Otherwise recurse into the 4 neighbours with i + 1.",
+    "To stop a path from reusing a cell, overwrite board[r][c] with a marker like \"#\" before recursing and put the letter back afterwards, whether the branch succeeded or not."
+  ],
+  "complexity": { "time": "O(m · n · 3^L) for an m × n board and a word of length L: each start explores at most 3 new directions per letter (it can't step back onto the cell it came from)", "space": "O(L) for the recursion depth; cells are marked in place instead of in a visited set" }
+}

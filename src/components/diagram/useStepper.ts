@@ -12,6 +12,8 @@ export interface Stepper {
   next: () => void;
   prev: () => void;
   reset: () => void;
+  /** Jump to a step (-1 = before the first step). */
+  seek: (i: number) => void;
   handleKey: (e: React.KeyboardEvent) => void;
 }
 
@@ -60,6 +62,10 @@ export function useStepper(total: number, durationOf: (i: number) => number, opt
     reset: () => {
       setPlaying(false);
       setIndex(-1);
+    },
+    seek: (i) => {
+      setPlaying(false);
+      setIndex(Math.max(-1, Math.min(i, last)));
     },
     handleKey: (e) => {
       const keys: Record<string, () => void> = {

@@ -1,0 +1,30 @@
+{
+  "title": "Valid Palindrome",
+  "difficulty": "Easy",
+  "patterns": ["two-pointers"],
+  "js": ["strings"],
+  "order": 1,
+  "summary": "Decide whether a sentence reads the same forwards and backwards once you ignore case and punctuation.",
+  "fn": "isPalindrome",
+  "params": ["s"],
+  "types": { "params": ["string"], "returns": "boolean" },
+  "tests": [
+    { "args": ["A man, a plan, a canal: Panama"], "expected": true, "explain": "Keeping only letters and digits and lowering the case gives \"amanaplanacanalpanama\", which reads the same both ways." },
+    { "args": ["race a car"], "expected": false, "explain": "\"raceacar\" read backwards is \"racaecar\"." },
+    { "args": [" "], "expected": true, "explain": "No letters or digits remain. An empty string is a palindrome." },
+    { "args": ["0P"], "expected": false },
+    { "args": ["ab_a"], "expected": true },
+    { "args": ["Was it a car or a cat I saw?"], "expected": true },
+    { "args": ["No 'x' in Nixon"], "expected": true },
+    { "args": ["a."], "expected": true },
+    { "args": ["abcdba"], "expected": false },
+    { "args": ["12321"], "expected": true },
+    { "args": ["1a2"], "expected": false }
+  ],
+  "hints": [
+    "Compare the first useful character with the last useful character, then move inward.",
+    "Use two indices, left and right. Skip any character that is not a letter or digit before comparing.",
+    "Compare lower-cased characters. If any pair differs, it isn't a palindrome; if the pointers meet, it is."
+  ],
+  "complexity": { "time": "O(n): each index is visited once by one of the pointers", "space": "O(1): no cleaned copy of the string is built" }
+}

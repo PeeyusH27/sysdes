@@ -17,6 +17,7 @@
 | [04-learn-path.md](04-learn-path.md) | Home, the HLD path index and all 10 steps, each expanded with sections, diagrams, widgets, JS code, Q&A and quizzes |
 | [05-deep-dives.md](05-deep-dives.md) | The 6 deep dives, expanded with new code cards, widgets and comparison tables |
 | [06-interview-questions.md](06-interview-questions.md) | Question hub, page template, detailed answers for all 7 questions, and a backlog of 15 new questions |
+| [07-dsa-track.md](07-dsa-track.md) | The DSA track added later: JavaScript cheat sheet, 22 patterns with step-by-step algorithm animations, and an in-browser editor with tests, progress and a solution that unlocks after a wrong attempt |
 
 ---
 

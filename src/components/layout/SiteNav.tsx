@@ -4,17 +4,30 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Menu, Moon, Network, Search, Sun, Wind } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { useHydrated } from "@/lib/hooks";
 import { useProgress } from "@/lib/progress";
 import { CommandMenu } from "./CommandMenu";
 
-const LINKS = [
-  { href: "/learn", label: "Learn" },
-  { href: "/deep-dives", label: "Deep dives" },
-  { href: "/questions", label: "Questions" },
-  { href: "/playground", label: "Playground" },
-  { href: "/cheatsheet", label: "Cheatsheet" },
+const TRACKS = [
+  { href: "/dsa", label: "DSA", match: ["/dsa"] },
+  { href: "/system-design", label: "System Design", match: ["/system-design", "/learn", "/deep-dives", "/questions", "/playground", "/cheatsheet", "/glossary"] },
 ];
+const SUB: Record<string, { href: string; label: string }[]> = {
+  "/dsa": [
+    { href: "/dsa/js", label: "JS cheat sheet" },
+    { href: "/dsa/patterns", label: "Patterns" },
+    { href: "/dsa/problems", label: "Problems" },
+  ],
+  "/system-design": [
+    { href: "/learn", label: "Learn" },
+    { href: "/deep-dives", label: "Deep dives" },
+    { href: "/questions", label: "Questions" },
+    { href: "/playground", label: "Playground" },
+    { href: "/cheatsheet", label: "Cheatsheet" },
+  ],
+};
+const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
 export function SiteNav() {
   const pathname = usePathname();
@@ -44,15 +57,26 @@ export function SiteNav() {
           <span className="brand-mark" aria-hidden>
             <Network size={16} />
           </span>
-          System Design Suite
+          <span className="brand-text">DSA &amp; System Design</span>
         </Link>
         <nav aria-label="Main">
           <div className="nav-links" data-open={open}>
-            {LINKS.map((l) => (
-              <Link key={l.href} href={l.href} aria-current={pathname.startsWith(l.href) ? "page" : undefined} onClick={() => setOpen(false)}>
-                {l.label}
-              </Link>
-            ))}
+            {TRACKS.map((t) => {
+              const active = t.match.some((m) => under(pathname, m));
+              return (
+                <div key={t.href} className={cn("nav-track", active && "is-active")}>
+                  <Link href={t.href} className="nav-track-link" aria-current={pathname === t.href ? "page" : active ? "true" : undefined} onClick={() => setOpen(false)}>
+                    {t.label}
+                  </Link>
+                  {active &&
+                    SUB[t.href].map((l) => (
+                      <Link key={l.href} href={l.href} aria-current={under(pathname, l.href) ? "page" : undefined} onClick={() => setOpen(false)}>
+                        {l.label}
+                      </Link>
+                    ))}
+                </div>
+              );
+            })}
           </div>
         </nav>
         <button type="button" className="search-btn" onClick={() => setSearchOpen(true)} aria-label="Search (Ctrl+K)">

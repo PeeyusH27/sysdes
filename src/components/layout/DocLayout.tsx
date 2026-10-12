@@ -17,6 +17,7 @@ export function DocLayout({
   prev,
   next,
   nextNote,
+  wide = false,
   children,
 }: {
   side: DocNavItem[];
@@ -29,12 +30,14 @@ export function DocLayout({
   prev?: { href: string; title: string };
   next?: { href: string; title: string };
   nextNote?: string;
+  /** Drop the right-hand "On this page" column so wide content (algorithm animations) gets the room. */
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="container container-wide">
       <ReadingProgress />
-      <div className="lesson">
+      <div className={wide ? "lesson lesson--wide" : "lesson"}>
         <SideList title={sideTitle} items={side} />
         <article className="lesson-main">
           <header className="page-head" style={{ paddingTop: 24 }}>
@@ -63,7 +66,7 @@ export function DocLayout({
             )}
           </nav>
         </article>
-        <aside className="toc" aria-label="On this page">
+        <aside className="toc" aria-label="On this page" hidden={wide}>
           {headings.length > 0 && (
             <>
               <h2>On this page</h2>

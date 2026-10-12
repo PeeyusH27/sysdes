@@ -1,0 +1,30 @@
+{
+  "title": "Merge k Sorted Lists",
+  "difficulty": "Hard",
+  "patterns": ["heaps"],
+  "js": ["heap", "linked-list-tree-nodes"],
+  "order": 5,
+  "summary": "Merge k sorted linked lists into one sorted linked list.",
+  "fn": "mergeKLists",
+  "params": ["lists"],
+  "types": { "params": ["ListNode[]"], "returns": "ListNode" },
+  "io": { "args": ["list[]"], "returns": "list" },
+  "tests": [
+    { "args": [[[1, 4, 7], [2, 5, 8], [3, 6, 9]]], "expected": [1, 2, 3, 4, 5, 6, 7, 8, 9], "explain": "The three lists interleave perfectly: take 1, 2, 3 from their heads in turn, then 4, 5, 6, and so on." },
+    { "args": [[]], "expected": [], "explain": "No lists at all: return null, which is shown as []." },
+    { "args": [[[]]], "expected": [], "explain": "One list, and it is empty: the result is empty too." },
+    { "args": [[[], [0], []]], "expected": [0] },
+    { "args": [[[-3, -1, 2], [-2, 2, 2], [5]]], "expected": [-3, -2, -1, 2, 2, 2, 5] },
+    { "args": [[[1, 2, 3]]], "expected": [1, 2, 3] },
+    { "args": [[[1], [0, 2, 4, 6, 8, 10, 12], [3, 5]]], "expected": [0, 1, 2, 3, 4, 5, 6, 8, 10, 12] },
+    { "args": [[[1, 1], [1], [1, 1, 1]]], "expected": [1, 1, 1, 1, 1, 1] },
+    { "args": [[[5], [4], [3], [2], [1]]], "expected": [1, 2, 3, 4, 5] },
+    { "args": [[[-44, -14, -11, -7, 47, 48], [38], [-44, -11, 2, 4, 6, 20], [-33, -27, -25, 4, 12, 13, 31], [10, 43, 49], [-38, -8, 11, 20], [-34, -8, 13, 24, 33, 35, 47], [-49, -4, 6, 25, 26, 38], [50], [50]]], "expected": [-49, -44, -44, -38, -34, -33, -27, -25, -14, -11, -11, -8, -8, -7, -4, 2, 4, 4, 6, 6, 10, 11, 12, 13, 13, 20, 20, 24, 25, 26, 31, 33, 35, 38, 38, 43, 47, 47, 48, 49, 50, 50] }
+  ],
+  "hints": [
+    "The next node of the result is always one of the k current heads. Which one?",
+    "Keep the current head of every non-empty list in a min-heap ordered by val. Pop the smallest, append it to the result, and push its next node if there is one.",
+    "Use a dummy head node so appending the first node is not a special case, and skip null lists when you fill the heap."
+  ],
+  "complexity": { "time": "O(N log k): each of the N nodes is pushed and popped once on a heap of at most k heads", "space": "O(k) for the heap; the result reuses the existing nodes" }
+}

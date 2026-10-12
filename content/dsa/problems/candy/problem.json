@@ -1,0 +1,32 @@
+{
+  "title": "Candy",
+  "difficulty": "Hard",
+  "patterns": ["greedy"],
+  "js": ["arrays", "numbers-math"],
+  "order": 6,
+  "summary": "Hand out the fewest candies so every child gets one and anyone rated higher than a neighbour gets more than that neighbour.",
+  "fn": "candy",
+  "params": ["ratings"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[1, 3, 2, 2, 1]], "expected": 7, "explain": "Give 1, 2, 1, 2, 1 candies. The child rated 3 beats both neighbours, and the second child rated 2 beats the child rated 1 after it. Two children with equal ratings may get different amounts." },
+    { "args": [[2, 2, 2]], "expected": 3, "explain": "Equal ratings never require more candy, so one candy each is enough." },
+    { "args": [[1, 2, 3, 4]], "expected": 10, "explain": "Every child is rated higher than the one before, so the amounts must climb: 1 + 2 + 3 + 4 = 10." },
+    { "args": [[5]], "expected": 1 },
+    { "args": [[4, 3, 2, 1]], "expected": 10 },
+    { "args": [[1, 3, 5, 4, 2]], "expected": 9 },
+    { "args": [[3, 1, 3]], "expected": 5 },
+    { "args": [[1, 2, 3, 2, 1, 0]], "expected": 13 },
+    { "args": [[1, 6, 10, 8, 7, 3, 2]], "expected": 18 },
+    { "args": [[0, 0, 1]], "expected": 4 },
+    { "args": [[1, 2, 2]], "expected": 4 },
+    { "args": [[3, 0, 1, 5, 5, 0, 5, 2, 0, 1, 2, 4, 2, 2, 4, 3, 2, 2, 5, 2, 4, 3, 5, 2, 2, 2, 3, 0, 3, 3, 0, 3, 3, 4, 3, 2, 5, 3, 4, 2]], "expected": 69 }
+  ],
+  "samples": 3,
+  "hints": [
+    "There are two rules per child: one about the left neighbour and one about the right neighbour. Try satisfying them one direction at a time.",
+    "Left to right: if ratings[i] > ratings[i - 1], give child i one more than child i - 1; otherwise 1. Now every left-neighbour rule holds.",
+    "Right to left: if ratings[i] > ratings[i + 1], raise child i to at least candies[i + 1] + 1 (take the max, so the left rule stays true). Sum the result."
+  ],
+  "complexity": { "time": "O(n): two passes", "space": "O(n): one candies array" }
+}

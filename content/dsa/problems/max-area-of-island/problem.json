@@ -1,0 +1,29 @@
+{
+  "title": "Max Area of Island",
+  "difficulty": "Medium",
+  "patterns": ["graph-traversal", "union-find"],
+  "js": ["graphs-in-js", "recursion"],
+  "order": 3,
+  "summary": "Find the size of the largest group of connected land cells in a 0/1 grid.",
+  "fn": "maxAreaOfIsland",
+  "params": ["grid"],
+  "types": { "params": ["number[][]"], "returns": "number" },
+  "tests": [
+    { "args": [[[0, 1, 1, 0, 0, 0], [0, 1, 0, 0, 1, 1], [0, 0, 0, 1, 1, 0], [1, 0, 0, 0, 1, 0], [1, 1, 0, 0, 0, 0]]], "expected": 5, "explain": "There are three islands with areas 3 (top left), 5 (the right-hand group) and 3 (bottom left). The largest is 5." },
+    { "args": [[[0, 0, 0], [0, 0, 0]]], "expected": 0, "explain": "There is no land, so the answer is 0." },
+    { "args": [[[1, 0, 1], [0, 1, 0], [1, 0, 1]]], "expected": 1, "explain": "Five separate one-cell islands: corners don't connect. The largest has area 1." },
+    { "args": [[[1]]], "expected": 1 },
+    { "args": [[[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]]], "expected": 15 },
+    { "args": [[[1, 1, 1, 1, 1], [1, 0, 0, 0, 1], [1, 0, 1, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 1]]], "expected": 16 },
+    { "args": [[[1, 1, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1], [0, 0, 1, 1]]], "expected": 4 },
+    { "args": [[[1], [1], [0], [1], [1], [1]]], "expected": 3 },
+    { "args": [[[1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 0, 0, 0, 0, 0, 0, 0, 1], [1, 1, 1, 1, 1, 1, 1, 0, 1], [1, 0, 0, 0, 0, 0, 1, 0, 1], [1, 0, 1, 1, 1, 0, 1, 0, 1], [1, 0, 1, 0, 0, 0, 1, 0, 1], [1, 0, 1, 1, 1, 1, 1, 0, 1], [1, 0, 0, 0, 0, 0, 0, 0, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1]]], "expected": 49 },
+    { "args": [[[1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0], [0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1], [0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0], [1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1], [1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0], [0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0], [1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 0], [1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0], [1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0], [1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1], [0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0], [1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0], [0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1], [0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0], [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1]]], "expected": 46 }
+  ],
+  "hints": [
+    "This is Number of Islands, but instead of counting islands you measure each one.",
+    "Write a DFS that returns the number of land cells it visits: 1 for the current cell plus the areas returned by its four neighbours.",
+    "Sink each cell (set it to 0) before recursing so it is never counted twice. Keep the maximum over all starting cells; with no land the answer is 0."
+  ],
+  "complexity": { "time": "O(m·n): every cell is visited once", "space": "O(m·n): the recursion depth can reach the size of the largest island" }
+}

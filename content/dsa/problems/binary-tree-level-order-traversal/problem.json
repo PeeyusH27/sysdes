@@ -1,0 +1,30 @@
+{
+  "title": "Binary Tree Level Order Traversal",
+  "difficulty": "Medium",
+  "patterns": ["tree-bfs"],
+  "js": ["stack-queue-deque", "arrays"],
+  "order": 3,
+  "summary": "Group the values of a binary tree by level: top level first, left to right within each level.",
+  "fn": "levelOrder",
+  "params": ["root"],
+  "types": { "params": ["TreeNode | null"], "returns": "number[][]" },
+  "io": { "args": ["tree"] },
+  "tests": [
+    { "args": [[1, 2, 3, null, 4, 5, 6, 7]], "expected": [[1], [2, 3], [4, 5, 6], [7]], "explain": "Row by row: [1], then [2, 3], then 4 (under 2) followed by 5 and 6 (under 3), then 7 (under 4)." },
+    { "args": [[8]], "expected": [[8]], "explain": "One node, one level." },
+    { "args": [[]], "expected": [], "explain": "No nodes, so no levels: return an empty array." },
+    { "args": [[1, 2, null, 3, null, 4]], "expected": [[1], [2], [3], [4]] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], "expected": [[1], [2, 3], [4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]] },
+    { "args": [[1, null, 2, 3]], "expected": [[1], [2], [3]] },
+    { "args": [[0, 0, 0, -1, null, null, -1]], "expected": [[0], [0, 0], [-1, -1]] },
+    { "args": [[6, 4, 9, 12, null, 14, 2, 8, 3, null, null, 7, 1]], "expected": [[6], [4, 9], [12, 14, 2], [8, 3, 7, 1]] },
+    { "args": [[1, 2, null, null, 3, 4, null, null, 5]], "expected": [[1], [2], [3], [4], [5]] },
+    { "args": [[-5, 8, -3, -1, 6, 0, 7, -7, 9, null, 5, -9, null, null, -5, 7, 5, -9, null, 3, 9, -7, -6, null, null, -6, null, -2, -2, 8, 4, null, null, 6, -3, null, null, null, null, null, -7, null, null, 6, -6, 8, null, null, null, 8, null, null, null, null, null, null, null, 6, 8, 8, 2, null, null, null, null, -8, null, 4, 0, null, null, 5, -9]], "expected": [[-5], [8, -3], [-1, 6, 0, 7], [-7, 9, 5, -9, -5], [7, 5, -9, 3, 9, -7, -6], [-6, -2, -2, 8, 4, 6, -3], [-7, 6, -6, 8, 8], [6, 8, 8, 2], [-8, 4, 0], [5, -9]] }
+  ],
+  "hints": [
+    "You need the values grouped by depth, top to bottom, and left to right inside each group.",
+    "A queue already hands you the nodes in exactly that order. The only question is where one level ends and the next begins.",
+    "At the start of each level, record size = the number of nodes waiting. Dequeue exactly size nodes into one array, enqueuing their children as you go."
+  ],
+  "complexity": { "time": "O(n): every node is enqueued and dequeued once", "space": "O(w) for the queue (plus O(n) for the output)" }
+}

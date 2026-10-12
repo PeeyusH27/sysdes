@@ -1,0 +1,31 @@
+{
+  "title": "Linked List Cycle",
+  "difficulty": "Easy",
+  "patterns": ["fast-slow-pointers"],
+  "js": ["linked-list-tree-nodes", "map-set"],
+  "order": 2,
+  "summary": "Decide whether following next pointers from the head ever loops back to a node you have already visited.",
+  "fn": "hasCycle",
+  "params": ["head"],
+  "types": { "params": ["ListNode"], "returns": "boolean" },
+  "io": { "args": ["list-cycle"] },
+  "tests": [
+    { "args": [[[4, 9, 2, 7], 1]], "expected": true, "explain": "The last node (7) links back to the node at index 1 (9), so walking the list goes 4, 9, 2, 7, 9, 2, 7, … forever." },
+    { "args": [[[1, 2], 0]], "expected": true, "explain": "The second node links back to the head: a loop of two nodes." },
+    { "args": [[[1], -1]], "expected": false, "explain": "pos = -1 means the last node's next is null: there is no loop." },
+    { "args": [[[], -1]], "expected": false },
+    { "args": [[[1], 0]], "expected": true },
+    { "args": [[[1, 2, 3, 4, 5], -1]], "expected": false },
+    { "args": [[[1, 2, 3, 4, 5, 6], 5]], "expected": true },
+    { "args": [[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0]], "expected": true },
+    { "args": [[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50], 25]], "expected": true },
+    { "args": [[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50], -1]], "expected": false },
+    { "args": [[[7, 7, 7, 7, 7], -1]], "expected": false }
+  ],
+  "hints": [
+    "A Set of visited nodes solves it in O(n) space. Can you do it with O(1) extra space?",
+    "Move one pointer one step at a time and another two steps at a time. If there is no loop, the fast one falls off the end.",
+    "If there is a loop, both pointers end up circling it, and the fast one gains one node per step on the slow one, so they must land on the same node."
+  ],
+  "complexity": { "time": "O(n): slow is caught before it finishes one lap of the loop", "space": "O(1): two pointers" }
+}

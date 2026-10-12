@@ -1,0 +1,89 @@
+Linked list and tree problems hand you node objects, not arrays. You need the exact node shapes, a quick way to build test inputs and print results, and the pointer discipline that stops you from losing half a list mid-rewire.
+
+### ListNode, TreeNode and the array format
+
+These are the classes the problem editor and every Run button provide as globals, so don't redefine them in your solution:
+
+```js
+class ListNode {
+  constructor(val = 0, next = null) {
+    this.val = val;
+    this.next = next;            // next node, or null at the tail
+  }
+}
+class TreeNode {
+  constructor(val = 0, left = null, right = null) {
+    this.val = val;
+    this.left = left;            // child nodes, or null
+    this.right = right;
+  }
+}
+new ListNode(1, new ListNode(2));                 // 1 -> 2
+new TreeNode(1, new TreeNode(2), new TreeNode(3)); // 1 with children 2 and 3
+```
+
+The judge converts test inputs for you: an array like `[1, 2, 3]` becomes a list and you receive its head; a level-order array like `[3, 9, 20, null, null, 15, 7]` becomes a tree and you receive its root. When you return a node, it is converted back to an array before comparing. An empty list or tree is `null`.
+
+When you test on your own, write the same converters. A list is built by appending behind a dummy node. A tree is built from **level order with nulls**: a queue holds the nodes still waiting for children, and each pair of array entries fills the left and right child of the next node in the queue.
+
+<RunCode src="snippets/nodes-build.js" />
+
+The level-order format lists children **only for real nodes**: a `null` has no entries for its own children. That is why index arithmetic like "children of `i` are at `2i + 1` and `2i + 2`" does **not** work on these arrays (it only works for complete trees such as heaps). In this site's editor, `console.log(head)` prints a list compactly as `ListNode(1 → 2 → 3)` and a tree as `TreeNode([…])`; in plain Node, convert to an array first.
+
+### Dummy head nodes
+
+Whenever the head itself might change (removing nodes, inserting at the front, merging), start with `const dummy = new ListNode(0, head)` and work from there. The real list is always `dummy.next`, so "the head was removed" stops being a special case.
+
+<RunCode src="snippets/nodes-dummy.js" />
+
+Two habits go with it: keep a `prev` or `tail` pointer that starts **at the dummy**, and return `dummy.next`, never the original `head` variable.
+
+### Walking a list and the save-next rule
+
+Traverse with a separate variable (`for (let node = head; node; node = node.next)`), never by moving `head` itself, unless you are sure you don't need the start again. When you change a node's `next`, you destroy the only path to the rest of the list, so **save `curr.next` in a variable before rewiring**. Reversal is the canonical example: save, rewire, advance.
+
+<RunCode src="snippets/nodes-reverse.js" />
+
+Draw three boxes and the arrows between them before you write any pointer code. Every line should either save a pointer, rewire one `next`, or move a variable.
+
+### Tree traversals preview
+
+Depth-first orders differ only in **when the node itself is handled**: before its children (pre-order), between them (in-order, which visits a BST in sorted order), or after them (post-order, used when a node needs its children's answers). Breadth-first visits one level at a time.
+
+<RunCode src="snippets/nodes-traversals.js" />
+
+These recursive walks use O(h) stack space, where h is the tree height: O(log n) when balanced but O(n) for a skewed tree. See [Recursion](/dsa/js#recursion) for the explicit-stack versions.
+
+### Null checks with ?. and ??
+
+Most node-related crashes are `TypeError: Cannot read properties of null (reading 'next')`. Guard every dereference whose node might be missing:
+
+```js
+while (fast && fast.next) {}             // check before you jump two steps
+const nextVal = node.next?.val;          // undefined when there is no next node
+const leftVal = node.left?.val ?? 0;     // default for a missing child
+if (!node) return 0;                     // the base case of nearly every tree recursion
+```
+
+`?.` produces `undefined`, not `null`. A check like `node?.next === null` is `false` when `node` itself is missing, so compare with `== null` or test truthiness instead.
+
+### Node operation costs
+
+| Operation | Cost |
+|---|---|
+| Access the k-th list node | O(k): walk from the head |
+| Insert or delete after a node you hold | O(1) |
+| Length, tail, search by value | O(n) |
+| Build from an array / convert to an array | O(n) |
+| Any full tree traversal | O(n) time, O(h) extra space |
+
+<Callout kind="warning" title="Linked list and tree gotchas">
+
+- Returning `head` after the head node was removed. Use a dummy and return `dummy.next`.
+- Rewiring `curr.next` before saving it: the rest of the list is unreachable.
+- Comparing nodes with values: `node === 5` is always false. Compare `node.val`, or compare nodes by identity (`a === b`) when you mean "the same node".
+- Printing or measuring a list that has a cycle never ends. Detect the cycle first.
+- Reading a level-order array with `2i + 1` indexing when it contains nulls.
+- Modifying the input list when the caller (or a later step) still needs the original order.
+
+</Callout>

@@ -1,0 +1,30 @@
+{
+  "title": "Number of 1 Bits",
+  "difficulty": "Easy",
+  "patterns": ["bit-manipulation"],
+  "js": ["bitwise", "numbers-math"],
+  "order": 2,
+  "summary": "Count how many bits are set in the binary form of a non-negative integer.",
+  "fn": "hammingWeight",
+  "params": ["n"],
+  "types": { "params": ["number"], "returns": "number" },
+  "tests": [
+    { "args": [13], "expected": 3, "explain": "13 is 1101 in binary: three 1 bits." },
+    { "args": [64], "expected": 1, "explain": "64 is 1000000 in binary: a power of two has exactly one 1 bit." },
+    { "args": [2147483647], "expected": 31, "explain": "2^31 - 1 is thirty-one 1 bits in a row, the largest allowed input." },
+    { "args": [0], "expected": 0 },
+    { "args": [1], "expected": 1 },
+    { "args": [255], "expected": 8 },
+    { "args": [1073741824], "expected": 1 },
+    { "args": [1431655765], "expected": 16 },
+    { "args": [123456789], "expected": 16 },
+    { "args": [2147483646], "expected": 30 },
+    { "args": [1023], "expected": 10 }
+  ],
+  "hints": [
+    "You could test each of the 31 bit positions with (n >> i) & 1. Can you loop only once per set bit instead?",
+    "Subtracting 1 from n flips its lowest set bit to 0 and every 0 below it to 1.",
+    "So n & (n - 1) is n with its lowest set bit removed. Count how many times you can do that before n becomes 0."
+  ],
+  "complexity": { "time": "O(k): k is the number of set bits, at most 31", "space": "O(1)" }
+}

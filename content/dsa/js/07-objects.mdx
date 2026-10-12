@@ -1,0 +1,61 @@
+Plain objects are JavaScript's records (`{ start, end }`, `{ node, depth }`) and the quick dictionary many solutions reach for. They're great for fixed shapes and string keys, but every key becomes a string and every object inherits a few keys you never added, which bites when you count numbers or arbitrary words.
+
+### Object literals and dynamic keys
+
+```js
+const point = { r: 0, c: 0 };           // literal
+const { r, c } = point;                 // read several fields at once
+const state = { r, c, steps: 0 };       // shorthand: { r: r, c: c, steps: 0 }
+point.r = 3;                            // dot: the key is literally "r"
+point[key] = 1;                         // brackets: the key is the VALUE of key
+const obj = { [key]: 1 };               // computed key in a literal
+obj.missing;                            // undefined, not an error
+delete obj[key];                        // remove a key
+```
+
+Use dot access for fixed field names and brackets whenever the key is in a variable. `obj.key` and `obj[key]` are different lookups: the first always reads a property named "key".
+
+### Keys, values and entries
+
+`Object.keys`, `Object.values` and `Object.entries` return arrays you can loop over or chain, and `Object.fromEntries` turns `[key, value]` pairs back into an object. All of them include only the object's own enumerable string keys, which is what you want (unlike `for...in`, which also walks inherited ones).
+
+<RunCode src="snippets/objects-entries.js" />
+
+| Operation | Cost |
+|---|---|
+| `obj[key]`, `obj[key] = v`, `key in obj`, `Object.hasOwn` | O(1) average |
+| `Object.keys` / `values` / `entries` | O(n), builds a new array |
+| `Object.keys(obj).length` (the "size") | O(n) |
+| `{ ...obj }`, `Object.assign({}, obj)` | O(n) |
+| `structuredClone(obj)` | O(total size of everything nested) |
+
+### Keys are always strings
+
+`obj[3]` and `obj['3']` are the same entry: numbers (and anything else) are converted to strings when used as keys. When you count numbers in an object, `Object.keys` gives you strings back, `includes(3)` fails, and arithmetic on a key concatenates. Arrays and objects used as keys turn into strings like `'1,2'` and `'[object Object]'`. Key order also isn't pure insertion order: integer-like keys (`'0'`, `'2'`, `'10'`) come first in ascending order, then everything else as inserted.
+
+<RunCode src="snippets/objects-string-keys.js" />
+
+### Checking whether a key exists
+
+`key in obj` also finds **inherited** keys, so `'toString' in {}` is `true`. `Object.hasOwn(obj, key)` checks only the object's own keys. Testing `obj[key]` for truthiness fails on a stored `0`, and even `!== undefined` fails when `undefined` was stored deliberately. If keys come from input words, inherited names like `constructor` can collide with your counts: a `Map`, or an object made with `Object.create(null)`, has no inherited keys.
+
+<RunCode src="snippets/objects-has-key.js" />
+
+### Copying objects
+
+Spread `{ ...obj }` and `Object.assign({}, obj)` are **shallow**: top-level fields are copied, but nested arrays, objects and Sets are still shared. `structuredClone(obj)` makes a full deep copy of plain data (arrays, objects, Maps, Sets, Dates). It throws on functions, and class instances come back as plain objects. Avoid `JSON.parse(JSON.stringify(x))`: it turns Maps and Sets into `{}`, `Infinity` into `null`, and drops `undefined`.
+
+<RunCode src="snippets/objects-copying.js" />
+
+For counting, lookups by number, or any key that isn't a fixed field name, prefer a `Map`: it keeps key types, has an O(1) `size`, and inherits nothing. See <JsRef to="map-set" />.
+
+<Callout kind="warning" title="Object gotchas">
+
+- Counting numbers in `{}` turns them into string keys: `Object.keys(count)` gives `['3', '10']`. Convert with `Number(k)` or use a `Map`.
+- `'constructor' in {}` and `'toString' in {}` are `true`. Use `Object.hasOwn`, `Object.create(null)` or a `Map` for keys that come from input.
+- `if (obj[key])` treats a stored `0` as missing. Use `Object.hasOwn(obj, key)` or `key in obj`.
+- `obj.key` is not `obj[key]`: dot access never reads a variable.
+- `{ ...obj }` is shallow: nested arrays are shared. Use `structuredClone` for a deep copy.
+- An array or object as a key collapses to a string (`'1,2'`, `'[object Object]'`). Build the string key yourself, on purpose.
+
+</Callout>

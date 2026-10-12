@@ -1,0 +1,77 @@
+Design problems (Min Stack, LRU Cache, Trie) ask you to write a class, and union-find, tries and heaps are cleanest as one. You need only a small slice of the class syntax: a constructor, methods, maybe a getter or a private field.
+
+### Class syntax essentials
+
+```js
+class Name {
+  field = 0;                       // public field: set on every new instance
+  #secret = [];                    // private field: only code inside the class can read it
+  constructor(a, b) {              // runs on `new Name(a, b)`
+    this.a = a;                    // instance data always goes through `this`
+  }
+  method(x) { return this.a + x; } // shared by all instances
+  get size() { return this.#secret.length; } // read as obj.size, without ()
+  static of(a) { return new Name(a, 0); }    // called as Name.of(a)
+}
+const obj = new Name(1, 2);        // `new` is required: Name(1, 2) throws TypeError
+```
+
+<RunCode src="snippets/classes-basics.js" />
+
+Class bodies always run in strict mode, so a missing `this.` fails loudly: `items.push(x)` instead of `this.items.push(x)` throws `ReferenceError`, and so does `count = 0`, which outside strict mode would quietly create a global. Class declarations are not hoisted like functions: define the class above the code that uses it.
+
+### Union-Find as a class
+
+Union-find (disjoint set union) keeps a `parent` array where each group is a tree and its root is the group's representative. Two tricks keep the trees flat: **path halving** in `find` (point each visited node at its grandparent) and **union by size** (hang the smaller tree under the larger one).
+
+<RunCode src="snippets/classes-union-find.js" />
+
+`union` returning `false` when both items already share a root is exactly the "does this edge create a cycle?" test. Use it in [Union-Find](/dsa/patterns/union-find) problems and Kruskal's algorithm.
+
+### Trie skeleton
+
+A trie is a tree of nodes, one per character of a prefix. Each node holds its children (a `Map` from character to node, or an object, or an array of 26) and a flag for "a word ends here". A private `#walk` helper does the shared work of `search` and `startsWith`.
+
+<RunCode src="snippets/classes-trie.js" />
+
+A `Map` per node is the easy default. An array of 26 indexed by `ch.charCodeAt(0) - 97` is faster when the alphabet is fixed lowercase letters, at the cost of 26 slots per node.
+
+### Design-problem classes
+
+A design problem gives you a class name and method signatures. The judge creates **one instance** with the constructor arguments, then calls the methods in order and compares each return value; methods that return nothing are recorded as `null`. Keep every bit of state on `this`: anything at the top level of your file is shared by every test and every instance.
+
+<RunCode src="snippets/classes-design.js" />
+
+The usual trick in these problems is to store a little **extra** state so every operation stays O(1): here a second stack of running minimums. LRU Cache pairs a `Map` (which remembers insertion order) with deleting and re-inserting a key on each access.
+
+### Costs of the class-based structures
+
+| Structure | Operation | Cost |
+|---|---|---|
+| Union-find with path halving + union by size | `find`, `union`, `connected` | amortized O(α(n)), effectively O(1) |
+| Union-find without either trick | `find` | O(n) worst case: a long chain |
+| Trie | `insert`, `search`, `startsWith` | O(L) for a word of length L |
+| Trie | memory | O(total characters inserted) nodes |
+| Min stack | `push`, `pop`, `top`, `getMin` | O(1) |
+
+### Class, closure or plain object?
+
+| Use | When |
+|---|---|
+| `class` | several operations on shared state (data structures, design problems), many instances |
+| Closure (`function make() { let state; return { … } }`) | one-off private state, such as a counter or memoized helper |
+| Plain object `{ start, end }` | a record with no behaviour, such as an interval or a node created on the fly |
+| Tuple array `[start, end]` | records you sort or destructure a lot; the most compact |
+
+For records, tuples and object literals are usually enough: `intervals.sort((a, b) => a[0] - b[0])` reads fine. Reach for a class when the same operations repeat on the same data.
+
+<Callout kind="warning" title="Classes gotchas">
+
+- `Trie()` without `new` throws `TypeError: Class constructor Trie cannot be invoked without 'new'`.
+- Writing `items` instead of `this.items` inside a method throws `ReferenceError`.
+- Calling a getter like a method: `stack.size()` is a `TypeError`. Getters are read as `stack.size`.
+- Passing `obj.method` as a callback loses `this`. Pass `(x) => obj.method(x)`.
+- State stored outside the class (a top-level array or Map) is shared between instances and tests.
+- Methods in design problems must **return** the value the problem asks for: `pop()` that forgets `return` yields `null` in the judge.
+
+</Callout>

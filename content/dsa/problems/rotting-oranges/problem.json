@@ -1,0 +1,31 @@
+{
+  "title": "Rotting Oranges",
+  "difficulty": "Medium",
+  "patterns": ["graph-traversal"],
+  "js": ["graphs-in-js", "stack-queue-deque"],
+  "order": 4,
+  "summary": "Rot spreads from every rotten orange to its neighbours each minute; find when the last fresh orange rots.",
+  "fn": "orangesRotting",
+  "params": ["grid"],
+  "types": { "params": ["number[][]"], "returns": "number" },
+  "tests": [
+    { "args": [[[2, 1, 1, 0], [0, 1, 0, 1], [1, 1, 1, 1]]], "expected": 6, "explain": "The rot spreads one step per minute: (0,1) at minute 1, (0,2) and (1,1) at 2, (2,1) at 3, (2,0) and (2,2) at 4, (2,3) at 5 and finally (1,3) at 6." },
+    { "args": [[[2, 1, 0], [0, 1, 0], [1, 0, 1]]], "expected": -1, "explain": "The oranges at (2,0) and (2,2) have no rotten neighbour, ever: empty cells cut them off. So it's impossible: -1." },
+    { "args": [[[0, 2, 0]]], "expected": 0, "explain": "There are no fresh oranges at all, so no time needs to pass: 0." },
+    { "args": [[[1]]], "expected": -1 },
+    { "args": [[[0]]], "expected": 0 },
+    { "args": [[[2, 1, 1, 1, 1, 1, 2]]], "expected": 3 },
+    { "args": [[[2, 2], [2, 2]]], "expected": 0 },
+    { "args": [[[2, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 2]]], "expected": 3 },
+    { "args": [[[2, 1, 0, 1], [1, 1, 0, 1]]], "expected": -1 },
+    { "args": [[[1], [2], [1], [1]]], "expected": 2 },
+    { "args": [[[1, 1, 2, 1, 2, 1, 1, 2, 1, 1], [0, 0, 0, 1, 1, 0, 1, 1, 1, 1], [0, 0, 1, 1, 1, 0, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 1, 0, 2, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 0, 1, 1], [1, 1, 1, 1, 1, 1, 1, 0, 1, 0], [1, 1, 1, 0, 1, 1, 1, 1, 1, 1], [1, 0, 1, 0, 1, 1, 1, 1, 0, 1], [1, 1, 1, 1, 0, 1, 1, 1, 0, 1]]], "expected": 11 },
+    { "args": [[[1, 0, 1, 0, 0, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 0, 1, 1, 0, 1], [0, 1, 0, 1, 1, 1, 0, 1, 1, 1], [1, 0, 1, 1, 0, 1, 0, 1, 1, 1], [0, 1, 1, 1, 1, 1, 1, 1, 0, 1], [1, 1, 1, 1, 2, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 0, 0, 1, 1], [1, 1, 1, 1, 0, 0, 1, 1, 0, 1], [1, 0, 2, 1, 0, 1, 0, 1, 1, 0], [1, 1, 0, 1, 1, 0, 1, 1, 0, 1]]], "expected": -1 }
+  ],
+  "hints": [
+    "All rotten oranges start spreading at the same time. Running a separate search from each one gives the wrong timing.",
+    "Put every rotten orange in one queue before you start (multi-source BFS). Process the queue one level at a time: one level is one minute.",
+    "Count the fresh oranges up front and decrease the count as they rot. If any are left when the queue runs dry, return -1. With no fresh oranges the answer is 0."
+  ],
+  "complexity": { "time": "O(m·n): each cell is queued at most once", "space": "O(m·n): the queue can hold every orange" }
+}

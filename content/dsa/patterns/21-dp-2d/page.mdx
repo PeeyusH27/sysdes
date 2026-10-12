@@ -1,0 +1,188 @@
+import { lcsTable, knapsackTable, knapsackRow } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+When one index can't describe a subproblem, use two: a cell `(r, c)` of a grid, a prefix of **each** of two strings, or "the first `i` items with capacity `c`". The recipe from [1D DP](/dsa/patterns/dp-1d) doesn't change: say what `dp[i][j]` means, build it from neighbouring cells, seed row 0 and column 0, and fill in an order where those neighbours are ready. It costs O(m × n) time, and usually only O(n) space once you keep a single row.
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- **Two strings or sequences** are compared: common subsequence, edits to turn one into the other, interleaving, matching with wildcards.
+- **A grid** where you move only right and down and count paths or minimise a cost.
+- **Items under a budget**: pick a subset whose weights fit a capacity, or whose values hit an exact target sum.
+- You tried a 1D state and it wasn't enough: `dp[i]` needs a second number (remaining capacity, a position in the other string) to be well defined.
+
+</Callout>
+
+| Variant | `dp[i][j]` means | Each cell reads | Classic problems |
+|---|---|---|---|
+| Grid paths | the answer for reaching cell `(i, j)` | above `(i - 1, j)` and left `(i, j - 1)` | Unique Paths, Minimum Path Sum, Dungeon Game |
+| Two strings (prefixes) | the answer for `a.slice(0, i)` and `b.slice(0, j)` | diagonal, above, left | Longest Common Subsequence, Edit Distance, Distinct Subsequences |
+| 0/1 knapsack | the best using the first `i` items with capacity `j` | `(i - 1, j)` and `(i - 1, j - w)` | Partition Equal Subset Sum, Target Sum, Ones and Zeroes |
+| Unbounded knapsack | the same, but items may repeat | `(i - 1, j)` and `(i, j - w)` | Coin Change II, Coin Change, Rod Cutting |
+| Intervals | the answer for the slice `a[i..j]` | shorter slices inside it | Longest Palindromic Subsequence, Burst Balloons |
+
+## The core idea: a cell, its neighbours, and a fill order
+
+Take a grid where you may only move **right** or **down**. How many paths reach cell `(r, c)` from the top-left? The last move came either from the cell above or from the cell to the left, and those two groups of paths don't overlap. So
+
+```js
+paths[r][c] = paths[r - 1][c] + paths[r][c - 1];   // the first row and first column are all 1
+```
+
+Fill the table **row by row, left to right**, and when you reach a cell, the cell above (previous row) and the cell to the left (earlier in this row) are always finished. Here is a 3 × 4 grid:
+
+| | col 0 | col 1 | col 2 | col 3 |
+|---|---|---|---|---|
+| **row 0** | 1 | 1 | 1 | 1 |
+| **row 1** | 1 | 2 | 3 | 4 |
+| **row 2** | 1 | 3 | 6 | **10** |
+
+Every 2D DP works like this: a meaning for the cell, a small set of neighbours it reads, and a fill order that respects them.
+
+### Two strings: prefixes and the empty row
+
+With two strings, the state is a **pair of prefixes**: `dp[i][j]` describes the first `i` letters of `a` and the first `j` letters of `b`. So `i` runs from `0` to `m` and `j` from `0` to `n`, the table is `(m + 1) × (n + 1)`, and the letters are `a[i - 1]` and `b[j - 1]`. The extra row 0 and column 0 are the **empty prefix**, and they are the base cases: the longest common subsequence with an empty string is 0; turning a prefix into the empty string takes `i` deletions.
+
+Then decide by looking at the **last letters** of the two prefixes. For the longest common subsequence: if they are equal, use both (diagonal + 1); if not, at least one of them isn't in the answer, so drop `a`'s (the cell above) or `b`'s (the cell to the left) and keep the larger. Watch the table fill, then the walk back that recovers the letters:
+
+<AlgoViz trace={lcsTable} />
+
+## Step by step: the recipe in two dimensions
+
+<Steps>
+  <Step title="Name both indices and the cell in words">
+    "`dp[i][j]` = the fewest edits to turn the first `i` letters of `a` into the first `j` letters of `b`." Say whether an index is a **length** (prefixes, capacities: needs the extra 0 row or column) or a **position** (grid cells: no extra row).
+  </Step>
+  <Step title="Size the table and avoid the shared-row trap">
+    `Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))`. Never `new Array(m + 1).fill(new Array(n + 1).fill(0))`: that is one row object repeated, and writing one cell changes the whole column.
+  </Step>
+  <Step title="Seed row 0 and column 0">
+    These are the base cases: an empty prefix, no items, the first row or column of a grid. Get them right before writing the loops; most wrong answers on edit distance are a row 0 of zeros instead of `0, 1, 2, …`.
+  </Step>
+  <Step title="Write the recurrence from the last decision">
+    The last move in the grid (from above or from the left), the last letters of both prefixes (match or not), the last item (take it or skip it). Each option points at one neighbouring cell.
+  </Step>
+  <Step title="Fill in dependency order">
+    If a cell reads above, left and the diagonal, row by row and left to right works. Interval DPs read shorter intervals, so loop by length instead.
+  </Step>
+  <Step title="Read the answer, rebuild it, then compress">
+    The answer is usually the far corner `dp[m][n]`. Walk back from it if the choices are needed. Only then drop to one row, if the cells read just the previous row.
+  </Step>
+</Steps>
+
+## Template 1: grid paths
+
+Count the right-and-down paths in a grid with walls. Walls get 0 ways, and the start gets 1. The second version keeps a single row: before `row[c]` is updated it still holds the value from the row above, and `row[c - 1]` already holds this row's value, which is exactly "above + left".
+
+<CodeTabs files={['snippets/grid-paths.js']} />
+
+<ProblemLink slug="unique-paths" /> is the version without walls. <ProblemLink slug="minimum-path-sum" /> replaces `+` with `Math.min(above, left) + grid[r][c]`. In both, the first row and column have only one way in, so treat them separately or pad the table.
+
+## Template 2: two strings
+
+The same table as the animation, plus the walk back from the corner that turns the lengths into an actual subsequence:
+
+<CodeTabs files={['snippets/two-strings.js']} />
+
+<ProblemLink slug="longest-common-subsequence" /> only asks for the length, so it can stop after the fill. <ProblemLink slug="edit-distance" /> uses the same grid with a different meaning: `dp[i][j]` is the fewest edits to turn the first `i` letters of `a` into the first `j` letters of `b`. Row 0 and column 0 are `j` and `i` (insert or delete everything). When the last letters match, the cell copies the diagonal for free; otherwise it is 1 plus the smallest of three neighbours:
+
+| Neighbour | Edit it stands for |
+|---|---|
+| diagonal `dp[i - 1][j - 1]` | **replace** `a`'s last letter with `b`'s |
+| above `dp[i - 1][j]` | **delete** `a`'s last letter |
+| left `dp[i][j - 1]` | **insert** `b`'s last letter |
+
+## Template 3: knapsack, 0/1 and unbounded
+
+Rows are items, columns are capacities from 0 to `W`. For each item, every cell chooses: **skip** it (the cell above) or **take** it (the cell above, `w` columns to the left, plus its value). Taking reads the **previous** row, so each item is used at most once: that's 0/1 knapsack.
+
+<AlgoViz trace={knapsackTable} />
+
+Each row only reads the row above, so one row is enough, but the **direction** of the capacity loop now matters:
+
+- **0/1 (each item once): go from high capacity to low.** `dp[c - w]` is to the left of every cell already updated for this item, so it still means "without this item".
+- **Unbounded (any number of copies): go from low to high.** `dp[c - w]` has already been updated for this item, so taking it again is allowed. That is the same as reading `(i, j - w)` in the 2D table.
+
+Same items, same code, opposite loops:
+
+<AlgoViz trace={knapsackRow} />
+
+<CodeTabs files={['snippets/knapsack.js']} />
+
+<ProblemLink slug="partition-equal-subset-sum" /> is 0/1 knapsack with booleans: can some subset reach exactly half the total? <ProblemLink slug="coin-change-ii" /> is unbounded and counts: `ways[c] += ways[c - coin]`. For counting, the order of the two loops also matters. **Coins outside, amounts inside** adds each coin in a fixed order and counts every combination once. Amounts outside and coins inside counts `1 + 2` and `2 + 1` separately: that is the number of ordered sequences, a different problem (Combination Sum IV).
+
+## Reconstructing the answer
+
+The table stores values, not choices, but every value came from one of its neighbours, so you can retrace it from the answer cell:
+
+- **LCS:** matching letters mean the diagonal (record the letter); otherwise move towards the larger of above and left.
+- **Knapsack:** if `dp[i][c] !== dp[i - 1][c]`, item `i` was taken: record it and move to `c - w`. Otherwise move up.
+- **Grid minimum path:** step to whichever of above and left is smaller.
+
+The walk is O(m + n), but it needs the **full** table: once you compress to one row, the history is gone. If the interviewer wants the path, keep the 2D table, or store a parent pointer per cell.
+
+## Try it
+
+<RunCode src="snippets/try-it.js" />
+
+## Complexity
+
+| Variant | Time | Extra space |
+|---|---|---|
+| Grid `m × n` | O(m × n) | O(m × n) table, O(n) with one row |
+| Two strings, lengths `m` and `n` | O(m × n) | O(m × n), O(min(m, n)) with one row |
+| 0/1 or unbounded knapsack, `n` items, capacity `W` | O(n × W) | O(n × W), O(W) with one row |
+| Reconstruction walk | O(m + n) | needs the full table |
+| Interval DP over length `n` | O(n²) states, often O(n³) total | O(n²) |
+
+O(n × W) depends on the **value** of `W`, not its number of digits, so knapsack is fast for `W` up to around 10^5 and hopeless for `W = 10^12`.
+
+## JavaScript you'll use
+
+<JsRef to={["arrays", "gotchas", "recursion"]} />
+
+```js
+const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0)); // m + 1 independent rows
+const bad = new Array(m + 1).fill(new Array(n + 1).fill(0));             // ONE row, shared m + 1 times
+const grid2 = grid.map((row) => row.slice());                             // copy before writing into the input
+let prev = new Array(n + 1).fill(0), cur = new Array(n + 1).fill(0);
+[prev, cur] = [cur, prev];                                                // two rows, swapped each iteration
+```
+
+The shared-row trap is worth one more sentence because it fails silently: `fill(x)` evaluates `x` once and stores the **same** array in every slot, so `dp[1][2] = 5` also sets `dp[0][2]`, `dp[2][2]`, and so on. `Array(n).fill([])` has the same bug. `Array.from({ length }, () => …)` calls the factory once per row and gives each row its own array.
+
+<Callout kind="warning">
+
+- Building rows with `fill(new Array(…))` or `fill([])`: every row is the same object.
+- Forgetting the extra row and column for prefixes, then reading `dp[i - 1][j]` at `i = 0`: `dp[-1]` is `undefined`, so the lookup throws a TypeError.
+- Mixing indices: in a prefix table the letter for row `i` is `a[i - 1]`, not `a[i]`.
+- Seeding row 0 of edit distance with zeros instead of `0, 1, 2, …, n`.
+- Compressing 0/1 knapsack to one row with the capacity loop going **up**: items get reused.
+- Putting the amount loop outside the coin loop when counting combinations: you count orderings instead.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="Can you bring LCS or edit distance down to O(min(m, n)) space?">
+    Yes. Each row reads only the row above, so keep two rows (or one row plus a variable for the old diagonal value, which gets overwritten before you need it). Make the shorter string the column dimension. The catch: you lose the table, so you can return the length or distance but not the actual subsequence or the edit script. Hirschberg's algorithm recovers the alignment in linear space with divide and conquer, but that is rarely expected.
+  </FollowUp>
+  <FollowUp q="Why must the 0/1 knapsack loop run from high capacity to low with one row?">
+    The 2D recurrence reads `dp[i - 1][c - w]`: the previous item row. With one row, the cells to the left of `c` either still hold the previous row's values (if you go downward, they haven't been touched yet) or this row's values (if you go upward). Going upward reads a value that may already contain the current item, so it gets taken twice. That is exactly the unbounded recurrence, which is why the same code with the loop reversed solves unbounded knapsack.
+  </FollowUp>
+  <FollowUp q="Coin Change II and Combination Sum IV look the same. Why do they give different answers?">
+    Coin Change II counts combinations (multisets): `1 + 2` and `2 + 1` are one way. Putting coins in the outer loop processes them in a fixed order, so each multiset is built in exactly one way. Combination Sum IV counts ordered sequences, so the amount is the outer loop and every amount tries every coin as its last element. For amount 3 with coins 1 and 2 the first gives 2, the second gives 3.
+  </FollowUp>
+  <FollowUp q="How would you print the actual edits that turn one word into another?">
+    Fill the full edit-distance table, then walk back from `dp[m][n]`. If the letters match and the cell equals the diagonal, move diagonally with no edit. Otherwise find which neighbour plus 1 equals the cell: diagonal means replace, above means delete `a[i - 1]`, left means insert `b[j - 1]`. Collect the edits and reverse them. Ties mean several equally short edit scripts exist; any one is a valid answer.
+  </FollowUp>
+  <FollowUp q="What if the robot in the grid can move in all four directions?">
+    Then cells can depend on each other in a cycle, so there is no fill order where every neighbour is finished first, and the DP breaks. Counting paths becomes ill-defined without a "no revisits" rule (and then it is exponential backtracking). For the cheapest path with non-negative costs, use Dijkstra's algorithm; for unit costs, BFS. DP on grids relies on moves that only go forward.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

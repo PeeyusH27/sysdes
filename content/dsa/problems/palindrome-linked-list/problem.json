@@ -1,0 +1,30 @@
+{
+  "title": "Palindrome Linked List",
+  "difficulty": "Easy",
+  "patterns": ["fast-slow-pointers", "linked-list-reversal"],
+  "js": ["linked-list-tree-nodes"],
+  "order": 4,
+  "summary": "Decide whether the values of a singly linked list read the same forwards and backwards, using O(1) extra space.",
+  "fn": "isPalindrome",
+  "params": ["head"],
+  "types": { "params": ["ListNode"], "returns": "boolean" },
+  "io": { "args": ["list"] },
+  "tests": [
+    { "args": [[1, 2, 2, 1]], "expected": true, "explain": "Read backwards the values are 1, 2, 2, 1 again." },
+    { "args": [[1, 2]], "expected": false, "explain": "Backwards it reads 2, 1." },
+    { "args": [[1, 2, 3, 2, 1]], "expected": true, "explain": "With an odd length the middle value (3) pairs with itself and doesn't need a partner." },
+    { "args": [[7]], "expected": true },
+    { "args": [[1, 1]], "expected": true },
+    { "args": [[1, 2, 3, 1]], "expected": false },
+    { "args": [[1, 2, 1, 2]], "expected": false },
+    { "args": [[3, 3, 3, 3, 3]], "expected": true },
+    { "args": [[3, 2, 9, 9, 6, 2, 3, 8, 3, 9, 6, 8, 6, 1, 7, 6, 0, 3, 2, 1, 5, 0, 1, 7, 0, 0, 7, 1, 0, 5, 1, 2, 3, 0, 6, 7, 1, 6, 8, 6, 9, 3, 8, 3, 2, 6, 9, 9, 2, 3]], "expected": true },
+    { "args": [[3, 2, 9, 9, 6, 2, 3, 8, 3, 9, 6, 8, 6, 1, 7, 6, 0, 3, 2, 1, 5, 0, 1, 7, 0, 5, 0, 7, 1, 0, 6, 1, 2, 3, 0, 6, 7, 1, 6, 8, 6, 9, 3, 8, 3, 2, 6, 9, 9, 2, 3]], "expected": false }
+  ],
+  "hints": [
+    "Copying the values into an array and comparing both ends is O(n) space. For O(1), you need to walk the second half backwards without an array.",
+    "Find the middle with slow and fast pointers, then reverse the second half in place so it can be walked from the tail towards the middle.",
+    "Compare the first half with the reversed second half node by node. If you want to be tidy, reverse the second half again to restore the list."
+  ],
+  "complexity": { "time": "O(n): find the middle, reverse half, compare half", "space": "O(1): only pointers are rewired" }
+}

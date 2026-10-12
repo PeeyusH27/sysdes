@@ -1,0 +1,31 @@
+{
+  "title": "Gas Station",
+  "difficulty": "Medium",
+  "patterns": ["greedy"],
+  "js": ["numbers-math", "arrays"],
+  "order": 4,
+  "summary": "Find the station from which a car with an empty tank can drive once around a circular route without running dry.",
+  "fn": "canCompleteCircuit",
+  "params": ["gas", "cost"],
+  "types": { "params": ["number[]", "number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[3, 1, 2, 5], [2, 4, 3, 1]], "expected": 3, "explain": "Start at station 3: fill 5, drive to station 0 using 1 (4 left). Fill 3 and use 2 (5 left), fill 1 and use 4 (2 left), fill 2 and use 3 (1 left), and you are back at station 3." },
+    { "args": [[2, 2, 2], [3, 3, 2]], "expected": -1, "explain": "There are 6 units of gas in total but the whole loop costs 8, so no start can work." },
+    { "args": [[4], [3]], "expected": 0, "explain": "One station: fill 4 units and spend 3 to drive around back to it." },
+    { "args": [[3], [4]], "expected": -1 },
+    { "args": [[0, 0, 5], [2, 2, 1]], "expected": 2 },
+    { "args": [[5, 0, 0], [1, 2, 2]], "expected": 0 },
+    { "args": [[2, 3, 4, 5, 1], [4, 5, 1, 2, 3]], "expected": 2 },
+    { "args": [[6, 1, 1, 1], [1, 2, 2, 2]], "expected": 0 },
+    { "args": [[1, 1, 1, 1], [1, 1, 1, 2]], "expected": -1 },
+    { "args": [[7, 0, 4, 6, 9, 0, 1, 4, 7, 4, 2, 6, 1, 6, 3, 1, 1, 1, 9, 8, 3, 9, 0, 7, 8, 7, 0, 1, 4, 9], [4, 1, 4, 5, 6, 9, 0, 9, 9, 6, 3, 1, 3, 5, 8, 4, 4, 9, 1, 3, 7, 9, 5, 0, 1, 2, 1, 6, 0, 0]], "expected": 18 },
+    { "args": [[3, 6, 8, 8, 4, 1, 0, 7, 7, 7, 3, 4, 9, 6, 5, 6, 2, 8, 5, 4, 7, 4, 6, 5, 0], [7, 9, 6, 8, 8, 2, 8, 7, 6, 8, 5, 7, 9, 0, 7, 9, 2, 8, 0, 5, 9, 2, 7, 2, 7]], "expected": -1 }
+  ],
+  "samples": 3,
+  "hints": [
+    "First a quick test: if the total gas is less than the total cost, no start can work. Is the reverse also true?",
+    "Simulate from station 0, keeping the tank. Suppose the tank goes negative on the way from station i to i + 1. Could any station between the start and i have been a better start?",
+    "No: each of them would arrive at i with even less gas. So restart from i + 1 with an empty tank. If the total is non-negative, the last restart point is the answer."
+  ],
+  "complexity": { "time": "O(n): one pass", "space": "O(1)" }
+}

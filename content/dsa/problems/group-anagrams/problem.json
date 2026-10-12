@@ -1,0 +1,31 @@
+{
+  "title": "Group Anagrams",
+  "difficulty": "Medium",
+  "patterns": ["hashing"],
+  "js": ["map-set", "strings", "sorting"],
+  "order": 4,
+  "summary": "Put words that are anagrams of each other into the same group.",
+  "fn": "groupAnagrams",
+  "params": ["strs"],
+  "types": { "params": ["string[]"], "returns": "string[][]" },
+  "compare": "deep-unordered",
+  "tests": [
+    { "args": [["listen", "silent", "enlist", "google", "gogole", "cat", "act"]], "expected": [["listen", "silent", "enlist"], ["google", "gogole"], ["cat", "act"]], "explain": "listen, silent and enlist use the same six letters; google and gogole match; cat and act match. Groups, and the words inside them, may come in any order." },
+    { "args": [[""]], "expected": [[""]], "explain": "The empty string forms a group of its own." },
+    { "args": [["a"]], "expected": [["a"]] },
+    { "args": [["abc", "bca", "cab", "xyz", "zyx", "q"]], "expected": [["abc", "bca", "cab"], ["xyz", "zyx"], ["q"]] },
+    { "args": [["ab", "ba", "abb", "bab", "bba", "b"]], "expected": [["ab", "ba"], ["abb", "bab", "bba"], ["b"]] },
+    { "args": [["", "", "a"]], "expected": [["", ""], ["a"]] },
+    { "args": [["aab", "aba", "baa", "abb"]], "expected": [["aab", "aba", "baa"], ["abb"]] },
+    { "args": [["stop", "pots", "tops", "opts", "spot", "post"]], "expected": [["stop", "pots", "tops", "opts", "spot", "post"]] },
+    { "args": [["ac", "bb"]], "expected": [["ac"], ["bb"]] },
+    { "args": [["abc", "def", "ghi"]], "expected": [["abc"], ["def"], ["ghi"]] },
+    { "args": [["x", "onte", "baa", "rat", "note", "x", "aab", "lsap", "baa", "rat", "rat", "eton", "aab", "slap", "aab", "slap", "toen", "rta", "aab", "eton", "note", "lspa", "eton", "aab", "tar", "oetn", "spal", "teon", "x", "eton"]], "expected": [["x", "x", "x"], ["onte", "note", "eton", "toen", "eton", "note", "eton", "oetn", "teon", "eton"], ["baa", "aab", "baa", "aab", "aab", "aab", "aab"], ["rat", "rat", "rat", "rta", "tar"], ["lsap", "slap", "slap", "lspa", "spal"]] }
+  ],
+  "hints": [
+    "Comparing every pair of words is slow. Instead, can you give every word a key so that anagrams get the same key?",
+    "Sorting a word's letters gives such a key: \"listen\" and \"silent\" both become \"eilnst\".",
+    "Use a Map from key to an array of words. Push each word into its key's array, then return the map's values."
+  ],
+  "complexity": { "time": "O(n · k log k): n words of length up to k, each sorted once (O(n · k) with a letter-count key)", "space": "O(n · k): every word is stored once in the map" }
+}

@@ -1,0 +1,30 @@
+{
+  "title": "Reverse Bits",
+  "difficulty": "Easy",
+  "patterns": ["bit-manipulation"],
+  "js": ["bitwise", "numbers-math"],
+  "order": 5,
+  "summary": "Reverse the order of the 32 bits of an unsigned integer.",
+  "fn": "reverseBits",
+  "params": ["n"],
+  "types": { "params": ["number"], "returns": "number" },
+  "tests": [
+    { "args": [6], "expected": 1610612736, "explain": "6 is 110 in its lowest bits, so 00…0110 reversed is 0110 0…0: bits 29 and 30 are set, which is 2^30 + 2^29 = 1610612736." },
+    { "args": [1], "expected": 2147483648, "explain": "Bit 0 moves to bit 31: 2^31 = 2147483648. The answer must be unsigned, not -2147483648." },
+    { "args": [4294967295], "expected": 4294967295, "explain": "All 32 bits are 1, so reversing changes nothing." },
+    { "args": [0], "expected": 0 },
+    { "args": [2147483648], "expected": 1 },
+    { "args": [305419896], "expected": 510274632 },
+    { "args": [4294967294], "expected": 2147483647 },
+    { "args": [3221225472], "expected": 3 },
+    { "args": [2863311530], "expected": 1431655765 },
+    { "args": [16], "expected": 134217728 },
+    { "args": [4026531840], "expected": 15 }
+  ],
+  "hints": [
+    "Treat n as exactly 32 bits, leading zeros included. Bit 0 must become bit 31, bit 1 becomes bit 30, and so on.",
+    "Loop 32 times: shift the result left by one, OR in n's lowest bit (n & 1), then shift n right by one.",
+    "In JavaScript, use n >>>= 1 (unsigned shift) so inputs of 2^31 and above work, and return result >>> 0 so a set top bit doesn't make the answer negative."
+  ],
+  "complexity": { "time": "O(1): always 32 iterations", "space": "O(1)" }
+}

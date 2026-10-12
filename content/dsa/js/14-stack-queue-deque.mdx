@@ -1,0 +1,82 @@
+JavaScript has no `Stack`, `Queue` or `Deque` classes. An array is already a perfect stack, but using it as a queue with `shift()` quietly makes BFS quadratic on big inputs. Know the two-line head-index fix and keep a deque in your back pocket for sliding windows.
+
+### Arrays as stacks
+
+`push` and `pop` work on the end of the array in O(1) amortized, and `at(-1)` peeks at the top. Popping or peeking an empty array returns `undefined` instead of throwing, so check `stack.length` when empty matters.
+
+```js
+const stack = [];
+stack.push(x);                 // push (several at once: push(a, b))
+const top = stack.at(-1);      // peek; same as stack[stack.length - 1]
+const x = stack.pop();         // pop; undefined if empty
+if (stack.length === 0) {}     // empty check
+```
+
+<RunCode src="snippets/stack-array.js" />
+
+### Queue with a head index
+
+`shift()` removes the first element and **moves every other element down one slot**, so each call is O(n) and a BFS that shifts its queue is O(n²). V8 has a fast path that hides this for arrays under roughly 16,000 items, which is why a `shift()` BFS passes the small examples and then times out on the large hidden tests. `unshift()` has the same cost.
+
+The fix is to never remove from the front: keep a `head` index and move it forward. Reading `q[head++]` is O(1).
+
+```js
+const queue = [start];
+let head = 0;
+while (head < queue.length) {  // not queue.length > 0: nothing is ever removed
+  const node = queue[head++];
+  for (const next of neighbours(node)) queue.push(next);
+}
+```
+
+<RunCode src="snippets/queue-head-index.js" />
+
+The array keeps every item ever enqueued. For BFS that is fine (each node is enqueued once, so memory is O(n) anyway). For a queue that lives a long time with many more operations than items alive at once, **compact** now and then: when `head` passes half the array, drop the consumed prefix with `slice(head)`. Each compaction copies at most as many items as were dequeued since the last one, so it stays amortized O(1).
+
+### A small Queue class
+
+Wrap the head index in a class when the queue is used in several places or the problem is a design problem. This one compacts automatically and exposes `size` as a getter. The BFS below also shows the **level-by-level** idiom: read the current size first, then dequeue exactly that many nodes.
+
+<RunCode src="snippets/queue-class.js" />
+
+Mark nodes as visited **when you enqueue them**, not when you dequeue them; otherwise the same node can sit in the queue many times.
+
+### Ring-buffer deque
+
+A deque (double-ended queue) adds and removes at both ends. A **ring buffer** stores items in a fixed-size array that wraps around: `head` is the index of the front item, and item `i` lives at `(head + i) % capacity`. When it fills up, copy the items into an array twice as large, which keeps every operation O(1) amortized.
+
+<RunCode src="snippets/deque-ring-buffer.js" />
+
+Moving `head` backwards uses `(head - 1 + capacity) % capacity`: in JavaScript `-1 % 8` is `-1`, not `7`, so add the capacity before taking the remainder.
+
+### Monotonic deque preview
+
+Sliding window maximum keeps a deque of **indices** whose values decrease from front to back. A new value pops every smaller value off the back (they can never be the maximum again), and the front is dropped once it leaves the window. Every index is pushed and popped at most once, so the whole scan is O(n) instead of O(n·k).
+
+<RunCode src="snippets/deque-monotonic.js" />
+
+Because nothing is ever added at the front, an array with `pop()` at the back and a `head` index at the front is a complete deque for this pattern. You need the ring buffer only when items really are pushed at both ends (0-1 BFS, palindrome checks on a stream, some design problems).
+
+### Stack and queue costs
+
+| Operation | Array as stack | Array with `shift`/`unshift` | Head-index queue | Ring-buffer deque |
+|---|---|---|---|---|
+| Add at back | `push` O(1)* | `push` O(1)* | `push` O(1)* | O(1)* |
+| Remove from back | `pop` O(1) | `pop` O(1) | not needed | O(1) |
+| Remove from front | n/a | `shift` **O(n)** | `head++` O(1) | O(1) |
+| Add at front | n/a | `unshift` **O(n)** | not supported | O(1)* |
+| Peek | `at(-1)` O(1) | `[0]` O(1) | `[head]` O(1) | O(1) |
+| Size | `length` O(1) | `length` O(1) | `length - head` O(1) | O(1) |
+
+\* amortized: the array occasionally reallocates when it grows.
+
+<Callout kind="warning" title="Stack and queue gotchas">
+
+- `queue.shift()` inside a BFS loop: O(n) per call, invisible on small tests, a timeout on big ones.
+- With a head index, the loop condition is `head < queue.length`. `while (queue.length)` never ends because nothing is removed.
+- In level-order BFS, save `const size = queue.length - head` before the inner loop; the length changes as you push children.
+- `stack.at(-1)` on an empty stack is `undefined`, and `undefined > 5` is just `false`: an empty-stack bug can pass silently.
+- Ring-buffer index math with `%` on a negative number stays negative. Add the capacity first.
+- Marking visited on dequeue instead of enqueue lets duplicates flood the queue.
+
+</Callout>

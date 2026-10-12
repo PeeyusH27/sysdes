@@ -1,0 +1,30 @@
+{
+  "title": "Subarray Sum Equals K",
+  "difficulty": "Medium",
+  "patterns": ["prefix-sum", "hashing"],
+  "js": ["map-set", "arrays"],
+  "order": 3,
+  "summary": "Count the contiguous subarrays whose sum is exactly k, when the array may contain negative numbers.",
+  "fn": "subarraySum",
+  "params": ["nums", "k"],
+  "types": { "params": ["number[]", "number"], "returns": "number" },
+  "tests": [
+    { "args": [[1, 2, 1, 2, 1], 3], "expected": 4, "explain": "[1, 2] at indices 0–1, [2, 1] at 1–2, [1, 2] at 2–3 and [2, 1] at 3–4: four subarrays." },
+    { "args": [[3, 4, -7, 3, 1], 0], "expected": 2, "explain": "[3, 4, -7] and [4, -7, 3] both sum to 0. Negative numbers are allowed, so a window can't be used." },
+    { "args": [[1], 0], "expected": 0, "explain": "The only subarray, [1], sums to 1." },
+    { "args": [[0, 0, 0], 0], "expected": 6 },
+    { "args": [[1, -1, 1, -1], 0], "expected": 4 },
+    { "args": [[5], 5], "expected": 1 },
+    { "args": [[-2, -1, 2, 1], 1], "expected": 2 },
+    { "args": [[4, -6, 2, -6, 8], -6], "expected": 3 },
+    { "args": [[1, 2, 3], 7], "expected": 0 },
+    { "args": [[2, 2, 2, 2, 2], 4], "expected": 4 },
+    { "args": [[-3, 1, 5, 0, -4, -1, 5, 2, 4, 3, -5, 5, 4, 2, -1, 0, -5, 2, 1, 1, -2, -4, -4, 1, 0, 5, 4, 4, 3, 5, 3, -1, 3, -2, -5, 5, 5, 2, 5, 3, -1, -1, 2, 1, 2, 5, 2, -1, 0, 1], 3], "expected": 28 }
+  ],
+  "hints": [
+    "Negative numbers break the sliding window: a sum that is too big can shrink when you add an element.",
+    "With running sums, the sum of nums[i..j] is prefix(j) - prefix(i - 1). It equals k exactly when an earlier running sum equals current - k.",
+    "Walk once, keeping a Map from running sum to how many times it has occurred (start with 0 → 1). At each step add map.get(sum - k) to the answer, then record sum."
+  ],
+  "complexity": { "time": "O(n): one pass with O(1) map operations", "space": "O(n): up to n distinct running sums" }
+}

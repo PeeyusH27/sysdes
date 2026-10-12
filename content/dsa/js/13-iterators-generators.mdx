@@ -1,0 +1,81 @@
+`for...of`, spread and `Array.from` all speak one protocol, the **iterable**, so the same loop walks arrays, strings, Maps and Sets. Generators let you write your own iterables, which turns tree walks and ranges into lazy streams you can stop after the k-th value.
+
+### What for...of iterates
+
+| Value | `for (const x of value)` gives |
+|---|---|
+| Array | the elements, in index order |
+| String | characters (by code point, so an emoji counts as one) |
+| `Map` | `[key, value]` pairs in insertion order |
+| `Set` | the items in insertion order |
+| `arguments`, typed arrays, generator objects | their values |
+| Plain object `{}` | nothing: `TypeError: … is not iterable` |
+
+<RunCode src="snippets/iterators-for-of.js" />
+
+**`entries()`, `keys()` and `values()`.** Arrays, Maps and Sets all have the three methods. `arr.entries()` is how you get the index inside a `for...of`; on a Map, `entries()` is what plain `for...of` already uses.
+
+```js
+for (const [i, x] of arr.entries()) {}   // index and value
+for (const k of map.keys()) {}           // just the keys
+const total = [...map.values()].reduce((a, b) => a + b, 0);
+const firstKey = map.keys().next().value; // oldest key: what an LRU cache evicts
+```
+
+They return **iterators**, not arrays: no `length`, no `[0]`, and they can be read only **once**. Spread them (`[...m.keys()]`) when you need an array. Recent engines (Node 22+ and current browsers) also have iterator helpers such as `m.keys().map(f).toArray()`, but spreading works everywhere.
+
+### Spreading iterables and Array.from
+
+`[...iterable]` copies any iterable into a new array, and `f(...iterable)` passes its items as arguments. `Array.from(iterable, mapFn)` converts and maps in one pass, and also accepts an array-like `{ length: n }`, which is the standard way to build ranges and 2D grids with independent rows.
+
+<RunCode src="snippets/iterators-spread-from.js" />
+
+Each of these is O(n): fine once, a trap inside a loop. `Math.max(...big)` also passes every item as a separate argument, which throws `RangeError` for arrays with more than roughly 100,000 items; loop instead.
+
+### Generator functions for lazy traversals
+
+A `function*` returns a generator. Each `yield` hands one value to the consumer and **pauses** until the next value is requested, so nothing is computed ahead of time. `yield*` forwards everything another generator yields, which makes recursive walks read like the textbook definition.
+
+<RunCode src="snippets/iterators-generators.js" />
+
+Generators shine when you might stop early (k-th smallest, first match, merging two sorted streams) or when the sequence is huge or infinite. Recursive generators are still recursion: each value is passed up through every nested level (O(depth) per value), and nesting a few thousand deep overflows the stack. For skewed trees, write the walk with an explicit stack inside a single generator.
+
+### Breaking out of for...of early
+
+`break`, `return` and `throw` inside a `for...of` stop the loop immediately and **close** the iterator: a generator's `finally` block runs, and no further values are produced. `forEach` can't do this: `return` inside its callback only skips to the next element, and `break` is a syntax error. When you need an early exit, use `for...of`, a classic `for`, or `some`/`find`.
+
+```js
+for (const x of nums) {
+  if (x === target) return true;         // leaves the whole function
+}
+nums.forEach((x) => { if (x === target) return; }); // only ends this callback
+```
+
+### for...in is for object keys
+
+`for...in` walks an object's enumerable **string** keys, including inherited ones. On an array that means indices as strings (`'0' + 1` is `'01'`) plus any extra properties, so never use it for arrays. For objects, `Object.keys`, `Object.values` and `Object.entries` with `for...of` are clearer and skip inherited keys.
+
+<RunCode src="snippets/iterators-for-in.js" />
+
+### Iteration costs
+
+| Operation | Cost |
+|---|---|
+| `for...of` over an array, string, Map or Set | O(n) total |
+| `[...it]`, `Array.from(it)`, `Array.from(it, f)` | O(n) time and a new O(n) array |
+| `m.keys()`, `arr.entries()` (creating the iterator) | O(1): values come one at a time |
+| `gen.next()` on a flat generator | O(1) per value |
+| Recursive generator with `yield*` | O(depth) per value |
+| `Object.keys(obj)` / `Object.entries(obj)` | O(number of keys), builds a new array |
+
+<Callout kind="warning" title="Iteration gotchas">
+
+- `for (const x of obj)` throws for plain objects. Use `Object.entries(obj)`.
+- `map.keys()[0]` is `undefined` and `map.keys().length` is `undefined`. Spread first.
+- An iterator or generator is used up after one pass: a second spread gives `[]`.
+- `for (const i in arr)` gives string indices, so `i + 1` concatenates.
+- `return` inside `forEach` does not stop the loop.
+- Adding to a `Set` or `Map` while iterating it visits the new items too, which can loop forever. Deleting during iteration is safe.
+- `s.length` counts UTF-16 units, while `for...of` counts code points: they differ for emoji.
+
+</Callout>

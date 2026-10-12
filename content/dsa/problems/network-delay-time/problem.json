@@ -1,0 +1,30 @@
+{
+  "title": "Network Delay Time",
+  "difficulty": "Medium",
+  "patterns": ["shortest-paths", "heaps"],
+  "js": ["heap", "graphs-in-js"],
+  "order": 2,
+  "summary": "A signal starts at one node of a weighted directed network. How long until every node has received it?",
+  "fn": "networkDelayTime",
+  "params": ["times", "n", "k"],
+  "types": { "params": ["number[][]", "number", "number"], "returns": "number" },
+  "tests": [
+    { "args": [[[1, 2, 4], [1, 3, 1], [3, 2, 2], [2, 4, 1]], 4, 1], "expected": 4, "explain": "From node 1: node 3 at time 1, node 2 at time 3 (through 3, faster than the direct edge of 4), node 4 at time 4. Everyone has the signal at time 4." },
+    { "args": [[[1, 2, 3]], 2, 2], "expected": -1, "explain": "Edges are one-way. The signal starts at node 2 and can't travel back to node 1, so not every node receives it: -1." },
+    { "args": [[], 1, 1], "expected": 0, "explain": "The only node is the source, which has the signal at time 0." },
+    { "args": [[[1, 2, 1], [2, 3, 1], [1, 3, 5]], 3, 1], "expected": 2 },
+    { "args": [[[3, 1, 2], [3, 2, 2], [2, 4, 3]], 4, 3], "expected": 5 },
+    { "args": [[[1, 2, 1], [2, 3, 2]], 4, 1], "expected": -1 },
+    { "args": [[[1, 2, 5], [1, 2, 2], [2, 3, 1]], 3, 1], "expected": 3 },
+    { "args": [[[1, 2, 1], [2, 3, 1], [3, 1, 1], [3, 4, 10]], 4, 2], "expected": 11 },
+    { "args": [[[1, 2, 0], [2, 3, 0], [1, 3, 1]], 3, 1], "expected": 0 },
+    { "args": [[[1, 2, 10], [12, 6, 13], [10, 5, 8], [11, 12, 16], [8, 14, 4], [15, 2, 15], [2, 1, 3], [3, 6, 2], [4, 9, 7], [13, 7, 2], [15, 12, 12], [5, 12, 5], [15, 4, 16], [3, 12, 14], [7, 6, 13], [4, 12, 18], [15, 7, 10], [11, 14, 20], [7, 1, 15], [13, 1, 9], [5, 15, 12], [6, 14, 10], [8, 3, 1], [12, 7, 8], [6, 4, 17], [8, 6, 9], [11, 8, 18], [5, 10, 8], [2, 7, 16], [10, 2, 2], [2, 15, 12], [15, 11, 10], [8, 10, 20], [2, 11, 18], [1, 4, 6], [9, 12, 7], [15, 9, 4], [11, 1, 3], [9, 15, 7], [13, 4, 4]], 15, 4], "expected": -1 },
+    { "args": [[[14, 4, 40], [2, 13, 32], [29, 22, 15], [1, 2, 41], [5, 17, 44], [2, 30, 1], [27, 18, 47], [1, 3, 12], [22, 3, 7], [26, 12, 4], [27, 16, 34], [18, 8, 0], [16, 1, 29], [9, 18, 35], [22, 30, 18], [28, 10, 44], [24, 7, 8], [14, 19, 24], [17, 7, 50], [2, 28, 15], [21, 25, 34], [25, 27, 29], [20, 15, 44], [13, 28, 27], [23, 11, 26], [27, 3, 34], [5, 12, 10], [24, 18, 25], [15, 8, 46], [21, 3, 4], [2, 6, 0], [7, 14, 23], [7, 9, 0], [16, 21, 31], [16, 9, 46], [5, 14, 38], [4, 24, 11], [24, 23, 14], [28, 15, 47], [6, 18, 8], [1, 11, 29], [12, 27, 14], [30, 5, 27], [30, 27, 10], [18, 28, 44], [20, 18, 35], [16, 28, 34], [14, 13, 27], [16, 6, 19], [8, 25, 11], [26, 16, 42], [10, 4, 1], [4, 8, 16], [28, 30, 7], [20, 21, 43], [30, 16, 5], [11, 18, 12], [27, 2, 24], [11, 27, 10], [2, 23, 9], [7, 4, 33], [25, 2, 6], [29, 23, 12], [12, 8, 22], [16, 19, 30], [22, 2, 25], [1, 5, 44], [14, 7, 8], [18, 10, 23], [3, 18, 7], [27, 7, 34], [5, 23, 1], [8, 19, 35], [6, 5, 37], [26, 24, 32], [24, 27, 22], [4, 30, 24], [18, 30, 6], [29, 1, 3], [11, 22, 6], [30, 7, 43], [30, 26, 17], [14, 2, 47], [8, 6, 8], [8, 29, 7], [25, 22, 47], [8, 23, 25], [3, 11, 27], [14, 20, 41], [8, 20, 3]], 30, 1], "expected": 88 }
+  ],
+  "hints": [
+    "The signal reaches each node along its fastest route, so you need the shortest travel time from k to every node. The answer is the largest of those times.",
+    "All travel times are non-negative: use Dijkstra. Keep dist[] and a min-heap of [time, node]; always expand the node with the smallest known time.",
+    "When you pop an entry whose time is larger than dist[node], skip it: it is stale. At the end, if any dist is still Infinity, return -1."
+  ],
+  "complexity": { "time": "O(E log E): each edge can push one heap entry, and each push or pop is O(log E)", "space": "O(n + E): adjacency list, dist array and heap" }
+}

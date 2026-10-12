@@ -1,0 +1,30 @@
+{
+  "title": "Number of Connected Components",
+  "difficulty": "Medium",
+  "patterns": ["union-find", "graph-traversal"],
+  "js": ["classes", "arrays"],
+  "order": 2,
+  "summary": "Given n nodes and a list of undirected edges, count how many separate pieces the graph falls into.",
+  "fn": "countComponents",
+  "params": ["n", "edges"],
+  "types": { "params": ["number", "number[][]"], "returns": "number" },
+  "tests": [
+    { "args": [5, [[0, 1], [1, 2], [3, 4]]], "expected": 2, "explain": "0, 1 and 2 are linked into one piece and 3-4 is another: 2 components." },
+    { "args": [6, [[0, 1], [1, 2], [2, 0], [3, 4]]], "expected": 3, "explain": "The edge 2-0 closes a loop inside an existing piece, so it merges nothing. The pieces are {0, 1, 2}, {3, 4} and the lone node 5: 3 components." },
+    { "args": [4, []], "expected": 4, "explain": "With no edges every node is its own component." },
+    { "args": [1, []], "expected": 1 },
+    { "args": [2, [[1, 0]]], "expected": 1 },
+    { "args": [5, [[0, 1], [1, 2], [2, 3], [3, 4]]], "expected": 1 },
+    { "args": [4, [[2, 3], [1, 2], [1, 3]]], "expected": 2 },
+    { "args": [7, [[6, 5], [5, 4], [3, 2], [2, 1], [1, 0]]], "expected": 2 },
+    { "args": [10, [[9, 0], [9, 1], [9, 2], [9, 3], [9, 4], [9, 5], [9, 6], [9, 7], [9, 8]]], "expected": 1 },
+    { "args": [40, [[1, 13], [27, 22], [15, 11], [36, 28], [2, 11], [34, 4], [27, 25], [4, 13], [5, 10], [11, 38], [26, 35], [12, 11], [34, 24], [37, 17], [13, 7], [3, 8], [27, 11], [20, 18], [15, 19], [17, 36], [10, 16], [36, 39], [27, 36], [1, 35], [20, 29], [20, 26]]], "expected": 14 },
+    { "args": [60, [[20, 23], [46, 58], [37, 41], [52, 31], [31, 34], [27, 56], [51, 58], [25, 15], [18, 50], [22, 32], [27, 21], [9, 15], [49, 39], [54, 51], [1, 18], [28, 7], [54, 55], [33, 29], [38, 25], [13, 57], [7, 2], [43, 34], [27, 42], [1, 6], [54, 15], [24, 59], [43, 28], [39, 34], [36, 47], [53, 56], [52, 30], [30, 32], [48, 16], [47, 58], [4, 22], [54, 53], [57, 46], [27, 3], [9, 4], [21, 47], [32, 29], [58, 14], [40, 47], [8, 23], [54, 3], [39, 7], [34, 44], [54, 4], [16, 55], [42, 51]]], "expected": 15 }
+  ],
+  "hints": [
+    "Before any edge is added, there are n components: every node alone.",
+    "An edge between two nodes in different components merges them, so the count drops by one. An edge inside one component changes nothing.",
+    "Keep a union-find with a count field. union(a, b) returns false when a and b already share a root; only decrement the count when it returns true."
+  ],
+  "complexity": { "time": "O(n + E · α(n)): building the arrays plus one near-constant union per edge", "space": "O(n): parent and rank arrays" }
+}

@@ -1,0 +1,31 @@
+{
+  "title": "Word Search II",
+  "difficulty": "Hard",
+  "patterns": ["trie", "backtracking"],
+  "js": ["recursion", "map-set", "graphs-in-js"],
+  "order": 5,
+  "summary": "Find every word from a list that can be traced through adjacent cells of a letter grid.",
+  "fn": "findWords",
+  "params": ["board", "words"],
+  "types": { "params": ["string[][]", "string[]"], "returns": "string[]" },
+  "compare": "unordered",
+  "tests": [
+    { "args": [[["c", "a", "t", "s"], ["o", "r", "e", "d"], ["d", "e", "n", "t"]], ["cat", "cats", "core", "code", "red", "tend", "dent", "rot", "card"]], "expected": ["cat", "cats", "core", "code", "red", "dent"], "explain": "Each found word is a chain of side-by-side cells, such as c → o → d → e for \"code\". \"tend\" and \"card\" would need a diagonal last step, and \"rot\" fails because the only o has no t next to it." },
+    { "args": [[["a", "b"], ["c", "d"]], ["abdc", "abcd", "acdb", "ba"]], "expected": ["abdc", "acdb", "ba"], "explain": "\"abcd\" would need c right after b, but those two cells only touch diagonally." },
+    { "args": [[["a"]], ["a", "aa"]], "expected": ["a"], "explain": "\"aa\" would need the single cell twice: a cell can be used only once per word." },
+    { "args": [[["a", "b"]], ["aba"]], "expected": [] },
+    { "args": [[["a", "a"], ["a", "a"]], ["aaaa", "aaaaa", "aa"]], "expected": ["aaaa", "aa"] },
+    { "args": [[["x", "y"], ["z", "w"]], ["cat", "dog"]], "expected": [] },
+    { "args": [[["t", "r", "e", "e"], ["s", "i", "e", "s"], ["x", "e", "t", "r"]], ["tree", "trees", "tries", "tie", "set", "sets", "rest"]], "expected": ["tree", "trees", "tries", "set"] },
+    { "args": [[["a", "b"], ["c", "d"]], ["abcdab"]], "expected": [] },
+    { "args": [[["a", "b", "c", "d", "e", "f"]], ["abc", "fed", "cba", "bcdef", "ace"]], "expected": ["abc", "fed", "cba", "bcdef"] },
+    { "args": [[["c", "c", "b", "e"], ["a", "d", "c", "d"], ["d", "c", "e", "e"], ["e", "b", "c", "c"]], ["acca", "dcbe", "cbdb", "bed", "daccbe", "ebcce", "eecc", "eec", "ccbede", "ecce", "ecdcbe", "cbce"]], "expected": ["dcbe", "bed", "daccbe", "ebcce", "eecc", "eec", "ccbede", "ecce", "ecdcbe", "cbce"] },
+    { "args": [[["a", "t", "r", "i", "r", "t"], ["e", "o", "o", "t", "s", "t"], ["r", "t", "t", "r", "i", "r"], ["r", "o", "i", "r", "e", "s"], ["a", "e", "t", "a", "a", "s"], ["e", "t", "o", "t", "t", "t"]], ["ireia", "tat", "trirto", "eorae", "reot", "ttrir", "ase", "aet", "ottori", "rttoit", "iaiso", "eaoeot", "eaat", "soaas", "asts", "rstrss", "eatrit", "esr", "trr", "ttaar"]], "expected": ["tat", "trirto", "eorae", "reot", "ttrir", "aet", "ottori", "rttoit", "eaat", "rstrss", "eatrit", "esr", "trr", "ttaar"] }
+  ],
+  "hints": [
+    "Searching the grid once per word repeats the same work for words that share a prefix. Can a single DFS check all the words at once?",
+    "Put the words in a trie. Start a DFS from every cell and move a trie pointer with it: if the next letter has no child in the trie, abandon this path.",
+    "Store each word on its end node; when the DFS reaches it, record the word and clear it so it is reported once. Mark a cell as used while it is on the current path and restore it when you backtrack."
+  ],
+  "complexity": { "time": "O(m · n · 4 · 3^(L-1)) in the worst case for words up to length L, though the trie cuts most paths short; building the trie is O(total letters)", "space": "O(total letters) for the trie, plus O(L) recursion" }
+}

@@ -1,0 +1,30 @@
+{
+  "title": "Maximum Depth of Binary Tree",
+  "difficulty": "Easy",
+  "patterns": ["tree-dfs", "tree-bfs"],
+  "js": ["recursion", "linked-list-tree-nodes"],
+  "order": 1,
+  "summary": "Count the nodes on the longest path from the root down to a leaf.",
+  "fn": "maxDepth",
+  "params": ["root"],
+  "types": { "params": ["TreeNode | null"], "returns": "number" },
+  "io": { "args": ["tree"] },
+  "tests": [
+    { "args": [[1, 2, 3, 4, 5, null, 6, null, null, 7]], "expected": 4, "explain": "The longest root-to-leaf path is 1 → 2 → 5 → 7, which has 4 nodes." },
+    { "args": [[1, null, 2]], "expected": 2, "explain": "The root has only a right child: 1 → 2 is 2 nodes." },
+    { "args": [[]], "expected": 0, "explain": "An empty tree has no nodes, so its depth is 0." },
+    { "args": [[7]], "expected": 1 },
+    { "args": [[1, 2, null, 3, null, 4, null, 5]], "expected": 5 },
+    { "args": [[1, null, 2, null, 3, null, 4, null, 5, null, 6]], "expected": 6 },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], "expected": 4 },
+    { "args": [[1, 2, null, null, 3, 4, null, null, 5]], "expected": 5 },
+    { "args": [[-10, -20, 30, null, -5]], "expected": 3 },
+    { "args": [[-43, -34, 41, 50, -10, 4, -46, 14, 3, -41, 0, -24, 6, 46, null, -49, 30, -3, null, null, null, null, 18, 24, null, null, null, 0, null, null, null, null, null, null, null, null, -6, null, null, 3, 42, null, 3, -35, -48, 39, -20, -4, -4, -30, null, null, null, 24, -18, 12, 22, null, 8, null, -27, null, null, null, null, null, 43, null, 40, null, null, null, null, null, null, null, 21]], "expected": 10 }
+  ],
+  "hints": [
+    "The depth of a tree is 1 for the root plus the depth of its deeper subtree.",
+    "What should an empty subtree (null) return so that a leaf comes out as 1?",
+    "Return 0 for null, otherwise 1 + Math.max(maxDepth(root.left), maxDepth(root.right)). Counting levels with a BFS works too."
+  ],
+  "complexity": { "time": "O(n): every node is visited once", "space": "O(h) for the recursion: O(log n) when balanced, O(n) for a skewed tree" }
+}

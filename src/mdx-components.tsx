@@ -12,6 +12,9 @@ import { ClassDiagram } from "@/components/diagram/ClassDiagram";
 import { DecisionTree } from "@/components/diagram/DecisionTree";
 import { Timeline } from "@/components/diagram/Timeline";
 import * as Widgets from "@/components/widgets";
+import { AlgoViz } from "@/components/algo/AlgoViz";
+import { JsRef, ProblemLink } from "@/components/dsa/ContentBits";
+import { RunCode } from "@/components/dsa/RunCode";
 
 const components = {
   a: ({ href = "", children, ...rest }) =>
@@ -57,6 +60,10 @@ const components = {
   ClassDiagram,
   DecisionTree,
   Timeline,
+  AlgoViz,
+  JsRef,
+  ProblemLink,
+  RunCode,
   ...Widgets,
 } satisfies MDXComponents;
 

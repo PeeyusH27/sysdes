@@ -1,0 +1,29 @@
+{
+  "title": "Longest Consecutive Sequence",
+  "difficulty": "Medium",
+  "patterns": ["hashing"],
+  "js": ["map-set"],
+  "order": 5,
+  "summary": "Find the length of the longest run of consecutive integers in an unsorted array, in O(n) time.",
+  "fn": "longestConsecutive",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[10, 5, 12, 3, 11, 4, 13]], "expected": 4, "explain": "10, 11, 12, 13 is a run of 4 (3, 4, 5 is a run of 3). The values don't need to be next to each other in the array." },
+    { "args": [[]], "expected": 0, "explain": "An empty array has no run at all." },
+    { "args": [[2, 3, 1, 2]], "expected": 3, "explain": "1, 2, 3: the repeated 2 counts once." },
+    { "args": [[7]], "expected": 1 },
+    { "args": [[9, 1, -1, 0, 8, 7, 2]], "expected": 4 },
+    { "args": [[5, 5, 5]], "expected": 1 },
+    { "args": [[1, 3, 5, 7]], "expected": 1 },
+    { "args": [[3, 2, 1, 0, -1, -2]], "expected": 6 },
+    { "args": [[1000000000, -1000000000, 999999999]], "expected": 2 },
+    { "args": [[39, 52, 32, 14, 39, 39, -1, -29, 42, 33, -29, 4, 8, 11, -32, -38, 32, -7, -39, 10, 28, 40, 7, -17, -24, 59, -9, 19, -17, 56, 33, -32, -3, 58, -9, 54, -38, 24, 34, -8, 12, -3, 1, -20, 21, 36, 52, -23, 12, 53]], "expected": 3 }
+  ],
+  "hints": [
+    "Sorting solves it in O(n log n). To reach O(n) you need O(1) answers to \"is x in the array?\"",
+    "Put every number in a Set. A run can be counted by stepping x + 1, x + 2, … while the set has them.",
+    "Only start counting from x when x - 1 is not in the set: then each run is walked exactly once, from its smallest value."
+  ],
+  "complexity": { "time": "O(n): every number is visited by at most one run walk", "space": "O(n): the set" }
+}

@@ -1,0 +1,31 @@
+{
+  "title": "Parallel Courses",
+  "difficulty": "Medium",
+  "patterns": ["topological-sort"],
+  "js": ["graphs-in-js", "arrays"],
+  "order": 3,
+  "summary": "Take any number of courses per semester once their prerequisites are done; find the fewest semesters needed, or -1.",
+  "fn": "minimumSemesters",
+  "params": ["n", "relations"],
+  "types": { "params": ["number", "number[][]"], "returns": "number" },
+  "tests": [
+    { "args": [4, [[1, 2], [1, 3], [3, 4]]], "expected": 3, "explain": "Semester 1: course 1. Semester 2: courses 2 and 3, which both only needed 1. Semester 3: course 4, which needed 3." },
+    { "args": [3, [[1, 2], [2, 3], [3, 1]]], "expected": -1, "explain": "1 → 2 → 3 → 1 is a loop, so none of these courses can ever be started: -1." },
+    { "args": [5, []], "expected": 1, "explain": "Nothing depends on anything, so all five courses fit in one semester." },
+    { "args": [1, []], "expected": 1 },
+    { "args": [4, [[1, 2], [1, 3], [2, 4], [3, 4]]], "expected": 3 },
+    { "args": [6, [[1, 2], [2, 3], [3, 4], [5, 6]]], "expected": 4 },
+    { "args": [10, [[10, 9], [9, 8], [8, 7], [7, 6], [6, 5], [5, 4], [4, 3], [3, 2], [2, 1]]], "expected": 10 },
+    { "args": [6, [[1, 2], [2, 3], [4, 5], [5, 6], [6, 4]]], "expected": -1 },
+    { "args": [2, [[1, 2], [2, 1]]], "expected": -1 },
+    { "args": [3, [[1, 3], [1, 3], [2, 3]]], "expected": 2 },
+    { "args": [8, [[1, 2], [2, 3], [1, 4], [4, 5], [5, 6], [6, 3], [7, 8]]], "expected": 5 },
+    { "args": [30, [[16, 21], [4, 2], [5, 25], [6, 4], [22, 25], [23, 9], [9, 25], [9, 28], [17, 10], [27, 4], [30, 13], [28, 12], [21, 15], [23, 21], [29, 14], [1, 2], [17, 21], [9, 27], [23, 26], [12, 21], [26, 4], [22, 21], [3, 5], [21, 14], [21, 8], [23, 10], [30, 2], [14, 8], [9, 2], [1, 14], [29, 18], [26, 30], [20, 18], [1, 25], [1, 8], [12, 8], [26, 2], [14, 2], [30, 28], [9, 21], [9, 30], [1, 15], [23, 5], [3, 4], [24, 29]]], "expected": 8 }
+  ],
+  "hints": [
+    "In the first semester you can take every course with no prerequisites. Which courses become available for the second semester?",
+    "Run Kahn's algorithm one level at a time: the current level is everything with in-degree 0 right now. Taking all of them unlocks the next level. Count the levels.",
+    "Courses are numbered 1 to n, so size your arrays n + 1. If fewer than n courses were ever taken, a cycle blocks the rest: return -1."
+  ],
+  "complexity": { "time": "O(n + E): every course and relation is processed once", "space": "O(n + E): the adjacency list, in-degrees and the current level" }
+}

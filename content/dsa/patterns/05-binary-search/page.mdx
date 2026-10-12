@@ -1,0 +1,179 @@
+import { classicSearch, lowerBound, searchOnAnswer } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+Binary search keeps a range that **must contain the answer** and halves it with every comparison, so a million candidates need about 20 checks. It works on anything **monotonic**: a sorted array, a rotated array (one half is always sorted), or a yes/no question about the answer that flips from "no" to "yes" exactly once. Learn one template, **first true** (`lo < hi`, `hi = mid`), and most off-by-one bugs disappear. Time drops from O(n) to O(log n).
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- The input is **sorted**, or sorted and then **rotated**.
+- "Find the **first** / **last** position", "smallest index such that…", "where would it be inserted?"
+- "**Minimum** speed / capacity / time such that…", "**minimize the maximum**", "**maximize the minimum**": a yes/no check gets easier as the answer grows.
+- The constraints demand **O(log n)**, or the answer can be as large as 10^9, so trying every value is out.
+
+</Callout>
+
+| Variant | Search range | Loop and updates | Classic problems |
+|---|---|---|---|
+| Exact match | indices `[0, n - 1]` | `lo <= hi`; `lo = mid + 1` or `hi = mid - 1`; return inside the loop | binary search |
+| First true (lower bound) | indices `[0, n]` | `lo < hi`; `hi = mid` if `ok(mid)`, else `lo = mid + 1`; return `lo` | insert position, first and last position |
+| Rotated array | indices `[0, n - 1]` | find the sorted half, then test whether the target is inside it | search in a rotated array, find the minimum |
+| On the answer | values `[smallest possible, largest possible]` | first true over values, with a feasibility check | Koko, ship capacity, split array largest sum |
+
+## The core idea: a range that must contain the answer
+
+Every binary search is built on one sentence, the **invariant**: *if the answer exists, it is inside `[lo, hi]`.* Each step looks at the middle of the range and proves that one half **can't** contain the answer, so that half is dropped and the sentence stays true.
+
+On a sorted array the proof is one comparison. If `nums[mid]` is smaller than the target, every value left of `mid` is smaller still, so the whole left half, `mid` included, is out. If it is bigger, the right half is out.
+
+Halving is what makes it fast. A range of n candidates becomes n/2, then n/4, and after about log₂(n) steps one candidate is left: 10 steps for a thousand elements, 20 for a million, 30 for a billion. Watch the ruled-out half fade after each comparison:
+
+<AlgoViz trace={classicSearch} />
+
+**Computing `mid`.** In Java or C++, `lo + hi` can overflow a 32-bit integer, which is why textbooks write `lo + (hi - lo) / 2`. JavaScript numbers hold exact integers up to 2^53, so `Math.floor((lo + hi) / 2)` never overflows. The JavaScript trap is the opposite one: `(lo + hi) >> 1` looks clever, but bitwise operators squeeze their input into a **32-bit signed integer**, so once `lo + hi` passes about 2.1 billion (easy when you search over answer values) it comes out negative. `lo + ((hi - lo) >> 1)` is safe as long as the range is narrower than that. Either way, `mid` rounds **down**, so `lo <= mid < hi` whenever `lo < hi`; the templates below rely on it.
+
+## Step by step
+
+<Steps>
+  <Step title="Name the search space">
+    Indices of an array (`0` to `n - 1`, or `0` to `n` when "not found" or "insert at the end" is a valid answer), or a range of answer values from the smallest that could possibly work to the largest you'd ever need.
+  </Step>
+  <Step title="Write the yes/no question and check it is monotonic">
+    For the first-true template you need a test `ok(x)` that is false for a prefix and true for the rest: `nums[i] >= target`, or "speed `k` finishes in `h` hours". Say out loud why `ok(x)` implies `ok(x + 1)`. If you can't, binary search is the wrong tool.
+  </Step>
+  <Step title="Pick the template and state the invariant">
+    Exact match: "if the target is anywhere, it is in `[lo, hi]`". First true: "everything before `lo` is false, everything from `hi` on is true", so the first true is in `[lo, hi]`.
+  </Step>
+  <Step title="Update so the invariant holds and the range shrinks">
+    Exact match: `mid` was checked, so `lo = mid + 1` or `hi = mid - 1`. First true: `hi = mid` (it might be the answer) or `lo = mid + 1` (it is false). Never `lo = mid` with a rounded-down `mid`: two candidates would loop forever.
+  </Step>
+  <Step title="Run the tiny cases by hand">
+    Trace the loop on 0, 1 and 2 candidates. That is where every off-by-one bug lives, and it takes 30 seconds.
+  </Step>
+</Steps>
+
+## Template 1: exact match
+
+Use it when you are looking for one specific value in a sorted array and can stop the moment you find it. The range is **inclusive** on both ends, so the loop runs while it has at least one element (`lo <= hi`), and both updates skip `mid` because it has already been checked.
+
+<CodeTabs files={['snippets/classic.js']} />
+
+This is <ProblemLink slug="binary-search" /> line for line. When the target is missing, the loop ends with `lo` sitting exactly where the target would be inserted, which is a hint of the next template.
+
+## Template 2: first true (lower bound)
+
+Most binary search questions are not "is it here?" but "**where does something start?**": the first copy of a value, the insert position, the first bad version, the smallest speed that works. Picture a yes/no test over the candidates:
+
+```text
+index:          0  1  2  3  4  5  6     (7 = "none")
+nums:           1  3  3  3  5  8  9
+nums[i] >= 3?   F  T  T  T  T  T  T
+                   ^ first true = 1
+```
+
+The first-true template finds that boundary. Its invariant is "everything before `lo` is false, everything from `hi` on is true". `hi` starts at `n`, one past the end, because "no index passes" is a legitimate answer. When `lo` and `hi` meet, one candidate is left and it is the boundary.
+
+<AlgoViz trace={lowerBound} />
+
+<CodeTabs files={['snippets/lower-bound.js']} />
+
+`lowerBound` answers <ProblemLink slug="search-insert-position" /> directly, and a lower bound plus an upper bound answers <ProblemLink slug="find-first-and-last-position" />: the first copy is at `lowerBound(x)`, the last at `upperBound(x) - 1`, and there are `upperBound(x) - lowerBound(x)` copies.
+
+**Off-by-one, settled.** The two templates come in matched sets. Mix the parts and you get a bug:
+
+| Template | Range | Loop | Move right | Move left | Ends with |
+|---|---|---|---|---|---|
+| Exact match | inclusive `[lo, hi]` | `lo <= hi` | `lo = mid + 1` | `hi = mid - 1` | `lo === hi + 1` (empty) |
+| First true | `[lo, hi]`, where `hi` may be "none" | `lo < hi` | `lo = mid + 1` | `hi = mid` | `lo === hi` (the answer) |
+
+`lo <= hi` with `hi = mid` loops forever once `lo === hi`. `lo < hi` with `hi = mid - 1` can step over the answer. To find the **last** true of a test that goes true…true, false…false, search for the first false and subtract one; that is easier to get right than rounding `mid` up.
+
+## Template 3: rotated sorted arrays
+
+Rotating a sorted array (`[1, 2, 4, 5, 7, 9]` → `[5, 7, 9, 1, 2, 4]`) breaks the rule "smaller middle means go right". What survives is this: cut the range anywhere, and **at least one half is still sorted normally**. If `nums[lo] <= nums[mid]`, the left half has no drop in it; otherwise the right half doesn't. For a sorted half you can check membership exactly from its two end values, which tells you which half to keep.
+
+To find where the rotation starts (the minimum), compare `nums[mid]` with `nums[hi]` instead. If `nums[mid] > nums[hi]`, the drop is to the right of `mid`. This is the first-true template in disguise: the test `nums[i] <= nums[n - 1]` is false on the upper run and true on the lower run.
+
+<CodeTabs files={['snippets/rotated.js']} />
+
+<ProblemLink slug="search-in-rotated-sorted-array" /> uses the "which half is sorted?" test in a single pass. You can also find the minimum first and then run Template 1 on the correct run.
+
+## Template 4: binary search on the answer
+
+Sometimes nothing in the input is sorted, but the **answer** is a number in a known range, and checking a candidate is easy:
+
+- Can every package ship within `days` days if the ship holds `cap` per day? Fill each day greedily and count.
+- Does speed `k` finish the bananas within `h` hours?
+
+If a candidate works, every bigger one works too. So "does `x` work?" goes no, no, …, yes, yes over the range of values, and the first-true template finds the smallest `x` that works. You never look at most of the values, which is why ranges of a billion are fine.
+
+<AlgoViz trace={searchOnAnswer} />
+
+<CodeTabs files={['snippets/answer-space.js']} />
+
+The bounds come from the problem: the **lowest** candidate is the smallest value that could possibly work (the heaviest package, the biggest element), the **highest** is one that surely does (the total, the largest pile). The phrases "minimize the maximum" and "maximize the minimum" are the giveaway. For the maximize case, as in `maxMinDistance`, the check flips from yes to no, so search for the first failure and step back one. Practice it with <ProblemLink slug="koko-eating-bananas" /> and <ProblemLink slug="split-array-largest-sum" />.
+
+## Try it
+
+<RunCode src="snippets/try-it.js" />
+
+## Complexity
+
+| Variant | Time | Extra space |
+|---|---|---|
+| Exact match, lower or upper bound | O(log n) | O(1) |
+| First and last position (two bounds) | O(log n) | O(1) |
+| Rotated array | O(log n) | O(1) |
+| On the answer, range of size R, check costs O(n) | O(n log R) | O(1) |
+| Recursive version of any of these | same time | O(log n) call stack |
+
+## JavaScript you'll use
+
+<JsRef to={["numbers-math", "arrays"]} />
+
+```js
+const mid = Math.floor((lo + hi) / 2);     // exact for any integers up to 2^53
+const mid2 = lo + ((hi - lo) >> 1);        // also fine while hi - lo < 2^31
+(1500000000 + 1600000000) >> 1;           // -597483648: >> works on 32-bit integers!
+Math.ceil(pile / speed);                   // hours for a pile: a partial hour counts as one
+Math.max(...weights);                      // largest value (spreads every element as an argument)
+nums.reduce((a, b) => a + b, 0);           // total, a common upper bound for answer searches
+```
+
+`Math.max(...arr)` passes each element as a separate argument, and somewhere above about 100,000 elements it throws a `RangeError`. For huge inputs, use a loop or `reduce`.
+
+<Callout kind="warning">
+
+- Mixing the templates: `while (lo <= hi)` with `hi = mid` never ends; `while (lo < hi)` with `hi = mid - 1` can skip the answer.
+- Starting `hi` at `n - 1` when "past the end" is a valid answer (insert position, "no such element").
+- Using `(lo + hi) >> 1` while searching over values above a billion: the 32-bit conversion makes `mid` negative.
+- Forgetting to verify the result: a lower bound returns a position even when the target is missing, so check `nums[i] === target`.
+- Binary searching a test that isn't monotonic, like comparing only `nums[mid]` with the target in a rotated array.
+- Rounding the wrong way in checks: hours for a pile are `Math.ceil(p / k)`, not `Math.floor`.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="Why do some people write lo + (hi - lo) / 2? Do you need it in JavaScript?">
+    In languages with 32-bit `int`, `lo + hi` can overflow when both are large, producing a negative `mid`. JavaScript numbers are doubles with exact integers up to 2^53, so `Math.floor((lo + hi) / 2)` is safe for any realistic range. The JavaScript-specific bug is `(lo + hi) >> 1`, because bitwise operators convert to 32-bit signed integers. Mention both and you show you know why the idiom exists.
+  </FollowUp>
+  <FollowUp q="What changes in a rotated sorted array if values can repeat?">
+    When `nums[lo] === nums[mid] === nums[hi]` (as in `[1, 1, 1, 0, 1]`), you can't tell which half is sorted. The fix is to shrink by one, `lo++` and `hi--`, and continue. It stays correct, but the worst case becomes O(n), and no algorithm can do better: the one smaller value could be anywhere.
+  </FollowUp>
+  <FollowUp q="How do you binary search for a real-valued answer, like a square root to six decimal places?">
+    There are no neighbouring integers, so use `lo = mid` and `hi = mid` (no plus or minus one) and stop after a fixed number of iterations, say 60, or when `hi - lo` falls below the tolerance. Each iteration halves the error. For an integer square root, use the "last true" trick: the first `x` with `x * x > n`, minus one.
+  </FollowUp>
+  <FollowUp q="The sorted array is too large to know its length (a stream or an API). How do you search it?">
+    Exponential search: check indices 1, 2, 4, 8, … until the value there is at least the target (or you run off the end), then binary search between the last two probes. It costs O(log p), where p is the target's position, and it is also the trick behind galloping in merge algorithms.
+  </FollowUp>
+  <FollowUp q="How do you search a matrix whose rows are sorted and each row starts after the previous one ends?">
+    Treat it as one sorted array of `rows * cols` cells: index `i` maps to row `Math.floor(i / cols)` and column `i % cols`, then run Template 1, for O(log(rows · cols)). If only rows and columns are sorted separately, binary search doesn't apply directly; walk from the top-right corner instead (left if too big, down if too small) in O(rows + cols).
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

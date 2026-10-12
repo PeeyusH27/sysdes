@@ -1,0 +1,87 @@
+Arrays are the input to most problems and the storage behind DP tables, stacks, queues and adjacency lists. The traps are in how you create them (shared rows), which end you add to and remove from (O(1) or O(n)), and whether a method copies the array or changes it.
+
+### Creating 1D arrays
+
+```js
+const nums = [5, 1, 4];                               // literal
+const zeros = new Array(n).fill(0);                   // n zeros (DP rows, counters)
+const dist = new Array(n).fill(Infinity);             // "unreached"
+const ids = Array.from({ length: n }, (_, i) => i);   // [0, 1, …, n-1] (union-find parents)
+const chars = Array.from('abc');                      // from any iterable: ['a', 'b', 'c']
+```
+
+`new Array(n)` on its own creates `n` **holes**: slots with no value that `map`, `forEach` and `reduce` skip, so `new Array(n).map(…)` does nothing useful. Always `fill` first or use `Array.from`. Holes also appear with `delete arr[i]` and literals like `[1, , 3]`; avoid them.
+
+<RunCode src="snippets/arrays-create.js" />
+
+### 2D arrays without shared rows
+
+`fill(value)` stores the *same* value in every slot. When that value is an array, every row is the same array, and writing to `grid[0][0]` changes every row. This is one of the most common bugs in DP and grid solutions. `Array.from` with a function creates a fresh row for each index.
+
+```js
+const grid = Array.from({ length: m }, () => new Array(n).fill(0)); // m × n zeros
+const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0)); // with a padding row/column
+const adj = Array.from({ length: n }, () => []);                   // n empty adjacency lists
+const copy = grid.map((row) => [...row]);                          // copy a grid row by row
+```
+
+<RunCode src="snippets/arrays-2d.js" />
+
+### Array ends and their costs
+
+Arrays are fast at the **end** and slow at the **front**. `push`, `pop` and `at(-1)` make an array a perfect stack. `shift` and `unshift` move every other element one slot, so a queue built on `shift()` turns an O(n) BFS into O(n²) on large inputs (see <JsRef to="stack-queue-deque" /> for a fast queue).
+
+```js
+arr.push(x);       // add to the end, returns the new length
+arr.pop();         // remove and return the last item (undefined if empty)
+arr.at(-1);        // peek at the last item: same as arr[arr.length - 1]
+arr.unshift(x);    // add to the front: shifts everything
+arr.shift();       // remove from the front: shifts everything
+```
+
+| Operation | Cost |
+|---|---|
+| `arr[i]`, `arr[i] = x`, `arr.length`, `at(i)` | O(1) |
+| `push`, `pop` | O(1) (push is amortised) |
+| `shift`, `unshift` | O(n) |
+| `splice(i, k, …items)` | O(n − i): everything after `i` moves |
+| `slice`, `concat`, `[...arr]`, `flat` | O(n) for the new array |
+| `indexOf`, `includes`, `find`, `findIndex` | O(n) |
+| `reverse`, `fill` | O(n) |
+| `sort` | O(n log n) |
+
+### slice, splice and copies
+
+The two names differ by one letter and behave in opposite ways. `slice(start, end)` **copies** a range into a new array and leaves the original alone. `splice(start, deleteCount, …items)` **mutates**: it removes and/or inserts in place and returns the removed items. Spread and `concat` also copy. ES2023 added non-mutating versions of the mutating methods: `toReversed`, `toSorted`, `toSpliced` and `with(i, value)`.
+
+<RunCode src="snippets/arrays-slice-splice.js" />
+
+### Searching an array
+
+```js
+arr.indexOf(x)                 // first index of x (compared with ===), or -1
+arr.lastIndexOf(x)             // last index, or -1
+arr.includes(x)                // true/false; unlike indexOf it finds NaN
+arr.find((x) => x > 3)         // first element passing the test, or undefined
+arr.findIndex((x) => x > 3)    // its index, or -1
+arr.findLast((x) => x > 3)     // search from the end (also findLastIndex)
+```
+
+Every one of these scans the array. Inside a loop they make your solution O(n²); when you test membership repeatedly, build a `Set` once (see <JsRef to="map-set" />).
+
+### In-place edits vs new arrays
+
+"Modify the array in place" means writing into the array you were given: `nums[i] = …`, `push`, `splice`, `reverse`, `fill`, `sort`, or `nums.length = k` to cut the tail. `map`, `filter`, `slice`, `concat` and spread all return a **new** array, and assigning it to the parameter only changes your local variable.
+
+<RunCode src="snippets/arrays-in-place.js" />
+
+<Callout kind="warning" title="Array gotchas">
+
+- `new Array(m).fill(new Array(n).fill(0))` and `new Array(n).fill([])` share one inner array. Use `Array.from({ length: m }, () => …)`.
+- `new Array(n).map(…)` returns holes because `map` skips empty slots. `fill` first.
+- `shift()` in a BFS loop is O(n) per call. Use a head index or a deque.
+- `slice` copies, `splice` mutates. `[...grid]` copies only the outer array of a 2D grid.
+- `arr[-1]` is `undefined` (it's a property named "-1"). Use `arr.at(-1)`.
+- `includes` and `indexOf` inside a loop are a hidden nested loop. Use a `Set`.
+
+</Callout>

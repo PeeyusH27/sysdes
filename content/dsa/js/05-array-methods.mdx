@@ -1,0 +1,71 @@
+Almost every solution is a loop over an array. Picking the right form decides whether you can stop early, whether you have the index, and whether you quietly allocate a new array at every step of a chain.
+
+### Choosing a loop
+
+| Loop | Gives you | `break` / `continue` | Use it for |
+|---|---|---|---|
+| `for (let i = 0; …; i++)` | the index | yes | index math, neighbours, two pointers, going backwards |
+| `for (const x of arr)` | each value | yes | reading every element; also strings, Maps and Sets |
+| `for (const [i, x] of arr.entries())` | index and value | yes | when you need both and might stop early |
+| `arr.forEach((x, i) => …)` | value and index | no | side effects when you never stop early |
+| `for (const k in obj)` | keys, as strings | yes | plain objects only, and `Object.keys` is usually better |
+
+`for...in` on an array hands you `'0'`, `'1'`, … as **strings**, so `k + 1` concatenates, and it also visits any extra enumerable properties. Use `for...of` or a counted loop instead.
+
+<RunCode src="snippets/array-methods-loops.js" />
+
+### map, filter and reduce
+
+`map` returns a new array of the same length, `filter` returns a new array of the elements that pass, and `reduce` folds the array into a single value (a sum, a Map, an object). Always give `reduce` its initial value: without one it uses the first element as the accumulator, which is wrong whenever the result has a different type, and it throws on an empty array.
+
+<RunCode src="snippets/array-methods-transform.js" />
+
+### Early exit with some, every and find
+
+`some` stops at the first element that passes, `every` at the first that fails, and `find`/`findIndex` at the first match. On an empty array, `every` is `true` and `some` is `false`. `forEach` has no way to stop: if you need to break, use `for...of` or one of these.
+
+```js
+nums.some((x) => x < 0)         // is there any negative?
+nums.every((x, i) => i === 0 || nums[i - 1] <= x)   // is it sorted?
+nums.find((x) => x > target)    // first element above target, or undefined
+nums.findIndex((x) => x > target) // its index, or -1
+```
+
+<RunCode src="snippets/array-methods-early-exit.js" />
+
+### Index and value together
+
+```js
+for (const [i, x] of arr.entries()) {}    // index and value, break works
+arr.forEach((x, i) => {});                // index is the second argument
+arr.map((x, i) => x * i);                 // so is map's, filter's, some's…
+for (const i of arr.keys()) {}            // 0, 1, 2, … (rarely needed)
+```
+
+Callbacks receive `(value, index, array)`, so passing a function that takes a second parameter can surprise you: `['1', '2', '3'].map(parseInt)` gives `[1, NaN, NaN]` because the index becomes the radix. Write `map(Number)` or `map((s) => parseInt(s, 10))`.
+
+### Chaining and hot loops
+
+A chain like `arr.filter(…).map(…).reduce(…)` is still O(n) overall, but every step is another pass and another array. That's fine for clarity. Switch to a plain `for` loop when you need several results at once, when you might stop early, or inside the inner loop of an O(n²) DP where allocation adds up. Above all, watch for searches hidden in a callback: `includes`, `indexOf` or `find` inside `filter` or `map` is a nested loop.
+
+<RunCode src="snippets/array-methods-chaining.js" />
+
+| Method | Time | Extra space |
+|---|---|---|
+| `for`, `for...of`, `forEach` | O(n) | O(1) |
+| `map`, `filter` | O(n) | O(n) for the new array |
+| `reduce` | O(n) | whatever the accumulator holds |
+| `some`, `every`, `find`, `findIndex` | O(position of the first decisive element), O(n) worst | O(1) |
+| `a.filter(…).map(…)` | O(n) per step | one new array per step |
+| `includes` / `indexOf` inside any of the above | O(n · m) | O(1) |
+
+<Callout kind="warning" title="Iteration gotchas">
+
+- `return` inside `forEach` doesn't stop the loop; it only skips to the next element. Use `for...of` with `break`.
+- `for...in` over an array gives string indices: `'1' + 1` is `'11'`.
+- `reduce` without an initial value throws on `[]` and uses the first element as the accumulator.
+- `['1', '2', '3'].map(parseInt)` is `[1, NaN, NaN]`.
+- `[].every(…)` is `true`. Check for the empty case if "all" shouldn't hold vacuously.
+- `b.includes(x)` inside `a.filter(…)` is O(n · m). Build a `Set` from `b` first.
+
+</Callout>

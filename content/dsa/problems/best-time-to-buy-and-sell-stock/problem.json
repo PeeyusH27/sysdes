@@ -1,0 +1,31 @@
+{
+  "title": "Best Time to Buy and Sell Stock",
+  "difficulty": "Easy",
+  "patterns": ["greedy"],
+  "js": ["numbers-math", "arrays"],
+  "order": 1,
+  "summary": "Pick one day to buy and a later day to sell so that the profit is as large as possible.",
+  "fn": "maxProfit",
+  "params": ["prices"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[8, 3, 6, 1, 7, 4]], "expected": 6, "explain": "Buy at index 3 (price 1) and sell at index 4 (price 7): a profit of 6." },
+    { "args": [[9, 7, 4, 2]], "expected": 0, "explain": "Prices only fall, so every trade loses money. Not trading gives 0." },
+    { "args": [[2, 9, 1, 5]], "expected": 7, "explain": "The lowest price, 1, comes too late: selling after it earns at most 5 - 1 = 4. Buying at 2 and selling at 9 earns 7." },
+    { "args": [[5]], "expected": 0 },
+    { "args": [[3, 3, 3]], "expected": 0 },
+    { "args": [[1, 2]], "expected": 1 },
+    { "args": [[2, 1]], "expected": 0 },
+    { "args": [[4, 1, 6, 0, 3]], "expected": 5 },
+    { "args": [[0, 10000]], "expected": 10000 },
+    { "args": [[1, 2, 3, 4, 5, 6]], "expected": 5 },
+    { "args": [[141, 267, 111, 333, 657, 976, 598, 853, 677, 350, 155, 95, 633, 503, 847, 679, 562, 457, 782, 973, 528, 579, 278, 685, 513, 66, 472, 798, 503, 589, 505, 802, 824, 428, 759, 70, 505, 410, 72, 250, 307, 668, 11, 991, 366, 604, 950, 632, 959, 163]], "expected": 980 }
+  ],
+  "samples": 3,
+  "hints": [
+    "Checking every buy day against every later sell day is O(n²). Fix the sell day instead: which buy day is best for it?",
+    "For a sell on day i, the best buy is the cheapest price on any day before i. Keep that minimum as you scan.",
+    "One pass: profit = max(profit, price - minSoFar), then minSoFar = min(minSoFar, price). Start profit at 0, so not trading is allowed."
+  ],
+  "complexity": { "time": "O(n): one pass", "space": "O(1)" }
+}

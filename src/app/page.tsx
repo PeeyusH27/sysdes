@@ -1,100 +1,135 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, FileQuestion, Hammer, Library } from "lucide-react";
+import { ArrowRight, Binary, Braces, Code2, Network } from "lucide-react";
 import { deepDives, learnSteps, questions } from "@content/registry";
+import { jsTopics, patterns } from "@content/dsa/registry";
 import { requestJourney } from "@content/home";
+import { pairSum } from "@content/dsa/patterns/02-two-pointers/viz";
 import { FlowDiagram } from "@/components/diagram/FlowDiagram";
-import { CapacityCalculator } from "@/components/widgets/CapacityCalculator";
-import { ContinueLearning, LegacyHashRedirect } from "./home-client";
+import { AlgoViz } from "@/components/algo/AlgoViz";
+import { problemRows } from "@/lib/dsa/load";
+import { ContinueLearning, LegacyHashRedirect, TrackProgress } from "./home-client";
 
 export default function Home() {
+  const problems = problemRows();
   return (
     <div className="container">
       <LegacyHashRedirect />
-      <section className="hero">
+      <section className="hero home-hero">
         <div>
-          <span className="eyebrow">System design, from scratch to interview-ready</span>
+          <span className="eyebrow">Coding interviews, from first principles</span>
           <h1>
-            Learn system design, <span className="grad">then practise it.</span>
+            Master <span className="grad">DSA patterns</span> and <span className="grad">system design</span>, then practise both.
           </h1>
           <p>
-            A step-by-step HLD path with animated diagrams you can play and pause, interactive simulators, detailed interview answers in
-            JavaScript, and a drag-and-drop playground that grades your designs.
+            Two tracks in one place. Learn the patterns behind most coding problems with step-by-step animations and solve them in a browser editor, then design
+            real systems with animated diagrams, simulators and a graded playground.
           </p>
-          <div className="hero-cta">
-            <Link href="/learn" className="btn btn-primary">
-              Start the HLD path <ArrowRight size={16} aria-hidden />
-            </Link>
-            <Link href="/playground" className="btn">
-              Open the playground
-            </Link>
-          </div>
-        </div>
-        <div className="hero-visual">
-          <FlowDiagram spec={requestJourney} autoplay loop compact />
         </div>
       </section>
 
-      <div className="entry-cards">
-        <Link href="/learn" className="card card-link">
-          <span className="icon"><BookOpen size={20} aria-hidden /></span>
-          <h3>HLD path</h3>
-          <p>{learnSteps.length} steps from estimation to case studies, each with diagrams, widgets, code and a quiz.</p>
-        </Link>
-        <Link href="/deep-dives" className="card card-link">
-          <span className="icon"><Library size={20} aria-hidden /></span>
-          <h3>Deep dives</h3>
-          <p>{deepDives.length} techniques that come up again and again: caching, sharding, storage, real-time, connections, request flows.</p>
-        </Link>
-        <Link href="/questions" className="card card-link">
-          <span className="icon"><FileQuestion size={20} aria-hidden /></span>
-          <h3>Interview questions</h3>
-          <p>{questions.length} famous frontend, backend and full-stack questions with step-by-step answers and full JavaScript code.</p>
-        </Link>
-        <Link href="/playground" className="card card-link">
-          <span className="icon"><Hammer size={20} aria-hidden /></span>
-          <h3>Playground</h3>
-          <p>Drag components onto a canvas, connect them, simulate traffic, and get graded on challenges.</p>
-        </Link>
+      <div className="track-cards">
+        <article className="track-card" data-track="dsa" aria-labelledby="track-dsa">
+          <div className="track-visual">
+            <AlgoViz trace={pairSum} compact autoplay loop />
+          </div>
+          <div className="track-body">
+            <span className="eyebrow">
+              <Binary size={13} aria-hidden /> Track 1
+            </span>
+            <h2 id="track-dsa">Data structures and algorithms</h2>
+            <p>
+              Start with the JavaScript you need, learn each pattern with an animated walkthrough and a code template, then solve tagged problems with tests
+              that run in your browser.
+            </p>
+            <ul className="track-stats">
+              <li>
+                <b>{jsTopics.length}</b> JavaScript topics
+              </li>
+              <li>
+                <b>{patterns.length}</b> patterns
+              </li>
+              <li>
+                <b>{problems.length}</b> problems
+              </li>
+            </ul>
+            <ol className="track-steps">
+              <li>
+                <Link href="/dsa/js">
+                  <Braces size={14} aria-hidden /> JavaScript for DSA cheat sheet
+                </Link>
+              </li>
+              <li>
+                <Link href="/dsa/patterns">
+                  <Binary size={14} aria-hidden /> Patterns, explained step by step
+                </Link>
+              </li>
+              <li>
+                <Link href="/dsa/problems">
+                  <Code2 size={14} aria-hidden /> Practice in the editor
+                </Link>
+              </li>
+            </ol>
+            <TrackProgress track="dsa" problems={problems.map((p) => p.slug)} />
+            <div className="hero-cta">
+              <Link href="/dsa" className="btn btn-primary">
+                Start the DSA track <ArrowRight size={16} aria-hidden />
+              </Link>
+              <Link href="/dsa/problems" className="btn">
+                Practice problems
+              </Link>
+            </div>
+          </div>
+        </article>
+
+        <article className="track-card" data-track="sd" aria-labelledby="track-sd">
+          <div className="track-visual">
+            <FlowDiagram spec={requestJourney} autoplay loop compact />
+          </div>
+          <div className="track-body">
+            <span className="eyebrow">
+              <Network size={13} aria-hidden /> Track 2
+            </span>
+            <h2 id="track-sd">System design</h2>
+            <p>
+              A step-by-step HLD path with animated diagrams you can play and pause, interactive simulators, detailed interview answers in JavaScript, and a
+              drag-and-drop playground that grades your designs.
+            </p>
+            <ul className="track-stats">
+              <li>
+                <b>{learnSteps.length}</b> HLD steps
+              </li>
+              <li>
+                <b>{deepDives.length}</b> deep dives
+              </li>
+              <li>
+                <b>{questions.length}</b> interview questions
+              </li>
+            </ul>
+            <ol className="track-steps">
+              <li>
+                <Link href="/learn">HLD path: estimation to case studies</Link>
+              </li>
+              <li>
+                <Link href="/questions">Interview questions with full answers</Link>
+              </li>
+              <li>
+                <Link href="/playground">Build and grade designs in the playground</Link>
+              </li>
+            </ol>
+            <TrackProgress track="sd" />
+            <div className="hero-cta">
+              <Link href="/learn" className="btn btn-primary">
+                Start the HLD path <ArrowRight size={16} aria-hidden />
+              </Link>
+              <Link href="/system-design" className="btn">
+                System design overview
+              </Link>
+            </div>
+          </div>
+        </article>
       </div>
 
-      <ContinueLearning />
-
-      <h2 className="section-title">Choose your track</h2>
-      <div className="tracks">
-        <div className="card">
-          <span className="badge badge-Frontend">Frontend</span>
-          <ol>
-            <li><Link href="/learn/requirements-estimation">Requirements and estimation</Link></li>
-            <li><Link href="/learn/api-load-balancing">APIs and load balancing</Link></li>
-            <li><Link href="/learn/caching">Caching (incl. HTTP caching)</Link></li>
-            <li><Link href="/questions/typeahead">Typeahead</Link> and <Link href="/questions/infinite-feed">infinite feed</Link></li>
-            <li><Link href="/deep-dives/polling-sse-websockets">Polling, SSE and WebSockets</Link></li>
-          </ol>
-        </div>
-        <div className="card">
-          <span className="badge badge-Backend">Backend</span>
-          <ol>
-            <li><Link href="/learn/requirements-estimation">HLD path steps 1–7</Link></li>
-            <li><Link href="/questions/rate-limiter">Rate limiter</Link></li>
-            <li><Link href="/questions/movie-booking">Ticket booking</Link></li>
-            <li><Link href="/questions/parking-lot">Parking lot (LLD)</Link></li>
-            <li><Link href="/deep-dives/sharding-strategies">Sharding</Link> and <Link href="/deep-dives/connections-pooling">connections</Link></li>
-          </ol>
-        </div>
-        <div className="card">
-          <span className="badge badge-Full-stack">Full-stack</span>
-          <ol>
-            <li><Link href="/learn/requirements-estimation">HLD path steps 1–5</Link></li>
-            <li><Link href="/questions/chat">Real-time chat</Link></li>
-            <li><Link href="/questions/news-feed">News feed</Link></li>
-            <li><Link href="/deep-dives/request-flows">Request flows end to end</Link></li>
-            <li><Link href="/playground">Build it in the playground</Link></li>
-          </ol>
-        </div>
-      </div>
-
-      <h2 className="section-title">Try it: how many servers does your app need?</h2>
-      <CapacityCalculator compact />
+      <ContinueLearning extra={problems.map((p) => ({ href: `/dsa/problems/${p.slug}`, title: p.title, section: "Problems" }))} />
     </div>
   );
 }

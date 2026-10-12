@@ -1,0 +1,31 @@
+{
+  "title": "Coin Change",
+  "difficulty": "Medium",
+  "patterns": ["dp-1d", "graph-traversal"],
+  "js": ["arrays", "numbers-math"],
+  "order": 4,
+  "summary": "Find the fewest coins that add up to an amount, or -1 when the amount can't be made.",
+  "fn": "coinChange",
+  "params": ["coins", "amount"],
+  "types": { "params": ["number[]", "number"], "returns": "number" },
+  "tests": [
+    { "args": [[1, 3, 4], 6], "expected": 2, "explain": "3 + 3. Taking the largest coin first gives 4 + 1 + 1, which needs three coins." },
+    { "args": [[2], 3], "expected": -1, "explain": "Coins of 2 only make even totals, so 3 can't be made." },
+    { "args": [[1, 2, 5], 0], "expected": 0, "explain": "An amount of 0 needs no coins at all." },
+    { "args": [[1, 5, 10, 25], 63], "expected": 6 },
+    { "args": [[7], 7], "expected": 1 },
+    { "args": [[3, 7], 5], "expected": -1 },
+    { "args": [[4, 6], 9], "expected": -1 },
+    { "args": [[2, 5, 10, 1], 27], "expected": 4 },
+    { "args": [[9, 6, 5, 1], 11], "expected": 2 },
+    { "args": [[25, 10], 30], "expected": 3 },
+    { "args": [[17, 29, 101, 233], 9999], "expected": 51 },
+    { "args": [[2, 7, 13], 1000], "expected": 80 }
+  ],
+  "hints": [
+    "Greedy (largest coin first) fails: with coins 1, 3 and 4, it makes 6 as 4 + 1 + 1 instead of 3 + 3.",
+    "Let fewest[a] be the fewest coins that make the amount a. If the last coin you add is c, the rest is the amount a - c.",
+    "fewest[a] = 1 + min over coins c of fewest[a - c]. Start with fewest[0] = 0 and every other cell at Infinity, fill a from 1 up, and return -1 if fewest[amount] is still Infinity."
+  ],
+  "complexity": { "time": "O(amount × number of coins): each amount tries every coin", "space": "O(amount): one cell per amount" }
+}

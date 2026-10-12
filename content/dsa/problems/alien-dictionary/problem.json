@@ -1,0 +1,32 @@
+{
+  "title": "Alien Dictionary",
+  "difficulty": "Hard",
+  "patterns": ["topological-sort"],
+  "js": ["map-set", "strings", "graphs-in-js"],
+  "order": 5,
+  "summary": "Recover an alphabet's letter order from a list of words sorted in that alphabet, or report that none exists.",
+  "fn": "alienOrder",
+  "params": ["words"],
+  "types": { "params": ["string[]"], "returns": "string" },
+  "validate": "(result, args, expected) => {\n  const [words] = args;\n  if (typeof result !== \"string\") return \"Return a string of letters.\";\n  if (expected === \"\") return result === \"\" ? true : \"No alphabet can put these words in this order, so return \\\"\\\".\";\n  if (result === \"\") return `These words are sorted under at least one alphabet (for example \"${expected}\"), so don't return \"\".`;\n  const letters = new Set(words.join(\"\"));\n  const rank = new Map();\n  for (let i = 0; i < result.length; i++) {\n    const ch = result[i];\n    if (!letters.has(ch)) return `\"${ch}\" doesn't appear in any word, so it can't be in the order.`;\n    if (rank.has(ch)) return `\"${ch}\" appears more than once in your order.`;\n    rank.set(ch, i);\n  }\n  for (const ch of letters) if (!rank.has(ch)) return `Your order is missing the letter \"${ch}\".`;\n  for (let i = 0; i + 1 < words.length; i++) {\n    const a = words[i];\n    const b = words[i + 1];\n    let j = 0;\n    while (j < a.length && j < b.length && a[j] === b[j]) j++;\n    if (j < a.length && j < b.length) {\n      if (rank.get(a[j]) > rank.get(b[j])) return `\"${a}\" comes before \"${b}\", so \"${a[j]}\" must come before \"${b[j]}\", but your order has it after.`;\n    } else if (a.length > b.length) return `\"${a}\" can't come before its own prefix \"${b}\" in any alphabet.`;\n  }\n  return true;\n}",
+  "tests": [
+    { "args": [["qr", "qs", "ps", "psr", "rq"]], "expected": "qprs", "explain": "\"qr\" before \"qs\" gives r < s. \"qs\" before \"ps\" gives q < p. \"ps\" before \"psr\" says nothing (a prefix comes first anyway). \"psr\" before \"rq\" gives p < r. The only order is q, p, r, s." },
+    { "args": [["mo", "om", "mm"]], "expected": "", "explain": "\"mo\" before \"om\" means m < o, but \"om\" before \"mm\" means o < m. Both can't be true, so return \"\"." },
+    { "args": [["abc", "ab"]], "expected": "", "explain": "A word can never come after a longer word that it is a prefix of, whatever the alphabet, so the list is invalid: \"\"." },
+    { "args": [["zebra"]], "expected": "zebra" },
+    { "args": [["aa", "aa"]], "expected": "a" },
+    { "args": [["ab", "abc"]], "expected": "abc" },
+    { "args": [["c", "b", "a"]], "expected": "cba" },
+    { "args": [["ba", "bc", "ac", "cab"]], "expected": "bac" },
+    { "args": [["x", "y", "x"]], "expected": "" },
+    { "args": [["ab", "adc"]], "expected": "abcd" },
+    { "args": [["ab", "ac", "bc", "ba"]], "expected": "" },
+    { "args": [["qqhqh", "qqr", "qh", "qm", "qxmm", "wh", "wtqh", "hz", "hr", "zxqz", "zrwr", "mh", "mttqq", "mkh", "dmxw", "drwmm", "xq", "xzz", "txtrd", "krttt", "rw", "rr"]], "expected": "qwhzmdxtkr" }
+  ],
+  "hints": [
+    "Compare each word only with the next one. The first position where they differ tells you one letter comes before another; nothing after that position tells you anything.",
+    "Those facts are edges of a directed graph on letters. Every letter that appears in any word is a node, even if it has no edges. Any topological order is a valid alphabet.",
+    "Return \"\" in two cases: a word is followed by its own proper prefix (\"abc\" then \"ab\"), or Kahn's algorithm can't place every letter because of a cycle. Add each edge once so in-degrees stay right."
+  ],
+  "complexity": { "time": "O(C): C is the total number of characters; at most 26 letters and 26² edges", "space": "O(1) beyond the input: the graph has at most 26 nodes and 26² edges" }
+}

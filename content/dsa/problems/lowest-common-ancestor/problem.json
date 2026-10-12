@@ -1,0 +1,31 @@
+{
+  "title": "Lowest Common Ancestor of a Binary Tree",
+  "difficulty": "Medium",
+  "patterns": ["tree-dfs"],
+  "js": ["recursion", "linked-list-tree-nodes"],
+  "order": 6,
+  "summary": "Given two values in a binary tree, return the value of their deepest shared ancestor.",
+  "fn": "lowestCommonAncestor",
+  "params": ["root", "p", "q"],
+  "types": { "params": ["TreeNode", "number", "number"], "returns": "number" },
+  "io": { "args": ["tree", null, null] },
+  "tests": [
+    { "args": [[10, 4, 7, 1, 9, 3, 12, null, null, 6, 2, null, 11], 6, 2], "expected": 9, "explain": "6 and 2 are both children of 9, so 9 is the deepest node with both below it." },
+    { "args": [[10, 4, 7, 1, 9, 3, 12, null, null, 6, 2, null, 11], 4, 2], "expected": 4, "explain": "2 is in the subtree of 4, and a node counts as its own ancestor, so the answer is 4." },
+    { "args": [[10, 4, 7, 1, 9, 3, 12, null, null, 6, 2, null, 11], 1, 11], "expected": 10, "explain": "1 is on the left of the root and 11 on the right, so their paths only meet at the root, 10." },
+    { "args": [[1, 2], 1, 2], "expected": 1 },
+    { "args": [[1, 2, 3], 2, 3], "expected": 1 },
+    { "args": [[1, 2, null, 3, null, 4, null, 5], 3, 5], "expected": 3 },
+    { "args": [[10, 4, 7, 1, 9, 3, 12, null, null, 6, 2, null, 11], 11, 12], "expected": 7 },
+    { "args": [[10, 4, 7, 1, 9, 3, 12, null, null, 6, 2, null, 11], 2, 4], "expected": 4 },
+    { "args": [[-1, 0, 3, -2, 4, null, null, 8], 8, 4], "expected": 0 },
+    { "args": [[13, 24, 44, 20, 17, 30, 50, null, null, null, 14, 25, null, 42, 8, 38, 47, 31, null, null, 18, 7, 26, 46, 15, null, null, null, null, null, 3, null, 28, 45, 23, null, null, 9, 16, null, 21, null, null, 4, 19, 37, 27, null, null, null, null, null, 43, 1, 39, 2, 33, null, 29, 49, 5, null, null, null, null, null, 32, null, null, null, 12, 35, 36, 22, null, 40, 34, null, null, null, null, null, 41, 10, null, null, 48, 11, null, null, 6], 11, 48], "expected": 27 },
+    { "args": [[13, 24, 44, 20, 17, 30, 50, null, null, null, 14, 25, null, 42, 8, 38, 47, 31, null, null, 18, 7, 26, 46, 15, null, null, null, null, null, 3, null, 28, 45, 23, null, null, 9, 16, null, 21, null, null, 4, 19, 37, 27, null, null, null, null, null, 43, 1, 39, 2, 33, null, 29, 49, 5, null, null, null, null, null, 32, null, null, null, 12, 35, 36, 22, null, 40, 34, null, null, null, null, null, 41, 10, null, null, 48, 11, null, null, 6], 41, 23], "expected": 23 }
+  ],
+  "hints": [
+    "Ask each subtree a question: did you find p or q? The answers flow up from the bottom.",
+    "If the current node holds p or q, report it straight away: whatever is below it can't produce a deeper common ancestor.",
+    "If both the left and right subtrees report a find, the current node is where the two paths split: it is the answer. If only one side reports, pass that report up."
+  ],
+  "complexity": { "time": "O(n): every node is visited at most once", "space": "O(h) for the recursion" }
+}

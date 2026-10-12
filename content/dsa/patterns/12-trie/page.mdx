@@ -1,0 +1,160 @@
+import { trieInsert, trieLookup, wildcardSearch } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+A trie stores strings **character by character along paths from the root**, so words that share a prefix share nodes. Inserting, looking up a word and checking a prefix all cost **O(L)** for a string of length L, however many words are stored. A DFS below a node lists every completion, a `.` wildcard simply branches, and any search driven by another input (a sentence, a grid) can **stop the moment its letters leave the trie**.
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- You get many **prefix** questions: "does any word start with…", autocomplete, counting words with a prefix.
+- A **dictionary of words** is matched against something else (a sentence, a grid of letters, a stream of characters) and you want to give up on a path as soon as no word can match.
+- Queries contain **wildcards** such as `.` for "any letter".
+- You need the **shortest or longest prefix** that is a word, or the longest prefix shared by all words.
+
+</Callout>
+
+| Variant | What you do | Classic problems |
+|---|---|---|
+| Basic trie | `children` + an end-of-word flag; insert, search, startsWith | implement a trie, longest common prefix |
+| Prefix walk with early stop | walk a query; stop at the first end flag or the first missing edge | replace words, find dictionary words in a text |
+| Wildcard DFS | a letter follows one edge, a `.` tries every child | add and search words |
+| Trie-guided backtracking | a grid DFS moves a trie pointer in lockstep and prunes dead prefixes | word search II |
+| Data on nodes | prefix counts, the stored word, the best suggestions | autocomplete, prefix counts |
+
+## The core idea: a prefix is a path
+
+Every node in a trie **stands for a prefix**: the characters on the edges from the root down to it. The root is the empty prefix. Inserting "car" creates (or reuses) the path root → c → a → r, and then **marks** the last node as the end of a word. The mark matters: after inserting "cart", the node for "car" exists either way, and only the flag says whether "car" itself was inserted.
+
+So looking something up never touches the other words. You read the query one character at a time and follow one edge per character: O(L), whether the trie holds ten words or a million. A hash set can also tell you whether a whole word is present in O(L) (hashing reads the string), but it can't answer "does any word start with `ca`?" without scanning every word, or storing every prefix of every word.
+
+<AlgoViz trace={trieInsert} />
+
+## Step by step
+
+<Steps>
+  <Step title="Pick a node shape">
+    A node needs its children (keyed by character) and an end-of-word flag. Use a `Map`, a plain object, or an array of 26 for lowercase letters (compared below). For grid problems, store the whole word on its end node instead of a flag.
+  </Step>
+  <Step title="Insert every word">
+    Walk from the root; create a child when the edge is missing; mark the last node. Each word costs O(its length), so building the trie is O(total characters).
+  </Step>
+  <Step title="Decide what a query needs at the end">
+    A whole word needs the end flag; a prefix only needs the path to exist; autocomplete needs a DFS below the node; counting needs a counter kept on each node during inserts.
+  </Step>
+  <Step title="Walk the query and stop early">
+    Follow one edge per character. The moment an edge is missing, no stored word continues that way: return immediately.
+  </Step>
+  <Step title="Let the trie steer other searches">
+    When the characters come from somewhere else (positions in a sentence, paths in a grid), carry a trie node along and abandon the search as soon as the next character has no child.
+  </Step>
+</Steps>
+
+## Template 1: the Trie class
+
+`find(prefix)` walks the path and returns the node it reaches, or `null`. The two classic queries are one line each on top of it: `search` needs the node **and** its end flag, `startsWith` only needs the node.
+
+<CodeTabs files={['snippets/trie.js']} />
+
+<AlgoViz trace={trieLookup} />
+
+This class is <ProblemLink slug="implement-trie" />. For <ProblemLink slug="longest-common-prefix" />, insert every word and walk down from the root while the current node has exactly one child and is not the end of a word: that path is the prefix all the words share.
+
+## Choosing the node shape
+
+| Children stored as | Find a child | Memory per node | Alphabet | Watch out for |
+|---|---|---|---|---|
+| `Map` | `children.get(ch)`, hashing | only the children that exist | any character | `get` returns `undefined`, not `null` |
+| plain object | `children[ch]` | only the children that exist | any character | use `Object.create(null)` if keys could clash with inherited names |
+| array of 26 | `next[code - 97]`, no hashing | always 26 slots | lowercase `a` to `z` only | other characters give negative or out-of-range indexes |
+
+The array is the fastest when the alphabet is small and known; a `Map` is the safe default. Either way every step is O(1).
+
+<CodeTabs files={['snippets/trie-array.js']} />
+
+## Template 2: wildcard search with DFS
+
+When a query may contain `.` (any one letter), a plain walk no longer works: at a dot there are several edges to follow. Turn the walk into a DFS on `(node, index in pattern)`. A letter still follows a single edge; a dot tries every child and returns `true` at the first branch that matches. Branches whose letters are not in the trie die immediately, so the search only explores what the words actually contain.
+
+<AlgoViz trace={wildcardSearch} />
+
+<CodeTabs files={['snippets/wildcard.js']} />
+
+This is <ProblemLink slug="design-add-and-search-words" />. A pattern with no dots costs O(L); a pattern made mostly of dots can visit every node down to depth L, which is still bounded by the size of the trie.
+
+## Template 3: prune a search with the trie
+
+The biggest wins come when the characters are produced by **another search**. Scan a text from each start position, or walk paths through a grid, and keep a pointer into the trie that moves with you. Two things can happen at each step:
+
+- the next character has **no child**: no word continues this way, so stop this branch now;
+- the node you reach **ends a word**: record a match (and keep going if longer words can still match).
+
+<CodeTabs files={['snippets/scan.js']} />
+
+<ProblemLink slug="replace-words" /> walks each word of a sentence through a trie of roots and stops at the **first** end flag, which is the shortest root. <ProblemLink slug="word-search-ii" /> runs a [backtracking](/dsa/patterns/backtracking) DFS from every grid cell, moving the trie pointer with each step: a path whose letters are not a prefix of any word is abandoned at once, and every word is checked in the same pass. Store each word on its end node and clear it once found, so it is reported only once.
+
+## Try it
+
+<RunCode src="snippets/try-it.js" />
+
+## Complexity
+
+N is the number of words, S their total length, L the length of one query.
+
+| Operation | Time | Extra space |
+|---|---|---|
+| Insert one word | O(L) | up to L new nodes |
+| `search`, `startsWith` | O(L) | O(1) |
+| Build from N words | O(S) | O(S) nodes (each with 26 slots for arrays) |
+| Autocomplete below a prefix | O(L + size of that subtree) | O(depth) for the DFS |
+| Wildcard search | O(L) without dots, up to every node down to depth L with many dots | O(L) recursion |
+| Text scan from every position | O(n · longest word) at most, usually far less with pruning | O(1) besides the trie |
+
+## JavaScript you'll use
+
+<JsRef to={["classes", "map-set", "strings"]} />
+
+```js
+class TrieNode {
+  constructor() { this.children = new Map(); this.isEnd = false; }
+}
+let child = node.children.get(ch);          // undefined when the edge is missing
+for (const ch of word) { /* … */ }          // iterate characters
+const index = word.charCodeAt(i) - 97;      // 'a' → 0 … 'z' → 25 for array children
+for (const [ch, next] of node.children) {}  // DFS over the children that exist
+const kids = Object.create(null);           // an object with no inherited keys
+```
+
+The JavaScript trap is building strings in a hot DFS: `path + ch` creates a new string at every node. That is fine for autocomplete, but in a grid search store the finished word on its end node and read it from there.
+
+<Callout kind="warning">
+
+- `search` returning `true` because the path exists, without checking the end-of-word flag.
+- Marking the end flag on the wrong node, or forgetting it, so whole words look like mere prefixes.
+- In wildcard DFS, writing `return dfs(child, i + 1)` inside the loop, which gives up after the first child.
+- In a grid DFS, not marking a cell as visited (reusing a letter), or forgetting to restore it when backtracking.
+- Reporting the same word twice when two grid paths spell it: clear the stored word after the first find.
+- Using an array of 26 when the input may contain uppercase letters, digits or other characters.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="Trie or hash set?">
+    For "is this exact word in the dictionary?", a `Set` is simpler, uses less memory and is also O(L) per lookup. Pick a trie when you need prefixes (startsWith, autocomplete, counting), wildcards, or early termination while scanning text or a grid. Say the trade-off out loud: a trie can use many times the memory of the raw strings because of per-node overhead.
+  </FollowUp>
+  <FollowUp q="How would you return the top 3 autocomplete suggestions quickly?">
+    Either DFS below the prefix node in alphabetical order and stop after three words, or precompute: during each insert, update a small sorted list of the best k words on every node along the path. The second makes each query O(L) at the cost of extra memory and slower inserts, which is usually the right trade for a search box.
+  </FollowUp>
+  <FollowUp q="How do you delete a word?">
+    Walk to its end node and clear the flag. Then prune: on the way back up, delete a child that has no children of its own and is not the end of another word. A recursive delete that returns "you can remove me" to its parent does this neatly. Never remove nodes that other words still pass through.
+  </FollowUp>
+  <FollowUp q="How can you make a trie smaller?">
+    Compress chains of single-child nodes into one edge labelled with a whole substring (a radix tree), so long unique suffixes cost one node instead of one per character. Other options are a ternary search tree (three pointers per node instead of 26 slots), or sharing common suffixes as well as prefixes (a DAWG) for static dictionaries.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

@@ -69,7 +69,8 @@ test("reduced motion renders no travelling packets", async ({ page }) => {
   await expect(figure.locator(".flow-caption")).not.toHaveText("");
 });
 
-for (const path of ["/", "/learn", "/questions", "/deep-dives", "/playground/url-shortener", ...allPages().map((p) => p.href)]) {
+const auditPaths = ["/", "/system-design", "/learn", "/questions", "/deep-dives", "/playground/url-shortener", "/dsa", "/dsa/patterns", "/dsa/problems", "/dsa/problems/three-sum", ...allPages().map((p) => p.href.split("#")[0])];
+for (const path of [...new Set(auditPaths)]) {
   test(`no serious accessibility violations on ${path}`, async ({ page }) => {
     await page.goto(path);
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();

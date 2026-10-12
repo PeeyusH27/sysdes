@@ -1,0 +1,30 @@
+{
+  "title": "Minimum Depth of Binary Tree",
+  "difficulty": "Easy",
+  "patterns": ["tree-bfs", "tree-dfs"],
+  "js": ["stack-queue-deque", "linked-list-tree-nodes"],
+  "order": 2,
+  "summary": "Count the nodes on the shortest path from the root down to a leaf.",
+  "fn": "minDepth",
+  "params": ["root"],
+  "types": { "params": ["TreeNode | null"], "returns": "number" },
+  "io": { "args": ["tree"] },
+  "tests": [
+    { "args": [[3, 5, 8, null, null, 2, 6]], "expected": 2, "explain": "5 is a leaf on level 2, so the shortest root-to-leaf path is 3 → 5: 2 nodes." },
+    { "args": [[1, null, 2, null, 3, null, 4]], "expected": 4, "explain": "The root has only a right child, so it is not a leaf. The only leaf is 4, at depth 4." },
+    { "args": [[]], "expected": 0, "explain": "An empty tree has depth 0." },
+    { "args": [[1]], "expected": 1 },
+    { "args": [[1, 2]], "expected": 2 },
+    { "args": [[1, 2, 3, 4, 5, 6, 7]], "expected": 3 },
+    { "args": [[1, 2, 3, 4, null, null, null, 5]], "expected": 2 },
+    { "args": [[1, 2, 3, 4, 5, null, 6, 7, 8, 9, 10, null, 11]], "expected": 4 },
+    { "args": [[6, 5, null, 4, null, 3, null, 2, null, 1]], "expected": 6 },
+    { "args": [[5, 2, 2, 7, 5, 7, 7, 1, 7, 2, 1, 4, 3, 7, 8, 3, null, 3, null, null, null, 0, null, 6, 7, 9, 0, 0, 6, null, 2, null, null, null, 1, null, null, null, null, null, null, 2, 5, null, null, 1, 6, null, 0, 0, 4, null, null, null, 5, null, null, 0, 6, null, 2, null, null, 3, null, 6, 8, null, 5, null, 9, 1, null, null, 3, null, null, 1, 0, 4, null, null, null, null, null, null, null, null, null, 3, 3, null, null, null, 3]], "expected": 4 }
+  ],
+  "hints": [
+    "The minimum depth is the depth of the shallowest leaf. Which traversal meets shallow nodes first?",
+    "BFS visits the tree level by level, so the first leaf it dequeues is a shallowest leaf: return that level's depth right away.",
+    "A leaf has no left and no right child. A node with one child is not a leaf, so don't stop there. (With DFS, a missing child must not count as a depth-0 branch.)"
+  ],
+  "complexity": { "time": "O(n) in the worst case, but BFS stops at the first leaf and often visits far fewer nodes", "space": "O(w) for the queue, where w is the widest level it reaches" }
+}

@@ -1,0 +1,31 @@
+{
+  "title": "Interval List Intersections",
+  "difficulty": "Medium",
+  "patterns": ["intervals", "two-pointers"],
+  "js": ["arrays", "destructuring-spread"],
+  "order": 6,
+  "summary": "Given two sorted lists of disjoint closed intervals, return every interval where they overlap.",
+  "fn": "intervalIntersection",
+  "params": ["firstList", "secondList"],
+  "types": { "params": ["number[][]", "number[][]"], "returns": "number[][]" },
+  "tests": [
+    { "args": [[[0, 3], [6, 9], [12, 15]], [[2, 7], [10, 13]]], "expected": [[2, 3], [6, 7], [12, 13]], "explain": "[0, 3] and [2, 7] share [2, 3]; [6, 9] and [2, 7] share [6, 7]; [12, 15] and [10, 13] share [12, 13]." },
+    { "args": [[[1, 4]], []], "expected": [], "explain": "The second list is empty, so the lists share nothing." },
+    { "args": [[[1, 5]], [[5, 10]]], "expected": [[5, 5]], "explain": "Closed intervals that touch share a single point, written as the interval [5, 5]." },
+    { "args": [[[1, 10]], [[2, 3], [5, 6], [8, 12]]], "expected": [[2, 3], [5, 6], [8, 10]] },
+    { "args": [[[0, 2], [5, 8]], [[3, 4]]], "expected": [] },
+    { "args": [[[1, 3], [5, 9]], [[1, 3], [5, 9]]], "expected": [[1, 3], [5, 9]] },
+    { "args": [[[3, 5], [9, 20]], [[4, 5], [7, 10], [11, 12], [15, 17], [19, 25]]], "expected": [[4, 5], [9, 10], [11, 12], [15, 17], [19, 20]] },
+    { "args": [[[0, 0], [2, 2]], [[0, 2]]], "expected": [[0, 0], [2, 2]] },
+    { "args": [[], []], "expected": [] },
+    { "args": [[[4, 8]], [[1, 2], [9, 10]]], "expected": [] },
+    { "args": [[[3, 7], [13, 13], [16, 17], [19, 25], [28, 35], [36, 43], [45, 50], [52, 57], [61, 64], [65, 66], [72, 74], [78, 84], [90, 92], [93, 100], [104, 109]], [[3, 8], [12, 16], [17, 21], [22, 23], [28, 34], [36, 40], [41, 47], [48, 53], [55, 61], [64, 68], [73, 76], [78, 78], [80, 85], [90, 91], [94, 96]]], "expected": [[3, 7], [13, 13], [16, 16], [17, 17], [19, 21], [22, 23], [28, 34], [36, 40], [41, 43], [45, 47], [48, 50], [52, 53], [55, 57], [61, 61], [64, 64], [65, 66], [73, 74], [78, 78], [80, 84], [90, 91], [94, 96]] }
+  ],
+  "samples": 3,
+  "hints": [
+    "Two closed intervals [a, b] and [c, d] overlap in [max(a, c), min(b, d)], as long as that start is <= that end.",
+    "Both lists are sorted, so walk them together with one pointer each, like merging two sorted arrays.",
+    "After comparing the current pair, advance the pointer of the interval that ends first: it can't overlap anything else in the other list."
+  ],
+  "complexity": { "time": "O(n + m): each step advances one of the two pointers", "space": "O(n + m) for the output" }
+}

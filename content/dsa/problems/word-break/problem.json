@@ -1,0 +1,31 @@
+{
+  "title": "Word Break",
+  "difficulty": "Medium",
+  "patterns": ["dp-1d"],
+  "js": ["strings", "map-set"],
+  "order": 5,
+  "summary": "Decide whether a string can be cut into pieces that are all dictionary words.",
+  "fn": "wordBreak",
+  "params": ["s", "wordDict"],
+  "types": { "params": ["string", "string[]"], "returns": "boolean" },
+  "tests": [
+    { "args": ["hotdogstand", ["hot", "dog", "stand", "hotdog", "sta"]], "expected": true, "explain": "hot + dog + stand works (so does hotdog + stand)." },
+    { "args": ["carpets", ["car", "pet", "carp"]], "expected": false, "explain": "car + pet leaves an s, and carp leaves ets. No split uses only dictionary words." },
+    { "args": ["abab", ["ab"]], "expected": true, "explain": "A word may be used more than once: ab + ab." },
+    { "args": ["a", ["a"]], "expected": true },
+    { "args": ["a", ["b"]], "expected": false },
+    { "args": ["aaaaaaa", ["aaaa", "aaa"]], "expected": true },
+    { "args": ["starfishy", ["star", "fish", "fishy", "tar"]], "expected": true },
+    { "args": ["abcd", ["a", "abc", "b", "cd"]], "expected": true },
+    { "args": ["catsanddogs", ["cat", "cats", "and", "sand", "dog"]], "expected": false },
+    { "args": ["ilikeicecream", ["i", "like", "ice", "cream", "icecream", "sam"]], "expected": true },
+    { "args": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab", ["a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa"]], "expected": false },
+    { "args": ["bananaband", ["ban", "ana", "nab", "and", "banana", "b"]], "expected": true }
+  ],
+  "hints": [
+    "Trying every way to cut the string is exponential: on 'aaaa…ab' a backtracking search explores a huge number of splits that all fail at the end.",
+    "Ask about prefixes: can s.slice(0, i) be split into words? The last word of such a split is s.slice(j, i) for some j < i.",
+    "canBuild[0] = true. canBuild[i] is true if some j < i has canBuild[j] true and s.slice(j, i) in a Set of the words. Return canBuild[s.length]."
+  ],
+  "complexity": { "time": "O(n × L × L): n end positions, up to L start positions each (L = longest word), and an O(L) slice and hash per check", "space": "O(n + total length of the words): the table and the word Set" }
+}

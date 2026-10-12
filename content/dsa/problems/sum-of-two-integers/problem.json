@@ -1,0 +1,30 @@
+{
+  "title": "Sum of Two Integers",
+  "difficulty": "Medium",
+  "patterns": ["bit-manipulation"],
+  "js": ["bitwise", "numbers-math"],
+  "order": 6,
+  "summary": "Add two integers without using the + or - operators.",
+  "fn": "getSum",
+  "params": ["a", "b"],
+  "types": { "params": ["number", "number"], "returns": "number" },
+  "tests": [
+    { "args": [3, 5], "expected": 8, "explain": "011 + 101: the bits carry all the way up and the result is 1000, which is 8." },
+    { "args": [-7, 4], "expected": -3, "explain": "Negative numbers are stored in two's complement, so the same loop gives -3." },
+    { "args": [-1, 1], "expected": 0, "explain": "-1 is all 1 bits. The carry ripples through every bit and falls off the top, leaving 0." },
+    { "args": [0, 0], "expected": 0 },
+    { "args": [-1000, -1000], "expected": -2000 },
+    { "args": [1000, 1000], "expected": 2000 },
+    { "args": [0, -5], "expected": -5 },
+    { "args": [999, -1], "expected": 998 },
+    { "args": [-512, 511], "expected": -1 },
+    { "args": [127, 129], "expected": 256 },
+    { "args": [15, 17], "expected": 32 }
+  ],
+  "hints": [
+    "Think about adding binary numbers by hand, one column at a time. Which operator gives the column's digit if you ignore the carry?",
+    "a ^ b adds every column without carrying. a & b marks the columns where both bits are 1, which is where a carry is produced; shifting it left by one moves each carry into the next column.",
+    "Repeat a, b = a ^ b, (a & b) << 1 until b (the carry) is 0. JavaScript's 32-bit bitwise operators make negative numbers work too."
+  ],
+  "complexity": { "time": "O(1): at most 32 iterations, since the carry moves one bit left each time", "space": "O(1)" }
+}

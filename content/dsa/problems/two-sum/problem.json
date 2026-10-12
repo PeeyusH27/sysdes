@@ -1,0 +1,31 @@
+{
+  "title": "Two Sum",
+  "difficulty": "Easy",
+  "patterns": ["hashing"],
+  "js": ["map-set"],
+  "order": 1,
+  "summary": "Find the two positions in an unsorted array whose values add up to a target, in one pass.",
+  "fn": "twoSum",
+  "params": ["nums", "target"],
+  "types": { "params": ["number[]", "number"], "returns": "number[]" },
+  "compare": "unordered",
+  "tests": [
+    { "args": [[4, 9, 1, 6], 7], "expected": [2, 3], "explain": "nums[2] + nums[3] = 1 + 6 = 7. Returning [3, 2] is accepted too." },
+    { "args": [[3, 1, 5, 7], 6], "expected": [1, 2], "explain": "1 + 5 = 6. Using the 3 at index 0 twice would also make 6, but a position can't be used twice." },
+    { "args": [[6, 6], 12], "expected": [0, 1], "explain": "Two different positions may hold the same value." },
+    { "args": [[-4, 8, 4, 1], 0], "expected": [0, 2] },
+    { "args": [[0, 7, 2, 0], 0], "expected": [0, 3] },
+    { "args": [[1, 5, 9, 2], 11], "expected": [2, 3] },
+    { "args": [[-1, -2, -3, -4, -5], -8], "expected": [2, 4] },
+    { "args": [[5, 1, 5], 10], "expected": [0, 2] },
+    { "args": [[2, 5, 5, 11], 10], "expected": [1, 2] },
+    { "args": [[1000000000, -1000000000, 7, 3], 10], "expected": [2, 3] },
+    { "args": [[-729, 475, 531, 83, 287, -231, 389, -302, 177, 929, -543, -845, -227, 589, -217, 753, -47, -779, -877, -163, -941, -609, 523, -457, -887, 295, -915, 181, -895, -127, 721, -129, 493, 843, 255, -863, -683, -709, 33, -999], 173], "expected": [1, 7] }
+  ],
+  "hints": [
+    "The brute force checks every pair in O(n²). For one number x, which single value would complete the pair?",
+    "You need target - x. Can you remember the numbers you have already passed so that checking for it costs O(1)?",
+    "Keep a Map from value to index. For each nums[i], look up target - nums[i] before storing nums[i], so an element never pairs with itself."
+  ],
+  "complexity": { "time": "O(n): one pass with O(1) average map operations", "space": "O(n): the map can hold every value" }
+}

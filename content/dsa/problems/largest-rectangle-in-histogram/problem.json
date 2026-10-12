@@ -1,0 +1,30 @@
+{
+  "title": "Largest Rectangle in Histogram",
+  "difficulty": "Hard",
+  "patterns": ["stack"],
+  "js": ["stack-queue-deque", "arrays"],
+  "order": 6,
+  "summary": "Find the area of the largest rectangle that fits inside a histogram of unit-width bars.",
+  "fn": "largestRectangleArea",
+  "params": ["heights"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[2, 4, 5, 1, 3, 3]], "expected": 8, "explain": "The bars of height 4 and 5 are side by side: a rectangle 2 wide and 4 tall has area 8." },
+    { "args": [[3, 3, 3]], "expected": 9, "explain": "All bars are equal, so the whole histogram is one 3 × 3 rectangle." },
+    { "args": [[2, 0, 2]], "expected": 2, "explain": "The 0 bar splits the histogram. Each side can only make a 1 × 2 rectangle." },
+    { "args": [[5]], "expected": 5 },
+    { "args": [[1, 2, 3, 4, 5]], "expected": 9 },
+    { "args": [[5, 4, 3, 2, 1]], "expected": 9 },
+    { "args": [[6, 7, 2, 6, 5, 6, 1]], "expected": 15 },
+    { "args": [[1, 1, 1, 1, 1, 1, 1, 1]], "expected": 8 },
+    { "args": [[4, 2, 0, 3, 2, 5]], "expected": 6 },
+    { "args": [[2, 1, 2]], "expected": 3 },
+    { "args": [[7, 16, 3, 5, 1, 2, 5, 8, 8, 12, 15, 19, 20, 17, 17, 2, 11, 6, 8, 16, 15, 4, 20, 19, 1, 20, 9, 1, 5, 9, 17, 11, 16, 18, 1, 14, 3, 20, 14, 1]], "expected": 75 }
+  ],
+  "hints": [
+    "The best rectangle has the height of some bar i. How far can a rectangle of exactly that height stretch to the left and to the right?",
+    "It stretches until the first strictly shorter bar on each side. A stack of indices with increasing heights finds both of those bars in one pass.",
+    "When bar i is shorter than the bar on top, pop the top: i is its right limit and the new top of the stack is its left limit, so its width is i - newTop - 1. A final bar of height 0 flushes whatever is left."
+  ],
+  "complexity": { "time": "O(n): every bar is pushed once and popped once", "space": "O(n): the stack of indices" }
+}

@@ -1,0 +1,68 @@
+Bit tricks replace whole data structures: XOR finds the unpaired value in O(1) space, an integer mask stores a subset or a visited set, and `x & (x - 1)` counts set bits. In JavaScript there's one rule to keep in mind at all times: every bitwise operator first converts its operands to **32-bit signed integers**.
+
+### The bitwise operators
+
+| Operator | Name | Example | Result | Typical use |
+|---|---|---|---|---|
+| `a & b` | AND | `0b1100 & 0b1010` | `0b1000` (8) | test a bit, keep only masked bits |
+| `a \| b` | OR | `0b1100 \| 0b1010` | `0b1110` (14) | set a bit, union of two masks |
+| `a ^ b` | XOR | `0b1100 ^ 0b1010` | `0b0110` (6) | toggle a bit, cancel pairs |
+| `~a` | NOT | `~5` | `-6` | build "everything but this bit" masks |
+| `a << k` | left shift | `1 << 4` | `16` | the mask for bit `k`; multiply by 2^k |
+| `a >> k` | sign-propagating right shift | `-16 >> 2` | `-4` | divide by 2^k, rounding down |
+| `a >>> k` | zero-fill right shift | `-1 >>> 28` | `15` | read bits as unsigned |
+
+Their precedence is lower than comparisons: `x & 1 === 0` means `x & (1 === 0)`. Always parenthesise: `(x & 1) === 0`.
+
+### The 32-bit rule
+
+Numbers are 64-bit floats, but `&`, `|`, `^`, `~`, `<<` and `>>` work on a 32-bit signed copy: fractions are truncated, bits above 31 are dropped, and bit 31 is the sign. So `1 << 31` is negative, `1 << 32` is `1` (shift counts wrap at 32), and anything at or above 2^31 wraps around. `x >>> 0` reinterprets the same 32 bits as an unsigned number from 0 to 2^32 − 1, which is also how you print a negative number's bits. For more than 31 bits, use arithmetic (`Math.floor(x / 2)`, `x % 2`, `2 ** k`) or BigInt (`1n << 40n`).
+
+<RunCode src="snippets/bitwise-32-bit.js" />
+
+### Testing, setting and clearing bits
+
+```js
+(x >> k) & 1              // 1 if bit k is set, else 0
+(x & (1 << k)) !== 0      // same test as a boolean
+x | (1 << k)              // set bit k
+x & ~(1 << k)             // clear bit k
+x ^ (1 << k)              // toggle bit k
+x & (x - 1)               // clear the lowest set bit
+x & -x                    // keep only the lowest set bit
+x > 0 && (x & (x - 1)) === 0  // x is a power of two
+(1 << n) - 1              // n ones: the mask of all n items (n up to 30)
+```
+
+<RunCode src="snippets/bitwise-bit-ops.js" />
+
+### XOR tricks
+
+XOR is its own inverse: `a ^ a` is `0`, `a ^ 0` is `a`, and order doesn't matter. XOR a list together and every value that appears an even number of times cancels out. That solves "find the one value without a pair" and "find the missing number in 0..n" in O(n) time and O(1) space. `a ^ b` also marks exactly the bits where two numbers differ.
+
+<RunCode src="snippets/bitwise-xor.js" />
+
+### Bitmasks for subsets
+
+With `n` items, each integer from `0` to `(1 << n) - 1` encodes one subset: bit `i` says whether item `i` is in it. Looping over those integers enumerates all 2^n subsets without recursion, and a single integer can stand in for a visited set in DP over subsets (traveling salesman, assigning tasks to workers). Keep `n` small: 2^20 is about a million.
+
+<RunCode src="snippets/bitwise-subsets.js" />
+
+| Operation | Cost |
+|---|---|
+| Any single bitwise operator | O(1) |
+| Popcount with `x &= x - 1` | O(number of set bits), at most 32 |
+| Enumerating all subsets of n items | O(2^n · n) |
+| Enumerating every submask of every mask | O(3^n) |
+| `x.toString(2)` | O(number of bits) |
+
+<Callout kind="warning" title="Bitwise gotchas">
+
+- `1 << 31` is negative and `1 << 32` is `1`. Masks only work for bits 0 to 30 (or 31 if you read results with `>>> 0`).
+- `x & 1 === 0` is parsed as `x & (1 === 0)`. Parenthesise every bitwise expression inside a comparison.
+- `(-5).toString(2)` prints `-101`, not two's complement. Use `(x >>> 0).toString(2)`.
+- `x | 0` and `x >> 1` corrupt numbers at or above 2^31. Use `Math.trunc` and `Math.floor(x / 2)` for big values.
+- A popcount loop with `while (n > 0)` returns 0 for negative inputs (bit 31 makes them negative). Loop on `n !== 0`.
+- XOR swap zeroes the value when both indices are the same. Swap with destructuring.
+
+</Callout>

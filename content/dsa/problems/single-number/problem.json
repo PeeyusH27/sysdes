@@ -1,0 +1,29 @@
+{
+  "title": "Single Number",
+  "difficulty": "Easy",
+  "patterns": ["bit-manipulation", "hashing"],
+  "js": ["bitwise"],
+  "order": 1,
+  "summary": "Every number appears twice except one. Find the loner in one pass with O(1) extra space.",
+  "fn": "singleNumber",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[7, 3, 5, 3, 7]], "expected": 5, "explain": "7 and 3 each appear twice and cancel out under XOR; 5 appears once." },
+    { "args": [[9]], "expected": 9, "explain": "A single element is the answer by itself." },
+    { "args": [[2, -4, 2]], "expected": -4, "explain": "Negative numbers work the same way: 2 ^ -4 ^ 2 = -4." },
+    { "args": [[0, 1, 0]], "expected": 1 },
+    { "args": [[1, 0, 1]], "expected": 0 },
+    { "args": [[30000, -30000, 30000]], "expected": -30000 },
+    { "args": [[5, 5, 6, 6, 7, 7, 8]], "expected": 8 },
+    { "args": [[11, 2, 2, 3, 3]], "expected": 11 },
+    { "args": [[-13626, -20516, -2120, 7395, 8279, 3326, 16860, -21351, 415, -28676, 415, 9827, -13824, 8763, 8763, -4500, -20774, -28676, -7382, 21560, -13881, -11283, 3326, -13626, -25944, -25944, -11283, -20774, -20516, -7382, -4500, 16860, 10994, 7395, 21560, -2120, -13881, 9827, 10994, -13824, 8279]], "expected": -21351 },
+    { "args": [[7890, -7546, 18194, 29498, -9930, -20131, -11499, -14377, -12247, 12046, 29504, 28445, -6656, -906, 20273, 18194, 23561, 28445, 21947, 20273, -6127, 15315, -6656, -7546, -11499, -15952, -20131, 8358, 27264, 18504, 25428, -26759, -2313, -10857, -29389, 22467, 824, -9930, -10857, -15952, 824, 25428, 27264, -12247, -906, -2313, -14377, 21947, 20563, -29389, 7890, 23561, 29498, 8358, -6127, -26759, 29504, 20563, 18504, 12046, 15315]], "expected": 22467 }
+  ],
+  "hints": [
+    "A Set or Map solves it in O(n) time, but uses O(n) memory. Which operator makes two equal numbers disappear?",
+    "x ^ x is 0 and x ^ 0 is x. XOR is also commutative and associative, so the order of the numbers doesn't matter.",
+    "XOR all the numbers together: every pair cancels to 0, and what is left is the single number."
+  ],
+  "complexity": { "time": "O(n): one pass", "space": "O(1): a single accumulator" }
+}

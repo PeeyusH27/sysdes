@@ -1,0 +1,31 @@
+{
+  "title": "Shortest Path in a Binary Matrix",
+  "difficulty": "Medium",
+  "patterns": ["shortest-paths", "graph-traversal"],
+  "js": ["graphs-in-js", "stack-queue-deque"],
+  "order": 1,
+  "summary": "Find the fewest cells on a path from the top-left to the bottom-right of a 0/1 grid, moving in any of 8 directions.",
+  "fn": "shortestPathBinaryMatrix",
+  "params": ["grid"],
+  "types": { "params": ["number[][]"], "returns": "number" },
+  "tests": [
+    { "args": [[[0, 1, 1], [1, 0, 1], [1, 1, 0]]], "expected": 3, "explain": "Only the main diagonal is open. Diagonal moves are allowed, so the path visits (0,0), (1,1) and (2,2): 3 cells." },
+    { "args": [[[0, 1, 0, 0], [0, 1, 0, 1], [0, 0, 1, 0], [1, 1, 0, 0]]], "expected": 5, "explain": "Go down to (1,0), then diagonally to (2,1) and (3,2), then right to (3,3): 5 cells. Every shorter route is blocked." },
+    { "args": [[[1, 0], [0, 0]]], "expected": -1, "explain": "The start cell is blocked, so no path can begin: -1." },
+    { "args": [[[0]]], "expected": 1 },
+    { "args": [[[1]]], "expected": -1 },
+    { "args": [[[0, 0], [0, 1]]], "expected": -1 },
+    { "args": [[[0, 0, 0], [1, 1, 1], [0, 0, 0]]], "expected": -1 },
+    { "args": [[[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]]], "expected": 5 },
+    { "args": [[[0, 0, 0, 0, 0], [1, 1, 1, 1, 0], [0, 0, 0, 1, 0], [0, 1, 0, 1, 0], [0, 1, 1, 1, 0]]], "expected": 8 },
+    { "args": [[[0, 1, 0, 0, 0], [0, 1, 0, 1, 0], [0, 1, 0, 1, 0], [0, 1, 0, 1, 0], [0, 0, 0, 1, 0]]], "expected": 13 },
+    { "args": [[[0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0], [1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0], [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1], [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0], [0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0], [0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0], [0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1], [0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0], [1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1], [0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0]]], "expected": 16 },
+    { "args": [[[0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0], [0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0], [0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1], [0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1], [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0], [0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0], [0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0], [0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0], [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0], [1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1], [1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], [1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0], [0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1], [0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0], [0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1], [0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1], [0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0]]], "expected": 24 }
+  ],
+  "hints": [
+    "Every move costs the same (one more cell), so this is an unweighted shortest path: breadth-first search.",
+    "Start the BFS at (0, 0) with distance 1, and try all 8 neighbours of each cell, including the diagonals. Skip cells that are 1 or already visited.",
+    "Mark a cell as visited when you push it, not when you pop it, so no cell enters the queue twice. Check first that the start and end cells are both 0."
+  ],
+  "complexity": { "time": "O(n²): each cell is enqueued at most once and has 8 neighbours", "space": "O(n²): the distance grid and the queue" }
+}

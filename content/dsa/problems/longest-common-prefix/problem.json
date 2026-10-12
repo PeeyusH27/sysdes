@@ -1,0 +1,30 @@
+{
+  "title": "Longest Common Prefix",
+  "difficulty": "Easy",
+  "patterns": ["trie"],
+  "js": ["strings", "map-set"],
+  "order": 1,
+  "summary": "Find the longest string that every word in a list starts with.",
+  "fn": "longestCommonPrefix",
+  "params": ["strs"],
+  "types": { "params": ["string[]"], "returns": "string" },
+  "tests": [
+    { "args": [["interview", "internet", "interval", "internal"]], "expected": "inter", "explain": "All four start with \"inter\"; at the next position they split into v, n, v and n." },
+    { "args": [["tree", "trie", "trip"]], "expected": "tr", "explain": "\"tr\" is shared; then \"tree\" has e where the others have i." },
+    { "args": [["apple", "banana"]], "expected": "", "explain": "The first letters already differ, so the common prefix is the empty string." },
+    { "args": [["solo"]], "expected": "solo" },
+    { "args": [["", "abc"]], "expected": "" },
+    { "args": [["same", "same", "same"]], "expected": "same" },
+    { "args": [["a", "ab", "abc"]], "expected": "a" },
+    { "args": [["prefix", "pre", "prefixes"]], "expected": "pre" },
+    { "args": [["xyz", "xy", "x", ""]], "expected": "" },
+    { "args": [["grape", "graph", "grain"]], "expected": "gra" },
+    { "args": [["abcdfjh", "abcdffgg", "abcdiihj", "abcdij", "abcdh", "abcd", "abcdf", "abcd", "abcde", "abcdg", "abcdhgj", "abcdej", "abcd", "abcdifje", "abcdeghigi", "abcdjfjj", "abcd", "abcdif", "abcdihfiji", "abcdeijg", "abcdjfijii", "abcdgieg", "abcdifgh", "abcdei", "abcdehj", "abcdh", "abcdhehfie", "abcdjjih", "abcd", "abcdgiijj"]], "expected": "abcd" }
+  ],
+  "hints": [
+    "The common prefix can't be longer than the shortest string, and it ends at the first position where two strings disagree.",
+    "In a trie of all the strings, the shared prefix is the path from the root along which there is only one way to go.",
+    "Walk down from the root while the current node has exactly one child and no string ends at it. The characters you pass are the answer."
+  ],
+  "complexity": { "time": "O(S): S is the total number of characters, each inserted once", "space": "O(S) for the trie (scanning the strings column by column needs only O(1))" }
+}

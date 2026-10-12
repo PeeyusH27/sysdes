@@ -1,0 +1,30 @@
+{
+  "title": "Accounts Merge",
+  "difficulty": "Medium",
+  "patterns": ["union-find", "graph-traversal"],
+  "js": ["map-set", "classes", "sorting"],
+  "order": 5,
+  "summary": "Merge account records that share an email, and list each person's emails in sorted order.",
+  "fn": "accountsMerge",
+  "params": ["accounts"],
+  "types": { "params": ["string[][]"], "returns": "string[][]" },
+  "compare": "unordered",
+  "tests": [
+    { "args": [[["Ana", "ana@x.com", "ana.work@x.com"], ["Ben", "ben@y.com"], ["Ana", "ana.home@x.com", "ana@x.com"], ["Ana", "a.dev@z.com"]]], "expected": [["Ana", "a.dev@z.com"], ["Ana", "ana.home@x.com", "ana.work@x.com", "ana@x.com"], ["Ben", "ben@y.com"]], "explain": "Records 0 and 2 share ana@x.com, so they are the same Ana: her emails are merged and sorted (\".\" sorts before \"@\"). Record 3 shares no email with them, so it stays a separate Ana. The outer order of the answer doesn't matter." },
+    { "args": [[["Kim", "k1@m.io", "k2@m.io"], ["Kim", "k3@m.io"], ["Kim", "k2@m.io", "k3@m.io"]]], "expected": [["Kim", "k1@m.io", "k2@m.io", "k3@m.io"]], "explain": "Records 0 and 1 share nothing directly, but record 2 shares k2@m.io with record 0 and k3@m.io with record 1, so all three are one person." },
+    { "args": [[["Lee", "lee@a.com"], ["Lee", "lee@b.com"]]], "expected": [["Lee", "lee@a.com"], ["Lee", "lee@b.com"]], "explain": "Same name but no shared email: two different people, two accounts." },
+    { "args": [[["Zoe", "z@q.com", "a@q.com", "z@q.com"]]], "expected": [["Zoe", "a@q.com", "z@q.com"]] },
+    { "args": [[["Sam", "s@a.org"]]], "expected": [["Sam", "s@a.org"]] },
+    { "args": [[["Sam", "s@a.org"], ["Sam", "t@a.org", "s@a.org"]]], "expected": [["Sam", "s@a.org", "t@a.org"]] },
+    { "args": [[["Ola", "o4@b.net"], ["Ola", "o3@b.net", "o4@b.net"], ["Ola", "o2@b.net", "o3@b.net"], ["Ola", "o1@b.net", "o2@b.net"]]], "expected": [["Ola", "o1@b.net", "o2@b.net", "o3@b.net", "o4@b.net"]] },
+    { "args": [[["Max", "max@c.com"], ["Ida", "ida@c.com"], ["Max", "max2@c.com"], ["Ivo", "ivo@c.com"]]], "expected": [["Ida", "ida@c.com"], ["Ivo", "ivo@c.com"], ["Max", "max2@c.com"], ["Max", "max@c.com"]] },
+    { "args": [[["Tom", "t1@d.com", "t2@d.com"], ["Tom", "t3@d.com", "t4@d.com"], ["Ann", "ann@d.com"], ["Tom", "t5@d.com"], ["Tom", "t4@d.com", "t5@d.com", "t1@d.com"]]], "expected": [["Ann", "ann@d.com"], ["Tom", "t1@d.com", "t2@d.com", "t3@d.com", "t4@d.com", "t5@d.com"]] },
+    { "args": [[["Eli", "eli0.0@mail.com", "eli0.1@mail.com", "eli0.2@mail.com"], ["Eli", "eli0.1@mail.com", "eli0.2@mail.com", "eli0.0@mail.com"], ["Eli", "eli6.1@mail.com", "eli6.0@mail.com", "eli6.2@mail.com"], ["Eli", "eli0.1@mail.com", "eli0.2@mail.com"], ["Chen", "chen2.2@mail.com", "chen2.0@mail.com"], ["Eli", "eli0.0@mail.com"], ["Eli", "eli4.1@mail.com", "eli4.2@mail.com"], ["Eli", "eli4.2@mail.com"], ["Chen", "chen2.2@mail.com"], ["Dev", "dev5.0@mail.com"], ["Eli", "eli0.0@mail.com", "eli0.2@mail.com"], ["Dev", "dev1.0@mail.com"], ["Eli", "eli4.3@mail.com", "eli4.1@mail.com"], ["Dev", "dev1.0@mail.com"]]], "expected": [["Chen", "chen2.0@mail.com", "chen2.2@mail.com"], ["Dev", "dev1.0@mail.com"], ["Dev", "dev5.0@mail.com"], ["Eli", "eli0.0@mail.com", "eli0.1@mail.com", "eli0.2@mail.com"], ["Eli", "eli4.1@mail.com", "eli4.2@mail.com", "eli4.3@mail.com"], ["Eli", "eli6.0@mail.com", "eli6.1@mail.com", "eli6.2@mail.com"]] }
+  ],
+  "hints": [
+    "Two records belong to the same person when they share at least one email, even indirectly: A shares with B and B shares with C means A, B and C are one person.",
+    "Use union-find over account indices. Keep a Map from email to the first account that listed it; when you see that email again, union the two accounts.",
+    "Afterwards, group every email under find(owner of the email), sort each group, and put the account name in front."
+  ],
+  "complexity": { "time": "O(E log E): E is the total number of emails; sorting the groups dominates the near-constant unions", "space": "O(E): the email map and the groups" }
+}

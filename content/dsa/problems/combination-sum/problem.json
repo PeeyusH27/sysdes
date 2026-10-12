@@ -1,0 +1,31 @@
+{
+  "title": "Combination Sum",
+  "difficulty": "Medium",
+  "patterns": ["backtracking"],
+  "js": ["recursion", "sorting", "arrays"],
+  "order": 3,
+  "summary": "Find every distinct way to reach a target sum using candidates that may be reused any number of times.",
+  "fn": "combinationSum",
+  "params": ["candidates", "target"],
+  "types": { "params": ["number[]", "number"], "returns": "number[][]" },
+  "compare": "deep-unordered",
+  "tests": [
+    { "args": [[3, 4, 5], 11], "expected": [[3, 4, 4], [3, 3, 5]], "explain": "3 + 3 + 5 = 11 and 3 + 4 + 4 = 11. A candidate may be reused, but [3, 5, 3] is the same combination as [3, 3, 5] and must appear only once." },
+    { "args": [[7], 3], "expected": [], "explain": "The only candidate is already larger than the target, so no combination exists." },
+    { "args": [[1], 2], "expected": [[1, 1]], "explain": "The same candidate may be used more than once: 1 + 1 = 2." },
+    { "args": [[2], 1], "expected": [] },
+    { "args": [[8, 2, 6], 10], "expected": [[8, 2], [2, 2, 2, 2, 2], [2, 2, 6]] },
+    { "args": [[3, 5, 7], 15], "expected": [[3, 3, 3, 3, 3], [5, 5, 5], [3, 5, 7]] },
+    { "args": [[2, 3, 6, 7, 9], 18], "expected": [[2, 2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 3, 3], [2, 2, 2, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3], [2, 2, 2, 2, 2, 2, 6], [2, 2, 2, 3, 3, 6], [3, 3, 3, 3, 6], [2, 2, 2, 6, 6], [3, 3, 6, 6], [6, 6, 6], [2, 2, 2, 2, 3, 7], [2, 3, 3, 3, 7], [2, 3, 6, 7], [2, 2, 7, 7], [2, 2, 2, 3, 9], [3, 3, 3, 9], [3, 6, 9], [2, 7, 9], [9, 9]] },
+    { "args": [[9, 4, 3], 12], "expected": [[4, 4, 4], [9, 3], [3, 3, 3, 3]] },
+    { "args": [[6, 4], 6], "expected": [[6]] },
+    { "args": [[11, 13], 10], "expected": [] },
+    { "args": [[2, 3, 5, 7, 11, 13, 17, 19, 23, 29], 30], "expected": [[2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3], [2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3], [2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3], [2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3, 3, 3, 3, 3], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 5], [2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 5], [2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 5], [2, 2, 3, 3, 3, 3, 3, 3, 3, 5], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5], [2, 2, 2, 2, 2, 2, 2, 3, 3, 5, 5], [2, 2, 2, 2, 3, 3, 3, 3, 5, 5], [2, 3, 3, 3, 3, 3, 3, 5, 5], [2, 2, 2, 2, 2, 2, 3, 5, 5, 5], [2, 2, 2, 3, 3, 3, 5, 5, 5], [3, 3, 3, 3, 3, 5, 5, 5], [2, 2, 2, 2, 2, 5, 5, 5, 5], [2, 2, 3, 3, 5, 5, 5, 5], [2, 3, 5, 5, 5, 5, 5], [5, 5, 5, 5, 5, 5], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 7], [2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 7], [2, 2, 2, 2, 3, 3, 3, 3, 3, 7], [2, 3, 3, 3, 3, 3, 3, 3, 7], [2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 7], [2, 2, 2, 2, 2, 2, 3, 3, 5, 7], [2, 2, 2, 3, 3, 3, 3, 5, 7], [3, 3, 3, 3, 3, 3, 5, 7], [2, 2, 2, 2, 2, 3, 5, 5, 7], [2, 2, 3, 3, 3, 5, 5, 7], [2, 2, 2, 2, 5, 5, 5, 7], [2, 3, 3, 5, 5, 5, 7], [3, 5, 5, 5, 5, 7], [2, 2, 2, 2, 2, 2, 2, 2, 7, 7], [2, 2, 2, 2, 2, 3, 3, 7, 7], [2, 2, 3, 3, 3, 3, 7, 7], [2, 2, 2, 2, 3, 5, 7, 7], [2, 3, 3, 3, 5, 7, 7], [2, 2, 2, 5, 5, 7, 7], [3, 3, 5, 5, 7, 7], [2, 2, 2, 3, 7, 7, 7], [3, 3, 3, 7, 7, 7], [2, 2, 5, 7, 7, 7], [2, 7, 7, 7, 7], [2, 2, 2, 2, 2, 2, 2, 2, 3, 11], [2, 2, 2, 2, 2, 3, 3, 3, 11], [2, 2, 3, 3, 3, 3, 3, 11], [2, 2, 2, 2, 2, 2, 2, 5, 11], [2, 2, 2, 2, 3, 3, 5, 11], [2, 3, 3, 3, 3, 5, 11], [2, 2, 2, 3, 5, 5, 11], [3, 3, 3, 5, 5, 11], [2, 2, 5, 5, 5, 11], [2, 2, 2, 2, 2, 2, 7, 11], [2, 2, 2, 3, 3, 7, 11], [3, 3, 3, 3, 7, 11], [2, 2, 3, 5, 7, 11], [2, 5, 5, 7, 11], [2, 3, 7, 7, 11], [5, 7, 7, 11], [2, 2, 2, 2, 11, 11], [2, 3, 3, 11, 11], [3, 5, 11, 11], [2, 2, 2, 2, 2, 2, 2, 3, 13], [2, 2, 2, 2, 3, 3, 3, 13], [2, 3, 3, 3, 3, 3, 13], [2, 2, 2, 2, 2, 2, 5, 13], [2, 2, 2, 3, 3, 5, 13], [3, 3, 3, 3, 5, 13], [2, 2, 3, 5, 5, 13], [2, 5, 5, 5, 13], [2, 2, 2, 2, 2, 7, 13], [2, 2, 3, 3, 7, 13], [2, 3, 5, 7, 13], [5, 5, 7, 13], [3, 7, 7, 13], [2, 2, 2, 11, 13], [3, 3, 11, 13], [2, 2, 13, 13], [2, 2, 2, 2, 2, 3, 17], [2, 2, 3, 3, 3, 17], [2, 2, 2, 2, 5, 17], [2, 3, 3, 5, 17], [3, 5, 5, 17], [2, 2, 2, 7, 17], [3, 3, 7, 17], [2, 11, 17], [13, 17], [2, 2, 2, 2, 3, 19], [2, 3, 3, 3, 19], [2, 2, 2, 5, 19], [3, 3, 5, 19], [2, 2, 7, 19], [11, 19], [2, 2, 3, 23], [2, 5, 23], [7, 23]] }
+  ],
+  "hints": [
+    "Build a combination one candidate at a time and track how much of the target is still missing. Stop a branch when it reaches exactly 0 (record it) or goes below 0.",
+    "To avoid listing [2, 3] and [3, 2] separately, only allow candidates from index start onwards. Because a candidate can be reused, recurse with start = i, not i + 1.",
+    "Sort the candidates first. Then as soon as candidates[i] is bigger than what's left, every later candidate is too: break out of the loop instead of recursing."
+  ],
+  "complexity": { "time": "Exponential: about O(n^(T/m)) for target T and smallest candidate m, since the tree is at most T/m levels deep; pruning after sorting skips most branches", "space": "O(T/m) for the recursion depth and the current combination, besides the output" }
+}

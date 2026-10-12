@@ -1,0 +1,27 @@
+{
+  "title": "Min Stack",
+  "difficulty": "Medium",
+  "patterns": ["stack"],
+  "js": ["classes", "stack-queue-deque"],
+  "order": 3,
+  "summary": "Build a stack that also reports its current minimum in O(1), even after pops.",
+  "kind": "design",
+  "className": "MinStack",
+  "tests": [
+    { "ops": ["MinStack", "push", "push", "push", "getMin", "pop", "top", "getMin"], "args": [[], [3], [5], [2], [], [], [], []], "expected": [null, null, null, null, 2, null, 5, 3], "explain": "After pushing 3, 5 and 2 the minimum is 2. Popping 2 leaves 3 and 5: the top is 5 and the minimum goes back to 3." },
+    { "ops": ["MinStack", "push", "push", "push", "getMin", "pop", "getMin", "pop", "getMin"], "args": [[], [2], [1], [1], [], [], [], [], []], "expected": [null, null, null, null, 1, null, 1, null, 2], "explain": "There are two copies of 1. Popping one copy must leave the minimum at 1; only after both are gone does it go back to 2." },
+    { "ops": ["MinStack", "push", "top", "getMin"], "args": [[], [5], [], []], "expected": [null, null, 5, 5], "explain": "With a single value, it is both the top and the minimum." },
+    { "ops": ["MinStack", "push", "push", "push", "push", "getMin", "pop", "pop", "pop", "getMin", "top"], "args": [[], [1], [2], [3], [4], [], [], [], [], [], []], "expected": [null, null, null, null, null, 1, null, null, null, 1, 1] },
+    { "ops": ["MinStack", "push", "push", "push", "push", "push", "getMin", "pop", "getMin", "pop", "getMin", "pop", "getMin", "top"], "args": [[], [5], [4], [3], [2], [1], [], [], [], [], [], [], [], []], "expected": [null, null, null, null, null, null, 1, null, 2, null, 3, null, 4, 4] },
+    { "ops": ["MinStack", "push", "push", "pop", "push", "getMin", "push", "getMin", "top", "pop", "getMin", "top"], "args": [[], [0], [-1], [], [3], [], [-5], [], [], [], [], []], "expected": [null, null, null, null, null, 0, null, -5, -5, null, 0, 3] },
+    { "ops": ["MinStack", "push", "push", "push", "pop", "pop", "getMin", "top"], "args": [[], [7], [7], [7], [], [], [], []], "expected": [null, null, null, null, null, null, 7, 7] },
+    { "ops": ["MinStack", "push", "push", "getMin", "pop", "getMin", "top"], "args": [[], [2147483647], [-2147483648], [], [], [], []], "expected": [null, null, null, -2147483648, null, 2147483647, 2147483647] },
+    { "ops": ["MinStack", "push", "push", "getMin", "getMin", "top", "top", "pop", "pop", "push", "push", "push", "pop", "pop", "pop", "push", "push", "push", "push", "getMin", "top", "top", "top", "push", "push", "getMin", "push", "push", "pop", "getMin", "pop", "getMin", "push", "top", "push", "pop", "push", "push", "push", "top", "push"], "args": [[], [-20], [-20], [], [], [], [], [], [], [-9], [19], [-4], [], [], [], [13], [0], [-17], [-11], [], [], [], [], [-7], [11], [], [-20], [13], [], [], [], [], [-9], [], [-18], [], [10], [-14], [11], [], [-20]], "expected": [null, null, null, -20, -20, -20, -20, null, null, null, null, null, null, null, null, null, null, null, null, -17, -11, -11, -11, null, null, -17, null, null, null, -20, null, -17, null, -9, null, null, null, null, null, 11, null] }
+  ],
+  "hints": [
+    "A single variable for the minimum breaks on pop: when the minimum is popped, what was the minimum before it was pushed?",
+    "Store, next to every value, the minimum of the stack at the moment that value was pushed. The stack then remembers every earlier minimum for you.",
+    "push(x) stores [x, Math.min(x, current minimum)]. getMin reads the second half of the top entry; pop simply removes the top entry."
+  ],
+  "complexity": { "time": "O(1) for push, pop, top and getMin", "space": "O(n): one extra number per stored value" }
+}

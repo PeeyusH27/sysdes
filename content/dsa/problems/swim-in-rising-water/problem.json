@@ -1,0 +1,29 @@
+{
+  "title": "Swim in Rising Water",
+  "difficulty": "Hard",
+  "patterns": ["shortest-paths", "binary-search", "union-find"],
+  "js": ["heap", "graphs-in-js"],
+  "order": 5,
+  "summary": "Water rises one unit per second over a grid of distinct heights. When can you first swim from one corner to the other?",
+  "fn": "swimInWater",
+  "params": ["grid"],
+  "types": { "params": ["number[][]"], "returns": "number" },
+  "tests": [
+    { "args": [[[0, 3], [2, 1]]], "expected": 2, "explain": "Going down then right visits heights 0, 2 and 1, so it is usable once the water reaches 2. Going right first needs the 3 to be covered. The answer is 2." },
+    { "args": [[[0, 8, 7], [1, 6, 5], [2, 3, 4]]], "expected": 4, "explain": "Down the left column and along the bottom row visits 0, 1, 2, 3, 4: at time 4 the whole route is under water." },
+    { "args": [[[3, 0], [1, 2]]], "expected": 3, "explain": "The start cell has height 3, so you can't leave it before time 3. By then the route 3 → 1 → 2 is covered." },
+    { "args": [[[0]]], "expected": 0 },
+    { "args": [[[0, 1], [2, 3]]], "expected": 3 },
+    { "args": [[[0, 1, 2, 3], [11, 12, 13, 4], [10, 15, 14, 5], [9, 8, 7, 6]]], "expected": 6 },
+    { "args": [[[0, 1, 2, 3, 4], [24, 23, 22, 21, 5], [12, 13, 14, 15, 16], [11, 17, 18, 19, 20], [10, 9, 8, 7, 6]]], "expected": 16 },
+    { "args": [[[2, 11, 6, 7, 32, 27], [21, 8, 31, 3, 22, 9], [18, 16, 13, 0, 19, 34], [4, 14, 17, 30, 10, 23], [28, 25, 29, 33, 5, 24], [15, 1, 35, 12, 20, 26]]], "expected": 26 },
+    { "args": [[[57, 30, 53, 0, 27, 39, 28, 97, 20, 73], [43, 40, 9, 93, 25, 12, 29, 13, 7, 35], [80, 32, 50, 52, 10, 45, 51, 22, 16, 26], [63, 67, 96, 79, 1, 92, 64, 81, 24, 5], [17, 85, 46, 33, 6, 75, 31, 68, 78, 71], [77, 60, 82, 56, 21, 55, 42, 74, 8, 47], [4, 95, 14, 44, 94, 66, 19, 38, 58, 11], [86, 2, 62, 98, 99, 18, 70, 54, 37, 88], [23, 48, 61, 89, 41, 90, 76, 69, 36, 59], [91, 3, 83, 65, 34, 84, 49, 15, 87, 72]]], "expected": 72 },
+    { "args": [[[96, 102, 89, 208, 166, 224, 110, 175, 132, 115, 74, 40, 185, 35, 50], [39, 75, 80, 1, 171, 199, 217, 120, 16, 164, 3, 21, 189, 149, 51], [184, 18, 196, 77, 108, 167, 69, 97, 134, 121, 218, 100, 99, 28, 0], [195, 131, 56, 219, 88, 66, 87, 200, 37, 202, 42, 94, 72, 170, 34], [193, 155, 138, 71, 59, 182, 81, 32, 172, 101, 205, 53, 116, 86, 147], [160, 57, 181, 177, 186, 161, 95, 113, 215, 8, 150, 98, 64, 156, 126], [136, 210, 194, 73, 130, 6, 31, 163, 135, 123, 128, 30, 19, 125, 188], [112, 55, 203, 148, 154, 63, 61, 76, 92, 143, 58, 180, 222, 129, 141], [13, 137, 139, 91, 212, 133, 29, 78, 41, 204, 118, 79, 216, 106, 162], [52, 25, 105, 10, 107, 60, 178, 151, 111, 103, 114, 36, 84, 46, 158], [83, 146, 198, 49, 187, 7, 190, 20, 174, 11, 54, 119, 44, 183, 26], [191, 48, 213, 157, 24, 173, 43, 67, 206, 14, 153, 82, 85, 93, 152], [109, 27, 2, 122, 62, 179, 104, 211, 17, 127, 144, 65, 15, 169, 140], [38, 70, 192, 159, 221, 12, 209, 145, 5, 201, 142, 45, 214, 4, 23], [9, 33, 165, 47, 117, 124, 22, 168, 220, 68, 90, 223, 207, 197, 176]]], "expected": 176 }
+  ],
+  "hints": [
+    "You can stand on a cell once the water level reaches its height. A route is usable at time t exactly when every cell on it has height at most t.",
+    "So the answer is the smallest possible 'highest cell' over all routes from (0, 0) to (n - 1, n - 1). That is a minimax path, and Dijkstra handles it: the cost of extending a route is max(time, grid[nr][nc]).",
+    "Push [grid[0][0], 0, 0] into a min-heap, always expand the lowest time, and return the time when you pop the bottom-right cell."
+  ],
+  "complexity": { "time": "O(n² log n): n² cells, each pushed a few times, with logarithmic heap operations", "space": "O(n²): the best-time grid and the heap" }
+}

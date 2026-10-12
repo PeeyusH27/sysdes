@@ -1,0 +1,29 @@
+{
+  "title": "Counting Bits",
+  "difficulty": "Easy",
+  "patterns": ["bit-manipulation", "dp-1d"],
+  "js": ["bitwise", "arrays"],
+  "order": 3,
+  "summary": "For every number from 0 to n, count its 1 bits, reusing the answers you have already computed.",
+  "fn": "countBits",
+  "params": ["n"],
+  "types": { "params": ["number"], "returns": "number[]" },
+  "tests": [
+    { "args": [4], "expected": [0, 1, 1, 2, 1], "explain": "0, 1, 10, 11, 100 in binary have 0, 1, 1, 2 and 1 set bits." },
+    { "args": [7], "expected": [0, 1, 1, 2, 1, 2, 2, 3], "explain": "From 4 (100) to 7 (111), each count is 1 more than the count for the same number without its top bit (0 to 3)." },
+    { "args": [0], "expected": [0], "explain": "Only the number 0, which has no set bits." },
+    { "args": [1], "expected": [0, 1] },
+    { "args": [8], "expected": [0, 1, 1, 2, 1, 2, 2, 3, 1] },
+    { "args": [16], "expected": [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1] },
+    { "args": [31], "expected": [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5] },
+    { "args": [64], "expected": [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 1] },
+    { "args": [100], "expected": [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2, 3, 3, 4, 3] },
+    { "args": [255], "expected": [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8] }
+  ],
+  "hints": [
+    "Counting the bits of each number separately is O(n log n). Can the count for i be built from a smaller number's count?",
+    "i >> 1 drops the last bit of i. That number is smaller than i, so its count is already in your array.",
+    "bits[i] = bits[i >> 1] + (i & 1). Fill the array from 1 to n."
+  ],
+  "complexity": { "time": "O(n): one O(1) step per number", "space": "O(1) besides the output array" }
+}

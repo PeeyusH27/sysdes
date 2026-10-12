@@ -1,0 +1,31 @@
+{
+  "title": "Binary Tree Maximum Path Sum",
+  "difficulty": "Hard",
+  "patterns": ["tree-dfs"],
+  "js": ["recursion", "functions-closures", "numbers-math"],
+  "order": 7,
+  "summary": "Find the largest sum of node values along any path in a binary tree, where the path may start and end anywhere.",
+  "fn": "maxPathSum",
+  "params": ["root"],
+  "types": { "params": ["TreeNode"], "returns": "number" },
+  "io": { "args": ["tree"] },
+  "tests": [
+    { "args": [[-3, 4, 5, -1, 6, null, -2]], "expected": 12, "explain": "The best path is 6 → 4 → -3 → 5 = 12. It passes through the negative root because both sides are worth more than -3 costs." },
+    { "args": [[-7]], "expected": -7, "explain": "A path needs at least one node, so a lone negative node is the answer." },
+    { "args": [[-10, 5, -20, 8, 7]], "expected": 20, "explain": "8 → 5 → 7 = 20. Going up to the root would only add -10, so the best path bends at 5." },
+    { "args": [[-5, -2, -8]], "expected": -2 },
+    { "args": [[6, 2, 3]], "expected": 11 },
+    { "args": [[2, -1, null, 4, null, -3, null, 5]], "expected": 7 },
+    { "args": [[0, 0, 0]], "expected": 0 },
+    { "args": [[1000, -1000, 1000]], "expected": 2000 },
+    { "args": [[1, -2, 3, 4, null, -6, 2, -1, 7]], "expected": 15 },
+    { "args": [[19, -28, 30, -21, -26, -13, 10, 1, 7, -6, -29, -23, -18, 29, null, -30, -17, -7, null, null, null, null, 1, -23, -16, null, 10, null, 9, null, null, -25, null, null, 15, null, null, 6, -27, -1, null, -14, 13, null, -7, null, null, -7, null, -2, 19, null, 8, null, null, null, -26, -30, 19, null, null, 3, 26, null, -4, null, null, 23, -28, null, null, null, -11, 29, null, null, -13, null, null, null, null, null, null, -26, null, null, -24, -8, null, null, null, null, 7, null, null, null, null, 7]], "expected": 118 },
+    { "args": [[-41, -9, -16, -52, -60, -60, -52, -16, -39, -32, -36, -19, -34, -59, -42, null, -45, -55, null, null, null, null, null, -45, -58, -46, null, -26, -56, -9, -14, null, null, null, null, null, -15, null, null, -30, null, null, -47, null, -10, -42, null, null, null, null, -49]], "expected": -9 }
+  ],
+  "hints": [
+    "Every path has one highest node. If the path bends at node X, its sum is X.val plus the best downward arm into the left subtree plus the best arm into the right.",
+    "An arm is optional: if the best arm from a child is negative, use 0 instead and simply don't extend into that child.",
+    "Post-order: gain(node) = node.val + Math.max(0, gain(left), gain(right)). At each node, update best with node.val + Math.max(0, gainLeft) + Math.max(0, gainRight). Start best at -Infinity."
+  ],
+  "complexity": { "time": "O(n): one post-order pass", "space": "O(h) for the recursion" }
+}

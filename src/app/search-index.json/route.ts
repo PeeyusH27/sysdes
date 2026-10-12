@@ -1,5 +1,6 @@
 import { allPages } from "@content/registry";
-import { mdxToPlainText } from "@/lib/content";
+import { mdxToPlainText, readContent } from "@/lib/content";
+import { loadProblems } from "@/lib/dsa/load";
 
 export const dynamic = "force-static";
 
@@ -14,5 +15,15 @@ export async function GET() {
       body: p.file ? (await mdxToPlainText(p.file)).slice(0, 8000) : "",
     })),
   );
-  return Response.json(docs);
+  const problems = await Promise.all(
+    loadProblems().map(async (p) => ({
+      id: `/dsa/problems/${p.slug}`,
+      title: p.meta.title,
+      section: "Problems",
+      summary: p.meta.summary,
+      tags: [p.meta.difficulty, ...p.meta.patterns].join(" "),
+      body: (await readContent(`dsa/problems/${p.slug}/statement.md`)).replace(/[`*_#>|]/g, " ").slice(0, 3000),
+    })),
+  );
+  return Response.json([...docs, ...problems]);
 }

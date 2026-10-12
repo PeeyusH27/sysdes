@@ -1,0 +1,32 @@
+{
+  "title": "Find First and Last Position of a Value",
+  "difficulty": "Medium",
+  "patterns": ["binary-search"],
+  "js": ["numbers-math", "arrays"],
+  "order": 3,
+  "summary": "In a sorted array with duplicates, find the first and last index of a target in O(log n) time.",
+  "fn": "searchRange",
+  "params": ["nums", "target"],
+  "types": { "params": ["number[]", "number"], "returns": "number[]" },
+  "tests": [
+    { "args": [[2, 4, 4, 4, 7, 9], 4], "expected": [1, 3], "explain": "The three 4s occupy indices 1, 2 and 3." },
+    { "args": [[2, 4, 4, 4, 7, 9], 5], "expected": [-1, -1], "explain": "5 is not in the array." },
+    { "args": [[], 3], "expected": [-1, -1], "explain": "An empty array contains nothing." },
+    { "args": [[8], 8], "expected": [0, 0] },
+    { "args": [[5, 5, 5, 5, 5], 5], "expected": [0, 4] },
+    { "args": [[1, 2, 3], 3], "expected": [2, 2] },
+    { "args": [[1, 1, 2, 3], 1], "expected": [0, 1] },
+    { "args": [[-3, -3, 0, 0, 0, 6], 0], "expected": [2, 4] },
+    { "args": [[1, 3, 5, 7], 0], "expected": [-1, -1] },
+    { "args": [[1, 3, 5, 7], 8], "expected": [-1, -1] },
+    { "args": [[-17, -17, -17, -17, -16, -16, -16, -15, -15, -15, -14, -14, -14, -14, -11, -11, -8, -8, -8, -8, -7, -7, -7, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, 6, 6, 6, 8, 8, 8, 8, 10, 10, 10, 12, 12, 12, 16, 16, 18, 18, 18, 19, 19, 19, 19, 23, 24, 24, 24], -3], "expected": [23, 33] },
+    { "args": [[-17, -17, -17, -17, -16, -16, -16, -15, -15, -15, -14, -14, -14, -14, -11, -11, -8, -8, -8, -8, -7, -7, -7, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, 6, 6, 6, 8, 8, 8, 8, 10, 10, 10, 12, 12, 12, 16, 16, 18, 18, 18, 19, 19, 19, 19, 23, 24, 24, 24], -13], "expected": [-1, -1] }
+  ],
+  "samples": 3,
+  "hints": [
+    "Finding any copy of the target and then walking left and right is O(n) when the target fills most of the array. Use two binary searches instead.",
+    "First position: the first index whose value is >= target. Last position: the first index whose value is > target, minus one.",
+    "Write one lowerBound(nums, x) helper (lo = 0, hi = nums.length, loop while lo < hi). Then first = lowerBound(target) and last = lowerBound(target + 1) - 1. Check that nums[first] really equals the target."
+  ],
+  "complexity": { "time": "O(log n): two binary searches", "space": "O(1)" }
+}

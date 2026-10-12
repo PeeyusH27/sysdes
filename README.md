@@ -1,8 +1,11 @@
-# System Design Suite
+# DSA & System Design
 
-A Next.js site for learning high-level system design: a 10-step HLD path, 6 deep dives and 7 interview questions with detailed JavaScript answers. Diagrams are animated SVG you can play, pause and step through; widgets simulate load balancers, caches, queues and more; and a drag-and-drop playground lints, simulates and grades your designs.
+A Next.js site for interview preparation with two tracks:
 
-The implementation plan this was built from is in [`docs/plan/`](docs/plan/README.md). Content conventions are in [`docs/AUTHORING.md`](docs/AUTHORING.md).
+- **DSA** (`/dsa`): a JavaScript-for-DSA cheat sheet with runnable snippets, 22 patterns explained step by step with animations synced to the code, and practice problems solved in an in-browser editor. Tests run in a Web Worker, solved problems are tracked, and a step-by-step solution unlocks after the first wrong submission.
+- **System design** (`/system-design`): a 10-step HLD path, 6 deep dives and 7 interview questions with detailed JavaScript answers. Diagrams are animated SVG you can play, pause and step through; widgets simulate load balancers, caches, queues and more; and a drag-and-drop playground lints, simulates and grades your designs.
+
+The implementation plans are in [`docs/plan/`](docs/plan/README.md) (the DSA track is [`07-dsa-track.md`](docs/plan/07-dsa-track.md)). Content conventions are in [`docs/AUTHORING.md`](docs/AUTHORING.md) and [`docs/AUTHORING-DSA.md`](docs/AUTHORING-DSA.md).
 
 ## Run it
 
@@ -15,7 +18,9 @@ npm run build && npm start
 ## Checks
 
 ```bash
-npm test                     # Vitest: snippet tests, widget logic, playground logic, content integrity
+npm test                     # Vitest: snippet tests, widget logic, playground logic, content integrity,
+                             # and every DSA reference solution run against its tests
+
 npm run check:content        # compiles every MDX file and checks components, imports and code files
 npm run typecheck
 npx playwright test          # end-to-end (builds must exist: run `npm run build` first)
@@ -33,6 +38,17 @@ npx playwright test          # end-to-end (builds must exist: run `npm run build
 | `src/components/widgets/` | Interactive simulators used in MDX |
 | `src/components/playground/` | React Flow builder: store (undo/autosave), lint rules, grader, traffic simulator, share links, challenges |
 | `src/mdx-components.tsx` | Every component available to MDX |
+| `content/dsa/registry.ts` | DSA patterns and JavaScript cheat sheet topics |
+| `content/dsa/patterns/<NN-slug>/` | Pattern lessons: `page.mdx`, `viz.ts` (animation traces), `quiz.ts`, `snippets/` |
+| `content/dsa/js/` | Cheat sheet topics (`<NN-id>.mdx`) and their runnable snippets |
+| `content/dsa/problems/<slug>/` | Problems: `problem.json` (tests), `statement.md`, `solution.md`, `solution.js` |
+| `src/components/algo/` | Algorithm animation engine: `defineTrace` + view builders, `AlgoPlayer` |
+| `src/components/dsa/`, `src/lib/dsa/` | Problem workspace, CodeMirror editor, runner client, progress store, problem loader |
+| `public/dsa-runner.js` | The sandboxed test runner (Web Worker in the browser, evaluated directly in tests) |
+
+## Adding a DSA problem
+
+Create `content/dsa/problems/<slug>/` with `problem.json`, `statement.md`, `solution.md` and `solution.js` (see `docs/AUTHORING-DSA.md`), then run `npx vitest run tests/dsa.test.ts -t <slug>`. It appears in the problem list and on its pattern page automatically.
 
 ## Adding a page
 

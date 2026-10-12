@@ -1,0 +1,31 @@
+{
+  "title": "Course Schedule II",
+  "difficulty": "Medium",
+  "patterns": ["topological-sort", "graph-traversal"],
+  "js": ["graphs-in-js", "stack-queue-deque"],
+  "order": 2,
+  "summary": "Return an order in which to take all the courses so that every prerequisite comes first, or [] if none exists.",
+  "fn": "findOrder",
+  "params": ["numCourses", "prerequisites"],
+  "types": { "params": ["number", "number[][]"], "returns": "number[]" },
+  "validate": "(result, args, expected) => {\n  const [n, prerequisites] = args;\n  if (!Array.isArray(result)) return \"Return an array of course numbers.\";\n  if (expected.length === 0) return result.length === 0 ? true : \"The prerequisites contain a cycle, so no valid order exists: return [].\";\n  if (result.length === 0) return `An order exists (for example [${expected.join(\", \")}]), so don't return [].`;\n  if (result.length !== n) return `The order must list all ${n} courses exactly once, but it has ${result.length} entries.`;\n  const pos = new Array(n).fill(-1);\n  for (let i = 0; i < result.length; i++) {\n    const c = result[i];\n    if (!Number.isInteger(c) || c < 0 || c >= n) return `${JSON.stringify(c)} is not a course number from 0 to ${n - 1}.`;\n    if (pos[c] !== -1) return `Course ${c} appears more than once.`;\n    pos[c] = i;\n  }\n  for (const [course, pre] of prerequisites) {\n    if (pos[pre] > pos[course]) return `Course ${pre} is a prerequisite of course ${course}, so it must come first, but your order puts it after.`;\n  }\n  return true;\n}",
+  "tests": [
+    { "args": [4, [[1, 0], [2, 0], [3, 1], [3, 2]]], "expected": [0, 1, 2, 3], "explain": "0 has no prerequisites, so it goes first. 1 and 2 each need only 0, and 3 needs both. [0, 2, 1, 3] is just as correct." },
+    { "args": [2, [[0, 1], [1, 0]]], "expected": [], "explain": "0 and 1 each need the other, so neither can be first: return []." },
+    { "args": [3, []], "expected": [0, 1, 2], "explain": "With no prerequisites any order of 0, 1 and 2 works." },
+    { "args": [1, []], "expected": [0] },
+    { "args": [1, [[0, 0]]], "expected": [] },
+    { "args": [5, [[0, 4], [4, 3], [3, 2], [2, 1]]], "expected": [1, 2, 3, 4, 0] },
+    { "args": [6, [[1, 0], [2, 1], [0, 2], [4, 3], [5, 4]]], "expected": [] },
+    { "args": [6, [[3, 0], [3, 1], [4, 1], [4, 2], [5, 3], [5, 4]]], "expected": [0, 1, 2, 3, 4, 5] },
+    { "args": [3, [[2, 0], [2, 0], [1, 2]]], "expected": [0, 2, 1] },
+    { "args": [12, [[4, 8], [2, 10], [1, 11], [4, 1], [11, 3], [5, 9], [1, 9], [10, 0], [0, 3], [5, 4], [11, 9], [7, 0], [8, 9], [10, 6], [8, 1], [2, 7], [0, 6], [4, 3]]], "expected": [3, 6, 9, 0, 11, 10, 7, 1, 2, 8, 4, 5] },
+    { "args": [12, [[4, 8], [2, 10], [1, 11], [4, 1], [11, 3], [5, 9], [1, 9], [10, 0], [0, 3], [5, 4], [11, 9], [7, 0], [8, 9], [10, 6], [8, 1], [2, 7], [0, 6], [4, 3], [8, 4]]], "expected": [] }
+  ],
+  "hints": [
+    "Any order where each prerequisite comes before the course that needs it is accepted. That is a topological order of the graph pre → course.",
+    "Kahn's algorithm builds one: queue every course with in-degree 0, and each time you take a course, lower the in-degree of the courses it unlocks and queue the ones that reach 0.",
+    "The order in which courses leave the queue is the answer. If it has fewer than numCourses entries, some courses are stuck on a cycle: return []."
+  ],
+  "complexity": { "time": "O(V + E): each course and each pair is processed once", "space": "O(V + E): the adjacency list, in-degrees and queue" }
+}

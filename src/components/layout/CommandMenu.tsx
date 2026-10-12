@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import MiniSearch from "minisearch";
-import { BookOpen, Boxes, FileQuestion, Library } from "lucide-react";
+import { Binary, BookOpen, Boxes, Braces, Code2, FileQuestion, Library } from "lucide-react";
 
 type Doc = { id: string; title: string; section: string; summary: string; tags: string; body: string };
 
@@ -23,7 +23,7 @@ function loadIndex() {
   return indexPromise;
 }
 
-const ICONS: Record<string, typeof BookOpen> = { Learn: BookOpen, "Deep dives": Library, Questions: FileQuestion, Reference: Boxes };
+const ICONS: Record<string, typeof BookOpen> = { Learn: BookOpen, "Deep dives": Library, Questions: FileQuestion, Reference: Boxes, Patterns: Binary, JavaScript: Braces, Problems: Code2 };
 
 export function CommandMenu({ onClose }: { onClose: () => void }) {
   const router = useRouter();
@@ -48,8 +48,8 @@ export function CommandMenu({ onClose }: { onClose: () => void }) {
   return (
     <div className="cmdk-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="cmdk-panel" role="dialog" aria-modal="true" aria-label="Search">
-        <Command shouldFilter={false} label="Search lessons, deep dives and questions">
-          <Command.Input autoFocus value={q} onValueChange={setQ} placeholder="Search lessons, deep dives, questions…" />
+        <Command shouldFilter={false} label="Search lessons, patterns, problems and questions">
+          <Command.Input autoFocus value={q} onValueChange={setQ} placeholder="Search lessons, patterns, problems…" />
           <Command.List>
             <Command.Empty>{index ? "No results." : "Loading…"}</Command.Empty>
             {results.map((r) => {

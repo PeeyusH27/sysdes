@@ -1,0 +1,31 @@
+{
+  "title": "Coin Change II",
+  "difficulty": "Medium",
+  "patterns": ["dp-2d"],
+  "js": ["arrays", "recursion"],
+  "order": 6,
+  "summary": "Count the different combinations of coins that add up to an amount, with unlimited coins of each value.",
+  "fn": "change",
+  "params": ["amount", "coins"],
+  "types": { "params": ["number", "number[]"], "returns": "number" },
+  "tests": [
+    { "args": [6, [1, 2, 3]], "expected": 7, "explain": "3+3, 3+2+1, 3+1+1+1, 2+2+2, 2+2+1+1, 2+1+1+1+1 and 1+1+1+1+1+1. The order of the coins doesn't matter." },
+    { "args": [3, [2]], "expected": 0, "explain": "Coins of 2 only make even amounts." },
+    { "args": [0, [7]], "expected": 1, "explain": "There is exactly one way to make 0: use no coins." },
+    { "args": [10, [10]], "expected": 1 },
+    { "args": [4, [1, 2]], "expected": 3 },
+    { "args": [11, [2, 5]], "expected": 1 },
+    { "args": [7, [3, 5]], "expected": 0 },
+    { "args": [12, [2, 3, 5]], "expected": 5 },
+    { "args": [100, [1, 5, 10, 25]], "expected": 242 },
+    { "args": [25, [3, 5, 7]], "expected": 5 },
+    { "args": [500, [1, 2, 5, 10, 20, 50, 100, 200]], "expected": 6295434 },
+    { "args": [300, [3, 7, 11, 13, 17, 19]], "expected": 35980 }
+  ],
+  "hints": [
+    "Order doesn't matter: 1 + 2 and 2 + 1 are the same combination. A loop that tries every coin as the 'last coin' for every amount counts them twice.",
+    "Process the coins one at a time. ways[a] = number of combinations of the coins seen so far that make a. Adding a coin c: ways[a] += ways[a - c].",
+    "Put the coin loop OUTSIDE and the amount loop inside, going UP from c to amount (a coin may be used again). Start with ways[0] = 1."
+  ],
+  "complexity": { "time": "O(amount × number of coins): every coin updates every amount once", "space": "O(amount): one row of counts" }
+}

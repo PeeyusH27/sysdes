@@ -1,0 +1,30 @@
+{
+  "title": "Happy Number",
+  "difficulty": "Easy",
+  "patterns": ["fast-slow-pointers", "hashing"],
+  "js": ["numbers-math", "map-set"],
+  "order": 3,
+  "summary": "Repeatedly replace a number by the sum of the squares of its digits and decide whether it reaches 1 or loops forever.",
+  "fn": "isHappy",
+  "params": ["n"],
+  "types": { "params": ["number"], "returns": "boolean" },
+  "tests": [
+    { "args": [19], "expected": true, "explain": "19 → 1² + 9² = 82 → 64 + 4 = 68 → 36 + 64 = 100 → 1. It reaches 1, so 19 is happy." },
+    { "args": [4], "expected": false, "explain": "4 → 16 → 37 → 58 → 89 → 145 → 42 → 20 → 4: the sequence loops without ever reaching 1." },
+    { "args": [1], "expected": true, "explain": "1 is already 1." },
+    { "args": [7], "expected": true },
+    { "args": [2], "expected": false },
+    { "args": [100], "expected": true },
+    { "args": [116], "expected": false },
+    { "args": [1111111], "expected": true },
+    { "args": [10], "expected": true },
+    { "args": [2147483647], "expected": false },
+    { "args": [999999999], "expected": false }
+  ],
+  "hints": [
+    "Write out the sequence for a few numbers. Either it reaches 1 (and stays there), or it repeats a number it has seen before. Why can't it grow forever?",
+    "A repeated number means the sequence is stuck in a loop. That's cycle detection on a linked list, where next(x) is the digit-square sum of x.",
+    "Run a slow pointer (one step) and a fast pointer (two steps) along the sequence until they meet. The number is happy exactly when they meet at 1."
+  ],
+  "complexity": { "time": "O(log n): the first step shrinks any big number to a few hundred, and the walk from there is short", "space": "O(1) with fast and slow pointers (a Set of seen numbers also works)" }
+}

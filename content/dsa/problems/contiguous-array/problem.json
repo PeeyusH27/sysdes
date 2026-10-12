@@ -1,0 +1,30 @@
+{
+  "title": "Contiguous Array",
+  "difficulty": "Medium",
+  "patterns": ["prefix-sum"],
+  "js": ["map-set", "arrays"],
+  "order": 5,
+  "summary": "Find the longest contiguous piece of a binary array that has as many 0s as 1s.",
+  "fn": "findMaxLength",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[0, 0, 1, 0, 1, 1, 0]], "expected": 6, "explain": "Indices 1 to 6 hold 0, 1, 0, 1, 1, 0: three 0s and three 1s, length 6." },
+    { "args": [[1, 1, 1]], "expected": 0, "explain": "There are no 0s, so no balanced subarray exists: return 0." },
+    { "args": [[0, 1]], "expected": 2, "explain": "The whole array has one 0 and one 1." },
+    { "args": [[1]], "expected": 0 },
+    { "args": [[0, 0, 1, 1, 0, 0, 1, 1]], "expected": 8 },
+    { "args": [[1, 0, 1, 1, 1, 0, 0]], "expected": 6 },
+    { "args": [[0, 1, 1, 0, 1, 1, 1, 0]], "expected": 4 },
+    { "args": [[1, 1, 0, 0, 0]], "expected": 4 },
+    { "args": [[0, 0, 0, 1]], "expected": 2 },
+    { "args": [[1, 0, 1, 0, 1, 0, 1, 0, 1, 0]], "expected": 10 },
+    { "args": [[0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1]], "expected": 46 }
+  ],
+  "hints": [
+    "Count a 1 as +1 and a 0 as -1. A balanced subarray is then a subarray that sums to 0.",
+    "A subarray sums to 0 exactly when the running sum before it equals the running sum at its end.",
+    "Store the FIRST index where each running sum appears (running sum 0 at index -1). When the same sum shows up again at j, j - firstIndex is a balanced length."
+  ],
+  "complexity": { "time": "O(n): one pass", "space": "O(n): up to n + 1 distinct running sums" }
+}

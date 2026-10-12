@@ -1,0 +1,31 @@
+{
+  "title": "Edit Distance",
+  "difficulty": "Medium",
+  "patterns": ["dp-2d"],
+  "js": ["strings", "arrays", "numbers-math"],
+  "order": 4,
+  "summary": "Count the fewest single-letter inserts, deletes and replacements that turn one word into another.",
+  "fn": "minDistance",
+  "params": ["word1", "word2"],
+  "types": { "params": ["string", "string"], "returns": "number" },
+  "tests": [
+    { "args": ["table", "cable"], "expected": 1, "explain": "Replace the t with a c." },
+    { "args": ["flaw", "lawn"], "expected": 2, "explain": "Delete the f (law), then insert an n at the end (lawn)." },
+    { "args": ["", "abc"], "expected": 3, "explain": "Starting from nothing, insert all three letters." },
+    { "args": ["abc", ""], "expected": 3 },
+    { "args": ["", ""], "expected": 0 },
+    { "args": ["same", "same"], "expected": 0 },
+    { "args": ["sunday", "saturday"], "expected": 3 },
+    { "args": ["abcdef", "azced"], "expected": 3 },
+    { "args": ["dinosaur", "dinner"], "expected": 4 },
+    { "args": ["a", "b"], "expected": 1 },
+    { "args": ["abc", "cba"], "expected": 2 },
+    { "args": ["cacaccaddbaabedcdbaaecbec", "cbedadacdedeeadacdeccbadc"], "expected": 18 }
+  ],
+  "hints": [
+    "Look at the last letters of both words. If they are equal, they need no edit at all.",
+    "If they differ, the last edit was a replace, a delete or an insert. Each one leaves a smaller pair of prefixes to fix.",
+    "dp[i][j] = fewest edits for the first i letters of word1 and the first j of word2. dp[i][0] = i, dp[0][j] = j; on a mismatch dp[i][j] = 1 + min(diagonal, above, left)."
+  ],
+  "complexity": { "time": "O(m × n): one cell per pair of prefixes", "space": "O(m × n) for the table (O(min(m, n)) with two rows)" }
+}

@@ -1,0 +1,111 @@
+Your algorithm's Big-O is only as good as the built-ins inside its loops. One `includes`, `shift` or spread copy inside a loop silently multiplies the work by n, and a solution you analysed as O(n) times out as O(n²). Use these tables as the reference when you count.
+
+### Array method costs
+
+| Operation | Cost | Note |
+|---|---|---|
+| `arr[i]`, `arr.at(i)`, `arr.length` | O(1) | |
+| `push(x)`, `pop()` | O(1) amortized | the array occasionally reallocates |
+| `shift()`, `unshift(x)` | O(n) | moves every element; V8 hides it below about 16k items |
+| `splice(i, k, …items)` | O(n − i + items) | shifts everything after `i` |
+| `slice(a, b)` | O(b − a) | a new array |
+| `[...arr]`, `Array.from(arr)` | O(n) | a new array |
+| `a.concat(b)`, `[...a, ...b]` | O(n + m) | a new array |
+| `indexOf`, `includes`, `find`, `findIndex`, `some`, `every` | O(n) | linear scan, stops early when it can |
+| `map`, `filter`, `forEach`, `reduce`, `reverse`, `fill` | O(n) | |
+| `join(sep)` | O(total length) | |
+| `sort(cmp)`, `toSorted(cmp)` | O(n log n) comparisons | stable (TimSort in V8) |
+| `flat()` | O(total elements) | |
+| `new Array(n).fill(0)`, `Array.from({ length: n }, f)` | O(n) | |
+| `a === b` | O(1) | compares references, never contents |
+
+### String method costs
+
+Strings are immutable: every method that "changes" a string returns a new one.
+
+| Operation | Cost | Note |
+|---|---|---|
+| `s[i]`, `s.charCodeAt(i)`, `s.length` | O(1) | |
+| `s + t`, template literals | O(n + m) | engines may defer the copy (ropes) |
+| `s += ch` in a loop | O(n) total in V8 if you never read `s` in between | O(n²) when reads force copies; build an array and `join('')` |
+| `slice`, `substring` | O(k) | count it as a copy |
+| `split('')`, `[...s]` | O(n) | a new array |
+| `indexOf(t)`, `includes(t)` | O(n · m) worst case | fast in practice; still a scan |
+| `startsWith(t)`, `endsWith(t)` | O(m) | |
+| `s === t`, `s < t` | O(length) | compared character by character |
+| `toLowerCase`, `trim`, `replace`, `replaceAll` | O(n) | |
+| `repeat(k)` | O(n · k) | |
+| `parseInt(s)`, `Number(s)`, `String(x)` | O(length) | |
+| Using a string as a `Map`/`Set` key | O(length) to build and hash | number keys are cheaper |
+
+### Map, Set and object operation costs
+
+| Operation | Cost | Note |
+|---|---|---|
+| `map.get`, `set`, `has`, `delete`; `set.add`, `has`, `delete` | O(1) average | |
+| `map.size`, `set.size` | O(1) | a property |
+| `new Set(arr)`, `new Map(entries)` | O(n) | |
+| `for...of`, `[...map]`, `[...map.keys()]` | O(n) | |
+| `obj[key]`, `obj[key] = v`, `key in obj` | O(1) average | |
+| `delete obj[key]` | O(1) | can switch the object to a slower dictionary mode |
+| `Object.keys`, `values`, `entries` | O(n) | builds a new array on every call |
+| `Object.keys(obj).length` | O(n) | keep a counter, or use a `Map` and `size` |
+| `{ ...obj }`, `Object.assign({}, obj)` | O(n) | shallow copy |
+
+### Hidden costs of copying and helper functions
+
+| Operation | Cost | Note |
+|---|---|---|
+| `structuredClone(x)` | O(size of x) | deep copy of nested arrays, Maps and Sets |
+| `JSON.stringify(x)`, `JSON.parse(s)` | O(size) | loses Maps, Sets and `undefined` values |
+| `JSON.stringify(a) === JSON.stringify(b)` | O(n) | compares arrays by content; fine once, slow in a loop |
+| `Math.max(...arr)`, `Math.min(...arr)` | O(n) | throws `RangeError` beyond roughly 100k items |
+| `f(...arr)`, `arr.push(...other)` | O(n) | same argument-count limit for huge arrays |
+| `console.log` inside a hot loop | slow I/O per call | remove it before submitting |
+
+### Hidden O(n) traps inside loops
+
+Each line below is O(1)-looking code that actually scans or copies, which turns an O(n) loop into O(n²):
+
+| Trap | Fix |
+|---|---|
+| `if (!out.includes(x))` | keep a `Set` alongside: `seen.has(x)` |
+| `queue.shift()` in BFS | a head index: `queue[head++]` |
+| `out = [...out, x]` or `out = out.concat([x])` | `out.push(x)` |
+| `solve(arr.slice(1))` in recursion | pass an index: `solve(arr, i + 1)` |
+| `s += ch` while also reading `s` | push into an array, `join('')` once |
+| `arr.splice(i, 1)` to delete many items | `filter`, or a read/write pointer pass |
+| `arr.indexOf(x)` to find a position again and again | build a value → index `Map` once |
+| `Object.keys(obj).length` to count | a counter variable or `map.size` |
+| sorting inside a loop to keep data ordered | sort once, or use a heap |
+
+<RunCode src="snippets/complexity-traps.js" />
+
+At n = 20,000 the quadratic versions already cost tens to hundreds of milliseconds; at n = 10^5 they take seconds, which is exactly where hidden tests sit. `s += ch` deserves a note: V8 builds such strings as ropes, so a plain append loop is often fast, but that is an engine optimisation, not a guarantee, and reading from the string between appends forces repeated copies.
+
+### Operation budgets: what n allows
+
+<RunCode src="snippets/complexity-budget.js" />
+
+A tight arithmetic loop runs around 10^9 iterations per second, but real algorithm steps compare, index, branch and allocate. A rule of thumb that holds up: **about 10^8 simple steps per second, and 10^7 when each step touches a `Map`, a `Set` or builds a string**. Judges usually allow 1–2 seconds; this site's editor stops a test after 3. Read the constraints and work backwards:
+
+| Largest n | Complexity that fits | Typical approach |
+|---|---|---|
+| 10–12 | O(n!) | permutations, brute force |
+| 20–25 | O(2^n), O(n · 2^n) | subsets, bitmask DP |
+| 100–500 | O(n³) | Floyd-Warshall, interval DP |
+| 1,000–5,000 | O(n²) | 2D DP, all pairs |
+| 10^5–10^6 | O(n log n) | sorting, heaps, binary search |
+| 10^7–10^8 | O(n) | one pass with O(1) work per step |
+| beyond | O(log n) or O(1) | math, binary search on the answer |
+
+<Callout kind="warning" title="Complexity gotchas">
+
+- `sort` is O(n log n), not O(n). Sorting once is cheap; sorting inside a loop is not.
+- String keys cost their length: keying a `Map` by `arr.join(',')` of a long array makes every lookup O(L).
+- A memoized recursion costs (number of states) × (work per state). Count both.
+- Amortized O(1) (like `push`) means O(n) for n operations in total, even though a single call occasionally copies.
+- `arr.length` in a loop condition is O(1); there is no need to cache it.
+- An algorithm that "only" does O(n) work per element is O(n²) overall: look for the scan hiding inside a method call.
+
+</Callout>

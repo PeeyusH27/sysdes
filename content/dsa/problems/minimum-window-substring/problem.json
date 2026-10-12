@@ -1,0 +1,32 @@
+{
+  "title": "Minimum Window Substring",
+  "difficulty": "Hard",
+  "patterns": ["sliding-window"],
+  "js": ["map-set", "strings"],
+  "order": 6,
+  "summary": "Find the shortest piece of a string that contains every character of another string, repeats included.",
+  "fn": "minWindow",
+  "params": ["s", "t"],
+  "types": { "params": ["string", "string"], "returns": "string" },
+  "validate": "(result, args, expected) => { const [s, t] = args; if (typeof result !== \"string\") return \"Return a string.\"; if (expected === \"\") return result === \"\" ? true : \"No window of s contains every character of t, so the answer is \\\"\\\".\"; if (result.length !== expected.length) return \"The shortest valid window has length \" + expected.length + \", but yours has length \" + result.length + \".\"; if (!s.includes(result)) return \"Your answer is not a substring of s.\"; const need = {}; for (const c of t) need[c] = (need[c] || 0) + 1; for (const c of result) if (need[c]) need[c]--; return Object.values(need).every((v) => v === 0) ? true : \"Your window is missing some characters of t (repeats count).\"; }",
+  "tests": [
+    { "args": ["XAYBZCAB", "ABC"], "expected": "CAB", "explain": "\"CAB\" (indices 5 to 7) contains A, B and C, and no window of 3 characters elsewhere does." },
+    { "args": ["abc", "cc"], "expected": "", "explain": "t needs two c's but s has only one, so no window works: return \"\"." },
+    { "args": ["AaBb", "ab"], "expected": "aBb", "explain": "Letters are case-sensitive: the window must contain a lowercase a and a lowercase b, so the shortest is \"aBb\"." },
+    { "args": ["q", "q"], "expected": "q" },
+    { "args": ["abc", "d"], "expected": "" },
+    { "args": ["bba", "ab"], "expected": "ba" },
+    { "args": ["abcdebdde", "bde"], "expected": "deb" },
+    { "args": ["xyz", "xyz"], "expected": "xyz" },
+    { "args": ["ab", "b"], "expected": "b" },
+    { "args": ["mississippi", "pis"], "expected": "sip" },
+    { "args": ["pineapplepen", "pen"], "expected": "pen" },
+    { "args": ["HFHFDCBDEABBDBFEHGGBBDBBDDCEBADDCHCDBFAHAABGAFGHHBCEGADABBBA", "HAGC"], "expected": "HBCEGA" }
+  ],
+  "hints": [
+    "Count what t needs: a map from character to how many copies are required.",
+    "Extend a window to the right, and keep one number, missing, for how many required characters are still not covered. The window is valid when missing is 0.",
+    "While the window is valid, record it if it is the shortest so far, then move left forward. When removing a character makes missing positive again, go back to extending right."
+  ],
+  "complexity": { "time": "O(m + n): each index of s enters and leaves the window once, plus counting t", "space": "O(k): counts for the distinct characters of t" }
+}

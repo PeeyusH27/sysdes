@@ -1,7 +1,7 @@
 import { deepDives, getDeepDive } from "@content/registry";
 import { ogCard, ogSize } from "@/lib/og";
 
-export const alt = "System Design Suite";
+export const alt = "DSA & System Design";
 export const size = ogSize;
 export const contentType = "image/png";
 

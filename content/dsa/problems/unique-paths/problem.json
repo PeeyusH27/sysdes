@@ -1,0 +1,29 @@
+{
+  "title": "Unique Paths",
+  "difficulty": "Medium",
+  "patterns": ["dp-2d"],
+  "js": ["arrays", "gotchas"],
+  "order": 1,
+  "summary": "Count the paths from the top-left to the bottom-right of a grid when you may only move right or down.",
+  "fn": "uniquePaths",
+  "params": ["m", "n"],
+  "types": { "params": ["number", "number"], "returns": "number" },
+  "tests": [
+    { "args": [3, 3], "expected": 6, "explain": "Every path makes 2 moves down and 2 moves right in some order, and there are 6 such orders." },
+    { "args": [2, 4], "expected": 4, "explain": "One move down and three moves right. The single down move can come first, second, third or last." },
+    { "args": [1, 1], "expected": 1, "explain": "The robot already stands on the target: one path, with no moves at all." },
+    { "args": [3, 5], "expected": 15 },
+    { "args": [1, 9], "expected": 1 },
+    { "args": [7, 1], "expected": 1 },
+    { "args": [4, 4], "expected": 20 },
+    { "args": [10, 10], "expected": 48620 },
+    { "args": [16, 16], "expected": 155117520 },
+    { "args": [17, 18], "expected": 1166803110 }
+  ],
+  "hints": [
+    "Think about the last move into a cell. Where could the robot have been just before it?",
+    "paths[r][c] = paths[r - 1][c] + paths[r][c - 1]. Every cell in the first row and the first column has exactly one path.",
+    "Fill the table row by row, left to right, so the cell above and the cell to the left are always ready. A plain recursion repeats work and times out on the 17 × 18 grid."
+  ],
+  "complexity": { "time": "O(m × n): one addition per cell", "space": "O(m × n) for the table (O(n) if you keep a single row)" }
+}

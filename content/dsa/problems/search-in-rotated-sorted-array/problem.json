@@ -1,0 +1,32 @@
+{
+  "title": "Search in a Rotated Sorted Array",
+  "difficulty": "Medium",
+  "patterns": ["binary-search"],
+  "js": ["numbers-math", "arrays"],
+  "order": 4,
+  "summary": "A sorted array of distinct numbers was rotated at an unknown point. Find a target's index in O(log n) time.",
+  "fn": "searchRotated",
+  "params": ["nums", "target"],
+  "types": { "params": ["number[]", "number"], "returns": "number" },
+  "tests": [
+    { "args": [[5, 7, 9, 1, 2, 4], 2], "expected": 4, "explain": "The sorted array [1, 2, 4, 5, 7, 9] was rotated so that it starts at 5. The target 2 is at index 4." },
+    { "args": [[5, 7, 9, 1, 2, 4], 6], "expected": -1, "explain": "6 isn't in the array." },
+    { "args": [[1, 2, 3, 4, 5], 4], "expected": 3, "explain": "A rotation by zero positions leaves the array fully sorted; that is allowed too." },
+    { "args": [[3], 3], "expected": 0 },
+    { "args": [[3], 1], "expected": -1 },
+    { "args": [[4, 1], 1], "expected": 1 },
+    { "args": [[4, 1], 4], "expected": 0 },
+    { "args": [[6, 8, 10, 12, 2], 2], "expected": 4 },
+    { "args": [[11, 2, 3, 5, 8], 11], "expected": 0 },
+    { "args": [[30, 40, 50, 10, 20], 50], "expected": 2 },
+    { "args": [[12, 21, 24, 26, 33, 39, 45, 53, 56, 64, 70, 76, 79, -141, -135, -128, -122, -113, -107, -97, -92, -90, -82, -73, -69, -64, -54, -49, -46, -42, -34, -25, -21, -17, -11, -8, -3, 0, 6, 10], 39], "expected": 5 },
+    { "args": [[12, 21, 24, 26, 33, 39, 45, 53, 56, 64, 70, 76, 79, -141, -135, -128, -122, -113, -107, -97, -92, -90, -82, -73, -69, -64, -54, -49, -46, -42, -34, -25, -21, -17, -11, -8, -3, 0, 6, 10], -34], "expected": 30 }
+  ],
+  "samples": 3,
+  "hints": [
+    "Cut the array at any mid. At least one of the two halves, [lo, mid] or [mid, hi], is still sorted in the normal way. Which one? Compare nums[lo] with nums[mid].",
+    "If the left half is sorted (nums[lo] <= nums[mid]), you can tell exactly whether the target lies inside it: nums[lo] <= target < nums[mid]. If so, search left; otherwise search right.",
+    "Same idea when the right half is sorted: check nums[mid] < target <= nums[hi]. Use a closed range (lo <= hi) and move lo = mid + 1 or hi = mid - 1."
+  ],
+  "complexity": { "time": "O(log n): one half is discarded every step", "space": "O(1)" }
+}

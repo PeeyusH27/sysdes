@@ -1,0 +1,31 @@
+{
+  "title": "Car Pooling",
+  "difficulty": "Medium",
+  "patterns": ["prefix-sum", "intervals"],
+  "js": ["arrays"],
+  "order": 6,
+  "summary": "Decide whether a car with limited seats can serve every trip, given where each group gets in and out.",
+  "fn": "carPooling",
+  "params": ["trips", "capacity"],
+  "types": { "params": ["number[][]", "number"], "returns": "boolean" },
+  "tests": [
+    { "args": [[[3, 2, 6], [2, 4, 8]], 4], "expected": false, "explain": "Between stops 4 and 6 both groups are in the car: 3 + 2 = 5 passengers, more than 4 seats." },
+    { "args": [[[3, 2, 6], [2, 4, 8]], 5], "expected": true, "explain": "The peak is 5 passengers, which fits exactly." },
+    { "args": [[[2, 1, 4], [3, 4, 6]], 3], "expected": true, "explain": "The first group gets out at stop 4 before the second group gets in, so there are never more than 3 passengers." },
+    { "args": [[[5, 0, 1]], 5], "expected": true },
+    { "args": [[[6, 0, 1]], 5], "expected": false },
+    { "args": [[[1, 0, 10], [1, 2, 3], [1, 2, 3]], 2], "expected": false },
+    { "args": [[[2, 6, 9], [1, 0, 7], [3, 3, 5]], 4], "expected": true },
+    { "args": [[[2, 6, 9], [1, 0, 7], [3, 3, 5]], 3], "expected": false },
+    { "args": [[[4, 5, 10], [4, 0, 5]], 4], "expected": true },
+    { "args": [[[1, 999, 1000], [1, 0, 1000]], 1], "expected": false },
+    { "args": [[[5, 45, 64], [5, 5, 12], [3, 8, 21], [5, 24, 48], [3, 57, 80], [6, 23, 33], [2, 1, 16], [6, 30, 40], [5, 56, 76], [5, 33, 42], [4, 60, 75], [5, 17, 21], [4, 35, 44], [5, 44, 55], [3, 51, 70]], 20], "expected": true },
+    { "args": [[[5, 45, 64], [5, 5, 12], [3, 8, 21], [5, 24, 48], [3, 57, 80], [6, 23, 33], [2, 1, 16], [6, 30, 40], [5, 56, 76], [5, 33, 42], [4, 60, 75], [5, 17, 21], [4, 35, 44], [5, 44, 55], [3, 51, 70]], 19], "expected": false }
+  ],
+  "hints": [
+    "The car only drives east, so all that matters is how many passengers are inside at each stop.",
+    "A trip [p, from, to] adds p passengers at stop from and removes them at stop to. Record just those two changes in an array indexed by stop.",
+    "Walk the stops in order with a running sum of the changes (a difference array). If the running load ever exceeds capacity, return false."
+  ],
+  "complexity": { "time": "O(n + S): one write pair per trip, then one pass over the S = 1001 stops", "space": "O(S): the difference array" }
+}

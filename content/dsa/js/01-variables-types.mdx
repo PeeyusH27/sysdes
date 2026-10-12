@@ -1,0 +1,72 @@
+Most wrong answers in JavaScript aren't algorithm bugs. They're an index `0` read as "not found", an array two variables secretly share, or `==` converting a string behind your back. These rules decide what every assignment, `if` and comparison in a solution actually does.
+
+### let, const and block scope
+
+Use `const` for anything you never reassign (arrays, maps and sets included: their contents can still change) and `let` for counters, pointers and running totals. Both exist only inside the nearest block. Skip `var`: it belongs to the whole function, so a loop variable leaks past its loop and every closure created in the loop shares the same one.
+
+```js
+const seen = new Set();          // the binding is fixed; seen.add(x) is still fine
+let left = 0, right = n - 1;     // pointers move, so let
+for (let i = 0; i < n; i++) {}   // i exists only inside the loop
+k = 2; let k = 1;                // ReferenceError: used before its declaration
+const total = 0; total += 1;     // TypeError: Assignment to constant variable
+```
+
+<RunCode src="snippets/variables-scope.js" />
+
+### Primitives vs references
+
+Numbers, strings, booleans, `null`, `undefined`, bigints and symbols are **primitives**: assigning or passing one copies the value. Arrays, objects, Maps and Sets are **references**: assigning one copies a pointer, so two names can edit the same data. That's what makes "modify the array in place" work, and it's also behind the most common backtracking bug.
+
+<RunCode src="snippets/variables-references.js" />
+
+Take a snapshot with `[...arr]`, `arr.slice()` or `{ ...obj }`. Those copies are shallow: the rows of a 2D array are still shared (see <JsRef to="arrays" />).
+
+### typeof and type checks
+
+`typeof` is fine for numbers, strings and functions, but it answers `'object'` for `null`, arrays, Maps and Sets alike. Use the specific checks instead.
+
+```js
+typeof 42            // 'number'   (NaN and Infinity too)
+typeof 'a'           // 'string'
+typeof undefined     // 'undefined'
+typeof 10n           // 'bigint'
+typeof (() => 1)     // 'function'
+typeof null          // 'object'   a historical bug: test x === null
+typeof [1, 2]        // 'object'   test Array.isArray(x)
+typeof new Map()     // 'object'   test x instanceof Map
+Number.isNaN(x)      // the reliable NaN test (x !== x also works)
+Number.isInteger(x)  // true for 3 and 3.0, false for 3.5
+```
+
+### Equality and truthiness
+
+Always compare with `===` and `!==`. `==` converts types first, with rules so irregular that `0 == ''` and `0 == '0'` are true while `'' == '0'` is false. The single useful exception is `x == null`, which matches both `null` and `undefined`.
+
+An `if` converts its condition to a boolean. Exactly eight values are **falsy**: `false`, `0`, `-0`, `0n`, `''`, `null`, `undefined` and `NaN`. Everything else is truthy, including `[]`, `{}` and `'0'`. In DSA code the dangerous one is `0`: it's a valid index, a count, a stored value and a node value.
+
+<RunCode src="snippets/variables-truthy.js" />
+
+### null, undefined, ?. and ??
+
+`undefined` means nothing was ever put there: a declared but unset variable, a missing property, an index past the end, a function without `return`. `null` means deliberately empty, which is why a missing tree child and the end of a linked list are `null`. Optional chaining and the nullish operators let you handle both without a crash or an accidental fallback.
+
+<RunCode src="snippets/variables-nullish.js" />
+
+| Expression | Kicks in when the left side is |
+|---|---|
+| `a \|\| b` | any falsy value: `0`, `''`, `NaN`, `false`, `null`, `undefined` |
+| `a ?? b` | only `null` or `undefined` |
+| `a?.b`, `a?.[i]`, `f?.()` | `null` or `undefined`: the whole chain becomes `undefined` |
+| `a ??= b` | `null` or `undefined`: only then is `b` assigned |
+
+<Callout kind="warning" title="Variables and equality gotchas">
+
+- `if (idx)` after `indexOf` skips index 0. Compare with `idx !== -1`, or use `includes` when you only need yes or no.
+- `if (map.get(k))` is false when the stored value is `0`. Ask `map.has(k)`.
+- `res.push(path)` in backtracking stores the live array, which is empty by the end. Push a copy: `res.push([...path])`.
+- `count || 1` throws away a real `0`. Use `count ?? 1`.
+- `typeof null` and `typeof []` are both `'object'`. Use `x === null` and `Array.isArray(x)`.
+- Reassigning a parameter (`nums = nums.filter(…)`) leaves the caller's array untouched. To modify in place, write into `nums[i]`.
+
+</Callout>

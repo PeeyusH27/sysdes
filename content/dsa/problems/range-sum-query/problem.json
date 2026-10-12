@@ -1,0 +1,27 @@
+{
+  "title": "Range Sum Query",
+  "difficulty": "Easy",
+  "patterns": ["prefix-sum"],
+  "js": ["classes", "arrays"],
+  "order": 2,
+  "summary": "Design a class that answers many \"sum of nums[left..right]\" questions on a fixed array, each in O(1).",
+  "kind": "design",
+  "className": "NumArray",
+  "tests": [
+    { "ops": ["NumArray", "sumRange", "sumRange", "sumRange"], "args": [[[3, -1, 4, 1, -5, 9]], [0, 2], [2, 5], [0, 5]], "expected": [null, 6, 9, 11], "explain": "sumRange(0, 2) = 3 + -1 + 4 = 6; sumRange(2, 5) = 4 + 1 + -5 + 9 = 9; the whole array sums to 11. The constructor returns nothing (null)." },
+    { "ops": ["NumArray", "sumRange"], "args": [[[7]], [0, 0]], "expected": [null, 7], "explain": "A single element: the only range is [0, 0]." },
+    { "ops": ["NumArray", "sumRange", "sumRange", "sumRange", "sumRange"], "args": [[[1, 2, 3, 4]], [1, 1], [3, 3], [0, 3], [1, 2]], "expected": [null, 2, 4, 10, 5], "explain": "Ranges are inclusive at both ends, so sumRange(1, 1) is just nums[1] = 2." },
+    { "ops": ["NumArray", "sumRange", "sumRange"], "args": [[[0, 0, 0]], [0, 2], [1, 1]], "expected": [null, 0, 0] },
+    { "ops": ["NumArray", "sumRange", "sumRange"], "args": [[[-5, -5, -5, -5]], [0, 3], [2, 3]], "expected": [null, -20, -10] },
+    { "ops": ["NumArray", "sumRange", "sumRange", "sumRange", "sumRange"], "args": [[[10, -10, 10, -10, 10]], [0, 1], [0, 4], [1, 3], [4, 4]], "expected": [null, 0, 10, -10, 10] },
+    { "ops": ["NumArray", "sumRange", "sumRange"], "args": [[[100000, 100000, 100000, 100000]], [0, 3], [1, 2]], "expected": [null, 400000, 200000] },
+    { "ops": ["NumArray", "sumRange", "sumRange", "sumRange", "sumRange", "sumRange"], "args": [[[2, 4, 6, 8, 10, 12]], [0, 0], [5, 5], [2, 4], [0, 5], [3, 5]], "expected": [null, 2, 12, 24, 42, 30] },
+    { "ops": ["NumArray", "sumRange", "sumRange", "sumRange", "sumRange", "sumRange", "sumRange", "sumRange", "sumRange"], "args": [[[4, -43, -19, 10, 77, -87, 75, 22, 98, 43, 47, -76, -78, -36, -78, -91, 90, -98, -72, 1, 38, -33, -33, -93, 27, -73, -2, -76, -35, 56, -68, 85, 43, -27, 17, 67, 89, 96, 51, -25, 71, -5, 81, -79, -85, -98, -1, 74, -3, 88]], [12, 19], [28, 39], [33, 38], [0, 7], [21, 26], [11, 28], [37, 40], [33, 36]], "expected": [null, -362, 349, 293, 39, -207, -718, 193, 146] }
+  ],
+  "hints": [
+    "Summing the range in sumRange works but costs O(n) per call. The array never changes, so do the work once in the constructor.",
+    "Store prefix[i] = the sum of the first i elements (prefix[0] = 0), an array one longer than nums.",
+    "The sum of nums[left..right] is prefix[right + 1] - prefix[left]: everything up to right, minus everything before left."
+  ],
+  "complexity": { "time": "O(n) to build, then O(1) per sumRange call", "space": "O(n): the prefix array" }
+}

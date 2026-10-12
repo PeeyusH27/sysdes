@@ -1,0 +1,30 @@
+{
+  "title": "Partition Equal Subset Sum",
+  "difficulty": "Medium",
+  "patterns": ["dp-2d"],
+  "js": ["array-methods", "arrays"],
+  "order": 5,
+  "summary": "Decide whether an array of positive integers can be split into two groups with the same sum (0/1 knapsack).",
+  "fn": "canPartition",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "boolean" },
+  "tests": [
+    { "args": [[3, 1, 4, 2, 2]], "expected": true, "explain": "[4, 2] and [3, 1, 2] both sum to 6." },
+    { "args": [[1, 2, 5]], "expected": false, "explain": "The total is 8, so each group needs 4, and no subset adds up to 4." },
+    { "args": [[1, 2, 4]], "expected": false, "explain": "The total, 7, is odd: two equal halves are impossible." },
+    { "args": [[1, 1]], "expected": true },
+    { "args": [[1]], "expected": false },
+    { "args": [[2, 2, 3, 5]], "expected": false },
+    { "args": [[1, 2, 3, 4, 5, 6, 7]], "expected": true },
+    { "args": [[14, 9, 8, 4, 3, 2]], "expected": true },
+    { "args": [[100, 100, 100, 100, 100, 100, 100, 100]], "expected": true },
+    { "args": [[2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 6]], "expected": false },
+    { "args": [[71, 21, 59, 81, 58, 1, 21, 76, 97, 30, 93, 88, 11, 69, 29, 86, 52, 51, 74, 91, 85, 81, 85, 4, 57, 71, 97, 55, 84, 73, 83, 24, 32, 91, 54, 9, 24, 69, 87, 78]], "expected": true }
+  ],
+  "hints": [
+    "If the total is odd, the answer is false. Otherwise the question becomes: does some subset add up to exactly total / 2?",
+    "That is 0/1 knapsack with booleans: reachable[i][s] says whether some of the first i numbers sum to s. Each number is either left out or used once.",
+    "With one row: reachable[0] = true, and for each number x loop s from target DOWN to x, setting reachable[s] ||= reachable[s - x]. Going down keeps x from being used twice."
+  ],
+  "complexity": { "time": "O(n × S): n numbers times target sums up to S = total / 2", "space": "O(S): one row of booleans" }
+}

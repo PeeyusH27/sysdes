@@ -1,0 +1,31 @@
+{
+  "title": "Reorder List",
+  "difficulty": "Medium",
+  "patterns": ["linked-list-reversal", "fast-slow-pointers"],
+  "js": ["linked-list-tree-nodes"],
+  "order": 5,
+  "summary": "Rearrange a list in place so it alternates first, last, second, second-to-last, and so on.",
+  "fn": "reorderList",
+  "params": ["head"],
+  "types": { "params": ["ListNode"], "returns": "void" },
+  "io": { "args": ["list"] },
+  "inPlace": 0,
+  "tests": [
+    { "args": [[1, 2, 3, 4, 5, 6]], "expected": [1, 6, 2, 5, 3, 4], "explain": "Take from the front and the back in turn: 1, 6, 2, 5, 3, 4. The test reads the list starting from your original head." },
+    { "args": [[10, 20, 30, 40, 50]], "expected": [10, 50, 20, 40, 30], "explain": "With an odd length, the middle node (30) ends up last." },
+    { "args": [[1]], "expected": [1], "explain": "One node: nothing to move." },
+    { "args": [[]], "expected": [] },
+    { "args": [[1, 2]], "expected": [1, 2] },
+    { "args": [[1, 2, 3]], "expected": [1, 3, 2] },
+    { "args": [[1, 2, 3, 4]], "expected": [1, 4, 2, 3] },
+    { "args": [[5, 5, 6, 6]], "expected": [5, 6, 5, 6] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]], "expected": [1, 20, 2, 19, 3, 18, 4, 17, 5, 16, 6, 15, 7, 14, 8, 13, 9, 12, 10, 11] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]], "expected": [1, 21, 2, 20, 3, 19, 4, 18, 5, 17, 6, 16, 7, 15, 8, 14, 9, 13, 10, 12, 11] }
+  ],
+  "hints": [
+    "Write out the target order: the second half of the list is used backwards. What if you reversed the second half first?",
+    "Three steps: find the middle with slow and fast pointers, cut the list there and reverse the second half, then weave the two halves together.",
+    "While weaving, save both next pointers before you rewire: a.next = b, b.next = savedA, then move a and b to the saved nodes. Don't return anything; the head stays the head."
+  ],
+  "complexity": { "time": "O(n): middle, reversal and weave are one pass each", "space": "O(1): nodes are rewired in place" }
+}

@@ -1,0 +1,99 @@
+Top-k, merging k sorted lists, Dijkstra and scheduling problems all need a priority queue, and JavaScript doesn't have one. Be ready to write a binary heap from memory in a few minutes; it is about 40 lines and the same code serves as a min heap, a max heap or a heap of tuples.
+
+### Binary heap layout in an array
+
+A binary heap is a **complete** binary tree stored level by level in an array, with one rule: every parent comes before its children in the heap's order (for a min heap, `parent <= child`). The smallest item is therefore always at index 0, and no pointers are needed because positions are computed:
+
+```js
+const parent = (i) => (i - 1) >> 1;   // >> 1 halves and rounds down
+const left = (i) => 2 * i + 1;
+const right = (i) => 2 * i + 2;
+// [1, 3, 2, 7, 4, 5] is the tree   1
+//                                /   \
+//                               3     2
+//                              / \   /
+//                             7   4 5
+```
+
+Because the tree is complete, its height is ⌊log₂ n⌋, and every operation walks one root-to-leaf path at most.
+
+### MinHeap class with a comparator
+
+<RunCode src="snippets/heap-minheap.js" />
+
+How it works, line by line:
+
+- **`constructor(compare)`** takes a comparator with the same contract as `sort`: negative means `a` comes out first. The default `(a, b) => a - b` gives a min heap of numbers.
+- **`push(x)`** appends `x` as the last leaf, which keeps the tree complete, then **`siftUp`** swaps it with its parent while it should come out before the parent. At most one swap per level: O(log n).
+- **`pop()`** saves the root, removes the last leaf, puts that leaf at the root, then **`siftDown`** swaps it with whichever child should come out first, until neither child should. When the heap held a single item, `items.pop()` already emptied it, hence the `length > 0` check.
+- **`peek()`** reads index 0 and **`size`** is the array length: both O(1).
+- `siftUp` stops on ties (`>= 0`), so equal items aren't swapped for nothing. A heap is **not stable**: equal priorities come out in no particular order, so add a tie-breaker field if order matters.
+
+### Max heaps and tuple priorities
+
+Never write a second class: change the comparator.
+
+```js
+const minHeap = new MinHeap();                          // numbers, smallest first
+const maxHeap = new MinHeap((a, b) => b - a);           // numbers, largest first
+const byPriority = new MinHeap((a, b) => a[0] - b[0]);  // [priority, value] tuples
+const withTies = new MinHeap((a, b) => a[0] - b[0] || a[1] - b[1]); // then by second field
+const byDist = new MinHeap((a, b) => a.dist - b.dist);  // objects
+const byWord = new MinHeap((a, b) => (a < b ? -1 : a > b ? 1 : 0)); // strings
+
+// Dijkstra-style: push [distance, node], and skip entries that went stale.
+const pq = new MinHeap((a, b) => a[0] - b[0]);
+pq.push([0, source]);
+while (pq.size > 0) {
+  const [d, u] = pq.pop();
+  if (d > dist[u]) continue;     // a shorter path to u was found after this was pushed
+  // relax the edges of u, pushing [newDist, v] for every improvement
+}
+```
+
+A heap can't update an item's priority in place. Push a **new** entry with the better priority and ignore the outdated one when it is popped ("lazy deletion"); the heap grows to O(E) entries, which is fine.
+
+### Heapify an array in O(n)
+
+Pushing n items one at a time costs O(n log n). If you have them all up front, **heapify** instead: sift down every internal node, from the last one back to the root. Half the nodes are leaves and need no work, a quarter sink at most one level, an eighth at most two, and that sum is bounded by n, so the whole build is **O(n)**.
+
+<RunCode src="snippets/heap-heapify.js" />
+
+To add heapify to the class, accept an array in the constructor, copy it into `items`, and run the same loop with `this.siftDown(i)`.
+
+### Heap or sort?
+
+A heap earns its keep when items **arrive over time** or you need only **some** of them. Otherwise, sorting is simpler and just as fast.
+
+| Situation | Use | Cost |
+|---|---|---|
+| All items known, you need them all in order | sort once | O(n log n) |
+| k smallest or largest of n | size-k heap (min heap for the largest, max heap for the smallest) | O(n log k) |
+| k smallest of n, n up to about 10^5 | sorting and slicing is fine too | O(n log n) |
+| Pushes and pops interleave (Dijkstra, scheduling, k-way merge, running median) | heap | O(log n) per operation |
+| Only the k-th item, and speed matters | quickselect | O(n) average |
+
+Re-sorting an array after every insertion to fake a priority queue costs O(n log n) per insertion: that is the trap to avoid.
+
+### Heap costs
+
+| Operation | Cost |
+|---|---|
+| `push` | O(log n) |
+| `pop` | O(log n) |
+| `peek`, `size` | O(1) |
+| Build from n items with heapify | O(n) |
+| Build with n pushes | O(n log n) |
+| Pop everything (heapsort) | O(n log n) |
+| Find or delete an arbitrary item | O(n): heaps are only ordered along paths |
+
+<Callout kind="warning" title="Heap gotchas">
+
+- There is no built-in `PriorityQueue` in JavaScript. Some judges preload a library; interviews and this editor don't, so bring your own class.
+- A comparator that returns a boolean (`(a, b) => a > b`) never returns a negative number and silently breaks the heap.
+- The default comparator on tuples computes `[1, 'x'] - [2, 'y']`, which is `NaN`. Always pass a comparator for arrays and objects.
+- `(a, b) => b - a` gives `NaN` for `Infinity - Infinity`. Use explicit comparisons when priorities can be infinite.
+- Changing an item's priority while it sits in the heap breaks the order. Push a new entry instead.
+- `pop()` on an empty heap returns `undefined`: check `size` before destructuring `const [d, u] = pq.pop()`.
+
+</Callout>

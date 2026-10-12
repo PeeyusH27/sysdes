@@ -1,0 +1,30 @@
+{
+  "title": "Binary Tree Zigzag Level Order Traversal",
+  "difficulty": "Medium",
+  "patterns": ["tree-bfs"],
+  "js": ["stack-queue-deque", "arrays"],
+  "order": 5,
+  "summary": "Group a binary tree's values by level, reading the first level left to right, the next right to left, and so on.",
+  "fn": "zigzagLevelOrder",
+  "params": ["root"],
+  "types": { "params": ["TreeNode | null"], "returns": "number[][]" },
+  "io": { "args": ["tree"] },
+  "tests": [
+    { "args": [[1, 2, 3, 4, 5, 6, 7]], "expected": [[1], [3, 2], [4, 5, 6, 7]], "explain": "Level 1 left to right: [1]. Level 2 right to left: [3, 2]. Level 3 left to right again: [4, 5, 6, 7]." },
+    { "args": [[1]], "expected": [[1]], "explain": "One level, read left to right." },
+    { "args": [[]], "expected": [], "explain": "No nodes, no levels." },
+    { "args": [[1, 2, 3, 4, null, null, 5]], "expected": [[1], [3, 2], [4, 5]] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], "expected": [[1], [3, 2], [4, 5, 6, 7], [15, 14, 13, 12, 11, 10, 9, 8]] },
+    { "args": [[1, 2, null, 3, null, 4]], "expected": [[1], [2], [3], [4]] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]], "expected": [[1], [3, 2], [4, 5, 6, 7], [11, 10, 9, 8]] },
+    { "args": [[-5, -3, -8, null, -1, -9]], "expected": [[-5], [-8, -3], [-1, -9]] },
+    { "args": [[3, 1, 4, null, 2, null, 6, 5, null, 7]], "expected": [[3], [4, 1], [2, 6], [7, 5]] },
+    { "args": [[14, 54, 13, 60, null, 30, 21, null, 10, 43, 16, 53, 3, 52, null, null, 1, 31, 59, 28, 9, 44, 7, null, 38, null, null, 23, null, 15, null, 29, null, 19, 24, null, null, null, 47, 60, null, null, null, 4, null, null, 26, null, null, null, 24, 57, 19, null, null, null, null, null, null, null, 46, null, null, 5, 57, 32, 52, null, null, 43, null, 56, 56]], "expected": [[14], [13, 54], [60, 30, 21], [3, 53, 16, 43, 10], [52, 1, 31, 59, 28, 9, 44, 7], [47, 24, 19, 29, 15, 23, 38], [60, 4, 26, 24, 57, 19], [57, 5, 46], [32, 52, 43], [56, 56]] }
+  ],
+  "hints": [
+    "Start from the ordinary level-order traversal: the levels are the same, only the reading direction changes.",
+    "Keep a flag that flips after every level. Don't change the order in which you enqueue children; change where each value is written.",
+    "On a right-to-left level, write the i-th dequeued value at index size - 1 - i of the level's array (or reverse the finished level)."
+  ],
+  "complexity": { "time": "O(n): every node is enqueued and dequeued once", "space": "O(w) for the queue (plus O(n) for the output)" }
+}

@@ -1,0 +1,30 @@
+{
+  "title": "Merge Two Sorted Lists",
+  "difficulty": "Easy",
+  "patterns": ["linked-list-reversal", "two-pointers"],
+  "js": ["linked-list-tree-nodes"],
+  "order": 2,
+  "summary": "Splice two sorted linked lists into one sorted list, reusing their nodes.",
+  "fn": "mergeTwoLists",
+  "params": ["list1", "list2"],
+  "types": { "params": ["ListNode", "ListNode"], "returns": "ListNode" },
+  "io": { "args": ["list", "list"], "returns": "list" },
+  "tests": [
+    { "args": [[1, 3, 5], [2, 4, 6]], "expected": [1, 2, 3, 4, 5, 6], "explain": "Taking the smaller head each time alternates between the two lists." },
+    { "args": [[], [0]], "expected": [0], "explain": "One list is empty: the answer is the other list." },
+    { "args": [[1, 1, 2], [1, 3]], "expected": [1, 1, 1, 2, 3], "explain": "Ties can be taken from either list; the values come out as 1, 1, 1, 2, 3." },
+    { "args": [[], []], "expected": [] },
+    { "args": [[5], [1, 2, 3]], "expected": [1, 2, 3, 5] },
+    { "args": [[1, 2, 3], [4, 5, 6]], "expected": [1, 2, 3, 4, 5, 6] },
+    { "args": [[-3, 0, 0, 7], [-5, 0, 8]], "expected": [-5, -3, 0, 0, 0, 7, 8] },
+    { "args": [[2], [1]], "expected": [1, 2] },
+    { "args": [[1, 1, 1], [1, 1]], "expected": [1, 1, 1, 1, 1] },
+    { "args": [[-49, -48, -42, -39, -35, -29, -27, -22, -22, -22, -20, -18, -14, -14, -11, -7, -7, -6, -5, -2, 2, 7, 7, 12, 17], [-37, -33, -27, -21, -20, -14, -13, -12, -7, -1, 2, 3, 4, 6, 8, 12, 18, 25, 30, 35]], "expected": [-49, -48, -42, -39, -37, -35, -33, -29, -27, -27, -22, -22, -22, -21, -20, -20, -18, -14, -14, -14, -13, -12, -11, -7, -7, -7, -6, -5, -2, -1, 2, 2, 3, 4, 6, 7, 7, 8, 12, 12, 17, 18, 25, 30, 35] }
+  ],
+  "hints": [
+    "Compare the two heads. The smaller one must come first in the merged list. Then the problem repeats on what is left.",
+    "Start from a dummy node and keep a tail pointer. Attach the smaller head to tail.next, advance that list, and advance tail.",
+    "When one list runs out, attach the rest of the other in one step: it is already sorted. Return dummy.next."
+  ],
+  "complexity": { "time": "O(n + m): each node is attached once", "space": "O(1): only pointers change (no new nodes besides the dummy)" }
+}

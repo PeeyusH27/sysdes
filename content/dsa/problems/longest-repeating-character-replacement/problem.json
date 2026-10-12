@@ -1,0 +1,30 @@
+{
+  "title": "Longest Repeating Character Replacement",
+  "difficulty": "Medium",
+  "patterns": ["sliding-window"],
+  "js": ["arrays", "strings"],
+  "order": 4,
+  "summary": "Change at most k letters to make the longest possible run of one repeated letter.",
+  "fn": "characterReplacement",
+  "params": ["s", "k"],
+  "types": { "params": ["string", "number"], "returns": "number" },
+  "tests": [
+    { "args": ["ABBBCB", 1], "expected": 5, "explain": "Replace the C with a B: \"BBBBB\" (indices 1 to 5) has length 5." },
+    { "args": ["AAAA", 0], "expected": 4, "explain": "The whole string is already one letter." },
+    { "args": ["ABCD", 0], "expected": 1, "explain": "With no replacements allowed, the best is a single letter." },
+    { "args": ["ABCD", 3], "expected": 4 },
+    { "args": ["A", 0], "expected": 1 },
+    { "args": ["ABAA", 0], "expected": 2 },
+    { "args": ["BAAAB", 2], "expected": 5 },
+    { "args": ["XYYXXYX", 2], "expected": 5 },
+    { "args": ["ABCABCAB", 2], "expected": 4 },
+    { "args": ["AABBBAAABB", 1], "expected": 4 },
+    { "args": ["CBCCCCBCBBBCCBCCABBCCAAACBCCBAABBBACBCCCCCACBBABBB", 3], "expected": 10 }
+  ],
+  "hints": [
+    "For a fixed substring, which letter should you keep, and how many replacements does that cost?",
+    "Keep the most frequent letter. The cost is the window length minus that letter's count; the window is valid when the cost is at most k.",
+    "Slide a window with letter counts. Extend right; while the cost exceeds k, move left forward. Record the window length after each step."
+  ],
+  "complexity": { "time": "O(n): each index enters and leaves the window once (with a 26-letter scan per check, O(26 · n))", "space": "O(1): 26 counters" }
+}

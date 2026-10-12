@@ -1,0 +1,157 @@
+import { bellmanFordRounds, dijkstraHeap } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+All shortest-path algorithms repeat one move, **relaxation**: if going through `u` reaches `v` more cheaply, lower `dist[v]`. They differ only in the order they relax edges. **BFS** handles equal-cost edges in O(V + E), **Dijkstra** with a min-heap handles non-negative weights in O(E log V) by always expanding the closest node, and **Bellman-Ford** relaxes every edge once per round in O(V · E), which copes with negative weights and with a limit on the number of edges.
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- **Minimum** cost, time, distance or effort from a start to a target (or to every node).
+- Edges have **weights**: road lengths, flight prices, delays, height differences.
+- **Fewest steps or moves** in a grid or a puzzle: every move costs 1, so BFS.
+- "At most **k stops**" or "using at most k edges": count rounds with Bellman-Ford.
+- The cost of a route is its **largest** step (effort, water level): Dijkstra still works, with `max` instead of `+`.
+
+</Callout>
+
+| Algorithm | Edge weights | Relaxation order | Classic problems |
+|---|---|---|---|
+| BFS | all equal | layer by layer, with a queue | shortest path in a binary matrix, word ladder |
+| Dijkstra | non-negative | closest unsettled node first, with a min-heap | network delay time, path with minimum effort, swim in rising water |
+| Bellman-Ford | any; detects negative cycles | every edge, once per round | cheapest flights within k stops, graphs with negative edges |
+| Floyd–Warshall | any | every pair through every middle node, O(V³) | many queries between all pairs on a small graph |
+
+## The core idea: relax, closest first
+
+Keep `dist[v]`, the cheapest cost found so far, starting at `Infinity` everywhere except the source. Relaxing an edge `u → v` with weight `w` asks one question: is `dist[u] + w < dist[v]`? If so, a better route to `v` goes through `u`.
+
+Dijkstra adds one greedy rule: **always expand the unsettled node with the smallest `dist`**. When a node `u` comes out of the heap with distance `d`, that distance is final. Any other route to `u` must leave the settled region through some node that is at least `d` away and then add edges that are never negative, so it can't arrive with less than `d`.
+
+JavaScript has no decrease-key heap, so Dijkstra uses **lazy deletion**: when `dist[v]` improves, push a new `[dist, v]` entry and leave the old one in the heap. When an outdated entry reaches the top (`d > dist[u]`), skip it. Watch B, D, E and F each get a better route, and their old entries get skipped when they reach the top:
+
+<AlgoViz trace={dijkstraHeap} />
+
+### Why negative edges break Dijkstra
+
+Take `A → B` costing 4, `A → C` costing 5 and `C → B` costing -3. Dijkstra pops B at 4 because it is the closest node, and declares it final. But `A → C → B` costs 2. The argument above needed "edges never make a route cheaper", and a negative edge does exactly that.
+
+A Dijkstra that marks nodes as done, or that stops when it pops the target, returns the wrong answer here. The lazy version above happens to recover, because it pushes B again when it improves, but then a node can be re-processed many times and the running time can blow up exponentially. With negative edges, use Bellman-Ford. With a **negative cycle**, there is no shortest path at all: going around once more is always cheaper.
+
+## Step by step
+
+<Steps>
+  <Step title="Model the graph">
+    Decide what a node is (a city, a grid cell, or a state like `(city, flights used)`), what an edge is, and what it costs. Build an adjacency list: `adj[u]` holds `[v, w]` pairs.
+  </Step>
+  <Step title="Pick the algorithm from the weights">
+    All edges cost the same: BFS. Non-negative weights: Dijkstra. Negative weights, or a limit on how many edges a path may use: Bellman-Ford.
+  </Step>
+  <Step title="Define how a route's cost combines">
+    Usually `dist[u] + w`. For effort or water level it is `Math.max(dist[u], step)`. Dijkstra needs this to never decrease as the route grows.
+  </Step>
+  <Step title="Initialise">
+    `dist = new Array(n).fill(Infinity)` and `dist[source] = 0` (or the start cell's own cost). Push the source onto the queue or heap.
+  </Step>
+  <Step title="Relax until nothing changes">
+    Pop, skip stale entries, relax neighbours, push improvements. For a single target, stop when the target is **popped** (Dijkstra) or first reached (BFS), not when it is pushed.
+  </Step>
+  <Step title="Read the answer">
+    `dist[target]`, the maximum over all `dist` values, or `-1` where `dist` is still `Infinity`.
+  </Step>
+</Steps>
+
+## Template 1: BFS for unweighted graphs
+
+When every edge costs 1, a queue already hands out nodes in order of distance: all nodes at distance 1, then all at distance 2, and so on. No heap needed. Mark a node when you **push** it so it enters the queue once, and walk a `head` index instead of calling `shift()`.
+
+<CodeTabs files={['snippets/bfs-distances.js']} />
+
+On a grid, the neighbours come from a directions array: 4 entries for up/down/left/right, 8 when diagonals are allowed, as in <ProblemLink slug="shortest-path-in-binary-matrix" />. For more on BFS itself, see [Graph BFS and DFS](/dsa/patterns/graph-traversal).
+
+## Template 2: Dijkstra with a min-heap
+
+Write the heap once (about 40 lines) and reuse it. Entries are `[distance, node]` pairs, so the default comparator orders them by distance.
+
+<CodeTabs files={['snippets/dijkstra.js', 'snippets/min-heap.js']} />
+
+- <ProblemLink slug="network-delay-time" /> is the template as is: the answer is the largest `dist`.
+- <ProblemLink slug="path-with-minimum-effort" /> runs it on a grid where a route costs its steepest step: relax with `Math.max(effort, step)`.
+- <ProblemLink slug="swim-in-rising-water" /> is the same minimax idea, with the cell's own elevation as the cost.
+
+`shortestPath` adds a `prev` array to rebuild the route, and stops as soon as the target is popped, since a popped distance is final.
+
+## Template 3: Bellman-Ford, round by round
+
+Bellman-Ford doesn't choose an order: each round relaxes **every** edge once. If round `r` reads the distances from round `r - 1` and writes into a copy, then after round `r`, `dist[v]` is the cheapest path that uses **at most `r` edges**. A shortest path never needs more than `n - 1` edges, so `n - 1` rounds always suffice, whatever the signs of the weights.
+
+<AlgoViz trace={bellmanFordRounds} />
+
+<CodeTabs files={['snippets/bellman-ford.js']} />
+
+The round count is what makes it the tool for <ProblemLink slug="cheapest-flights-within-k-stops" />: at most k stops means at most k + 1 flights, so run k + 1 rounds. The copy matters there. Updating in place lets one round chain several edges, which is harmless when you only want the shortest path but breaks an edge limit. If anything still improves after `n - 1` rounds, a negative cycle is reachable.
+
+## Try it
+
+<RunCode src="snippets/try-it.js" />
+
+## Complexity
+
+| Algorithm | Time | Extra space |
+|---|---|---|
+| BFS | O(V + E): each node is queued once, each edge read once | O(V) |
+| Dijkstra, binary heap, lazy deletion | O(E log E), which is O(E log V) because E is at most V² | O(V + E): up to one heap entry per successful relaxation |
+| Dijkstra, scanning an array for the minimum | O(V²): better for dense graphs | O(V) |
+| Bellman-Ford | O(V · E) | O(V) |
+| Bellman-Ford limited to k + 1 rounds | O(k · E) | O(V): two distance arrays |
+| Floyd–Warshall (all pairs) | O(V³) | O(V²) |
+
+## JavaScript you'll use
+
+<JsRef to={["heap", "graphs-in-js", "stack-queue-deque"]} />
+
+```js
+const adj = Array.from({ length: n }, () => []);   // one fresh list per node
+for (const [u, v, w] of edges) adj[u].push([v, w]);
+const dist = new Array(n).fill(Infinity);           // Infinity + w is still Infinity
+const [d, u] = heap.pop();                          // entries are [distance, node]
+const next = dist.slice();                          // Bellman-Ford: read old, write new
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];    // grid neighbours
+```
+
+The main JavaScript trap is the missing priority queue. Sorting an array after every push costs O(n log n) per push, and `queue.shift()` costs O(n) per pop: both quietly turn a fast algorithm into a slow one. Bring the heap, and use a head index for queues.
+
+<Callout kind="warning">
+
+- Marking nodes visited when they are **pushed** in Dijkstra (a BFS habit): the first distance found is frozen even if a cheaper route turns up later.
+- Returning when the target is pushed instead of popped. Only a popped distance is final.
+- Running Dijkstra on a graph with negative weights.
+- Relaxing in place in Bellman-Ford when the number of edges is limited: one round can then chain several edges.
+- `new Array(n).fill([])` for the adjacency list: every node shares the same array.
+- Nodes labelled 1 to n with arrays of size n, or taking `Math.max(...dist)` over an unused slot 0 that is still `Infinity`.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="How do you return the path itself, not just its cost?">
+    Keep `prev[v] = u` whenever relaxing `u → v` improves `dist[v]`. At the end, follow `prev` from the target back to the source and reverse the list. The `prev` pointers form the shortest-path tree, so this costs O(path length) after the search.
+  </FollowUp>
+  <FollowUp q="Edges cost either 0 or 1. Can you beat Dijkstra?">
+    Yes, with 0-1 BFS: use a deque, push a neighbour to the **front** when the edge costs 0 and to the **back** when it costs 1. The deque stays sorted by distance, so it behaves like Dijkstra without the log factor: O(V + E). It fits problems like "minimum walls to remove" or "minimum arrow flips".
+  </FollowUp>
+  <FollowUp q="How would you detect a negative cycle?">
+    Run Bellman-Ford for n - 1 rounds, then try one more pass over the edges. If any edge can still be relaxed, some distance keeps falling forever, which only a reachable negative cycle can cause. (Currency arbitrage is the classic application, with weights `-log(rate)`.)
+  </FollowUp>
+  <FollowUp q="You need shortest paths between every pair of nodes. What would you do?">
+    For a small dense graph, Floyd–Warshall: for each middle node `k`, for each pair `(i, j)`, try `dist[i][k] + dist[k][j]`. It is O(V³), three nested loops, and handles negative edges. For a large sparse graph with non-negative weights, run Dijkstra from every node: O(V · E log V).
+  </FollowUp>
+  <FollowUp q="Dijkstra is too slow on a huge road map for a single A-to-B query. How can it be sped up?">
+    Stop as soon as B is popped. Search from both ends at once (bidirectional Dijkstra) and stop when the two searches meet. Or use A*: order the heap by `dist[v] + h(v)`, where `h` is a lower bound on the remaining distance such as the straight-line distance, so the search heads towards B instead of spreading evenly in all directions.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

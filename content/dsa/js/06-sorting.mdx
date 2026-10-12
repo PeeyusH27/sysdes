@@ -1,0 +1,64 @@
+Sorting first is the setup step for two pointers, intervals, greedy and binary search. In JavaScript the default `sort()` compares numbers **as strings**, a bug that passes the sample tests with single digits and fails the hidden ones with 10 or more.
+
+### The default sort trap
+
+Without a comparator, `sort` converts every element to a string and orders by UTF-16 code units, so `100` comes before `25` and `-1` before `-5`. For numbers, always pass `(a, b) => a - b` (ascending) or `(a, b) => b - a` (descending). `sort` also **mutates** the array and returns the same array, not a copy.
+
+<RunCode src="snippets/sorting-numbers.js" />
+
+### Writing comparators
+
+A comparator `(a, b) => …` returns a **negative number** to put `a` first, a **positive number** to put `b` first, and **0** for a tie. It must be consistent: the same pair always gets the same answer. Common mistakes break that contract silently, and the result then depends on the engine and the input size.
+
+```js
+nums.sort((a, b) => a - b);                    // numbers ascending
+nums.sort((a, b) => b - a);                    // numbers descending
+words.sort();                                  // strings by code unit: fine for plain lowercase
+words.sort((a, b) => a.localeCompare(b));      // dictionary order, case-aware
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0); // generic: numbers, strings, BigInts
+```
+
+<RunCode src="snippets/sorting-comparators.js" />
+
+### Multi-key and tuple sorts
+
+Compare the first key, and only on a tie move on to the next: `a[0] - b[0] || a[1] - b[1]` works because a tie is `0`, which is falsy, so `||` evaluates the second key. This is the standard setup for intervals (by start, then end), frequency rankings, and "sort these indices by their values".
+
+<RunCode src="snippets/sorting-multi-key.js" />
+
+### Stable sorts and toSorted
+
+Since ES2019 `sort` is guaranteed **stable**: elements that compare as equal keep their original relative order. That means you can sort by a secondary key first and then by the primary key, and that ties never shuffle unpredictably.
+
+`sort`, `reverse` and `splice` change the array in place. When the caller's array must stay untouched (or you're sorting a parameter you'll read again), use the ES2023 copies or copy first:
+
+```js
+const sorted = nums.toSorted((a, b) => a - b);  // new array; nums unchanged
+const backwards = nums.toReversed();            // new array
+const copySorted = [...nums].sort((a, b) => a - b); // same idea, works in older engines
+nums.sort((a, b) => a - b).reverse();           // both mutate nums in place
+```
+
+### Sorting costs and counting sort
+
+| Operation | Time | Extra space |
+|---|---|---|
+| `sort(cmp)`, `toSorted(cmp)` | O(n log n) comparisons | O(n) (merge buffer; `toSorted` also copies) |
+| Comparator calls | about n log₂ n of them | keep each O(1): precompute keys outside |
+| Sorting n strings of length up to L | O(n log n · L) | O(n) |
+| Counting sort over values 0..k | O(n + k) | O(k) |
+| Bucket by frequency | O(n) | O(n) |
+
+If a problem demands O(n), a comparison sort is out. When the values come from a small range (letters, ages, scores, digits) or you only need them grouped by count, counting into an array or buckets beats `sort`.
+
+<RunCode src="snippets/sorting-counting.js" />
+
+<Callout kind="warning" title="Sorting gotchas">
+
+- `nums.sort()` sorts numbers as strings: `[10, 9, 1]` becomes `[1, 10, 9]`. Always pass `(a, b) => a - b`.
+- `(a, b) => a > b` returns a boolean, never a negative number. It looks fine on some engines and fails on others.
+- `a - b` on strings gives `NaN` (treated as a tie: nothing sorts), and on BigInts throws. Use `localeCompare` or a three-way compare.
+- `sort` mutates and returns the same array: `const sorted = nums.sort(…)` changes `nums` too. Use `toSorted` for a copy.
+- Building strings or objects inside the comparator runs O(n log n) times. Compute keys once, then sort.
+
+</Callout>

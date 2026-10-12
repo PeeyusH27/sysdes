@@ -1,0 +1,30 @@
+{
+  "title": "Diameter of Binary Tree",
+  "difficulty": "Easy",
+  "patterns": ["tree-dfs"],
+  "js": ["recursion", "functions-closures"],
+  "order": 3,
+  "summary": "Find the number of edges on the longest path between any two nodes of a binary tree.",
+  "fn": "diameterOfBinaryTree",
+  "params": ["root"],
+  "types": { "params": ["TreeNode | null"], "returns": "number" },
+  "io": { "args": ["tree"] },
+  "tests": [
+    { "args": [[1, 2, 3, 4, 5, null, 6]], "expected": 4, "explain": "The longest path is 4 → 2 → 1 → 3 → 6 (or 5 → 2 → 1 → 3 → 6): 4 edges." },
+    { "args": [[1, 2]], "expected": 1, "explain": "Two nodes joined by one edge." },
+    { "args": [[1, 2, null, 3, 4, 5, null, null, 6, 7, null, null, 8]], "expected": 6, "explain": "The longest path, 7 → 5 → 3 → 2 → 4 → 6 → 8, bends at node 2 and never touches the root: 6 edges." },
+    { "args": [[]], "expected": 0 },
+    { "args": [[9]], "expected": 0 },
+    { "args": [[1, 2, null, 3, null, 4, null, 5]], "expected": 4 },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], "expected": 6 },
+    { "args": [[-1, -2, -3, -4, null, null, -5]], "expected": 4 },
+    { "args": [[1, 2, 3, 4, 5, null, null, 6, null, null, 7, 8, null, null, 9]], "expected": 6 },
+    { "args": [[6, 8, 9, 9, 7, 4, null, 6, null, 3, 2, 2, 3, null, 1, 4, null, 3, 6, 6, 4, 5, 9, null, 9, 6, null, null, 3, 1, 3, 7, 1, 5, null, 3, 3, 1, 9, null, null, null, null, null, null, null, 9, null, null, 1, 4, null, null, 7, null, 2, null, null, null, 4, null, 7, 1, null, null, 1, 6, null, null, 8, null, 7, null, null, 1, null, 8, 1, null, null, null, null, null, 3, null, 6, null, null, null, null, 3, 5]], "expected": 14 }
+  ],
+  "hints": [
+    "Every path has one highest node where it bends. If the longest path bends at node X, how long is it in terms of X's subtrees?",
+    "Through X, the longest path has height(X.left) + height(X.right) edges, where height counts the nodes on the longest downward path.",
+    "Compute heights in one post-order pass. At each node, update an outer best with left + right, then return 1 + Math.max(left, right) to the parent."
+  ],
+  "complexity": { "time": "O(n): one post-order pass", "space": "O(h) for the recursion" }
+}

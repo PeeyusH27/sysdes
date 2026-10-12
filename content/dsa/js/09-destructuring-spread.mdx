@@ -1,0 +1,83 @@
+Destructuring and spread turn swaps, pair unpacking and copies into one-liners, and they show up in almost every solution: `[a, b] = [b, a]`, `for (const [k, v] of map)`, `[...arr]`. Two facts keep them safe: every spread or rest is an O(n) copy, and every copy is only one level deep.
+
+### Array destructuring and swaps
+
+Square brackets on the left of `=` unpack by position. You can skip positions, give defaults for missing ones, and collect the remainder with `...rest`. The same syntax swaps two variables or two array slots without a temporary, which is the standard way to swap in two-pointer and partition code.
+
+<RunCode src="snippets/destructuring-swap.js" />
+
+The last lines show the one real pitfall. JavaScript inserts semicolons only where a line can't continue, and a line starting with `[` *can* continue the previous expression. If the line before a swap has no semicolon, the swap is parsed as an index into it. Either end statements with semicolons or start the swap line with one: `;[a, b] = [b, a]`.
+
+### Object destructuring
+
+Curly braces unpack by **name**. Rename with `key: newName`, default with `key = value`, and nest to reach inner fields. It's especially handy in function parameters for options and records.
+
+```js
+const { start, end } = interval;              // two fields at once
+const { val: v, left, right } = node;         // rename val to v
+const { k = 1 } = options;                    // default when options.k is undefined
+const { left: { val: leftVal } } = node;      // nested (throws if node.left is null)
+function dist({ r, c }, { r: r2, c: c2 }) {   // destructure parameters
+  return Math.abs(r - r2) + Math.abs(c - c2);
+}
+const { a, ...others } = obj;                 // others: a shallow copy without a
+```
+
+Destructuring `null` or `undefined` throws a `TypeError`, so guard nodes that may be missing (`if (!node) return 0;`) before unpacking them.
+
+### Destructuring in loops and callbacks
+
+Anything that yields pairs or tuples can be unpacked right in the loop head or the callback parameter: Map entries, `Object.entries(obj)`, `arr.entries()`, edge lists, intervals and BFS queue items.
+
+```js
+for (const [key, count] of map) {}             // Map entries
+for (const [key, value] of Object.entries(obj)) {} // keys are strings
+for (const [i, x] of arr.entries()) {}         // index and value
+for (const [u, v, w] of edges) {}              // weighted edge list
+intervals.sort(([s1], [s2]) => s1 - s2);       // in a comparator
+const [r, c] = queue[head++];                  // BFS state
+```
+
+<RunCode src="snippets/destructuring-loops.js" />
+
+### Spread for copies and concatenation
+
+`...` inside an array literal spreads any iterable: arrays, strings (into characters), Sets, Maps, `map.keys()`. Inside an object literal it copies own properties, and later keys override earlier ones. Inside a call, `f(...arr)` passes the elements as separate arguments. Every spread is **shallow**: nested arrays and objects are shared, not copied.
+
+<RunCode src="snippets/destructuring-spread-copies.js" />
+
+| Expression | Cost |
+|---|---|
+| `const [a, b] = pair`, `[a, b] = [b, a]` | O(1) |
+| `[...arr]`, `[...a, ...b]`, `[...str]` | O(n) |
+| `const [head, ...tail] = arr` | O(n): `tail` is a new array |
+| `{ ...obj }` | O(number of keys) |
+| `f(...arr)`, `Math.max(...arr)` | O(n), and limited by the engine's maximum argument count |
+
+Spreading inside a loop (`path = [...path, x]` at every step) turns an O(n) loop into O(n²). Push and pop on one array instead, and copy only when you save a result.
+
+### Rest parameters and rest elements
+
+`...name` on the **receiving** side collects whatever is left into a real array (or object). It must come last.
+
+```js
+function sum(...nums) {                 // sum(1, 2, 3): nums is [1, 2, 3]
+  return nums.reduce((a, b) => a + b, 0);
+}
+function maxOf(first, ...rest) {}       // at least one argument, the rest in an array
+const [first, ...others] = arr;         // array rest: a copy of arr without its first item
+const { id, ...fields } = record;       // object rest: every key except id
+```
+
+Prefer rest parameters to the old `arguments` object, which isn't a real array and doesn't exist in arrow functions.
+
+<Callout kind="warning" title="Destructuring and spread gotchas">
+
+- A line starting with `[` continues the previous line when it has no semicolon: `x = y` then `[a, b] = [b, a]` becomes `x = y[a, b] = [b, a]`.
+- `[...grid]` and `{ ...obj }` are shallow: changing `copy[0][0]` changes the original too.
+- `const [head, ...tail] = arr` in recursion copies the array at every call: O(n²) overall. Pass an index instead.
+- `Math.max(...arr)` throws a `RangeError` on very large arrays. Loop instead.
+- Destructuring a missing node (`const { val } = null`) throws. Check for `null` first.
+- `[...str]` splits into characters correctly even for emoji; `str.split('')` doesn't.
+
+</Callout>

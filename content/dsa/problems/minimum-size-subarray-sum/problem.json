@@ -1,0 +1,31 @@
+{
+  "title": "Minimum Size Subarray Sum",
+  "difficulty": "Medium",
+  "patterns": ["sliding-window", "binary-search"],
+  "js": ["arrays", "numbers-math"],
+  "order": 3,
+  "summary": "Find the length of the shortest run of positive numbers whose sum reaches a target.",
+  "fn": "minSubArrayLen",
+  "params": ["target", "nums"],
+  "types": { "params": ["number", "number[]"], "returns": "number" },
+  "tests": [
+    { "args": [9, [1, 4, 2, 7, 1, 3]], "expected": 2, "explain": "[2, 7] sums to exactly 9. No single value reaches 9, so the answer is 2." },
+    { "args": [5, [1, 1, 1]], "expected": 0, "explain": "Even the whole array only sums to 3, so no subarray works: return 0." },
+    { "args": [4, [4, 1]], "expected": 1, "explain": "The single value 4 already reaches the target." },
+    { "args": [15, [1, 2, 3, 4, 5]], "expected": 5 },
+    { "args": [11, [1, 2, 3, 4, 5]], "expected": 3 },
+    { "args": [1, [5]], "expected": 1 },
+    { "args": [100, [50, 50]], "expected": 2 },
+    { "args": [6, [2, 2, 2, 2]], "expected": 3 },
+    { "args": [8, [1, 7, 1, 1, 6, 2]], "expected": 2 },
+    { "args": [20, [3, 1, 1, 1, 1, 1, 1, 1, 9, 10]], "expected": 3 },
+    { "args": [120, [15, 23, 20, 16, 4, 29, 2, 26, 4, 20, 27, 28, 24, 17, 19, 17, 14, 12, 13, 24, 24, 5, 14, 24, 21, 24, 24, 7, 13, 5, 2, 17, 5, 19, 23, 6, 27, 17, 26, 23, 1, 26, 21, 8, 27, 21, 18, 12, 3, 8]], "expected": 6 },
+    { "args": [10000, [15, 23, 20, 16, 4, 29, 2, 26, 4, 20, 27, 28, 24, 17, 19, 17, 14, 12, 13, 24, 24, 5, 14, 24, 21, 24, 24, 7, 13, 5, 2, 17, 5, 19, 23, 6, 27, 17, 26, 23, 1, 26, 21, 8, 27, 21, 18, 12, 3, 8]], "expected": 0 }
+  ],
+  "hints": [
+    "All numbers are positive: adding an element makes a sum bigger, removing one makes it smaller.",
+    "Grow a window to the right until its sum reaches the target. That window is valid, but maybe not the shortest ending here.",
+    "While the sum is still at least the target, record the length and shrink from the left. Return 0 if nothing was ever recorded."
+  ],
+  "complexity": { "time": "O(n): left and right each move forward at most n times", "space": "O(1)" }
+}

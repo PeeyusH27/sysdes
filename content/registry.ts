@@ -1,5 +1,7 @@
 // Single source of truth for navigation, search, filters and the sitemap.
 // Page bodies live next to this file: content/<section>/<dir>/page.mdx
+// The DSA track has its own registry in content/dsa/registry.ts.
+import { jsTopics, patterns } from "./dsa/registry";
 
 export type Level = "Easy" | "Medium" | "Hard";
 export type Category = "Frontend" | "Backend" | "Full-stack";
@@ -209,7 +211,7 @@ export const getQuestion = (slug: string) => questions.find((q) => q.slug === sl
 export interface PageRef {
   href: string;
   title: string;
-  section: "Learn" | "Deep dives" | "Questions" | "Reference";
+  section: "Learn" | "Deep dives" | "Questions" | "Reference" | "Patterns" | "JavaScript" | "Problems";
   summary: string;
   tags: string[];
   /** MDX file relative to content/ */
@@ -224,5 +226,7 @@ export function allPages(): PageRef[] {
     { href: "/cheatsheet", title: "Cheatsheet", section: "Reference", summary: "Numbers to know, formulas and decision tables.", tags: ["numbers", "latency"], file: "cheatsheet.mdx" },
     { href: "/glossary", title: "Glossary", section: "Reference", summary: "System design terms in one line each.", tags: ["terms"] },
     { href: "/playground", title: "Playground", section: "Reference", summary: "Drag and drop an HLD diagram, lint it, simulate traffic and get graded.", tags: ["playground", "builder"] },
+    ...patterns.map((p) => ({ href: `/dsa/patterns/${p.slug}`, title: p.title, section: "Patterns" as const, summary: p.summary, tags: [...p.signals, "dsa", "pattern"], file: `dsa/patterns/${p.dir}/page.mdx` })),
+    ...jsTopics.map((t) => ({ href: `/dsa/js#${t.id}`, title: t.title, section: "JavaScript" as const, summary: t.summary, tags: ["javascript", "cheat sheet", t.group.toLowerCase()], file: `dsa/js/${t.file}.mdx` })),
   ];
 }

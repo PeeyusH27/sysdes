@@ -1,0 +1,162 @@
+import { frequencyBudget, pairCount, seenSet } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+A hash map or set **remembers what you have already seen**, so "is it there?", "how many?" and "where was it?" cost O(1) on average instead of another scan. The skill is deciding *what* to remember about each element (presence, a count, an index, a group) and *when* to look it up. The usual payoff: an O(n²) nested loop becomes one O(n) pass, paid for with O(n) memory.
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- You keep asking **"have I seen this before?"**: duplicates, repeats, visited states.
+- You need **how many times** something occurs: anagrams, the most frequent item, the first unique one.
+- Each element needs a **partner**: a complement `target - x`, or an earlier running total.
+- Items that share a property must be **grouped** together.
+- The brute force is a nested loop whose inner loop only **searches** for something.
+
+</Callout>
+
+| Variant | Structure | Remembers | Classic problems |
+|---|---|---|---|
+| Seen set | `Set` | which values appeared | contains duplicate, longest consecutive sequence, happy number |
+| Frequency map | `Map`, or an array of 26 for letters | value → count | valid anagram, first unique character, ransom note, top k frequent |
+| Complement map | `Map` | value → index (or count) | two sum, count pairs, subarray sum equals k |
+| Group by key | `Map` of arrays | canonical key → members | group anagrams, group shifted strings |
+
+## The core idea: replace the inner search with a lookup
+
+Most brute forces in this family look the same: for every element, scan the others to find something (a duplicate, a partner, a match). That inner scan is the O(n) you pay n times. A hash structure removes it: store what each element tells you as you pass it, and later elements **ask the structure** instead of scanning.
+
+The invariant to keep in your head is **"the map describes exactly the elements before the current index."** Two consequences follow:
+
+- **Look up, then insert.** The current element is not in the map yet, so it can't match itself.
+- **Every pair is found once.** For a pair at indices `i` and `j` with `i` before `j`, element `i` is already stored when the scan reaches `j`.
+
+Watch a set catch the first repeat in a single pass:
+
+<AlgoViz trace={seenSet} />
+
+Hashing isn't free. The map costs O(n) memory, and hashing a string key costs time proportional to its length. "O(1)" means O(1) *on average*: collisions can degrade a lookup, but JavaScript engines handle hashing well and interview problems never hinge on it.
+
+## Step by step
+
+<Steps>
+  <Step title="Write the brute force and find the inner search">
+    Name what the inner loop looks for: "an earlier equal value", "an earlier value equal to `target - x`", "a word with the same letters". That target is what the map must answer.
+  </Step>
+  <Step title="Choose what to remember">
+    Only presence matters: a `Set`. How many: value → count. Where: value → index (first or last, depending on what the answer needs). Which group: key → list of members.
+  </Step>
+  <Step title="Choose the key">
+    Usually the value itself. Sometimes a **canonical form** that makes equivalent items collide: sorted letters for anagrams, a count signature, an encoded pair like `` `${r},${c}` ``.
+  </Step>
+  <Step title="Decide the order of operations">
+    For pairs with earlier elements, look up **before** inserting. For "compare two whole inputs" (anagrams, ransom note), build the counts first in one pass, then check in a second pass.
+  </Step>
+  <Step title="Read off the answer">
+    Return early on the first hit, or make a final pass. If the answer depends on the **original order** (the first unique character), make that pass over the input, not over the map.
+  </Step>
+</Steps>
+
+## Template 1: seen set
+
+When only presence matters, a `Set` is the lightest tool: `has` and `add` are all you need.
+
+<CodeTabs files={['snippets/seen-set.js']} />
+
+The same few lines detect duplicates, mark visited nodes in a graph, or spot a cycle in a sequence of states (Happy Number). <ProblemLink slug="longest-consecutive-sequence" /> puts **all** values in a set first, then asks `set.has(x - 1)` to find where each run starts.
+
+## Template 2: frequency map
+
+A frequency map answers "how many?" in O(1). It also works as a **budget**: count what you have, then spend it and fail when a count runs out.
+
+<AlgoViz trace={frequencyBudget} />
+
+<CodeTabs files={['snippets/frequency.js']} />
+
+<ProblemLink slug="valid-anagram" /> counts one word up and the other down; <ProblemLink slug="first-unique-character" /> counts first, then scans the string again in order. When the keys are lowercase letters, an array of 26 counters indexed by `ch.charCodeAt(0) - 97` is a hash map with a perfect hash function: faster, and O(1) space.
+
+## Template 3: complement lookup
+
+For "two elements that combine into a target", fix the second element and ask the map about the first. Here the map stores counts, so duplicates are handled: each `x` adds one pair for **every** earlier copy of `target - x`.
+
+<AlgoViz trace={pairCount} />
+
+<CodeTabs files={['snippets/complement.js']} />
+
+<ProblemLink slug="two-sum" /> is this template with value → index instead of value → count, returning at the first hit. The same idea powers "count subarrays with sum k": store running totals, and look up `total - k`. That one lives in [Prefix Sums](/dsa/patterns/prefix-sum).
+
+## Template 4: group by a canonical key
+
+Grouping is a map from a key to a list. All the thinking goes into the key: two items must get the **same** key exactly when they belong together.
+
+<CodeTabs files={['snippets/group-by-key.js']} />
+
+| To group… | Key | Cost per item |
+|---|---|---|
+| anagrams | letters sorted: `[...w].sort().join('')` | O(k log k) |
+| anagrams, long words | 26 counts joined: `counts.join('#')` | O(k) |
+| grid cells, points | `` `${r},${c}` `` | O(1) |
+| strings equal up to a shift | gaps between letters: `"abd"` and `"bce"` both give `1,2` | O(k) |
+
+<ProblemLink slug="group-anagrams" /> is exactly this template plus the right key.
+
+## Try it
+
+<RunCode src="snippets/try-it.js" />
+
+## Complexity
+
+| Template | Time | Extra space |
+|---|---|---|
+| Seen set, frequency map | O(n): one O(1) lookup per element | O(n), or O(k) for an alphabet of k symbols |
+| Complement lookup | O(n) | O(n) |
+| Group by sorted key | O(n · k log k) for n strings of length k | O(n · k) for the stored strings |
+| Group by count signature | O(n · k) | O(n · k) |
+
+Compare with the brute forces they replace: O(n²) pair checks, or O(n² · k) word-by-word comparisons.
+
+## JavaScript you'll use
+
+<JsRef to={["map-set", "objects", "strings"]} />
+
+```js
+count.set(x, (count.get(x) ?? 0) + 1);           // increment, starting from 0
+if (seen.has(need)) return [seen.get(need), i];  // has(), not get(): an index can be 0
+const counts = new Array(26).fill(0);
+counts[ch.charCodeAt(0) - 97]++;                 // letter counter without a Map
+const key = [...word].sort().join('');           // canonical key for anagrams
+return [...groups.values()];                     // Map values → array of groups
+```
+
+The JavaScript trap: arrays and objects are compared **by reference** as keys. `seen.add([1, 2])` followed by `seen.has([1, 2])` is `false`, because those are two different arrays. Encode composite keys as strings or numbers.
+
+<Callout kind="warning">
+
+- Inserting before looking up, so an element pairs with itself (`[3, 4]` with target 6 returns `[0, 0]`).
+- Writing `if (map.get(k))` when the stored value can be `0`, such as an index or a count. Use `has`, or compare with `undefined`.
+- Using arrays or objects as map keys: they never match a fresh copy.
+- Counting with a plain object: `counts["constructor"]` already exists on `{}`, so a word list containing "constructor" breaks `(counts[w] || 0) + 1`. Use a `Map`.
+- Answering "first unique" by iterating the map instead of the input when order matters, or forgetting that building a string key costs O(length) per element.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="Hash map or sorting: which would you pick?">
+    A hash map gives O(n) expected time but O(n) extra memory. Sorting costs O(n log n) but needs little extra memory, gives a predictable worst case, and leaves equal values adjacent, which is handy for duplicates and for two pointers. Say both, then pick: when memory is tight or the data arrives sorted, sort; otherwise hash. Sorting also loses original indices unless you sort `[value, index]` pairs.
+  </FollowUp>
+  <FollowUp q="What is the worst case of a hash map lookup, and does it matter?">
+    If many keys collide into one bucket, a lookup degrades to O(n) (Java switches long buckets to balanced trees, giving O(log n)). An attacker who knows the hash function can force collisions, which is why engines randomise string hashing. For interview code, state "O(1) on average" and move on, unless the interviewer asks about adversarial input.
+  </FollowUp>
+  <FollowUp q="How do you group anagrams when the words are very long?">
+    Replace the O(k log k) sorted key with an O(k) count signature: 26 counts joined with a separator (`1#0#2#…`). The separator matters: without it, counts 1, 11 and 11, 1 both produce "111". For huge alphabets, count only the characters that occur and sort those keys.
+  </FollowUp>
+  <FollowUp q="The data doesn't fit in memory. Can you still count distinct items or find duplicates?">
+    Exactly: partition the data by hash into files that each fit in memory, then process each file with an in-memory map (equal values always land in the same file). Approximately: a Bloom filter answers "seen before?" with no false negatives and a tunable false-positive rate, HyperLogLog estimates the number of distinct items in a few kilobytes, and a count-min sketch estimates frequencies.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

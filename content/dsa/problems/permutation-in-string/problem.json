@@ -1,0 +1,31 @@
+{
+  "title": "Permutation in String",
+  "difficulty": "Medium",
+  "patterns": ["sliding-window"],
+  "js": ["arrays", "strings"],
+  "order": 5,
+  "summary": "Decide whether some rearrangement of one string appears as a contiguous piece of another.",
+  "fn": "checkInclusion",
+  "params": ["s1", "s2"],
+  "types": { "params": ["string", "string"], "returns": "boolean" },
+  "tests": [
+    { "args": ["abc", "xxbcay"], "expected": true, "explain": "\"bca\" (indices 2 to 4) uses exactly the letters of \"abc\"." },
+    { "args": ["abc", "acxb"], "expected": false, "explain": "Every 3-letter stretch of \"acxb\" contains an x, so none rearranges into \"abc\"." },
+    { "args": ["abcd", "abc"], "expected": false, "explain": "s1 is longer than s2, so it can't fit." },
+    { "args": ["a", "a"], "expected": true },
+    { "args": ["aab", "baab"], "expected": true },
+    { "args": ["aab", "abba"], "expected": false },
+    { "args": ["xy", "yx"], "expected": true },
+    { "args": ["dog", "goodgod"], "expected": true },
+    { "args": ["ab", "a"], "expected": false },
+    { "args": ["aa", "aba"], "expected": false },
+    { "args": ["afbbf", "aefafdadbffeaabddedadacdacddabfbbfaddbbaeecceedddfeebcdddaab"], "expected": true },
+    { "args": ["aaab", "aefafdadbffeaabddedadacdacddabfbbfaddbbaeecceedddfeebcdddaab"], "expected": false }
+  ],
+  "hints": [
+    "A rearrangement of s1 has exactly s1.length characters, with exactly s1's letter counts.",
+    "Slide a window of fixed length s1.length over s2 and keep letter counts for the window.",
+    "Compare the window's counts with s1's counts after each slide (26 numbers), or track how many letters currently differ so each slide costs O(1)."
+  ],
+  "complexity": { "time": "O(n + m): one pass over s2 after counting s1, with O(1) work per slide", "space": "O(1): 26 counters" }
+}

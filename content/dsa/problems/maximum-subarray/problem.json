@@ -1,0 +1,30 @@
+{
+  "title": "Maximum Subarray",
+  "difficulty": "Medium",
+  "patterns": ["dp-1d", "prefix-sum"],
+  "js": ["numbers-math", "arrays"],
+  "order": 3,
+  "summary": "Find the largest sum of a non-empty run of consecutive numbers (Kadane's algorithm).",
+  "fn": "maxSubArray",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[3, -4, 5, -1, 2, -6, 4]], "expected": 6, "explain": "[5, -1, 2] sums to 6. Adding the 3 and -4 in front would contribute -1, which only lowers it." },
+    { "args": [[-3, -1, -2]], "expected": -1, "explain": "Every number is negative and the subarray can't be empty, so the best is the single largest number." },
+    { "args": [[7]], "expected": 7, "explain": "A single element is its own only subarray." },
+    { "args": [[1, 2, 3, 4]], "expected": 10 },
+    { "args": [[-5]], "expected": -5 },
+    { "args": [[0, -3, 0]], "expected": 0 },
+    { "args": [[2, -1, 2, -1, 2]], "expected": 4 },
+    { "args": [[8, -19, 5, -4, 20]], "expected": 21 },
+    { "args": [[-1, -1, -1, -1]], "expected": -1 },
+    { "args": [[100, -101, 100]], "expected": 100 },
+    { "args": [[-24, 31, 4, 19, -50, 32, -49, -40, -10, 17, -14, -44, -16, 23, -25, -32, -4, 27, -1, -23, 6, 26, -12, 28, 48, 2, -24, 47, -29, -4, 19, -11, -20, -26, 19, -11, 41, -31, 32, -1, 11, 20, 26, -23, 9, 27, -5, -35, -48, 15, 49, 4, -21, 22, 32, 0, 20, -25, 25, 11]], "expected": 216 }
+  ],
+  "hints": [
+    "Ask a narrower question for every index i: what is the best sum of a subarray that ends exactly at i?",
+    "A subarray ending at i either is just [nums[i]], or extends the best subarray ending at i - 1. Take whichever is larger.",
+    "Keep that 'best ending here' value and the overall best in two variables. Start both at nums[0], not 0, or all-negative inputs break."
+  ],
+  "complexity": { "time": "O(n): one pass", "space": "O(1): two running values" }
+}

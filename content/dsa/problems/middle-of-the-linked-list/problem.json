@@ -1,0 +1,29 @@
+{
+  "title": "Middle of the Linked List",
+  "difficulty": "Easy",
+  "patterns": ["fast-slow-pointers"],
+  "js": ["linked-list-tree-nodes"],
+  "order": 1,
+  "summary": "Return the middle node of a singly linked list in one pass, choosing the second middle when the length is even.",
+  "fn": "middleNode",
+  "params": ["head"],
+  "types": { "params": ["ListNode"], "returns": "ListNode" },
+  "io": { "args": ["list"], "returns": "list" },
+  "tests": [
+    { "args": [[1, 2, 3, 4, 5]], "expected": [3, 4, 5], "explain": "The middle of 5 nodes is the 3rd. The answer is that node, so the list from it onwards is 3 → 4 → 5." },
+    { "args": [[1, 2, 3, 4, 5, 6]], "expected": [4, 5, 6], "explain": "With 6 nodes there are two middles, 3 and 4. Return the second one, 4." },
+    { "args": [[9]], "expected": [9], "explain": "A single node is its own middle." },
+    { "args": [[1, 2]], "expected": [2] },
+    { "args": [[1, 2, 3]], "expected": [2, 3] },
+    { "args": [[5, 4, 3, 2, 1, 0, -1]], "expected": [2, 1, 0, -1] },
+    { "args": [[7, 7, 7, 7]], "expected": [7, 7] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]], "expected": [11, 12, 13, 14, 15, 16, 17, 18, 19, 20] },
+    { "args": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]], "expected": [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41] }
+  ],
+  "hints": [
+    "Counting the nodes and then walking half way works, but takes two passes. Can two pointers find the middle in one?",
+    "Move slow one node per step and fast two nodes per step. When fast reaches the end, slow has covered half the distance.",
+    "Loop while fast and fast.next both exist. For an even length this leaves slow on the second of the two middle nodes, which is what the problem asks for."
+  ],
+  "complexity": { "time": "O(n): fast walks the list once", "space": "O(1): two pointers" }
+}

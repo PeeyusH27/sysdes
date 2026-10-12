@@ -1,0 +1,31 @@
+{
+  "title": "Valid Parentheses",
+  "difficulty": "Easy",
+  "patterns": ["stack"],
+  "js": ["stack-queue-deque", "map-set"],
+  "order": 1,
+  "summary": "Check that every bracket in a string is closed by the right kind of bracket, in the right order.",
+  "fn": "isValid",
+  "params": ["s"],
+  "types": { "params": ["string"], "returns": "boolean" },
+  "tests": [
+    { "args": ["()[]{}"], "expected": true, "explain": "Each pair opens and closes immediately, one after another." },
+    { "args": ["([)]"], "expected": false, "explain": "When ] arrives, the most recently opened bracket is (, not [. The brackets cross instead of nesting." },
+    { "args": ["{[]}"], "expected": true, "explain": "[] closes inside {}, and then {} closes: properly nested." },
+    { "args": ["("], "expected": false },
+    { "args": [")"], "expected": false },
+    { "args": ["(()"], "expected": false },
+    { "args": [""], "expected": true },
+    { "args": ["([]{})[]"], "expected": true },
+    { "args": ["{[()()]}("], "expected": false },
+    { "args": ["(((([[[{{{}}}]]]))))"], "expected": true },
+    { "args": ["())("], "expected": false },
+    { "args": ["]"], "expected": false }
+  ],
+  "hints": [
+    "The bracket that must close next is always the most recently opened one that is still open. Which data structure gives you the most recent item first?",
+    "Push every opening bracket. On a closing bracket, the top of the stack must be its partner: pop it, or return false if the stack is empty or holds the wrong kind.",
+    "A Map from each closing bracket to its opening partner keeps the check to one line. At the end, the string is valid only if the stack is empty."
+  ],
+  "complexity": { "time": "O(n): each character is pushed and popped at most once", "space": "O(n): the stack can hold every character, as in \"((((\"" }
+}

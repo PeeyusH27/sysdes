@@ -1,0 +1,31 @@
+{
+  "title": "Jump Game II",
+  "difficulty": "Medium",
+  "patterns": ["greedy", "graph-traversal"],
+  "js": ["numbers-math", "arrays"],
+  "order": 3,
+  "summary": "Each value says how far you may jump from that index. Find the fewest jumps that reach the last index.",
+  "fn": "jump",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "number" },
+  "tests": [
+    { "args": [[2, 4, 1, 1, 1, 1]], "expected": 2, "explain": "Jump 1 step to index 1, then 4 steps from index 1 to the last index. One jump can't do it: from index 0 you reach index 2 at most." },
+    { "args": [[1, 1, 1, 1]], "expected": 3, "explain": "Every value is 1, so you must step on every index: 3 jumps." },
+    { "args": [[0]], "expected": 0, "explain": "You already stand on the last index." },
+    { "args": [[5, 1, 1]], "expected": 1 },
+    { "args": [[1, 4, 1, 1, 1, 1]], "expected": 2 },
+    { "args": [[2, 1]], "expected": 1 },
+    { "args": [[3, 2, 1, 1, 4, 1, 1, 1]], "expected": 3 },
+    { "args": [[1, 2, 3]], "expected": 2 },
+    { "args": [[2, 0, 2, 0, 1]], "expected": 2 },
+    { "args": [[3, 2, 6, 4, 1, 5, 5, 1, 6, 3, 6, 4, 1, 5, 4, 1, 2, 1, 4, 1, 3, 5, 4, 6, 6, 1, 3, 1, 5, 3, 1, 1, 1, 6, 4, 5, 2, 3, 4, 2]], "expected": 9 },
+    { "args": [[5, 1, 1, 1, 4, 0, 0, 0, 1, 3, 5, 1, 0, 5, 1, 2, 4, 4, 3, 4, 4, 0, 0, 4, 5, 3, 4, 0, 0, 2]], "expected": 9 }
+  ],
+  "samples": 3,
+  "hints": [
+    "Think in rounds, like breadth-first search: after 1 jump you can stand anywhere in some range of indices, after 2 jumps in a further range, and so on.",
+    "While scanning the indices reachable with the current number of jumps, track the furthest index any of them can reach. That becomes the end of the next round.",
+    "Keep end (the edge of the current round) and farthest. For i from 0 to n - 2: farthest = max(farthest, i + nums[i]); when i reaches end, count a jump and set end = farthest."
+  ],
+  "complexity": { "time": "O(n): one pass", "space": "O(1)" }
+}

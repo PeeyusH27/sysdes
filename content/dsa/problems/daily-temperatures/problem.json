@@ -1,0 +1,29 @@
+{
+  "title": "Daily Temperatures",
+  "difficulty": "Medium",
+  "patterns": ["stack"],
+  "js": ["stack-queue-deque", "arrays"],
+  "order": 5,
+  "summary": "For each day, count how many days you wait until a strictly warmer one, or 0 if it never comes.",
+  "fn": "dailyTemperatures",
+  "params": ["temperatures"],
+  "types": { "params": ["number[]"], "returns": "number[]" },
+  "tests": [
+    { "args": [[71, 69, 72, 76, 70, 73, 75, 68]], "expected": [2, 1, 1, 0, 1, 1, 0, 0], "explain": "Day 0 (71) waits 2 days for 72. No later day beats 76 (day 3), 75 (day 6) or 68 (day 7), so they get 0." },
+    { "args": [[50, 55, 60]], "expected": [1, 1, 0], "explain": "Each day is followed directly by a warmer one." },
+    { "args": [[70, 70, 71]], "expected": [2, 1, 0], "explain": "Equal is not warmer: day 0 has to wait until day 2." },
+    { "args": [[80, 70, 60]], "expected": [0, 0, 0] },
+    { "args": [[65]], "expected": [0] },
+    { "args": [[60, 62, 61, 59, 64]], "expected": [1, 3, 2, 1, 0] },
+    { "args": [[30, 100, 31, 32, 33, 34]], "expected": [1, 0, 1, 1, 1, 0] },
+    { "args": [[40, 35, 32, 37, 50]], "expected": [4, 2, 1, 1, 0] },
+    { "args": [[99, 30, 31, 32, 100]], "expected": [4, 1, 1, 1, 0] },
+    { "args": [[54, 31, 55, 30, 78, 76, 88, 94, 63, 65, 83, 50, 41, 99, 35, 59, 69, 70, 60, 95, 88, 39, 65, 41, 36, 40, 46, 85, 89, 95, 88, 44, 53, 55, 84, 84, 34, 30, 31, 88, 65, 81, 60, 73, 43, 50, 95, 48, 34, 64]], "expected": [2, 1, 2, 1, 2, 1, 1, 6, 1, 1, 3, 2, 1, 0, 1, 1, 1, 2, 1, 0, 8, 1, 5, 3, 1, 1, 1, 1, 1, 0, 16, 1, 1, 1, 5, 4, 3, 1, 1, 7, 1, 5, 1, 3, 1, 1, 0, 2, 1, 0] }
+  ],
+  "hints": [
+    "This is \"next greater element\", except the answer is a distance in days, not the warmer temperature itself.",
+    "Keep a stack of the indices of days that haven't seen a warmer day yet. Their temperatures decrease from bottom to top.",
+    "When today is warmer than the day on top, pop it and record today's index minus its index. Repeat, then push today. Days left on the stack keep the default 0."
+  ],
+  "complexity": { "time": "O(n): every day is pushed once and popped at most once", "space": "O(n): the stack and the answer array" }
+}

@@ -1,0 +1,31 @@
+{
+  "title": "Split Array Largest Sum",
+  "difficulty": "Hard",
+  "patterns": ["binary-search", "dp-1d"],
+  "js": ["numbers-math", "arrays"],
+  "order": 6,
+  "summary": "Cut an array into k contiguous pieces so that the largest piece sum is as small as possible.",
+  "fn": "splitArray",
+  "params": ["nums", "k"],
+  "types": { "params": ["number[]", "number"], "returns": "number" },
+  "tests": [
+    { "args": [[6, 3, 8, 2, 5], 2], "expected": 15, "explain": "Cutting after the 3 gives [6, 3] and [8, 2, 5], with sums 9 and 15. The other cuts give a largest sum of 18, 17 or 19, so 15 is the best." },
+    { "args": [[4, 4, 4, 4], 2], "expected": 8, "explain": "Cut in the middle: [4, 4] and [4, 4], both summing to 8. Any other cut leaves one piece with at least 12." },
+    { "args": [[2, 9, 3], 3], "expected": 9, "explain": "With k equal to the length, every element is its own piece, so the largest piece is the largest element." },
+    { "args": [[10], 1], "expected": 10 },
+    { "args": [[1, 1, 1, 1, 1], 1], "expected": 5 },
+    { "args": [[0, 0, 0, 7], 2], "expected": 7 },
+    { "args": [[5, 1, 1, 1, 1, 5], 3], "expected": 5 },
+    { "args": [[1, 2, 3, 100, 4], 2], "expected": 104 },
+    { "args": [[3, 1, 4, 1, 5, 9, 2, 6], 3], "expected": 14 },
+    { "args": [[763, 159, 605, 679, 489, 159, 195, 677, 304, 431, 944, 696, 541, 545, 829, 527, 956, 460, 670, 542, 728, 107, 595, 653, 69, 5, 290, 680, 143, 893], 5], "expected": 3398 },
+    { "args": [[21, 188, 83, 126, 215, 109, 275, 124, 237, 296, 165, 458, 415, 187, 385, 239, 53, 438, 296, 108, 284, 103, 207, 361, 433, 146, 105, 114, 107, 363, 104, 278, 81, 392, 172, 80, 297, 91, 208, 200, 147, 411, 151, 431, 391, 278, 434, 143, 389, 351], 12], "expected": 1115 }
+  ],
+  "samples": 3,
+  "hints": [
+    "Turn the question around: given a limit L, can you cut the array into at most k pieces whose sums are all <= L?",
+    "That check is greedy: walk left to right and start a new piece only when adding the next number would exceed L. If L works, every bigger limit works too.",
+    "So binary search on L between max(nums) (no piece can be smaller than the biggest element) and sum(nums) (one piece). Find the first L whose greedy piece count is <= k."
+  ],
+  "complexity": { "time": "O(n log S): log S candidate limits, where S is the total sum, each checked in O(n)", "space": "O(1)" }
+}

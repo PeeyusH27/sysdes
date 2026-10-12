@@ -1,0 +1,28 @@
+{
+  "title": "Move Zeroes",
+  "difficulty": "Easy",
+  "patterns": ["two-pointers"],
+  "js": ["arrays", "destructuring-spread"],
+  "order": 3,
+  "summary": "Move every zero to the end of the array in place while keeping the other values in their original order.",
+  "fn": "moveZeroes",
+  "params": ["nums"],
+  "types": { "params": ["number[]"], "returns": "void" },
+  "inPlace": 0,
+  "tests": [
+    { "args": [[0, 1, 0, 3, 12]], "expected": [1, 3, 12, 0, 0], "explain": "The non-zero values 1, 3, 12 keep their order; the two zeroes go to the end. The test checks nums after your function returns." },
+    { "args": [[0]], "expected": [0] },
+    { "args": [[1, 2, 3]], "expected": [1, 2, 3] },
+    { "args": [[0, 0, 1]], "expected": [1, 0, 0] },
+    { "args": [[4, 0, 5, 0, 0, 6]], "expected": [4, 5, 6, 0, 0, 0] },
+    { "args": [[-1, 0, 0, -2]], "expected": [-1, -2, 0, 0] },
+    { "args": [[0, 0, 0]], "expected": [0, 0, 0] },
+    { "args": [[2, 1, 0, 0, 3, 0, 7]], "expected": [2, 1, 3, 7, 0, 0, 0] }
+  ],
+  "hints": [
+    "Don't return anything: change nums itself. The tests look at nums after your function runs.",
+    "Keep a write pointer for the next slot that should hold a non-zero value, and scan with a read pointer.",
+    "When read finds a non-zero, swap it into the write slot and advance write. Zeroes drift to the back on their own."
+  ],
+  "complexity": { "time": "O(n): one pass", "space": "O(1): in place" }
+}

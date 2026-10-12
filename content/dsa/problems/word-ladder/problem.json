@@ -1,0 +1,31 @@
+{
+  "title": "Word Ladder",
+  "difficulty": "Hard",
+  "patterns": ["graph-traversal"],
+  "js": ["map-set", "strings", "stack-queue-deque"],
+  "order": 6,
+  "summary": "Find the length of the shortest chain of words from a start word to a target, changing one letter at a time.",
+  "fn": "ladderLength",
+  "params": ["beginWord", "endWord", "wordList"],
+  "types": { "params": ["string", "string", "string[]"], "returns": "number" },
+  "tests": [
+    { "args": ["cold", "warm", ["cord", "card", "ward", "warm", "worm", "word", "wore", "core", "care", "ware"]], "expected": 5, "explain": "One shortest sequence is cold → cord → card → ward → warm: 5 words. Other routes (through word and worm) are no shorter." },
+    { "args": ["tick", "tock", ["tack", "tuck", "tick"]], "expected": 0, "explain": "\"tock\" is not in the word list, so no sequence can end with it: 0." },
+    { "args": ["ab", "ac", ["ac", "bc"]], "expected": 2, "explain": "\"ab\" → \"ac\" changes one letter, so the sequence has 2 words." },
+    { "args": ["hot", "dog", ["hut", "dug", "dog"]], "expected": 0 },
+    { "args": ["a", "c", ["a", "b", "c"]], "expected": 2 },
+    { "args": ["red", "tax", ["ted", "tex", "tax", "red", "tad"]], "expected": 4 },
+    { "args": ["lost", "cost", ["most", "cost", "most", "cost"]], "expected": 2 },
+    { "args": ["abc", "xyz", ["abz", "ayz", "xbc", "xyc", "xyz", "ayc"]], "expected": 4 },
+    { "args": ["sail", "mine", ["sail", "bail", "ball", "bell", "belt", "bolt", "boat", "coat", "cost", "most", "mist", "list", "lost", "loft", "soft", "sort", "fort", "form", "foam", "loam", "roam", "road", "load", "lead", "head", "heal", "seal", "sell", "tell", "tall", "tail", "mail", "maid", "said", "sand", "band", "bend", "bond", "fond", "find", "mind", "mine"]], "expected": 9 },
+    { "args": ["bolt", "fond", ["sail", "bail", "ball", "bell", "belt", "bolt", "boat", "coat", "cost", "most", "mist", "list", "lost", "loft", "soft", "sort", "fort", "form", "foam", "loam", "roam", "road", "load", "lead", "head", "heal", "seal", "sell", "tell", "tall", "tail", "mail", "maid", "said", "sand", "band", "bend", "bond", "fond", "find", "mind", "mine"]], "expected": 11 },
+    { "args": ["loam", "seal", ["sail", "bail", "ball", "bell", "belt", "bolt", "boat", "coat", "cost", "most", "mist", "list", "lost", "loft", "soft", "sort", "fort", "form", "foam", "loam", "roam", "road", "load", "lead", "head", "heal", "seal", "sell", "tell", "tall", "tail", "mail", "maid", "said", "sand", "band", "bend", "bond", "fond", "find", "mind", "mine"]], "expected": 6 },
+    { "args": ["aaaa", "bbbb", ["aaab", "aabb", "abbb", "bbbb", "baaa", "bbaa", "bbba"]], "expected": 5 }
+  ],
+  "hints": [
+    "Words are nodes; two words are joined by an edge when they differ in exactly one position. The question asks for the fewest edges, so think BFS.",
+    "Don't build the whole graph. From a word, try every position and every letter a–z, and keep the candidates that are in a Set of unused dictionary words.",
+    "Delete a word from the Set when you enqueue it, so it is never queued twice. Count levels: the start word is level 1, and return the level at which you reach endWord (0 if you never do)."
+  ],
+  "complexity": { "time": "O(N · L² · 26): N words, each tries 26·L candidates and building one costs O(L)", "space": "O(N · L): the Set and the queue of words" }
+}
