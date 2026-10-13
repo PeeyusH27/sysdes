@@ -43,3 +43,6 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
+
+# extra local build dirs (NEXT_DIST_DIR)
+/.next-*/

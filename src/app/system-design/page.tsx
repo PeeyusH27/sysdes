@@ -90,7 +90,8 @@ export default function SystemDesignHome() {
             <li><Link href="/learn/requirements-estimation">HLD path steps 1–7</Link></li>
             <li><Link href="/questions/rate-limiter">Rate limiter</Link></li>
             <li><Link href="/questions/movie-booking">Ticket booking</Link></li>
-            <li><Link href="/questions/parking-lot">Parking lot (LLD)</Link></li>
+            <li><Link href="/questions/parking-lot">Parking lot</Link>, <Link href="/questions/elevator">elevator</Link> and <Link href="/questions/vending-machine">vending machine</Link> (LLD)</li>
+            <li><Link href="/questions/leaderboard">Leaderboard</Link> and <Link href="/questions/payment-system">payment system</Link></li>
             <li><Link href="/deep-dives/sharding-strategies">Sharding</Link> and <Link href="/deep-dives/connections-pooling">connections</Link></li>
           </ol>
         </div>
@@ -99,7 +100,7 @@ export default function SystemDesignHome() {
           <ol>
             <li><Link href="/learn/requirements-estimation">HLD path steps 1–5</Link></li>
             <li><Link href="/questions/chat">Real-time chat</Link></li>
-            <li><Link href="/questions/news-feed">News feed</Link></li>
+            <li><Link href="/questions/news-feed">News feed</Link> and <Link href="/questions/ride-sharing">Uber ride matching</Link></li>
             <li><Link href="/deep-dives/request-flows">Request flows end to end</Link></li>
             <li><Link href="/playground">Build it in the playground</Link></li>
           </ol>

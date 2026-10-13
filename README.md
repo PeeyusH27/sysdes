@@ -3,7 +3,7 @@
 A Next.js site for interview preparation with two tracks:
 
 - **DSA** (`/dsa`): a JavaScript-for-DSA cheat sheet with runnable snippets, 22 patterns explained step by step with animations synced to the code, and practice problems solved in an in-browser editor. Tests run in a Web Worker, solved problems are tracked, and a step-by-step solution unlocks after the first wrong submission.
-- **System design** (`/system-design`): a 10-step HLD path, 6 deep dives and 7 interview questions with detailed JavaScript answers. Diagrams are animated SVG you can play, pause and step through; widgets simulate load balancers, caches, queues and more; and a drag-and-drop playground lints, simulates and grades your designs.
+- **System design** (`/system-design`): a 10-step HLD path, 6 deep dives and 12 interview questions (including LLD classics: parking lot, elevator, vending machine) with detailed JavaScript answers. Diagrams are animated SVG you can play, pause and step through; widgets simulate load balancers, caches, queues, a parking lot with cars driving to their spots, a bank of elevators, and more; and a drag-and-drop playground lints, simulates and grades your designs.
 
 Every lesson is a stack of section cards you can tick off, or flip through one at a time in Cards mode. **Shorts** (`/shorts`) cover both tracks as one-minute bullet-point cards: on a phone you swipe sideways for the next one and scroll down to read more; on desktop you use the arrows or ←/→.
 

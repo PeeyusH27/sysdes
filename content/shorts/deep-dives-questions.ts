@@ -510,6 +510,163 @@ server.headersTimeout = 66_000;   // keep above keepAliveTimeout`,
     source: "/questions/parking-lot#step-by-step-answer",
   },
 
+  // ── Question: Vending machine ──────────────────────────────────────────────
+  {
+    id: "vending-machine-state-table",
+    track: "System design",
+    topic: "Vending machine",
+    title: "A vending machine is a state machine: one outcome per event",
+    hook: "Every coin, button press and sensor signal needs exactly one outcome in each state, or the machine gives away colas or eats dollars.",
+    points: [
+      "Four states: **Idle**, **HasMoney**, **Dispensing**, **OutOfService**. Sold out belongs to a slot, not to the machine.",
+      "Write a **transition table**: rows are states, columns are events, and every cell has one outcome.",
+      "An event a state doesn't list is **rejected and changes nothing**. A refused coin drops straight to the cup.",
+      "Dispensing is a real state: it waits for the drop sensor, so coins, selects and cancels are all refused.",
+      "Every input goes through **one queue**, handled one event at a time.",
+    ],
+    more: [
+      {
+        title: "State objects",
+        points: [
+          "Each state is an object mapping event names to handlers that return the next state.",
+          "Rejections happen **before** any mutation, so a rejected event can't half-apply.",
+          "A test loops over all 32 (state, event) pairs: 13 are accepted, and the other 19 must leave everything unchanged.",
+        ],
+      },
+      {
+        title: "Watch out",
+        points: [
+          "A `SoldOutState` would stop the other 29 slots selling. SOLD OUT is a message in HasMoney; the credit stays.",
+          "Nested `if/else` hides missing cases. A table shows them, and rejects them by default.",
+        ],
+      },
+    ],
+    code: `hasMoney: {
+  coin: (m, { coin }) => { m.escrow.push(coin); return 'hasMoney'; },
+  cancel: m => { m.refund('cancelled'); return 'idle'; },
+  // select: sold out or short -> rejected; no change -> refund
+},
+dispensing: {                       // only the drop sensor gets in
+  dropped: m => { m.commit(); return 'idle'; },
+  dropFailed: m => { m.refund('nothing dropped'); return 'idle'; },
+},`,
+    say: "This is a state machine: Idle, HasMoney, Dispensing, OutOfService. I'd write the transition table first; any event a state doesn't list is rejected and changes neither money nor stock.",
+    source: "/questions/vending-machine#state-transition-table",
+  },
+  {
+    id: "vending-machine-change-making",
+    track: "System design",
+    topic: "Vending machine",
+    title: "Greedy change-making fails when the coin tubes run low",
+    hook: "Largest coin first is optimal with unlimited coins. A real machine has a handful per tube, and greedy never backtracks.",
+    points: [
+      "Owe 30¢ from one 25¢ and three 10¢: greedy takes the 25¢, then needs a 5¢ that isn't there.",
+      "A **bounded DP** over the coins actually in the tubes finds 10¢ + 10¢ + 10¢, with the fewest coins.",
+      "Count the escrow too: the customer's own coins can be part of their change.",
+      "No change possible? **Refuse the sale** and give back the same coins. Never sell short.",
+      "Keep money in **integer cents**: in floating point `0.1 + 0.2` is `0.30000000000000004`.",
+    ],
+    more: [
+      {
+        title: "Escrow, then commit",
+        points: [
+          "Inserted coins stay in escrow; select only reserves the change.",
+          "Only the sensor's `dropped` moves the escrow into the tubes, pays the change and takes stock, exactly once.",
+          "Invariant after every event: escrow + tubes + paid out = opening float + inserted + refills.",
+        ],
+      },
+      {
+        title: "Cost",
+        points: ["The DP runs once per sale over a few hundred cents: microseconds, even on a microcontroller."],
+      },
+    ],
+    code: `function fewestCoins(amount, counts, denoms = [100, 25, 10, 5]) {
+  let best = [0, ...Array(amount).fill(Infinity)];
+  for (const d of denoms)
+    best = best.map((min, a) => {     // min starts as "no coin d"
+      for (let j = 1; j <= (counts[d] ?? 0) && j * d <= a; j++)
+        min = Math.min(min, best[a - j * d] + j);
+      return min;
+    });
+  return best[amount]; // Infinity: no change, so refund
+}`,
+    say: "Greedy is only optimal with unlimited coins. With real tubes I'd run a bounded DP over the coins that are actually there, escrow included, and if it can't make change, refuse the sale and refund.",
+    source: "/questions/vending-machine#step-by-step-answer",
+  },
+
+  // ── Question: Elevator ─────────────────────────────────────────────────────
+  {
+    id: "elevator-look-dispatch",
+    track: "System design",
+    topic: "Elevator LLD",
+    title: "An elevator is two decisions: which car, and in what order",
+    hook: "Split dispatch from scheduling and the elevator question gets easy: each car runs LOOK, and one controller gives every hall call one car.",
+    points: [
+      "Each car is a **state machine**: IDLE, MOVING_UP, MOVING_DOWN, DOORS_OPEN, OUT_OF_SERVICE. Doors open only when it's stopped at a floor.",
+      "**LOOK**: keep the sweep while any stop lies ahead, turn around only when none does. No floor waits more than two sweeps.",
+      "**FCFS** zig-zags past floors it will need later; nearest-stop-first can starve a far floor.",
+      "**Nearest car** must be direction-aware: a car 2 floors away heading the wrong way can be the slowest to arrive.",
+      "One controller loop owns every hall call, so pressing ▲ twice is still one call and one car comes.",
+    ],
+    more: [
+      {
+        title: "Watch out",
+        points: [
+          "Put the safety rules inside the car: `openDoors()` throws while moving, and a car never moves with its doors open.",
+          "A failed car hands its hall calls to the other cars; its riders get out at the next floor.",
+          "A full car (about 80% load) skips hall calls and hands them back to the dispatcher.",
+        ],
+      },
+      {
+        title: "Other strategies",
+        points: [
+          "**Collective**: only an idle car, or one already passing in the right direction, takes a call. Simple, but cars bunch.",
+          "**Destination dispatch**: riders key in their floor in the lobby and are grouped by floor, so cars make fewer stops.",
+        ],
+      },
+    ],
+    code: `// LOOK, the whole stop policy for one car
+if (ahead(dir)) return here(dir) ? { serve: dir } : { move: dir };
+if (here(dir)) return { serve: dir };          // last stop this way
+if (here(flip(dir))) return { serve: flip(dir) }; // turn around here
+return ahead(flip(dir)) ? { move: flip(dir) } : {}; // else go idle`,
+    say: "Each car is a state machine that serves its stops in LOOK order, so waits are bounded. One controller assigns every hall call to exactly one car, scored by a direction-aware cost.",
+    source: "/questions/elevator#step-by-step-answer",
+  },
+  {
+    id: "elevator-round-trip-time",
+    track: "System design",
+    topic: "Elevator LLD",
+    title: "Lifts are slow because they stop, not because floors are far",
+    hook: "In a 20-floor office at the morning rush, a car's 148 s round trip is 52 s of travel and 72 s of stopping. That sets how many cars you need.",
+    points: [
+      "**Round trip** = travel up and back + every stop + every person getting in and out.",
+      "20 floors and 10 people a trip: about **8 stops**, and the car reaches floor **18.6** on average.",
+      "At 2.5 m/s and 8 s a stop the round trip is about **148 s**, so one car moves about 20 people in 5 minutes.",
+      "Four cars move about 81 in 5 minutes. 1,000 people needing 12% (120) moved want **six cars**.",
+      "Halve the stops (destination dispatch) and the trip drops to about 116 s: four cars then move about 103.",
+    ],
+    more: [
+      {
+        title: "The inputs",
+        points: [
+          "Stops per trip: N × (1 − (1 − 1/N)^P) = 20 × (1 − 0.95^10) ≈ 8.0.",
+          "A stop costs about 8 s: doors close 3 s, open 2 s, and about 3 s is lost braking and accelerating.",
+          "Each person takes 1.2 s to get in and 1.2 s to get out; a floor takes 1.4 s at 2.5 m/s.",
+        ],
+      },
+      {
+        title: "What to say next",
+        points: [
+          "Interval = round trip ÷ cars: 37 s with four cars, 25 s with six. Offices aim for under 30 s.",
+          "The controller is tiny: 120 presses in 5 minutes is 0.4 a second. The hard part is correctness.",
+        ],
+      },
+    ],
+    say: "I'd size for the morning rush: a 148 s round trip with 10 people per car means about 20 people per car per 5 minutes, so 1,000 people need six cars, and most of the trip is spent stopping.",
+    source: "/questions/elevator#capacity-estimate",
+  },
+
   // ── Question: Rate limiter ─────────────────────────────────────────────────
   {
     id: "token-bucket-vs-windows",
@@ -663,6 +820,148 @@ if (rowCount !== seats.length) await c.query('ROLLBACK');`,
     ],
     say: "The webhook confirms with a conditional update: still held by me? Then book it, even if the hold just expired. If someone else took the seats, roll back and refund. A unique payment id makes a retried webhook a no-op.",
     source: "/questions/movie-booking#failure-modes",
+  },
+
+  // ── Question: Leaderboard ──────────────────────────────────────────────────
+  {
+    id: "leaderboard-rank-sorted-set",
+    track: "System design",
+    topic: "Leaderboards",
+    title: "A sorted set answers \"what's my rank?\" in O(log n)",
+    hook: "A database index finds the top 100 easily, but to rank one player it must count everyone above them. A skip list keeps that count.",
+    points: [
+      "Each board is a Redis **sorted set**: a skip list ordered by score, plus a hash from player to score.",
+      "`ZINCRBY` adds points, `ZREVRANGE 0 99` is the top 100, and `1 + ZCOUNT key (score +inf` is a rank: all O(log n).",
+      "A B-tree stores no counts, so `COUNT(*) WHERE points > x` reads every entry above you: millions per query.",
+      "Cache the top 100 for a second, since everyone sees the same list. Compute \"my rank\" on demand from a replica.",
+      "50M players at about 100 bytes each is roughly 5 GB: one Redis primary plus a replica, no sharding yet.",
+    ],
+    more: [
+      {
+        title: "Writes and durability",
+        points: [
+          "Validate server-side, append to **Kafka**, then apply to the daily, weekly and all-time keys in one Lua script.",
+          "Kafka delivers at least once and `ZINCRBY` isn't idempotent: store the last applied offset in the same script.",
+          "Redis is a **rebuildable index**: reload the totals from the database and replay Kafka if it's lost.",
+        ],
+      },
+      {
+        title: "Time windows",
+        points: [
+          "One key per period, derived from when the match was **played**, so a late event lands on the right day.",
+          "`EXPIRE key ttl NX` sets the TTL once. `ZUNIONSTORE` of seven dailies rebuilds a week, but it's O(N): never per request.",
+        ],
+      },
+    ],
+    code: `await redis.zincrby('lb:all', 50, 'maya');           // O(log n)
+const top = await redis.zrevrange('lb:all', 0, 99, 'WITHSCORES');
+const score = await redis.zscore('lb:all', 'ravi');   // O(1)
+const above = await redis.zcount('lb:all', \`(\${score}\`, '+inf');
+const rank = above + 1;                               // ties share it`,
+    say: "Each board is a sorted set: ZINCRBY to add points, ZREVRANGE for the top 100, and 1 + ZCOUNT above my score for my rank, all O(log n). Redis is an index I can rebuild from the event log.",
+    source: "/questions/leaderboard#why-a-sorted-set",
+  },
+  {
+    id: "leaderboard-ties-and-shards",
+    track: "System design",
+    topic: "Leaderboards",
+    title: "Leaderboard ties and shards: where the interview is won",
+    hook: "Anyone can say \"use a sorted set\". The follow-ups are how ties are numbered and what you do when one node can't hold the board.",
+    points: [
+      "**Shared** ranks (1224) are 1 + `ZCOUNT` above you. **Dense** ranks (1223) need a second set of distinct scores.",
+      "**First to reach wins**: score = `points × 2^28 + (MAX_TS − ts)`. Doubles are exact only to 2^53, so points stay under 2^25.",
+      "Shard by player hash: each shard returns its own top K and you merge. Not K / N: the whole top K may sit on one shard.",
+      "My global rank is 1 + the sum of `ZCOUNT` above my score on every shard. Dense ranks don't add up across shards.",
+      "For the long tail, a score histogram gives \"top 37%\" from a few hundred counters instead of exact ranks.",
+    ],
+    more: [
+      {
+        title: "Shard by score range?",
+        points: [
+          "The top K comes from one shard, and a rank is the size of every higher shard plus your rank inside yours.",
+          "But the top shard is the hottest, players move between shards, and the boundaries drift as scores inflate.",
+        ],
+      },
+      {
+        title: "Watch out",
+        points: [
+          "`ZREVRANK` breaks ties by member name, which is arbitrary: use `ZCOUNT` for shared ranks.",
+          "Adding the time as a fraction of a point runs out of precision once totals reach about a million.",
+          "`ZADD GT` keeps the earliest of two equal best scores for free: the later one encodes smaller.",
+        ],
+      },
+    ],
+    say: "I'd break ties by first to reach, with a composite score that fits in 53 bits. Past one node I'd shard by player hash: the top K is a merge of every shard's top K, and my rank is 1 plus the sum of the ZCOUNTs.",
+    source: "/questions/leaderboard#step-by-step-answer",
+  },
+
+  // ── Question: Payment system ───────────────────────────────────────────────
+  {
+    id: "payment-timeout-means-unknown",
+    track: "System design",
+    topic: "Payments",
+    title: "A payment timeout means unknown, not failed",
+    hook: "The PSP may have charged the card before its reply got lost. Call that a failure and the customer's retry charges them twice.",
+    points: [
+      "Claim an **idempotency key** per checkout attempt under a unique constraint, in the same transaction that creates the payment.",
+      "Same key and body: replay the **stored response**. Still running: `409`. Same key, different body: `422`.",
+      "On a timeout, mark the payment `unknown` and pass **your own key** to the PSP, so any retry returns the original charge.",
+      "Let the signed **webhook**, or a recovery job's status query, settle `unknown` into succeeded or failed.",
+    ],
+    more: [
+      {
+        title: "Watch out",
+        points: [
+          "Never hold a database transaction open across the PSP call: at 1,160 payments/s that is 1,160 open transactions.",
+          "A check-then-insert in code races. Let the database's **unique key** pick the single winner.",
+          "Store declines too: retrying the key replays the decline, and another card needs a new key.",
+        ],
+      },
+      {
+        title: "Retries",
+        points: [
+          "Retry only timeouts, resets and 5xx, with exponential backoff and **full jitter**, and always with the same key.",
+          "Failing over to a second PSP after a timeout can double-charge: the first one may have succeeded.",
+        ],
+      },
+    ],
+    code: `INSERT INTO idempotency_keys (customer_id, key, request_hash)
+VALUES ($1, $2, $3)
+ON CONFLICT (customer_id, key) DO NOTHING;
+-- 0 rows: replay if done, 409 if started, 422 if the hash differs`,
+    say: "A PSP timeout is unknown, not failed. I'd claim an idempotency key in the same transaction as the payment, pass my key to the PSP, and let the webhook or a status query settle it.",
+    source: "/questions/payment-system#step-by-step-answer",
+  },
+  {
+    id: "payment-double-entry-ledger",
+    track: "System design",
+    topic: "Payments",
+    title: "Every cent twice: the double-entry ledger",
+    hook: "Payments are a bookkeeping problem. Balanced, append-only entries make double postings and missing money visible instead of silent.",
+    points: [
+      "Every transaction is a set of entries that **sums to zero**, in integer minor units of one currency: 5000 means $50.00.",
+      "A $50 charge: debit cash at PSP $48.25 and fees $1.75; credit the merchant $45.00 and revenue $5.00.",
+      "Entries are **append-only**. A refund or a correction is a new transaction in the other direction.",
+      "Balances are **derived** from the entries. Cache them as a projection, never as the source of truth.",
+    ],
+    more: [
+      {
+        title: "With webhooks",
+        points: [
+          "Verify the signature, insert the **event id** under a unique key, then apply only forward state moves.",
+          "Write the status change, the ledger entries and an **outbox** row in one transaction, so nothing half-happens.",
+        ],
+      },
+      {
+        title: "Balanced is not correct",
+        points: [
+          "A duplicate webhook posted twice still balances. **Reconciliation** against the PSP's daily report catches it.",
+          "Compute one leg as the remainder (merchant share = amount − commission), so rounding can't create or lose a cent.",
+        ],
+      },
+    ],
+    say: "Money lives in an append-only double-entry ledger in integer cents. Every transaction sums to zero, balances are derived, and a daily reconciliation with the PSP catches what balancing can't.",
+    source: "/questions/payment-system#step-by-step-answer",
   },
 
   // ── Question: Typeahead ────────────────────────────────────────────────────
@@ -879,5 +1178,83 @@ if (dup) {
 }`,
     say: "I'd present push first, then say it breaks for a 30M-follower account. The hybrid pushes for normal authors and merges celebrity posts at read time, with a threshold around 100K followers that we tune.",
     source: "/questions/news-feed#push-pull-or-hybrid",
+  },
+  // ── Question: Uber ride matching ───────────────────────────────────────────
+  {
+    id: "ride-matching-geo-index",
+    track: "System design",
+    topic: "Geospatial index",
+    title: "Find nearby drivers by cell, and always read the 8 neighbours",
+    hook: "5M drivers report every 4 s. Only the latest fix matters for matching, so it lives in memory, indexed by cell, never as a database row.",
+    points: [
+      "1.25M updates/s: **overwrite** each driver's position in Redis GEO (one key per city) with a TTL, and batch history to Kafka.",
+      "A **geohash** interleaves longitude and latitude bits, so a shared prefix means a shared cell. Precision 6 is about 1.2 × 0.6 km.",
+      "Cells have edges: a driver 10 m away can sit in the next cell, under another prefix. Always read the **8 neighbours** too.",
+      "Widen ring by ring. After ring k, anything unscanned is at least k cells away, so stop once the best are closer than that.",
+      "Rank the shortlist by **ETA** from the routing service: the nearest car may be across a river.",
+    ],
+    more: [
+      {
+        title: "Alternatives",
+        points: [
+          "**Quadtrees** split cells where drivers are dense, at the cost of a tree to rebalance as they move.",
+          "**H3** hexagons put every neighbour at the same distance, so rings are natural.",
+          "`GEOADD` overwrites a member's geohash score, so a moving driver leaves its old cell automatically.",
+        ],
+      },
+      {
+        title: "Watch out",
+        points: [
+          "GEO members never expire: keep a `loc:` key with a 15 s TTL and skip drivers without one.",
+          "Two points 31 m apart can hash to `s00000` and `7zzzzz`: prefixes alone can't find neighbours.",
+        ],
+      },
+    ],
+    code: `for (; k <= maxRings; k++) {
+  for (const cell of ringCells(center, k))
+    for (const d of index.inCell(cell)) found.push(near(d));
+  found.sort((a, b) => a.dist - b.dist);
+  // anything not scanned yet is at least k cells away
+  if (found.length >= want && found[want - 1].dist <= k * cell) break;
+}`,
+    say: "Only the latest fix matters, so it overwrites an in-memory geo index per city with a TTL. To match, I read the rider's cell and its 8 neighbours, widen ring by ring, and rank the shortlist by ETA.",
+    source: "/questions/ride-sharing#step-by-step-answer",
+  },
+  {
+    id: "ride-matching-compare-and-set",
+    track: "System design",
+    topic: "Matching",
+    title: "One ride, one driver: reserve with a compare-and-set, then offer",
+    hook: "Many matchers race for the same nearby cars. Check-then-write lets two of them offer one driver two rides in the same millisecond.",
+    points: [
+      "Driver state goes `AVAILABLE → OFFERED → ON_TRIP`, and every step is a **compare-and-set**, never a read followed by a write.",
+      "Reserve first: `AVAILABLE → OFFERED` succeeds for one matcher. The loser gets 0 and moves to its next candidate.",
+      "Offer **one driver at a time** with a 10–15 s countdown. A decline or silence sets the driver back to `AVAILABLE`.",
+      "The reservation has a **TTL**, so a matcher that crashes mid-offer can't strand a driver.",
+      "The ride side too: `UPDATE rides … WHERE state = 'REQUESTED'`, so a ride never gets two drivers.",
+    ],
+    more: [
+      {
+        title: "How to build it",
+        points: [
+          "Redis: a Lua script that checks `state` and writes it in one atomic step.",
+          "SQL: `UPDATE drivers SET state = 'OFFERED' WHERE id = $1 AND state = 'AVAILABLE'`, then check the row count.",
+          "Backstop: a partial unique index that allows one active ride per driver.",
+        ],
+      },
+      {
+        title: "Watch out",
+        points: [
+          "An accept that arrives after the reservation expired must fail its compare-and-set: show **offer expired**.",
+          "Offering one ride to several drivers at once creates races you then have to break.",
+        ],
+      },
+    ],
+    code: `const ok = await store.cas(id, { state: 'AVAILABLE' },
+  { state: 'OFFERED', rideId: ride.id, ttlMs: 15_000 });
+if (!ok) continue;            // another matcher won: next candidate
+const answer = await answerWithin(offer(id, ride), 12_000);`,
+    say: "Every driver state change is a compare-and-set with a TTL. The matcher reserves AVAILABLE to OFFERED before it sends the offer, so two matchers can't both win and a crash can't strand a driver.",
+    source: "/questions/ride-sharing#step-by-step-answer",
   },
 ];

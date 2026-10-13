@@ -3,6 +3,8 @@ import path from "node:path";
 import createMDX from "@next/mdx";
 
 const nextConfig: NextConfig = {
+  // Lets several local builds coexist (e.g. NEXT_DIST_DIR=.next-layout); defaults to .next.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   pageExtensions: ["js", "jsx", "ts", "tsx", "md", "mdx"],
   turbopack: {
     root: process.cwd(),

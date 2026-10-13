@@ -14,8 +14,36 @@ import { QuorumPlayground } from "../QuorumPlayground";
 import { RetryStorm } from "../RetryStorm";
 import { SeatRace } from "../SeatRace";
 import { TokenBucketViz } from "../TokenBucketViz";
+import { ParkingLotSim } from "../ParkingLotSim";
+import { ElevatorSim } from "../ElevatorSim";
+import { VendingMachineSim } from "../VendingMachineSim";
+import { LeaderboardRace } from "../LeaderboardRace";
+import { PaymentFlowSim } from "../PaymentFlowSim";
+import { RideMatchSim } from "../RideMatchSim";
+import { HashingLab } from "../HashingLab";
+import { TwoPointersLab } from "../TwoPointersLab";
+import { SlidingWindowLab } from "../SlidingWindowLab";
+import { PrefixSumLab } from "../PrefixSumLab";
+import { BinarySearchLab } from "../BinarySearchLab";
+import { StackLab } from "../StackLab";
+import { IntervalsLab } from "../IntervalsLab";
+import { FastSlowLab } from "../FastSlowLab";
+import { ListReversalLab } from "../ListReversalLab";
+import { TreeDfsLab } from "../TreeDfsLab";
+import { TreeBfsLab } from "../TreeBfsLab";
+import { TrieLab } from "../TrieLab";
+import { HeapLab } from "../HeapLab";
+import { GraphTraversalLab } from "../GraphTraversalLab";
+import { TopoSortLab } from "../TopoSortLab";
+import { UnionFindLab } from "../UnionFindLab";
+import { ShortestPathLab } from "../ShortestPathLab";
+import { BacktrackingLab } from "../BacktrackingLab";
+import { GreedyLab } from "../GreedyLab";
+import { Dp1dLab } from "../Dp1dLab";
+import { Dp2dLab } from "../Dp2dLab";
+import { BitLab } from "../BitLab";
 
-const WIDGETS = { TokenBucketViz, FixedVsSliding, QuorumPlayground, PollingRace, QueueSim, SeatRace, DebounceViz, LRUViz, CircuitBreakerSim, AvailabilityCalc, RetryStorm, KafkaPartitions };
+const WIDGETS = { TokenBucketViz, FixedVsSliding, QuorumPlayground, PollingRace, QueueSim, SeatRace, DebounceViz, LRUViz, CircuitBreakerSim, AvailabilityCalc, RetryStorm, KafkaPartitions, ParkingLotSim, ElevatorSim, VendingMachineSim, LeaderboardRace, PaymentFlowSim, RideMatchSim, HashingLab, TwoPointersLab, SlidingWindowLab, PrefixSumLab, BinarySearchLab, StackLab, IntervalsLab, FastSlowLab, ListReversalLab, TreeDfsLab, TreeBfsLab, TrieLab, HeapLab, GraphTraversalLab, TopoSortLab, UnionFindLab, ShortestPathLab, BacktrackingLab, GreedyLab, Dp1dLab, Dp2dLab, BitLab };
 
 beforeAll(() => {
   // jsdom lacks these browser APIs; widgets only need them to exist.

@@ -1,0 +1,269 @@
+import { architecture, submitSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Keep each board in a **Redis sorted set**: a skip list plus a hash, so adding points, reading the top 100 and finding any player's rank are all O(log n). Match results are validated server-side and appended to **Kafka**; a board updater applies each one to the daily, weekly and all-time keys in one Lua script that also records the Kafka offset, so a redelivery never counts twice. Redis is a **rebuildable index**: the event log and the scores database are the source of truth. Ties, time windows and boards too big for one node are where the interview is won.
+</TLDR>
+
+<Requirements
+  functional={["Submit a match result; its points add to the player's totals", 'Top K (e.g. the top 100) with ranks', 'My rank and score, and the 5 players above and below me', 'Daily, weekly and all-time boards', 'A new score shows up within about a second']}
+  nonFunctional={['Reads under 50 ms at p99', 'About 12K score events per second at peak', 'A score is never lost or counted twice', 'Scores are validated server-side (anti-cheat)']}
+  outOfScope={['Matchmaking and the game itself', 'Paying out prizes (we only freeze the final standings)', 'Friends and country boards (follow-ups)']} />
+
+The whole question hinges on one query: **what is my rank?** A database index finds the top 100 easily, but it has to count to tell a player how many people are ahead of them. A sorted set keeps that count on its links. Say so early, then spend your time on ties, time windows, durability and sharding.
+
+## Clarifying questions
+
+- How many players, how many daily actives, and how many matches does each play per day?
+- Do points accumulate over a season, or does the board rank a best single score? Both?
+- How are ties broken: a shared rank, or whoever got there first? Do prizes depend on it?
+- Which windows: daily, weekly, season? In which time zone does a day end?
+- How fresh must the board be: instant, or within a second or two?
+- Who computes the score: a game server we trust, or the client?
+
+## Capacity estimate
+
+| Quantity | Estimate |
+|---|---|
+| Players | 50M registered, 10M daily active |
+| Score events | 10M × 20 matches = 200M a day ≈ **2.3K per second** on average |
+| Peak | About 5× the average ≈ **12K events per second** |
+| Redis work per event | One Lua script: an offset check, 3 `ZINCRBY`, 2 `EXPIRE` |
+| Rank reads | One "my rank" after each match ≈ 12K per second at peak, O(log n) each |
+| Top-100 reads | Cached for 1 s in each API instance: a few Redis calls per second |
+| Memory per member | About 100 bytes: skip-list node, hash entry, short id. An estimate: measure with `MEMORY USAGE` |
+| All-time board | 50M × 100 B ≈ **5 GB** |
+| Daily boards | 10M × 100 B ≈ 1 GB each; 8 days kept ≈ 8 GB |
+| Weekly boards | About 20M weekly actives ≈ 2 GB each; 2 kept ≈ 4 GB |
+
+That's about 17 GB and 12K scripts per second: one Redis primary with a replica handles it, so **don't shard yet**. Say what would force it (a billion players, or ten times the write rate) and how you'd do it then.
+
+## Why a sorted set
+
+A table with an index on `points` handles the top 100 fine: `ORDER BY points DESC LIMIT 100` reads the first 100 index entries. Rank is the problem:
+
+```sql
+SELECT COUNT(*) + 1 FROM player_totals
+WHERE game_id = 1 AND period = 'all' AND points > 900;
+```
+
+A B-tree doesn't store how many entries sit above a key, so this reads every entry above you: millions of them for a mid-table player, up to 12K times a second at peak. Caching ranks doesn't save it either, because one score change shifts the rank of everyone it passes.
+
+A Redis sorted set is a **skip list** ordered by score, with a span count on every link, plus a **hash** from member to score. Redis adds up the spans as it walks down the list, so a rank costs O(log n) and nothing is scanned:
+
+| Command | What it does | Cost |
+|---|---|---|
+| `ZINCRBY lb 50 maya` | Add points (creates the member if new) | O(log n) |
+| `ZADD lb GT CH 950 maya` | Raise a best score, never lower it | O(log n) |
+| `ZREVRANGE lb 0 99 WITHSCORES` | Top 100, highest first | O(log n + 100) |
+| `ZREVRANK lb maya` | 0-based position, highest first | O(log n) |
+| `ZCOUNT lb (1250 +inf` | Players with strictly more points | O(log n) |
+| `ZSCORE lb maya` | One player's points | O(1) |
+| `ZUNIONSTORE w 7 d1 … d7` | Sum several boards into one | O(N) + O(M log M) |
+
+For 50M members that's a few dozen hops per query. Small sorted sets (up to 128 short members by default) are stored as one compact listpack instead: O(n), but tiny.
+
+## API
+
+| Method | Path | Result |
+|---|---|---|
+| POST | `/matches/:id/result` | From the match server, signed: `{ playerId, points, playedAt }` → `202` |
+| GET | `/boards/:board/top?n=100` | Top N with ranks; cached for 1 s |
+| GET | `/boards/:board/players/:id` | `{ score, rank }`, or `404` with no score in this period |
+| GET | `/boards/:board/players/:id/around?r=5` | The 2r + 1 players around this one |
+| GET | `/boards/:board/stream` | SSE: top-10 changes, at most once per second |
+
+`:board` is `all`, `daily` or `weekly`, with an optional `?period=2026-10-13` for a past period. Only match servers may call the submit endpoint (mutual TLS or a signed service token): the player's app never posts its own score.
+
+## Data model
+
+The durable copy lives in SQL; Redis holds an index of it.
+
+```sql
+CREATE TABLE score_events (
+  match_id  uuid        PRIMARY KEY,           -- a redelivered event inserts nothing
+  game_id   int         NOT NULL,
+  player_id bigint      NOT NULL,
+  points    int         NOT NULL CHECK (points BETWEEN 0 AND 10000),
+  played_at timestamptz NOT NULL,              -- decides the daily and weekly period
+  status    text        NOT NULL DEFAULT 'ok'  -- 'voided' after an anti-cheat review
+);
+
+CREATE TABLE player_totals (                   -- what a Redis rebuild loads
+  game_id    int    NOT NULL,
+  period     text   NOT NULL,                  -- 'all', 'd:2026-10-13', 'w:2026-W42'
+  player_id  bigint NOT NULL,
+  points     bigint NOT NULL,
+  reached_at timestamptz NOT NULL,             -- when the total last changed: the tie-break
+  PRIMARY KEY (game_id, period, player_id)
+);
+
+CREATE TABLE consumer_offsets (                -- written in the same transaction as the totals
+  partition   int    PRIMARY KEY,
+  next_offset bigint NOT NULL
+);
+```
+
+| Redis key | Type | Contents | Expiry |
+|---|---|---|---|
+| `lb:{g1}:all` | Sorted set | Player id → season points | None; a new key per season |
+| `lb:{g1}:daily:2026-10-13` | Sorted set | Points scored that UTC day | 8 days |
+| `lb:{g1}:weekly:2026-W42` | Sorted set | Points scored that ISO week | 14 days |
+| `lb:{g1}:best` | Sorted set | Best single match, as a composite score | None |
+| `off:{g1}:<partition>` | String | Last Kafka offset applied | None |
+
+`{g1}` is a Redis Cluster hash tag: every key of one game lands in the same slot, so one Lua script can update all of them atomically.
+
+## Architecture
+
+Play **Score update**, then **Top 100 from cache**, **My rank and around me**, and **Redis primary fails**.
+
+<FlowDiagram spec={architecture} />
+
+## Submitting a score
+
+Play the sequence, then switch branches: a **new personal best**, a score that is **not a best**, a **tie** with a rival, an event **replayed** after a failover, and a result anti-cheat **rejects**.
+
+<SequenceDiagram spec={submitSequence} />
+
+## Watch the race
+
+Thirty players, one of them you, fed by a seeded stream of match results in multiples of 50, so ties are common. Press **Run** and watch rows slide as ranks change. Switch **Ties** to number the same scores three ways. Press **+100 to me** until you climb out of the pinned **Around me** panel. Pick **Today** and press **New day** to roll the daily board over while the all-time board keeps going. Set **Shards** to 3 to see three per-shard top-5 lists merge into the global top 5, and your rank computed as a sum of per-shard counts.
+
+<LeaderboardRace />
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Players, matches per day, which windows, how ties break, how fresh the board must be.
+  </Step>
+  <Step title="Estimate">
+    Writes per second at peak and memory per board: one node or several?
+  </Step>
+  <Step title="Pick the structure">
+    A sorted set per board and period, and the four queries it answers in O(log n).
+  </Step>
+  <Step title="Handle the edges">
+    Ties, time windows, idempotent writes, cheating.
+  </Step>
+  <Step title="Scale and recover">
+    Shard when one node isn't enough; rebuild Redis from the log when it's lost.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="Name the queries">
+    Top K, my rank and score, the players around me, each for the daily, weekly and all-time board. The top K is the same for everyone, so cache it. "My rank" is personal and changes with every score, so it must be cheap to compute on demand.
+  </Step>
+  <Step title="One sorted set per board">
+    `ZINCRBY` adds points. `ZREVRANGE 0 99` is the top 100. `1 + ZCOUNT key (myScore +inf` is my rank. `ZREVRANK` then `ZREVRANGE p-5 p+5` is the window around me. Each is O(log n), which a B-tree index can't match for rank.
+  </Step>
+  <Step title="Pick a tie rule and say it">
+
+**Shared** ranks ("1224") are 1 + the count of strictly higher scores: plain `ZCOUNT`. **Dense** ranks ("1223") count distinct higher scores, which needs a second set of distinct scores. **First to reach wins** ("1234") puts the tie-break inside the score:
+
+```js
+export const TIME_BITS = 28;                          // 2^28 s ≈ 8.5 years of season
+export const MAX_POINTS = 2 ** (53 - TIME_BITS) - 1;  // 33,554,431
+// earlier time → larger remainder → higher among equal points
+const encode = (points, tsSec) => points * 2 ** TIME_BITS + (2 ** TIME_BITS - 1 - tsSec);
+```
+
+Scores are doubles, exact only up to 2^53, so points bits plus time bits must fit in 53. Don't add the time as a fraction: at a million points, two timestamps a millisecond apart collapse into the same double. Adding points to a composite is a read-modify-write (decode, add, re-encode with now), so it runs in the Lua script. A best-score board needs no script: `ZADD GT` never replaces an equal score reached later, because it encodes smaller.
+
+  </Step>
+  <Step title="Time windows are separate keys">
+    Derive the keys from when the match was **played**, not when the event is processed: a result from 23:59:59 counts for that day even if it arrives after midnight. One script increments the daily, weekly and all-time keys together and sets their expiry once (`EXPIRE … NX`). A weekly board could instead be built from seven daily ones with `ZUNIONSTORE`, but that's O(N) over millions of members: use it to rebuild, not on every read. At rollover nothing needs doing (writes simply land on the new key); after a grace period, snapshot yesterday's final standings for prizes.
+  </Step>
+  <Step title="Write path: validate, log, apply">
+    The match server computes the points and signs the result; the Score API checks the signature and plausibility, appends the event to Kafka with `acks=all`, and returns `202`. The board updater applies events in order per partition. Kafka delivers at least once and `ZINCRBY` isn't idempotent, so the script stores each partition's last applied offset and skips anything at or below it. Offset and boards change in the same atomic step.
+  </Step>
+  <Step title="Read path: cache what everyone shares">
+    The top 100 is identical for every viewer: cache it for one second in each API instance, so Redis sees a few reads per second however many players look (see [caching](/learn/caching)). "My rank" and "around me" go to a replica: two or three O(log n) calls, well under the 50 ms budget. Names and avatars come from a profile cache, never from the sorted set.
+  </Step>
+  <Step title="Durability: Redis is an index">
+    The event log and the scores database are the truth. The DB writer inserts each event (keyed by `match_id`), bumps `player_totals` and records its Kafka offsets in one transaction. If the Redis primary dies, Sentinel promotes the replica and the updater seeks Kafka back to the offsets the new primary holds. If both copies are lost, load `player_totals` into a fresh instance with batched `ZADD`s (50M members in minutes) and replay Kafka from the offsets stored with them.
+  </Step>
+  <Step title="Past one node: shard by player">
+
+Split a board into N keys by player hash (see [sharding strategies](/deep-dives/sharding-strategies)). A write touches one shard. Reads fan out:
+
+- **Top K:** every shard returns its own top K and the API merges them. Not K / N: the whole top K could live on one shard.
+- **My rank:** 1 + the sum over shards of `ZCOUNT shard (myScore +inf`. With composite scores the same sum gives the unique rank. Dense ranks don't add up across shards, because one score can sit on several.
+
+Align Kafka partitions with shards, so each shard's offset key lives beside its boards.
+
+  </Step>
+  <Step title="Or shard by score range">
+    Shard 0 holds scores above 10,000, shard 1 from 1,000 to 9,999, and so on. The top K comes from one shard, and my rank is the size of every higher shard (`ZCARD`) plus my rank inside mine. The costs: the top shard is the hottest (the best players play most), a player who crosses a boundary must move between shards (not atomic), and the boundaries drift as a season's scores inflate. Hash sharding is the safer default.
+  </Step>
+  <Step title="Approximate the tail, push the head">
+    Nobody cares whether they're #18,402,118 or #18,402,090. Keep exact ranks for the top 10K and give everyone else a percentile from a histogram of scores ("top 37%"): a few hundred counters instead of a node's worth of memory. For live updates, push top-10 changes over SSE at most once per second per board ([polling, SSE and WebSockets](/deep-dives/polling-sse-websockets)).
+  </Step>
+</Steps>
+
+## Implementation
+
+<CodeTabs files={['snippets/redis-leaderboard.js', 'snippets/tie-score.js', 'snippets/ranking.js', 'snippets/sharded-rank.js', 'snippets/periods.js', 'snippets/tie-score.test.js', 'snippets/sharded-rank.test.js']} />
+
+A few details worth pointing out:
+
+- `applyScore` checks and stores the partition's offset in the same script that changes the boards, so neither a redelivery nor a post-failover replay can double count.
+- `myRank` uses `ZCOUNT` with an exclusive bound for shared ranks. `ZREVRANK` alone would break ties by member name, which is arbitrary.
+- `encode` refuses more than 33,554,431 points. The test builds the composite it refuses and shows the decode coming back one point too high, at the wrong time.
+- `aroundMe` slides its window at either end of the board instead of shrinking it, so the screen shows 11 rows whenever the board has at least 11 players.
+- `mergeTopK` needs each shard's full top K; the test shows K / N dropping a player when one shard is strong.
+- `periods.js` takes the day from `played_at`, and gets ISO weeks right at the year boundary: 2027-01-01 belongs to 2026-W53.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Redis primary crashes | The last few ms of applied scripts are lost; writes fail for seconds | Sentinel promotes the replica; the updater seeks Kafka back to the offsets stored in Redis and replays |
+| Kafka redelivers an event | Points counted twice | Offset check in the same Lua script; the DB insert is keyed by `match_id` |
+| Both Redis copies lost | No leaderboard | Rebuild from `player_totals`, resume Kafka from the stored offsets; serve the last cached top 100 meanwhile |
+| A match ends at 23:59:59 and arrives after midnight | Counted on the wrong day | The period comes from `played_at`; old daily keys live 8 days; freeze prizes after a grace period |
+| Evening peak | Updater lag grows | Kafka absorbs the burst; pipeline the scripts; alert on consumer lag |
+| A cheater is found days later | Fake scores on every board | Void their events, recompute totals, then `ZREM` or `ZADD` them on each board |
+| `ZUNIONSTORE` on a huge board per request | Redis blocks for seconds | Only in rebuild jobs, off-peak or on a spare instance |
+
+## Trade-offs
+
+| Choice | Pros | Cons | Choose when |
+|---|---|---|---|
+| Sorted set vs a SQL index | O(log n) rank | Memory-bound; a derived copy to keep in sync | Ranks over millions of players |
+| Kafka first vs the API writing Redis | Durable before `202`, absorbs spikes, replayable | About 100 ms lag, more moving parts | Peaks far above average; rebuilds by replay |
+| Writing every period vs `ZUNIONSTORE` | Every board live, O(log n) per write | Three writes per event | Live weekly boards; `ZUNIONSTORE` for rebuilds |
+| Shard by player hash | Even writes; rank is a sum of `ZCOUNT`s | Every rank and top-K query fans out | Memory or writes outgrow one node |
+| Shard by score range | Top K from one shard | Hot top shard; players move between shards | Read-heavy boards with a stable score spread |
+| Exact ranks for all vs a percentile for the tail | Exact numbers for everyone | Memory for every player | Exact top 10K, percentile below it |
+| Composite tie score vs plain points | Deterministic first-to-reach order | Fewer bits for points; increments need a script | Prizes depend on rank |
+
+<Callout kind="interview" title="What interviewers listen for">
+Why rank is the hard query and how a sorted set answers it in O(log n); a definite tie rule, with the 2^53 limit if you encode time; period keys derived from when the match was played; Redis as a rebuildable index fed from a log, with idempotent updates; and a sharding answer that gets both top K (every shard returns K) and rank (a sum of per-shard counts) right.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would you build a friends leaderboard?">
+    Don't keep a sorted set per user: one score change would have to update every friend's set. Read the friend list (a few hundred ids), fetch their scores with one `ZMSCORE` call, sort in the API, and cache the result per user for a few seconds. The cost is O(friends) per view, whatever the size of the board.
+  </FollowUp>
+  <FollowUp q="How would you add country boards?">
+    One more key per country and period, written by the same script, since the event carries the player's country. A player who changes country is removed from the old key and added to the new one. A global rank and a country rank then cost O(log n) each.
+  </FollowUp>
+  <FollowUp q="How do you stop cheating?">
+    Server-authoritative scoring: the match server computes the points and signs the result. Plausibility rules at ingest (points per minute, match length, matches per hour), and offline anomaly detection that compares a player with their history and their peers. Hold prizes until review. To remove a cheater, void their events, recompute their totals, and fix every board.
+  </FollowUp>
+  <FollowUp q="What changes at a billion players?">
+    A billion members at about 100 bytes is roughly 100 GB for the all-time board alone, past one node. Shard by player hash into, say, 8 keys on 8 primaries: a write touches one, a rank is 1 + the sum of 8 `ZCOUNT`s run in parallel, and the top K merges 8 top-K lists. Or keep exact ranks only for the top million (trimmed with `ZREMRANGEBYRANK`) and give everyone else a percentile.
+  </FollowUp>
+  <FollowUp q="How do you show rank changes live?">
+    Server-Sent Events from the Leaderboard API. The updater publishes "top 10 changed" at most once per second per board; each API instance holds one subscription and fans the update out to its open connections. For "you were overtaken", notify only players who crossed a meaningful line, such as dropping out of the top 100, not everyone who slipped one place.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

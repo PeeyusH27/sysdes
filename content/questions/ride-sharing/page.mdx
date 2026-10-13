@@ -1,0 +1,308 @@
+import { architecture, matchSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Driver apps send a location **every 4 s over a WebSocket**: 1.25M updates/s at peak, so the latest fix **overwrites** an in-memory geo index (Redis GEO, one key per city, with a TTL) and history is batched to Kafka; no database row per update. To match, search the rider's **cell and its 8 neighbours**, then wider rings, rank the shortlist by **ETA**, and offer the ride to **one driver at a time**. Each offer starts with a **compare-and-set** on the driver's state (`AVAILABLE → OFFERED`), so two matchers can never both take the same driver. The rider's app follows the matched car over its own socket and glides the marker between fixes.
+</TLDR>
+
+<Requirements
+  functional={["Riders see nearby cars on a map", "Request a ride with a fare estimate (surge included)", "Match the request to one nearby driver, who accepts or declines", "The rider watches the driver approach live", "Trip lifecycle: requested → matched → arriving → in trip → completed or cancelled"]}
+  nonFunctional={["Driver locations fresh within a few seconds", "A match within a few seconds of the request", "A driver never gets two rides, and a ride never gets two drivers", "About 1.25M location updates per second at peak", "Regional isolation: an outage in one region doesn't stop other cities"]}
+  outOfScope={["Payments and driver payouts", "Routing engine internals (we call an ETA service)", "Ratings, chat and scheduled rides"]}
+/>
+
+This is a full-stack design question with two hard parts. The first is a **firehose of writes** that must never reach a durable database on the hot path. The second is a matcher that gives each ride to **exactly one driver** while many matchers race for the same cars. The client matters too: a car that glides smoothly across the rider's map, built from updates that arrive every few seconds. Say all three before drawing boxes.
+
+## Clarifying questions
+
+- **Scale:** how many drivers are online at peak, how many rides a day, how many cities?
+- **Freshness:** how stale may a driver's position be? It sets the update interval (we'll use 4 s).
+- **Matching policy:** the nearest car, the shortest ETA, or the best assignment across many requests at once (batch matching)?
+- **Offers:** how long does a driver get to answer? May we offer one ride to several drivers at once? (No: it wastes drivers' attention and creates races we then have to break.)
+- **Products:** pooled rides, XL, scheduled rides? Is surge pricing in scope?
+- **The map:** do riders see every nearby car before requesting, or only their matched driver after?
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Location updates | 5M online drivers ÷ one fix every 4 s | **1.25M/s** |
+| Ingest bandwidth | 1.25M/s × ~100 B | ≈ 125 MB/s (1 Gbit/s) |
+| Redis commands | 1.25M/s × 4 per update, pipelined | ≈ 5M/s: about 35 shards at ~150K/s each |
+| Latest positions in memory | 5M × ~200 B | ≈ **1 GB** |
+| If every update were a database row | 1.25M/s × 100 B × 86,400 s | ≈ 10.8 TB/day, all write load |
+| History kept | Half the drivers on a trip: 2.5M ÷ 4 s + 2.5M ÷ 30 s | ≈ 0.7M points/s to Kafka, batched |
+| Rides | 20M/day ÷ 86,400 s | ≈ 230/s (~700/s at peak) |
+| Matching searches | ~3 per ride (declines, wider rings) | ≈ 2K/s at peak |
+| Riders browsing the map | 2M open apps ÷ a refresh every 5 s | ≈ 400K/s nearby-car reads |
+| WebSockets | 5M drivers + 2M riders ÷ ~50K per gateway | ≈ 140 gateway nodes |
+
+Matching itself is cheap: 2K searches a second. The design is driven by the **location write rate**, and second by riders browsing the map. Only the latest fix matters for matching and it fits in 1 GB of RAM, so overwrite it in memory. Riders browsing don't need precision either: serve them a per-cell snapshot of nearby cars, cached for a few seconds, instead of one geo query per rider.
+
+## API
+
+WebSocket messages (one socket per app, JSON frames with a `type` field):
+
+| Direction | Message | Payload |
+|---|---|---|
+| Driver → server | `location` | `{ lat, lon, heading, speed, accuracy, ts }` every ~4 s |
+| Driver → server | `status` | `{ online: true }` or `{ online: false }` |
+| Server → driver | `offer` | `{ rideId, pickup, fare, etaS, expiresAt }` |
+| Driver → server | `offer_reply` | `{ rideId, accept }` |
+| Server → rider | `ride_update` | `{ rideId, state, driver, etaS }` |
+| Server → rider | `driver_location` | `{ lat, lon, heading, ts }` while matched |
+
+REST for the rest:
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/drivers/nearby?lat=&lon=` | Car markers for the map, from the per-cell cache |
+| POST | `/fares/estimate` | `{ pickup, dropoff }` → `{ quoteId, fare, surge, expiresAt }` |
+| POST | `/rides` | `{ quoteId, pickup, dropoff }` + `Idempotency-Key` → `201 { rideId, state: 'REQUESTED' }` |
+| GET | `/rides/:id` | State, driver and ETA; the app calls it after every reconnect |
+| POST | `/rides/:id/cancel` | Until the trip starts; a fee after a grace period |
+
+The idempotency key matters: a rider who double-taps Request on a flaky connection must get one ride, not two drivers heading their way. Authenticate both sockets during the HTTP upgrade, as in the [chat design](/questions/chat).
+
+## Data model
+
+Rides are durable and low-volume (hundreds per second), so they live in Postgres, sharded by city:
+
+```sql
+CREATE TABLE rides (
+  id            uuid PRIMARY KEY,
+  city          text   NOT NULL,
+  rider_id      bigint NOT NULL,
+  driver_id     bigint,
+  state         text   NOT NULL CHECK (state IN ('REQUESTED', 'MATCHED', 'ARRIVING', 'IN_TRIP', 'COMPLETED', 'CANCELLED')),
+  pickup        point  NOT NULL,                 -- (lon, lat)
+  dropoff       point  NOT NULL,
+  quote_id      uuid   NOT NULL,
+  surge         numeric(3, 2) NOT NULL DEFAULT 1.00,
+  fare_cents    int,
+  idem_key      text   NOT NULL UNIQUE,          -- a double tap finds the first ride
+  requested_at  timestamptz NOT NULL DEFAULT now(),
+  matched_at    timestamptz,
+  completed_at  timestamptz
+);
+-- A backstop for the matcher: at most one active ride per driver, whatever happens upstream.
+CREATE UNIQUE INDEX one_active_ride_per_driver ON rides (driver_id)
+  WHERE state IN ('MATCHED', 'ARRIVING', 'IN_TRIP');
+```
+
+Live driver state is soft and fast, so it lives in Redis, one hash-tagged key set per city:
+
+| Key | Type | Purpose |
+|---|---|---|
+| `geo:{city}` | GEO (a sorted set) | Online drivers by position: `GEOADD` on every fix, `GEOSEARCH` to match |
+| `loc:DRIVER` | hash, `EX 15` | The latest fix. It expires when the app goes quiet, so the driver drops out of matching |
+| `drv:DRIVER` | hash | `state` (AVAILABLE, OFFERED, ON_TRIP), `rideId`, `offerUntil`: changed only by compare-and-set |
+| `ride:RIDE` | pub/sub channel | The matched driver's fixes and state changes, for the rider's gateway |
+| `cell:{city}:GEOHASH` | string, `EX 3` | A snapshot of nearby cars for riders browsing the map |
+
+Location history goes to a Kafka topic keyed by driver id (one driver's points stay in order in one partition). Consumers write hourly Parquet files to object storage for analytics, ETA training and trip receipts.
+
+## Architecture
+
+Play **Location update**, then **Request → match**, **Driver declines → next** and **Region failure**.
+
+<FlowDiagram spec={architecture} />
+
+The same match as a sequence. Pick a branch: the driver **accepts**, **declines**, or **never answers**.
+
+<SequenceDiagram spec={matchSequence} />
+
+## Watch it run
+
+Tap anywhere on the map, or use **Request ride at random spot** and the pickup buttons, to drop a rider. The search ring grows cell by cell from the rider's cell, the nearest free car gets an offer with a countdown, and a decline passes the offer to the next car. Then press **Two riders, one driver** to see the compare-and-set break a tie, and switch **Index** to *scan all drivers* to watch "drivers examined per match" jump.
+
+<RideMatchSim />
+
+The ripples are location updates. The matcher only ever sees the **last reported** position, which is why the winning car is sometimes a little farther away than it looks. Time is sped up: cars report every 2 s and offers last 5 s here, against about 4 s and 10–15 s in a real system.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Drivers online, rides per day, cities, how fresh locations must be, and how offers work.
+  </Step>
+  <Step title="Estimate">
+    Do the location write rate first. 1.25M updates a second decides most of the design.
+  </Step>
+  <Step title="Index locations">
+    The latest fix per driver in an in-memory geo index per city; history to a log; no database on the hot path.
+  </Step>
+  <Step title="Match safely">
+    Search cells ring by ring, rank by ETA, and offer one driver at a time behind a compare-and-set.
+  </Step>
+  <Step title="Real time and failure">
+    Sockets to both apps, a smooth client marker, TTLs for everything that can be orphaned, and failover by region.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="State the two hard parts">
+
+"Locations are a firehose of overwrites; assignments must be exactly once." The first rules out a durable write per update. The second rules out check-then-write anywhere in the matcher. Interviewers listen for both before any boxes appear.
+
+</Step>
+<Step title="Ingest locations into memory">
+
+Driver apps send a fix every 4 s over a WebSocket. (At this scale, apps often move to QUIC or their own UDP-based protocol, which copes better with flaky mobile networks.) The location service drops out-of-order fixes and updates Redis in one pipelined round trip:
+
+```js
+await redis.multi()
+  .geoAdd(`geo:{${city}}`, { longitude: lon, latitude: lat, member: id })
+  .hSet(`loc:${id}`, { lat, lon, heading, ts })
+  .expire(`loc:${id}`, 15)
+  .exec();
+```
+
+`GEOADD` on an existing member overwrites its score, which is a 52-bit geohash, so a driver who crosses into another cell leaves the old one automatically. With a hand-built index you must remove the driver from the old cell yourself. History goes to Kafka in batches; nothing waits on it.
+
+</Step>
+<Step title="Index space with cells">
+
+A geohash splits the world in half again and again, alternating longitude and latitude, and writes the bits 5 at a time in base 32. Points sharing a prefix share a cell:
+
+| Precision | Cell size at the equator |
+|---|---|
+| 5 | 4.9 km × 4.9 km |
+| 6 | 1.2 km × 0.6 km |
+| 7 | 153 m × 153 m |
+| 8 | 38 m × 19 m |
+
+Cells narrow towards the poles: a precision-6 cell in San Francisco is 0.97 km wide. And cells have **edges**: a rider near one is closer to the next cell than to most of their own, so always read the 8 neighbours too. In Redis that's built in:
+
+```bash
+GEOSEARCH geo:{sf} FROMLONLAT -122.41 37.7749 BYRADIUS 2 km ASC COUNT 20 WITHDIST
+```
+
+Quadtrees (cells that split where it's dense) and Google S2 or Uber's H3 hexagons (every neighbour the same distance away) are the alternatives; see the trade-offs below.
+
+</Step>
+<Step title="Partition by city">
+
+A ride never crosses cities, so the city is the natural shard: one geo key, one matcher partition and one rides shard per city, each homed in the nearest region. A huge city is split further by zone. The matcher for a zone also reads its neighbours' cells near the border.
+
+</Step>
+<Step title="Find and rank candidates">
+
+Search ring by ring: the rider's cell, then the 8 around it, then the 16 around those. Stop once the best candidates are nearer than anything left: after ring k, every unscanned driver is at least k whole cells away. Drop drivers who are busy or whose `loc:` record has expired. Straight-line distance is only a shortlist: ask the ETA service for driving times to the best 10 and rank by those. Across a river or a one-way grid, the closest car is often not the quickest.
+
+</Step>
+<Step title="Offer behind a compare-and-set">
+
+The driver's state machine is `AVAILABLE → OFFERED → ON_TRIP`, and every transition is a compare-and-set. Reserve **before** offering, so two matchers racing for one driver can't both send an offer:
+
+```lua
+-- KEYS[1] = drv:<id>; ARGV: expected state, expected ride ('' = any), new state, new ride, reservation ms ('' = none)
+local cur = redis.call('HMGET', KEYS[1], 'state', 'rideId', 'offerUntil')
+local t = redis.call('TIME')
+local now = t[1] * 1000 + math.floor(t[2] / 1000)
+local state = cur[1]
+if state == 'OFFERED' and tonumber(cur[3] or 0) < now then state = 'AVAILABLE' end  -- an expired reservation is free
+if state ~= ARGV[1] or (ARGV[2] ~= '' and cur[2] ~= ARGV[2]) then return 0 end
+redis.call('HSET', KEYS[1], 'state', ARGV[3], 'rideId', ARGV[4], 'offerUntil', ARGV[5] == '' and 0 or now + tonumber(ARGV[5]))
+return 1
+```
+
+The loser of a race gets 0 and moves to its next candidate. With drivers in Postgres instead, the same step is `UPDATE drivers SET state = 'OFFERED', ride_id = $1 WHERE id = $2 AND state = 'AVAILABLE'`, then check the row count.
+
+</Step>
+<Step title="Declines, timeouts and crashes">
+
+A driver gets 10–15 s to answer; silence counts as a decline. Either way, a compare-and-set returns the driver from `OFFERED` (for this ride) to `AVAILABLE` and the next candidate gets the offer. When the list runs out, widen the search or tell the rider. If the matcher crashes mid-offer, the reservation's TTL frees the driver, and the ride, still `REQUESTED` in the database, is picked up by another matcher.
+
+</Step>
+<Step title="Ride lifecycle in the database">
+
+`REQUESTED → MATCHED → ARRIVING → IN_TRIP → COMPLETED`, with `CANCELLED` possible before the trip starts. Every transition is a conditional update, so a ride can't get two drivers:
+
+```sql
+UPDATE rides SET state = 'MATCHED', driver_id = $2, matched_at = now()
+WHERE id = $1 AND state = 'REQUESTED';
+```
+
+The partial unique index on `driver_id` for active rides is the backstop: even a bug upstream can't give one driver two active rides.
+
+</Step>
+<Step title="Real time to the rider">
+
+Once matched, the rider's gateway subscribes to `ride:RIDE`, and the location service publishes that driver's fixes there. Pushing beats polling here: the car should move within a second of each fix. On the client, glide the marker from where it is drawn to each new fix over one update interval, turn the short way round, ignore out-of-order fixes, and snap instead of gliding after a long gap. After a reconnect, call `GET /rides/:id` first: the ride may have changed state while the socket was down. See [polling, SSE and WebSockets](/deep-dives/polling-sse-websockets).
+
+</Step>
+<Step title="Fare estimate and surge">
+
+Every minute, per cell, compare demand (open requests and app opens) with supply (available drivers) and map the ratio to a capped, smoothed multiplier. The estimate returns a `quoteId` that locks the fare for a few minutes, and the ride request carries it, so the rider pays what they were shown.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Server side: the geohash, the ring search, the matcher and the ingest path. The first three are pure and unit-tested; `match.test.js` races two matchers for the same drivers.
+
+<CodeTabs files={['snippets/geohash.js', 'snippets/nearby.js', 'snippets/match.js', 'snippets/match.test.js', 'snippets/location-ingest.js']} />
+
+Client side: the rider's map hook and its interpolation tests.
+
+<CodeTabs files={['snippets/useDriverMarker.js', 'snippets/useDriverMarker.test.js']} />
+
+A few details worth pointing out:
+
+- `nearby()` stops after ring k only when every wanted candidate is within k cell widths, a rule ring 0 can't meet unless a driver stands on the pickup, so ring 1 is always read. A test compares it with a brute-force scan of every driver on 20 random layouts.
+- `GeoIndex.upsert()` removes the driver from the old cell before adding it to the new one, and ignores fixes older than the one it has.
+- `matchRide()` keeps the reservation 3 s longer than the offer, so an accept sent just before the deadline still lands. An accept that arrives after the reservation expired fails its compare-and-set and becomes "offer expired" (tested).
+- `location-ingest.js` never awaits Kafka on the hot path, and a dropped socket doesn't take the driver offline: the 15 s TTL does, so a tunnel isn't the end of a shift.
+- `planGlide()` starts each glide from the position currently drawn, so a new fix never makes the car jump. With a map SDK, move the marker directly in the animation frame rather than re-rendering React 60 times a second.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| A stadium empties (hot cell) | Thousands of requests and drivers in a few cells; one shard and one matcher run hot | Smaller cells where it's dense; batch matching for the area; surge to pull in supply; split the zone's index |
+| A driver's app goes quiet (tunnel, crash, phone off) | Rides offered to a ghost at a stale position | `loc:` expires after 15 s; skip drivers without it; a sweeper removes them from the geo set |
+| The matcher crashes mid-offer | The driver is stuck in `OFFERED` | The reservation has a TTL; the ride is still `REQUESTED`, so another matcher retries it |
+| An accept arrives after the offer expired | The driver thinks they have a ride someone else now has | The confirm is a compare-and-set on `OFFERED` for this ride; it fails and the app says "offer expired" |
+| A region goes down | Cities homed there stop matching | Geo DNS fails over; drivers' next fixes rebuild the index in ~4 s; the rides table is replicated cross-region |
+| GPS jitter in urban canyons | The car jumps between streets or drives backwards | Drop low-accuracy and impossible-speed fixes; snap to roads before ETA; the client glides between fixes |
+| The update rate outgrows Redis | Positions lag and go stale | Shard by city and zone; pipeline; drop old fixes instead of queueing them (only the latest matters) |
+
+## Trade-offs
+
+| Choice | Pros | Cons | Choose when |
+|---|---|---|---|
+| Geohash cells | Plain strings, prefix = containment, Redis GEO built in | Rectangular, distorted by latitude; must read neighbours | The default, especially with Redis |
+| Quadtree | Cells split where drivers are dense | An in-memory tree to rebalance as drivers move; harder to shard | Very uneven density, one process per city |
+| H3 hexagons (or S2) | Every neighbour is the same distance away; rings are natural | A library and integer cell ids; no Redis GEO | Many ring searches, surge zones, analytics per cell |
+| One offer at a time vs batch matching | Simple; the nearest driver gets the first chance | Greedy, and each decline costs up to 15 s | Most areas; batch (solve an assignment every 1–2 s) where demand is dense |
+| Push vs poll for rider updates | Fresh within a second, no wasted requests | A socket per rider | Following a matched car; polling the per-cell cache is fine for browsing |
+
+<Callout kind="interview" title="What interviewers listen for">
+The write-rate arithmetic (1.25M/s) and the conclusion that only the latest fix lives in memory, with a TTL. Why the 8 neighbouring cells are searched. ETA, not distance, for ranking. A **compare-and-set** on the driver's state before every offer, with a TTL so crashes can't strand drivers. And a smooth client that interpolates between fixes and resyncs after a reconnect.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How does surge pricing work?">
+    Per cell, every minute or so, compare demand (requests and app opens) with supply (available drivers nearby). Map the ratio to a multiplier through a capped curve, smooth it over time and across neighbouring cells so it doesn't flap, and show it in the fare quote. The `quoteId` locks it for a few minutes. Surge also signals drivers where to go, which is half its purpose.
+  </FollowUp>
+  <FollowUp q="How would pooled rides change matching?">
+    A candidate is now a car with free seats and a planned route, not a free driver. Score each candidate by the detour a new pickup and drop-off add for everyone already aboard, within limits. Batch requests over a few seconds so riders heading the same way are paired, and protect the car's plan with a version number in the compare-and-set instead of a single state.
+  </FollowUp>
+  <FollowUp q="What does the ETA service do?">
+    It holds the road graph with live speeds (learned from the same location stream) and answers shortest-path queries in milliseconds using precomputation such as contraction hierarchies. Map matching first snaps raw GPS to road segments. The matcher asks one-to-many questions (one pickup, ten drivers), so the service batches them.
+  </FollowUp>
+  <FollowUp q="How do you scale to 100 cities?">
+    Cities are the shard: per-city geo keys, matcher partitions and rides shards, each city homed in a nearby region. A giant city is split into zones with their own Redis shards and matchers, reading across zone borders. Accounts and payments are global services outside the hot path. See [sharding strategies](/deep-dives/sharding-strategies).
+  </FollowUp>
+  <FollowUp q="How do you guarantee a driver is never offered two rides?">
+    One authority per driver: the `drv:` record on the city's Redis shard, changed only by compare-and-set, with a TTL on reservations. A city is homed in exactly one region, so there's never a second copy taking writes. The confirm is another compare-and-set on the same record, and the database's partial unique index on active rides is the last line of defence.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

@@ -9,6 +9,10 @@ import "./dsa.css";
 import "./reader.css";
 import "./home.css";
 import "./shorts.css";
+import "./stage.css";
+import "./code.css";
+import "./nav.css";
+import "./hubs.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });

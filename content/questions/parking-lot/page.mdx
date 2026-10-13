@@ -86,6 +86,12 @@ Hover a class to highlight its relationships. The lot **owns** its floors and fl
 
 <ClassDiagram spec={classes} />
 
+## Watch it run
+
+Add a few vehicles and watch each one drive up the ramps to the spot the selector picked, then click a parked one to send it to the booth and watch the fee and the boards change. Then press **Two cars, one spot** under each gate setting: an atomic `take()` turns the second car away, while check-then-take tells both cars `0-C3`.
+
+<ParkingLotSim />
+
 ## Park and exit, step by step
 
 Play the sequence, then switch branches: **lot full** on the way in, **payment failed** on the way out.

@@ -64,7 +64,7 @@
 
 **Deep-dive slugs:** `caching-techniques`, `sharding-strategies`, `choosing-a-data-store`, `polling-sse-websockets`, `connections-pooling`, `request-flows`
 
-**Question slugs** (the source ids are kept): `parking-lot`, `rate-limiter`, `movie-booking`, `typeahead`, `infinite-feed`, `chat`, `news-feed`
+**Question slugs** (the source ids are kept): `parking-lot`, `rate-limiter`, `movie-booking`, `typeahead`, `infinite-feed`, `chat`, `news-feed`; added later: `elevator`, `vending-machine`, `leaderboard`, `payment-system`, `ride-sharing`
 
 Old hash links such as `#/q/chat` get a small client redirect on `/` that sends them to `/questions/chat`.
 

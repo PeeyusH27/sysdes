@@ -173,34 +173,59 @@ export const questions: Question[] = [
     tags: ["lld", "oop", "strategy pattern", "concurrency"], related: ["/learn/databases-scaling"],
   },
   {
-    slug: "rate-limiter", order: 2, title: "Design a Rate Limiter", category: "Backend", level: "Medium", minutes: 35,
+    slug: "elevator", order: 2, title: "Design an Elevator System (LLD)", category: "Backend", level: "Medium", minutes: 35,
+    summary: "Model cars, floors and requests as a state machine, then pick a dispatch strategy that keeps waits short and never starves a floor.",
+    tags: ["lld", "state machine", "scheduling", "strategy pattern", "concurrency"], related: ["/questions/parking-lot", "/questions/vending-machine"],
+  },
+  {
+    slug: "vending-machine", order: 3, title: "Design a Vending Machine (LLD)", category: "Backend", level: "Easy", minutes: 25,
+    summary: "A state machine in disguise: every coin, button press and refund has exactly one valid outcome in each state.",
+    tags: ["lld", "state pattern", "oop", "inventory", "change making"], related: ["/questions/parking-lot", "/questions/elevator"],
+  },
+  {
+    slug: "rate-limiter", order: 4, title: "Design a Rate Limiter", category: "Backend", level: "Medium", minutes: 35,
     summary: "Asked both as an algorithm question and as a distributed system question; be ready for either.",
     tags: ["redis", "lua", "token bucket", "gateway"], related: ["/learn/api-load-balancing", "/deep-dives/request-flows"], challenge: "rate-limiter",
   },
   {
-    slug: "movie-booking", order: 3, title: "Design Movie Ticket Booking", category: "Backend", level: "Medium", minutes: 40,
+    slug: "movie-booking", order: 5, title: "Design Movie Ticket Booking", category: "Backend", level: "Medium", minutes: 40,
     summary: "The core test is concurrency: two people must never buy the same seat.",
     tags: ["concurrency", "sql", "payments", "waiting room", "sse"], related: ["/learn/databases-scaling", "/learn/consistency-cap"], challenge: "ticket-booking",
   },
   {
-    slug: "typeahead", order: 4, title: "Build an Autocomplete (Typeahead)", category: "Frontend", level: "Medium", minutes: 30,
+    slug: "leaderboard", order: 6, title: "Design a Real-Time Leaderboard", category: "Backend", level: "Medium", minutes: 35,
+    summary: "A sorted set makes rank queries O(log n). The interesting parts are ties, time windows, and boards too big for one node.",
+    tags: ["redis", "sorted set", "ranking", "sharding", "caching"], related: ["/learn/caching", "/deep-dives/sharding-strategies"],
+  },
+  {
+    slug: "payment-system", order: 7, title: "Design a Payment System", category: "Backend", level: "Hard", minutes: 45,
+    summary: "Money must move exactly once. Idempotency keys, a double-entry ledger, provider webhooks and reconciliation keep every cent accounted for.",
+    tags: ["idempotency", "ledger", "webhooks", "reconciliation", "sagas"], related: ["/learn/async-messaging", "/deep-dives/request-flows"],
+  },
+  {
+    slug: "typeahead", order: 8, title: "Build an Autocomplete (Typeahead)", category: "Frontend", level: "Medium", minutes: 30,
     summary: "A frontend classic that tests debouncing, race conditions, caching, and accessibility.",
     tags: ["react", "debounce", "abortcontroller", "accessibility", "trie"], related: ["/learn/caching"],
   },
   {
-    slug: "infinite-feed", order: 5, title: "Build an Infinite Scroll Feed", category: "Frontend", level: "Medium", minutes: 30,
+    slug: "infinite-feed", order: 9, title: "Build an Infinite Scroll Feed", category: "Frontend", level: "Medium", minutes: 30,
     summary: "Tests performance thinking: pagination, virtualization, and state for very long lists.",
     tags: ["react", "virtualization", "pagination", "intersectionobserver"], related: ["/learn/api-load-balancing"],
   },
   {
-    slug: "chat", order: 6, title: "Design a Real-Time Chat App", category: "Full-stack", level: "Hard", minutes: 45,
+    slug: "chat", order: 10, title: "Design a Real-Time Chat App", category: "Full-stack", level: "Hard", minutes: 45,
     summary: "A full-stack favorite: WebSockets and optimistic UI on the client, fan-out and storage on the server.",
     tags: ["websockets", "redis pub/sub", "ordering", "receipts", "react"], related: ["/deep-dives/polling-sse-websockets", "/learn/async-messaging"], challenge: "chat",
   },
   {
-    slug: "news-feed", order: 7, title: "Design a News Feed (Twitter or Instagram)", category: "Full-stack", level: "Hard", minutes: 45,
+    slug: "news-feed", order: 11, title: "Design a News Feed (Twitter or Instagram)", category: "Full-stack", level: "Hard", minutes: 45,
     summary: "The key decision is fan-out on write versus fan-out on read, and how a React UI consumes the result.",
     tags: ["fan-out", "redis", "ranking", "caching", "react"], related: ["/learn/caching", "/learn/async-messaging"], challenge: "news-feed",
+  },
+  {
+    slug: "ride-sharing", order: 12, title: "Design Uber (Ride Matching)", category: "Full-stack", level: "Hard", minutes: 45,
+    summary: "Drivers report their location every few seconds. A geospatial index finds the nearest ones, and the matcher gives each ride to exactly one driver.",
+    tags: ["geohash", "geospatial", "location updates", "matching", "websockets"], related: ["/deep-dives/polling-sse-websockets", "/deep-dives/sharding-strategies"],
   },
 ];
 

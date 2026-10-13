@@ -1,0 +1,233 @@
+import { architecture, paymentSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Every checkout attempt carries an **idempotency key**, claimed under a unique constraint in the same transaction that creates the payment, so a retry replays the first response instead of charging again. A PSP timeout means **unknown**, not failed: pass your own key to the PSP and let its signed, deduplicated **webhook** (or a status query) settle the state machine. Each money movement is a balanced, append-only **double-entry ledger** transaction written together with the state change and an **outbox** event, and a daily **reconciliation** against the PSP's settlement report catches whatever slipped through.
+</TLDR>
+
+<Requirements
+  functional={['Create a payment for an order and charge the card through a PSP', 'Payment status for the client (poll or push)', 'Full and partial refunds', 'An auditable ledger of every money movement', 'Payouts to merchants (a follow-up)']}
+  nonFunctional={['Never double-charge, never lose a payment', 'Exactly-once effect on top of at-least-once delivery', 'Strong consistency for money, in integer minor units', 'Stay available and degrade gracefully when the PSP is slow', 'Minimal PCI scope: card data goes straight to the PSP']}
+  outOfScope={['Being a card network or an acquiring bank', 'Fraud models (a follow-up)', 'Tax, invoicing and currency hedging']} />
+
+This is a **correctness under failure** question, not a scale question. Networks time out after the work is done, PSPs deliver webhooks twice and out of order, and customers double-tap. Say the invariant before you draw anything: every cent is moved exactly once and accounted for exactly once.
+
+## Clarifying questions
+
+- Who are the parties? A marketplace: customers pay, the platform keeps a commission, merchants get paid out later.
+- Which PSP, and which payment methods? Cards answer in about a second; bank debits and some wallets confirm hours later, by webhook.
+- Charge immediately, or authorize now and capture on shipment?
+- One currency or many? Who carries the FX risk?
+- Refunds: partial, several per payment, any time limit?
+- Do we store cards for repeat purchases? (Store the PSP's token, never the card.)
+- Volume, and the peak: Black Friday, flash sales?
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Payments | 10M per day ÷ 86,400 s | ≈ **116/s** on average |
+| Peak | about 10× on Black Friday | ≈ **1,160/s** |
+| PSP calls in flight | 1,160/s × about 1 s PSP latency (Little's law) | ≈ **1,160 concurrent** |
+| Ledger entries | 4 per payment (charge, fee, commission) × 10M | **40M rows/day** |
+| Row writes at peak | about 12 per payment (key, payment, ledger, outbox, event) × 1,160 | ≈ **14K rows/s** |
+| Storage | 10M × 0.5 KB payments + 40M × 150 B entries | ≈ 11 GB/day, ≈ **4 TB/year** |
+| Money moved | 10M × $50 average | **$500M/day** |
+
+The write rate is within reach of one well-tuned Postgres primary; shard by `merchant_id` when it isn't. Two numbers shape the design. First, 1,160 calls are waiting on a slow external system at any moment, so **never hold a transaction or a row lock across a PSP call**. Second, at $500M a day an error rate of 0.01% is 1,000 wrong payments every day, so correctness can't depend on luck: it needs constraints, a ledger and reconciliation.
+
+## API
+
+| Method | Path | Body | Result |
+|---|---|---|---|
+| POST | `/payments` | `Idempotency-Key` header; `orderId`, `amount`, `currency`, `paymentMethod` (a PSP token) | `201` with a final status, `202 processing` while the outcome is unknown, `402` declined |
+| GET | `/payments/:id` | | `id`, `status`, `amount`, `refunded` |
+| POST | `/refunds` | `Idempotency-Key`; `paymentId`, `amount` | `201`, or `409` if it exceeds the refundable amount |
+| POST | `/webhooks/psp` | The PSP's signed event | `200` once stored, duplicates included |
+
+A retry with the same key and the same body gets the **stored** status code and body back. The same key while the first request is still running gets `409`; the same key with a different body gets `422`. The client generates the key once per checkout attempt (a UUID) and keeps it across retries; the server keeps keys for at least 24 hours. Card numbers are typed into the PSP's own form and come back as a token, so our servers never see them. That shrinks PCI DSS scope from every server that could touch a card to the pages that embed the PSP's form.
+
+## Data model
+
+<CodeBlock src="snippets/schema.sql" title="schema.sql" />
+
+The payment's state machine is the spine of the design:
+
+- `created → processing` before the PSP is called, committed first.
+- `processing → succeeded | failed | requires_action`, or `unknown` when the call times out.
+- `unknown → succeeded | failed`, settled by a webhook or a status query, never by a guess.
+- `succeeded → partially_refunded → refunded`. `failed`, `canceled` and `refunded` are final.
+
+Money lives in the ledger, not in a balance column. A balance is the sum of an account's entries; if reads get hot, cache it with a version, and rebuild it from the entries whenever in doubt.
+
+## Architecture
+
+Play **Happy path**, then **PSP timeout**, **Double tap** and **Duplicate webhook**.
+
+<FlowDiagram spec={architecture} />
+
+The same charge as a sequence. Pick **succeeded**, **declined** or **timeout**, and inside the timeout branch, whether the webhook arrives or the recovery job has to ask:
+
+<SequenceDiagram spec={paymentSequence} />
+
+## Watch it run
+
+Press **Pay $50** for the happy path, then **Play the bad day**: the PSP's reply is lost, the customer taps Pay again, and the webhook arrives twice. Run it once with both protections on, then set **Idempotency keys** and **Webhook dedupe** to **Off** and play it again. Every time the coin flies, the customer paid.
+
+<PaymentFlowSim />
+
+With keys off, the retry creates a second payment and the PSP charges again: the ledger still balances and even matches the PSP, because the money really moved twice. With dedupe off, the customer pays once but the capture is posted twice, and only reconciliation notices. Each transaction balancing is necessary, not sufficient.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Parties, PSP, payment methods (sync or async), currencies, refunds.
+  </Step>
+  <Step title="State the invariant">
+    Exactly-once effect; money in integer minor units; card data never touches us.
+  </Step>
+  <Step title="Draw the write path">
+    Idempotency key, state machine, PSP call, ledger posting, outbox.
+  </Step>
+  <Step title="Break it on purpose">
+    Timeout, double submit, duplicate webhook, crash between steps.
+  </Step>
+  <Step title="Close the loop">
+    Recovery job, reconciliation, refunds, payouts.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="Keep card data out">
+    The PSP's SDK collects the card in the browser and returns a token; we store and send only the token. Our servers never see a card number, so a breach of our database leaks no cards and PCI scope stays small.
+  </Step>
+  <Step title="Claim an idempotency key in the same transaction">
+
+The client sends `Idempotency-Key` with every attempt. One transaction claims the key and creates the payment; the unique key makes two concurrent claims impossible:
+
+```sql
+BEGIN;
+INSERT INTO idempotency_keys (customer_id, key, request_hash)
+VALUES ($1, $2, $3)
+ON CONFLICT (customer_id, key) DO NOTHING;      -- 0 rows: someone owns the key
+-- if 0 rows: SELECT request_hash, status, response_code, response_body ...
+--   hash differs     → ROLLBACK, 422
+--   status 'done'    → ROLLBACK, replay the stored response
+--   status 'started' → ROLLBACK, 409
+INSERT INTO payments (id, ..., status) VALUES ($4, ..., 'processing');
+COMMIT;
+```
+
+A concurrent insert of the same key waits for the first transaction to commit, then inserts nothing. A check-then-insert in code (or in Redis, beside the database) races or drifts from the payment row. A partial unique index on `order_id` adds a second net: one live payment per order.
+
+  </Step>
+  <Step title="Never hold a transaction across the PSP call">
+    Three phases: commit the claim and the `processing` payment; call the PSP with no transaction open; record the outcome, the ledger and the stored response in a second transaction. A crash between the phases leaves a `processing` row and a `started` key, which the recovery job settles by asking the PSP. Nothing is lost, because the intent was written before the money moved.
+  </Step>
+  <Step title="A timeout means unknown">
+    If the PSP doesn't answer, the card may or may not have been charged. Mark the payment `unknown` and tell the client "processing" (`202`). Never mark it failed, and never retry with a **new** PSP key: pass your own key to the PSP, so any retry returns the original charge. Retry transient errors with exponential backoff and full jitter, then let the webhook or a status query decide.
+  </Step>
+  <Step title="Webhooks: verify, dedupe, move forward">
+    Verify the HMAC signature over the raw body and reject stale timestamps. Insert the event id into `webhook_events` with `ON CONFLICT DO NOTHING`: a redelivery inserts nothing and stops there. Then apply only legal forward moves, because events arrive out of order: a late "succeeded" after a refund is recorded and ignored. Answer `200` quickly, duplicates included, or the PSP keeps retrying for days.
+  </Step>
+  <Step title="One writer for each move">
+    The sync reply, the webhook and the recovery job all call the same function. It locks the payment row, checks the transition, and in one transaction updates the status, posts the ledger and writes the outbox row. Whichever signal arrives first does the work; the others find the move illegal and do nothing. The ledger's unique `source` (for example `pay_1:charge`) is a last net.
+  </Step>
+  <Step title="Double-entry ledger">
+
+Every transaction is a set of entries that sums to zero, in integer minor units of one currency. A $50.00 card payment with a 2.9% + 30¢ PSP fee and a 10% commission:
+
+| Account | Type | Debit | Credit |
+|---|---|---|---|
+| Cash at PSP | asset | $48.25 | |
+| PSP fees | expense | $1.75 | |
+| Merchant payable (m_42) | liability | | $45.00 |
+| Platform revenue | revenue | | $5.00 |
+| **Total** | | **$50.00** | **$50.00** |
+
+Entries are append-only (revoke UPDATE and DELETE). A refund or a correction is a new transaction in the other direction, so the history explains every balance. Compute one leg as the remainder (the merchant's share is the amount minus the commission) so rounding can't create or lose a cent.
+
+  </Step>
+  <Step title="Outbox for events">
+    Write `payment.succeeded` to the `outbox` table in the same transaction as the move. A relay publishes unpublished rows to the event bus and marks them; if it crashes after publishing, it publishes again, so consumers dedupe by event id. There is no window where the payment succeeded but the order service never hears about it. See [the dual-write problem](/learn/async-messaging#the-dual-write-problem-and-the-transactional-outbox).
+  </Step>
+  <Step title="Reconcile every day">
+    Download the PSP's settlement report and match every charge, refund and fee to the ledger by PSP id and amount; then match the PSP's payouts to the bank statement. Sort mismatches into "missing in our ledger" (a lost webhook: replay it), "missing at the PSP" (we posted something that didn't happen: reverse it) and "amount differs" (fees, FX: post an adjustment). Never edit history; queue anything unexplained for a human.
+  </Step>
+  <Step title="Refunds and sagas">
+
+Reserve a partial refund with one conditional UPDATE, so two concurrent refunds can't exceed the charge:
+
+```sql
+UPDATE payments
+SET refunded = refunded + $2,
+    status = CASE WHEN refunded + $2 = amount THEN 'refunded' ELSE 'partially_refunded' END
+WHERE id = $1 AND status IN ('succeeded', 'partially_refunded') AND refunded + $2 <= amount;
+```
+
+Zero rows means `409`. Then call the PSP with the refund's own id as its key and post the ledger when it confirms. Multi-step flows (authorize the card, reserve inventory, capture, pay the merchant) run as a **saga**: each step has a compensation (void the authorization, release the stock, refund), and every step and compensation is idempotent.
+
+  </Step>
+</Steps>
+
+## Implementation
+
+<CodeTabs files={['snippets/ledger.js', 'snippets/payment-state.js', 'snippets/idempotency.js', 'snippets/retry.js', 'snippets/create-payment.js', 'snippets/webhook-handler.js', 'snippets/ledger.test.js']} />
+
+A few details worth pointing out:
+
+- `chargeEntries` derives the merchant's share as `amount - commission`, so every amount from 1¢ to $100 balances exactly (the test checks all 10,000). For $19.99 the fee is 88¢ and the commission $2.00.
+- `Ledger.post` is idempotent by transaction id: the same entries twice is a no-op, but reusing an id for different entries throws, the same rule as an idempotency key with a different body.
+- `applyEvent` returns `applied: false` for duplicates and late events instead of throwing; `transition` throws, because an illegal move from our own code is a bug.
+- `createPayment` stores a decline (`402`) as the key's final response: retrying the same key replays the decline, and trying another card needs a new key.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| PSP times out | Charged or not: unknown | Mark `unknown`; retry only with the same key; webhook, then a status query |
+| DB down after the PSP charged | Money moved, no record of success | Intent committed before the call; the PSP retries the webhook; the recovery job asks; reconciliation |
+| Webhook storm (backlog after an outage) | Slow handler, so more retries | Verify, insert the event and answer `200` fast; process from a queue with bounded workers |
+| Double submit | Two charges | Idempotency key under a unique constraint; `409` while in flight; one live payment per order |
+| Two partial refunds at once | More refunded than paid | Conditional UPDATE `refunded + $2 <= amount`; refund id as the PSP key |
+| Currency rounding | Cents appear or vanish | Integer minor units; one leg as the remainder; per-currency exponents (JPY has 0, KWD 3) |
+| Outbox relay down | Orders not marked paid yet | Rows wait in the outbox; alert on the oldest unpublished row |
+
+## Trade-offs
+
+| Choice | Pros | Cons | Choose when |
+|---|---|---|---|
+| Sync charge vs async (queue, then webhook) | Instant answer; simple | API latency and availability tied to the PSP | Cards; go async for bank debits, 3-D Secure and wallets |
+| Ledger as the source of truth vs a balance column | Full history, audits, rebuildable balances | More rows; balances need aggregation or a cache | Always for money; cache balances as a projection |
+| Idempotency in the DB vs in Redis at the API | Atomic with the payment row | Load on the primary | Money; Redis only for low-stakes endpoints |
+| One PSP vs two | Simple; one reconciliation | PSP outage stops sales | Most companies; add a second for scale or resilience |
+| Authorize then capture vs charge now | Capture on shipment; voids are free | Authorizations expire (about 7 days for cards) | Physical goods; charge now for digital goods |
+
+<Callout kind="interview" title="What interviewers listen for">
+"A timeout means **unknown**" said before they ask; idempotency keys under a **unique constraint** with a stored response, not a check-then-insert; no transaction held across the PSP call; webhooks **verified, deduped and forward-only**; an append-only **double-entry ledger** in integer minor units; and **reconciliation** as the safety net. Sharding and Kafka talk before these earns little.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How do you handle multiple currencies?">
+    Every entry carries its currency and a transaction never mixes two. An FX conversion is two linked transactions through an FX clearing account, one per currency, with the rate and the source stored. Balances, trial balances and reconciliation all run per currency, and amounts use each currency's exponent (JPY has no minor unit). Decide who carries the FX risk between charge and payout, and post FX gains or losses explicitly.
+  </FollowUp>
+  <FollowUp q="How do payouts to merchants work?">
+    A daily job reads each merchant's payable balance, holds back a reserve for refunds and chargebacks, and creates a payout with an idempotency key of merchant plus date. The ledger moves the amount from merchant payable to cash in transit, then to the merchant once the bank or the PSP confirms. A failed payout is reversed with new entries, and payouts are reconciled against the bank statement like charges.
+  </FollowUp>
+  <FollowUp q="Where do fraud checks go?">
+    Before the PSP call: a risk service scores the payment (velocity per card, device and account, amount, geography) with a tight timeout. Low risk goes straight through, medium risk is stepped up to 3-D Secure (`requires_action`), high risk is blocked. Chargebacks and refunds feed back into the model. If the risk service is down, fail open below an amount threshold and closed above it.
+  </FollowUp>
+  <FollowUp q="Can you fail over to a second PSP?">
+    Only for payments the first PSP certainly never charged: a refused connection, or an error before the request was accepted. A **timeout** on PSP A followed by a charge on PSP B can charge the customer twice, because A may have succeeded. Route new payments to B when A's circuit breaker opens, settle A's unknowns through its webhooks and status API, refund any duplicate automatically, and reconcile both PSPs.
+  </FollowUp>
+  <FollowUp q="Reconciliation found a mismatch. Now what?">
+    Classify it. Missing in the ledger: we missed a webhook, so replay the event from the PSP's events API and let the normal handler post it. Missing at the PSP: we posted something that didn't happen, so investigate and post a reversal. Amount differs: usually fees or FX, so post an adjustment. Never edit entries, alert above a threshold, and track how long each mismatch stays open.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />
