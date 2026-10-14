@@ -61,6 +61,13 @@ function drawTrie(
   return graph("trie", { nodes, edges }, { tones: [...ends, ...(o.tones ?? [])], edgeTones: o.edgeTones, badges });
 }
 
+/** Readers' word lists: the trie (root included) must stay small enough to read. */
+function trieProblem(words: string[]) {
+  const nodes = new Set([""]);
+  for (const w of words) for (let i = 1; i <= w.length; i++) nodes.add(w.slice(0, i));
+  return nodes.size > 20 && `Those words make a trie of ${nodes.size} nodes. Keep it to 20 so it fits: fewer words, or words that share prefixes.`;
+}
+
 const pathIds = (word: string, upTo: number) => Array.from({ length: upTo + 1 }, (_, i) => `^${word.slice(0, i)}`);
 const pathEdges = (ids: string[], tone: Tone): [string, string, Tone][] => ids.slice(1).map((id, i) => [ids[i], id, tone]);
 
@@ -84,6 +91,8 @@ insert(word) {
     { label: "car, cat, cart, dog, do", input: { words: ["car", "cat", "cart", "dog", "do"] } },
     { label: "Prefix inserted last", input: { words: ["tent", "tend", "ten"] } },
   ],
+  fields: { words: { chars: "a-z", maxItems: 6, maxLength: 6, help: "Lowercase words separated by commas (up to 6)." } },
+  validate: ({ words }) => trieProblem(words),
   run(t, { words }) {
     const pos = layout(words);
     const root = makeNode("");
@@ -158,6 +167,16 @@ startsWith(prefix) { return this.find(prefix) !== null; }                 //@pre
       input: { words: ["app", "apple", "apply"], queries: [["search", "appl"], ["startsWith", "appl"], ["search", "app"]] as [string, string][] },
     },
   ],
+  fields: {
+    words: { chars: "a-z", maxItems: 6, maxLength: 6, help: "Lowercase words separated by commas (up to 6)." },
+    queries: { maxItems: 4, chars: "a-zA-Z", maxLength: 10, colNames: ["op", "word"], help: "One per line: search word, or startsWith prefix (up to 4)." },
+  },
+  validate: ({ words, queries }) => {
+    const bad = queries.findIndex(([op]) => !/^(search|startswith)$/i.test(op));
+    if (bad !== -1) return `Line ${bad + 1}: the operation must be search or startsWith, not "${queries[bad][0]}".`;
+    return trieProblem(words);
+  },
+  prepare: (input) => ({ ...input, queries: input.queries.map(([op, q]) => [/^search$/i.test(op) ? "search" : "startsWith", q.toLowerCase()] as [string, string]) }),
   run(t, { words, queries }) {
     const pos = layout(words);
     const root = makeNode("");
@@ -246,6 +265,8 @@ search(pattern) {
     { label: "Match after backtracking", input: { words: ["bad", "bed", "cat", "cod"], pattern: "..t" } },
     { label: "No match", input: { words: ["bad", "bed", "cat", "cod"], pattern: "..x" } },
   ],
+  fields: { words: { chars: "a-z", maxItems: 6, maxLength: 6, help: "Lowercase words separated by commas (up to 6)." }, pattern: { chars: "a-z.", maxLength: 6, help: "Lowercase letters and dots. A dot matches any one letter." } },
+  validate: ({ words }) => trieProblem(words),
   run(t, { words, pattern }) {
     const pos = layout(words);
     const root = makeNode("");

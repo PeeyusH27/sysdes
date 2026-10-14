@@ -57,7 +57,7 @@ export const queueWithDlq: FlowSpec = {
         { edge: "w1>db", tone: "error", caption: "The database times out. The worker does not ack and does not mark the job done.", mark: [{ node: "db", state: "down" }] },
         { edge: "queue>w1", reverse: true, tone: "error", caption: "The job goes back to the queue with a delay: retry in 1 s.", ms: 1400 },
         { edge: "queue>w2", tone: "error", caption: "Attempt 2 lands on Worker 2 and fails too: retry in 2 s.", ms: 1400 },
-        { edge: "queue>w1", tone: "error", caption: "Attempt 3 fails: retry in 4 s. Retry in 1 s → 2 s → 4 s gives the database room to recover.", ms: 1600 },
+        { edge: "queue>w1", tone: "error", caption: "Attempt 3 fails: retry in 4 s. Backing off 1 s → 2 s → 4 s gives the database room to recover.", ms: 1600 },
         { edge: "queue>w2", caption: "Attempt 4, four seconds later. The database is healthy again.", mark: [{ node: "db", state: null }] },
         { edge: "w2>db", tone: "ok", caption: "The write succeeds, the job is marked done, and the message is acked. Nothing was lost." },
       ],
@@ -72,7 +72,7 @@ export const queueWithDlq: FlowSpec = {
         {
           edge: "queue>dlq",
           tone: "error",
-          caption: "After the maximum attempts it moves to the dead letter queue, so it stops burning worker time and blocking healthy messages.",
+          caption: "After the maximum attempts it moves to the dead letter queue, where it stops burning worker time and blocking healthy messages.",
           mark: [{ node: "dlq", state: "busy" }],
         },
         {
@@ -89,7 +89,7 @@ export const queueWithDlq: FlowSpec = {
       steps: [
         {
           edge: "api>queue",
-          caption: "A flash sale: five times the normal traffic hits the API, which publishes every job and still answers fast.",
+          caption: "Flash sale: five times the normal traffic hits the API, which publishes every job and still answers fast.",
           with: [{ edge: "api>queue", caption: "" }, { edge: "api>queue", caption: "" }],
           mark: [{ node: "queue", state: "busy" }],
         },

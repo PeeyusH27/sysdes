@@ -2,71 +2,66 @@ import { classes, hallCallFlow, trip } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Model each **car as a state machine** (IDLE, MOVING_UP, MOVING_DOWN, DOORS_OPEN, OUT_OF_SERVICE) that keeps **up-stops and down-stops** and serves them in **LOOK** order: keep going while any stop lies ahead, turn around only when none does, so no floor waits more than two sweeps. One **controller** owns every hall call and hands it to exactly one car through a pluggable **dispatch strategy** (nearest car with a direction-aware cost, or collective). Safety lives inside the car: doors open only when it is stopped at a floor, and it never moves with them open.
+Each car is a **state machine** that serves its **up-stops and down-stops** in **LOOK** order, so no floor waits more than two sweeps. One **controller** owns every hall call and hands it to exactly one car through a pluggable **dispatch strategy** (direction-aware nearest car, or collective).
 </TLDR>
 
 <Requirements
-  functional={['N floors and M cars; ▲/▼ hall buttons on every floor and a floor panel in every car', 'Each hall call is answered by one car that stops in the requested direction', 'Doors open and close at stops, and a door sensor reopens them', 'Each car shows its floor and direction; hall lamps stay lit until answered', 'Capacity: a full car skips hall calls, an overloaded car will not leave', 'Out-of-service and fire-service modes']}
-  nonFunctional={['Short average wait and a bounded longest wait: no floor is starved', 'A hall call is assigned to exactly one car, even when many buttons are pressed at once', 'Safety invariants: doors open only when stopped at a floor; never move with doors open', 'Deterministic tests: time is an injected tick', 'New dispatch strategies plug in without touching the car']}
-  outOfScope={['Motor drives and acceleration profiles', 'Destination dispatch kiosks (a follow-up)', 'Managing many buildings centrally (an HLD follow-up)']} />
+  functional={['N floors, M cars; ▲/▼ buttons on each floor, a panel in each car', 'One car answers each hall call, stopping in the requested direction', 'Doors open at stops; a sensor reopens them', 'Cars show floor and direction; hall lamps stay lit until answered', 'A full car skips hall calls; an overloaded car will not leave', 'Out-of-service and fire-service modes']}
+  nonFunctional={['Short average wait, bounded longest wait', 'Each hall call goes to exactly one car, even under simultaneous presses', 'Doors open only when stopped at a floor; never move with doors open', 'Deterministic tests: time is an injected tick', 'New dispatch strategies plug in without touching the car']}
+  outOfScope={['Motor drives and acceleration profiles', 'Destination dispatch kiosks (a follow-up)', 'Many buildings (an HLD follow-up)']} />
 
-This is a **low-level design** (LLD) question with a scheduling problem inside it. The interviewer wants a clean state machine for one car, a single owner for every request, and a dispatch policy you can defend with numbers. Say that out loud, then split the problem in two: **which car** answers a hall call (dispatch), and **in what order** a car serves its stops (scheduling).
+A **low-level design** (LLD) question with a scheduling problem inside. Split it early: **which car** answers a hall call (dispatch), and **in what order** a car serves its stops (scheduling).
 
 ## Clarifying questions
 
-- How many floors and cars? Do all cars serve every floor, or are there zones (low-rise, high-rise)?
-- What kind of building: an office with a morning rush, a hotel, a hospital with priority calls?
-- ▲/▼ buttons on each floor, or a destination keypad in the lobby?
-- What should happen when a car fails, the power drops, or the fire alarm sounds?
-- Which matters most: the average wait, the longest wait, or energy? They pull in different directions.
-- One controller for one building (LLD), or a fleet of buildings (HLD)?
+- How many floors and cars? Zones, or every car to every floor?
+- An office with a morning rush, a hotel, a hospital with priority calls?
+- ▲/▼ buttons per floor, or a destination keypad in the lobby?
+- What happens on a car failure, a power cut, a fire alarm?
+- Optimise average wait, longest wait or energy? One building or a fleet?
 
 ## Capacity estimate
 
-Lift engineers size a building for the **up-peak**: the morning rush, when nearly every trip starts in the lobby. The round-trip time (RTT) of one car tells you how often a car leaves the lobby and how many people the group moves in 5 minutes.
+Size for the **up-peak**, the morning rush when nearly every trip starts in the lobby. One car's round-trip time (RTT) sets everything.
 
 | Quantity | Estimate |
 |---|---|
 | Building | 20 floors above the lobby, 3.5 m each (a 70 m rise) |
-| Population | 50 people per floor = **1,000** |
-| Target | Move 12% of them in the busiest 5 minutes = **120 people** |
-| Load per trip | A 13-person car, 80% full at peak: **P = 10** |
-| Travel | 2.5 m/s, so **1.4 s per floor** at full speed (3.5 ÷ 2.5) |
-| Stops per trip | S = 20 × (1 − (19/20)^10) ≈ **8.0** (10 people, 20 floors, some share a floor) |
+| Population | 50 per floor = **1,000** |
+| Target | 12% of them in the busiest 5 minutes = **120 people** |
+| Load per trip | A 13-person car, 80% full: **P = 10** |
+| Travel | 2.5 m/s: **1.4 s per floor** (3.5 ÷ 2.5) |
+| Stops per trip | S = 20 × (1 − (19/20)^10) ≈ **8.0** (10 riders, some sharing a floor) |
 | Highest floor reached | H ≈ **18.6** on average |
-| Time per stop | ~**8 s**: doors close 3 s, open 2 s, ~3 s lost braking and accelerating |
-| Transfer | **1.2 s** per passenger, in at the lobby and out upstairs |
+| Time per stop | ~**8 s**: close 3 s, open 2 s, ~3 s braking and accelerating |
+| Transfer | **1.2 s** per passenger, in at the lobby, out upstairs |
 
 RTT = 2 × H × 1.4 + (S + 1) × 8 + 2 × P × 1.2 = 52 + 72 + 24 ≈ **148 s**.
 
-- One car moves 10 people every 148 s: 300 × 10 ÷ 148 ≈ **20 people per 5 minutes**.
-- **Four cars** move about **81**, well short of 120. A car leaves the lobby every 148 ÷ 4 ≈ **37 s**; offices aim for under 30 s.
-- **Six cars** move about 121 and leave every ~25 s. At 1.6 m/s instead of 2.5, the RTT grows to about 178 s and the same six cars move about 101.
+- One car: 300 × 10 ÷ 148 ≈ **20 people per 5 minutes**.
+- **Four cars**: about **81**, leaving the lobby every 148 ÷ 4 ≈ **37 s** (offices aim for under 30 s).
+- **Six cars**: about 121, every ~25 s. At 1.6 m/s instead of 2.5, the RTT is about 178 s and six cars move about 101.
 
-Look where the 148 s goes: **stopping (72 s) costs more than travelling (52 s)**. That is why the dispatch policy matters, and why destination dispatch, which groups people by floor, raises capacity: cutting stops per trip from 8 to 4 would bring the RTT to about 116 s, and four cars would move about 103. The controller itself is tiny: 120 presses in 5 minutes is 0.4 per second, plus one tick per car every 50–100 ms. The hard part is correctness, not throughput.
-
-One trip, second by second, with the same numbers:
+The surprise: **stopping (72 s) costs more than travelling (52 s)**. Destination dispatch's 4 stops instead of 8 give an RTT of about 116 s: four cars then move about 103. The controller is tiny (120 presses in 5 minutes is 0.4 per second, plus a tick per car every 50–100 ms), so correctness is the hard part. The timeline plays one trip.
 
 <Timeline spec={trip} />
 
 ## API
 
-The interface is the public methods of `ElevatorSystem`, plus the events it emits.
-
 | Call | Returns | Notes |
 |---|---|---|
 | `hallCall(floor, dir)` | Car id, or `null` if queued | Idempotent: a lit button stays one call |
 | `carCall(carId, floor)` | | Adds a stop to that car |
-| `tick()` | | Advances every car one step; tests drive it, so time is injected |
+| `tick()` | | Advances every car one step; tests drive it |
 | `takeOutOfService(carId)` | | Its hall calls move to other cars |
 | `returnToService(carId)` | | Back in the dispatch pool |
-| events `assigned`, `queued`, `cleared`, `arrived` | | Hall lamps, displays and logs observe these |
+| events `assigned`, `queued`, `cleared`, `arrived` | | Lamps, displays and logs observe these |
 
-Each car exposes `addStop(floor, dir?)`, `step()` and `openDoors()`, which throws while the car is moving.
+Each car exposes `addStop(floor, dir?)`, `step()` and `openDoors()`, which throws while moving.
 
 ## Data model
 
-Everything lives in the controller's memory; a building has a handful of cars and a few dozen buttons.
+It all fits in the controller's memory; the snippet is one instant.
 
 ```js
 // the controller's state at one instant
@@ -81,26 +76,24 @@ const state = {
 ```
 
 - A hall call is in exactly one place: `assigned` (with one car) or `waiting`.
-- Up hall calls go into a car's `upStops` and down calls into `downStops`. A car call goes into whichever set matches its side of the car.
-- Nothing must survive a restart: hall panels keep their lamps lit and re-send their calls, and riders re-press. An append-only event log (calls, stops, faults) is useful for maintenance, not for dispatch.
+- Up calls go into `upStops`, down calls into `downStops`; a car call joins the set on its side of the car.
+- Nothing survives a restart: panels re-send lit calls, riders re-press. An append-only event log serves maintenance, not dispatch.
 
 ## Class design
 
-Hover a class to highlight its relationships. The system **owns** its floors and cars (composition, filled diamond); each car owns its door and panel. The strategy interface is where the design bends without breaking.
+Hover a class to light up its relationships. Filled diamonds mean **ownership**: the system owns floors and cars, each car its door and panel.
 
 <ClassDiagram spec={classes} />
 
 ## Watch it run
 
-Three cars, eight floors. Press **▲** or **▼** on a floor to add a person (the tag above their head is where they're going), or press floors on a car's panel. Then switch **Strategy**: every strategy replays the same passengers, so compare the numbers at the same sim time. Try **Take car B out of service** while it's carrying people.
+Three cars, eight floors. Press **▲** or **▼** to add a person, or a car's panel buttons. Switch **Strategy** to replay the same passengers, and try **Take car B out of service** mid-trip. After five simulated minutes on the default seed:
+
+- **Random**, 16 passengers a minute: FCFS waits nearly twice as long (about 8 s against 4–5 s), each car chasing its oldest stop.
+- **Morning rush**: similar lobby waits, but FCFS rides run about 30% longer (14 s against 11 s).
+- **Nearest car** and **Collective** are close; Collective never sends a car the wrong way.
 
 <ElevatorSim />
-
-On the default seed, after five simulated minutes:
-
-- With **Random** traffic at 16 passengers a minute, FCFS waits nearly twice as long on average (about 8 s against 4–5 s) and travels more floors: each car heads straight for its oldest stop and ignores floors it passes.
-- In **Morning rush**, the lobby wait is similar under FCFS, but rides are about 30% longer (14 s against 11 s): each car serves its riders' floors in the order they were pressed, so it zig-zags.
-- **Nearest car** and **Collective** are close. Nearest car commits each call when it is pressed; Collective waits for a car that is idle or already passing, so no car is sent the wrong way.
 
 ## Hall call to doors open, step by step
 
@@ -112,19 +105,19 @@ Play the sequence, then switch branches: **all cars busy** (the call waits and i
 
 <Steps>
   <Step title="Clarify">
-    Floors, cars, zones, building type, failure modes, and whether this is one building (LLD) or many (HLD).
+    Floors, cars, building type, failures.
   </Step>
   <Step title="Split the problem">
-    Dispatch (which car answers a hall call) and scheduling (in what order a car serves its stops) are separate decisions with separate classes.
+    Dispatch and scheduling, in separate classes.
   </Step>
   <Step title="Draw one car's state machine">
-    Five states, the transitions between them, and the two safety rules. Everything else is built on this.
+    Five states, two safety rules.
   </Step>
   <Step title="Pick strategies and defend them">
-    LOOK inside each car; a direction-aware nearest car (or collective) across cars. Back the choice with the round-trip numbers.
+    LOOK per car; nearest car across cars; RTT numbers.
   </Step>
   <Step title="Walk a scenario, then break it">
-    One hall call end to end; then two presses at once, a full car, a failed car, and a power cut.
+    Double press, full car, failed car, power cut.
   </Step>
 </Steps>
 
@@ -132,7 +125,7 @@ Play the sequence, then switch branches: **all cars busy** (the call waits and i
 
 <Steps>
   <Step title="Use cases and nouns">
-    Call a car from a floor, choose a floor inside it, open and close doors, show floor and direction, and survive failures. The nouns become classes: `ElevatorSystem`, `ElevatorCar`, `Door`, `HallPanel`, `CarPanel`, `Display`, `HallCall`, `CarCall`, and a `DispatchStrategy` interface.
+    Call, ride, doors, display, failures. Nouns: `ElevatorSystem`, `ElevatorCar`, `Door`, `HallPanel`, `CarPanel`, `Display`, `HallCall`, `CarCall`, plus a `DispatchStrategy` interface.
   </Step>
   <Step title="One car is a state machine">
 
@@ -144,105 +137,108 @@ Play the sequence, then switch branches: **all cars busy** (the call waits and i
 | DOORS_OPEN | timer done, sensor clear | IDLE |
 | any | fault or maintenance key | OUT_OF_SERVICE |
 
-The safety rules live inside the car, not in its callers: `openDoors()` throws while moving, and `step()` never moves a car whose doors are open. A moving car that loses its target halts at the next floor; it never reverses in motion.
+Safety lives in the car: `openDoors()` throws while moving, `step()` never moves with doors open, and a car that loses its target halts at the next floor rather than reversing in motion.
 
   </Step>
   <Step title="Two sets of stops per car">
-    An up hall call goes into `upStops`, a down hall call into `downStops`, and a car call into whichever set matches its side of the car. LOOK only ever asks two questions: is any stop ahead, and is this floor a stop in my direction? With 20–100 floors a `Set` scan is fine; a min-heap of up-stops and a max-heap of down-stops make each decision O(log n).
+    LOOK asks two questions: is any stop ahead, and is this floor a stop in my direction? A `Set` scan is fine for 20–100 floors; a min-heap of up-stops and a max-heap of down-stops make it O(log n).
   </Step>
   <Step title="LOOK, not FCFS or SCAN">
 
-- **FCFS** serves stops in the order they were pressed, so the car zig-zags past floors it will need later.
-- **Nearest stop first** (SSTF) minimises the next move but can starve a far floor while nearby calls keep arriving.
-- **SCAN** sweeps to the end of the shaft and back, even when nobody is up there.
-- **LOOK** sweeps like SCAN but turns around at the last request.
+- **FCFS**: press order, zig-zagging past floors it needs later.
+- **Nearest stop first** (SSTF): can starve a far floor.
+- **SCAN**: sweeps to the end of the shaft even if nobody is there.
+- **LOOK**: sweeps like SCAN, but turns at the last request.
 
-The bound that answers "can a floor starve?": a car never turns around while a stop lies ahead, so a waiting floor is passed at most once in the wrong direction. Its car arrives within two sweeps, at most 2 × (floors − 1) floors of travel plus the stops on the way.
+A car never turns while a stop lies ahead, so a waiting floor is passed at most once the wrong way and served within two sweeps: at most 2 × (floors − 1) floors of travel, plus stops.
 
   </Step>
   <Step title="Dispatch: which car answers">
 
-**Nearest car** scores every car and picks the lowest cost. The cost must be **direction-aware**: follow the car's sweep to where it can open in the call's direction, and add a penalty for each stop it makes first.
+**Nearest car** picks the lowest **direction-aware** cost: follow the car's sweep to where it can open in the call's direction, plus a penalty per stop first.
 
 ```js
 // car at 2 sweeping up to 5; call 4▼: up to 5, back to 4 = 4 floors, plus 2 for the stop at 5
 cost = routeDistance(car, call.floor, call.dir) + stopCost * stopsBefore;
 ```
 
-**Collective** assigns nothing up front: a call goes to an idle car or one already sweeping past it in the right direction, and otherwise waits. It is simpler and never sends a car the wrong way, but cars can bunch together.
+**Collective** assigns nothing up front: a call waits for an idle car or one sweeping past in its direction. Simpler, but cars bunch.
 
   </Step>
   <Step title="One owner per call">
-    Many panels can press at once, so presses are messages to one controller loop (an event loop or an actor per building). Each runs to completion: the first press of 5▲ assigns it, and the second finds the key already in `assigned` and changes nothing. That gives idempotent buttons and exactly one car per call without locks. Panels must never pick cars themselves.
+    Simultaneous presses become messages to one controller loop (an event loop or an actor per building). The first 5▲ is assigned; the second finds it in `assigned` and does nothing. One car per call, no locks.
   </Step>
   <Step title="Doors, sensor and load">
-    Each stop holds the doors for a timer; a blocked sensor beam reopens them, and after ~20 s a slow, buzzing "nudge" close takes over. Load weighing adds two rules: above ~80% the car stops accepting hall calls (it hands them back to the dispatcher), and above 100% it won't close or leave.
+    A blocked sensor beam reopens the doors; after ~20 s a slow, buzzing "nudge" close takes over. Above ~80% load the car hands hall calls back to the dispatcher; above 100% it won't leave.
   </Step>
   <Step title="Failures and modes">
-    Taking a car out of service hands its hall calls to other cars, keeping their place in the queue; riders get out at the next floor. Fire service is a system mode: recall every car to the designated floor, open, and ignore calls. Modes change which cars dispatch can see and which stops a car accepts, so they need no changes to LOOK.
+    Out of service hands a car's calls to others, keeping their queue place; riders exit at the next floor. Fire service and other modes only change which cars dispatch sees and which stops they accept, so LOOK is untouched.
   </Step>
   <Step title="Displays and lamps">
-    Observer pattern: the system emits `arrived` and `cleared`, and displays, hall lanterns and lamps subscribe. The controller doesn't know how many screens a building has.
+    Observer: displays, hall lanterns and lamps subscribe to `arrived` and `cleared`.
   </Step>
   <Step title="Tests">
-    Inject the tick, so every test is deterministic. Cover LOOK order and reversal, a hall call served in its own direction, the double press, one owner per call, reassignment after a failure, doors never opening while moving, and a random run that stays inside the building and drains with every call served.
+    Inject the tick. Unit-test LOOK order, a call served in its own direction, the double press and reassignment; then check invariants after every tick of a seeded random run (in the building, no doors open in motion, one owner per call, every call drains within a bound).
   </Step>
 </Steps>
 
 ## Implementation
 
-<CodeTabs files={['snippets/models.js', 'snippets/elevator-car.js', 'snippets/dispatcher.js', 'snippets/elevator-system.js', 'snippets/elevator.test.js']} />
+The same design in **JavaScript, Java or Python**: pick a language and every code block on the site follows. The Java and Python versions add real locks where the JavaScript leans on the single-threaded event loop.
 
-A few details worth pointing out:
+<CodeTabs
+  files={['snippets/models.js', 'snippets/elevator-car.js', 'snippets/dispatcher.js', 'snippets/elevator-system.js', 'snippets/elevator.test.js']}
+  java={['snippets/java/Models.java', 'snippets/java/ElevatorCar.java', 'snippets/java/Dispatcher.java', 'snippets/java/ElevatorSystem.java', 'snippets/java/ElevatorTest.java']}
+  python={['snippets/python/models.py', 'snippets/python/elevator_car.py', 'snippets/python/dispatcher.py', 'snippets/python/elevator_system.py', 'snippets/python/test_elevator.py']}
+/>
 
-- `#plan()` is the whole LOOK policy: stop if this floor is a stop in the sweep direction, keep going while anything is ahead, otherwise turn around (serving a call here in the other direction first).
-- A car never reverses in motion. If its target is taken away (a reassignment), it halts at the next floor and decides again.
-- `routeDistance` is what makes nearest car direction-aware: a car at 2 sweeping up to 5 is 2 floors from 4▲ but 4 floors from 4▼, plus 2 for the stop at 5, so 6.
-- `takeOutOfService` re-dispatches the failed car's calls at once and puts any that no car can take at the **front** of `waiting`, because they were pressed first.
+- `#plan()` is all of LOOK: stop if this floor is a stop in the sweep direction, continue while anything lies ahead, else turn (serving a call here in the other direction first).
+- `routeDistance`: a car at 2 sweeping up to 5 is 2 floors from 4▲, but 4 from 4▼ plus 2 for the stop at 5, so 6.
+- `takeOutOfService` re-dispatches at once and puts calls no car can take at the **front** of `waiting`: they were pressed first.
 
 ## Failure modes
 
 | What breaks | Effect | Mitigation |
 |---|---|---|
-| Something blocks the doors | Doors can't close; the car is stuck | Sensor reopens; after ~20 s a slow nudge close with a buzzer, then report a fault |
-| A car fails or is switched off | Its hall calls would wait forever | Out of service: hand its calls to other cars; riders get out at the next floor |
-| Power cut | Car stops between floors | Brakes hold; battery rescue drives it to the nearest floor and opens the doors |
-| Position or load sensor fault | Car doesn't know where it is or how full | Fail safe: stop, level at the next floor, go out of service; never guess |
-| Overload | Car can't leave safely | No door close or departure above capacity; bypass hall calls above ~80% |
-| Controller crash | Assignments lost | Panels keep lamps lit and re-send; each car can fall back to serving calls on its own |
-| Fire alarm | Lifts become dangerous | Fire recall to the designated floor, doors open, calls ignored; firefighter control only |
+| Something blocks the doors | Car stuck | Sensor reopens; nudge close after ~20 s, then a fault |
+| A car fails | Its calls wait forever | Calls go to other cars; riders exit at the next floor |
+| Power cut | Car stops between floors | Brakes hold; battery rescue drives it to the nearest floor and opens |
+| Position or load sensor fault | Car doesn't know where it is | Stop, level at the next floor, go out of service; never guess |
+| Overload | Car can't leave safely | No departure over capacity; bypass hall calls above ~80% |
+| Controller crash | Assignments lost | Panels re-send; cars serve calls on their own |
+| Fire alarm | Lifts become dangerous | Recall to the designated floor, doors open; firefighter control only |
 
 ## Trade-offs
 
-| Choice | Pros | Cons | Choose when |
-|---|---|---|---|
-| FCFS | Trivial; fair by arrival | Zig-zags; waits and rides grow fast with load | Only as a baseline |
-| Nearest car (direction-aware) | Short waits; each call decided once | Commits at press time, even if a better car frees up later | Most buildings with ▲/▼ buttons |
-| Collective | No assignment state; never sends a car the wrong way | Cars bunch; a call may wait for an idle car | Small groups, simple controllers |
-| Destination dispatch | Groups riders by floor: fewer stops, more capacity | Keypads, and riders can't change their mind | Tall offices with a heavy morning rush |
-| One controller vs per-car scheduling | One place assigns, so no double service | A single point of failure | The default; cars fall back to local mode if it fails |
+| Choice | Pros | Cons |
+|---|---|---|
+| FCFS | Trivial; fair by arrival (a baseline) | Zig-zags; waits grow fast |
+| Nearest car (direction-aware) | Short waits; the default for ▲/▼ buildings | Commits at press time |
+| Collective | No assignment state; fine for small groups | Cars bunch; calls may wait |
+| Destination dispatch | Fewer stops: tall offices with a heavy rush | Keypads; no changing your mind |
+| One controller | No double service | Single point of failure (cars fall back to local mode) |
 
 <Callout kind="interview" title="What interviewers listen for">
-A car **state machine** with the safety rules inside it; the split between **dispatch** and **scheduling**; LOOK with a stated bound on waiting; **one owner per hall call** and an answer for a failed car; and round-trip numbers to justify how many cars. Jumping to `class Elevator` with a `goTo(floor)` method and no notion of direction is the usual way to lose points.
+A car **state machine** with safety inside; **dispatch** split from **scheduling**; LOOK with a waiting bound; **one owner per hall call**; RTT numbers behind the car count. A `class Elevator` with `goTo(floor)` and no direction loses points.
 </Callout>
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="How would destination dispatch change the design?">
-    People enter their floor on a lobby keypad before boarding, and the screen tells them which car to take. The dispatcher now sees destinations, so it groups people going to nearby floors into one car: fewer stops per trip, which is where most of the round trip goes. A `HallCall` becomes a `DestinationRequest` with `from` and `to`, cars lose their floor buttons, and the strategy interface stays the same.
+    Riders key in their floor in the lobby, so `HallCall` becomes a `DestinationRequest` (`from`, `to`) behind the same strategy, and grouping by floor cuts stops, the biggest slice of the round trip.
   </FollowUp>
   <FollowUp q="How would you add VIP and fire-service modes?">
-    Make the mode part of the system's state. A VIP or hospital key takes one car out of group dispatch and serves only its car calls. Fire recall sends every car to the designated floor, opens the doors and ignores hall calls; firefighter control then accepts car calls only, with doors that open only while the button is held. Modes change which cars dispatch sees and which stops a car accepts; LOOK is untouched.
+    Modes are system state: a VIP key pulls one car out of dispatch, and fire recall parks every car at the designated floor, doors open, for firefighter control. LOOK is untouched.
   </FollowUp>
   <FollowUp q="How would you scale this to many buildings?">
-    Keep dispatch local: each building runs its own controller, because safety and timing can't depend on a network. Each controller streams events (calls, stops, faults, door cycles) through a queue to a central service sharded by building id. That service runs dashboards, predictive maintenance (rising door-fault rates) and pushes configuration such as zoning schedules back down.
+    Keep dispatch local (safety can't depend on a network) and stream events to a central service, sharded by building id, for dashboards and predictive maintenance.
   </FollowUp>
   <FollowUp q="How would you save energy or prepare for the morning rush?">
-    Use a parking policy for idle cars: before 9 am, send them to the lobby; at other times, spread them through the building; at night, switch some off. Add an energy term to the cost so a car already moving beats waking a parked one. Traffic patterns from the event log tell you when each policy should start.
+    Park idle cars by policy (the lobby before 9 am, some off at night) and add an energy term so a moving car beats waking a parked one.
   </FollowUp>
   <FollowUp q="How do you test it?">
-    Inject the tick, so there is no real time. Unit-test the car's state machine and LOOK order. Then run property tests: random presses from a seeded generator, checking after every tick that cars stay in the building, doors never open while moving, every call has one owner, and everyone is delivered within a bound. Compare strategies by replaying the same seed, as the simulator above does.
+    Inject the tick and property-test the invariants over seeded random runs; replaying one seed compares strategies fairly, as the simulator does.
   </FollowUp>
 </FollowUps>
 

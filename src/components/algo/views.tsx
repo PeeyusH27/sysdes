@@ -1,6 +1,6 @@
 "use client";
-import { useId } from "react";
-import { AnimatePresence, m } from "motion/react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
+import { AnimatePresence, m, useReducedMotionConfig } from "motion/react";
 import type { ArrayView, GraphView, GridView, Json, ListView, MapView, NoteView, Prim, QueueView, SetView, StackView, Tone, TreeView, View } from "./types";
 
 const ease = { duration: 0.35, ease: [0.4, 0, 0.2, 1] as const };
@@ -11,6 +11,55 @@ export const fmtJson = (v: Json | undefined): string =>
 
 const TONE_WORD: Partial<Record<Tone, string>> = { found: "✓", bad: "✕" };
 const sizeClass = (s: string) => (s.length > 5 ? "xs" : s.length > 3 ? "sm" : undefined);
+
+/** Text that pops briefly when its value changes (never on first render), so the eye catches every update. */
+function Val({ text, className }: { text: string; className?: string }) {
+  const [seen, setSeen] = useState({ text, n: 0 });
+  if (seen.text !== text) setSeen({ text, n: seen.n + 1 });
+  return (
+    <span key={seen.n} className={seen.n ? (className ? `${className} av-pop` : "av-pop") : className}>
+      {text}
+    </span>
+  );
+}
+
+/** Same for SVG text: a short fade-in on change. */
+function SvgVal({ text, ...rest }: { text: string } & React.SVGProps<SVGTextElement>) {
+  const [seen, setSeen] = useState({ text, n: 0 });
+  if (seen.text !== text) setSeen({ text, n: seen.n + 1 });
+  return (
+    <text key={seen.n} {...rest} className={seen.n ? `${rest.className ?? ""} av-flash`.trim() : rest.className}>
+      {text}
+    </text>
+  );
+}
+
+/**
+ * FLIP for wrapped chips: when an entry is added or removed, the others slide to their new place instead of jumping.
+ * Children opt in with data-flip="key".
+ */
+function useFlip<T extends HTMLElement>() {
+  const box = useRef<T>(null);
+  const last = useRef(new Map<string, { x: number; y: number }>());
+  const reduce = useReducedMotionConfig();
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const next = new Map<string, { x: number; y: number }>();
+    // Layout offsets (the box is position: relative), so running enter/exit transforms don't count as moves.
+    el.querySelectorAll<HTMLElement>(":scope > [data-flip]").forEach((c) => {
+      const at = { x: c.offsetLeft, y: c.offsetTop };
+      const was = last.current.get(c.dataset.flip!);
+      next.set(c.dataset.flip!, at);
+      if (!was || reduce || typeof c.animate !== "function") return;
+      const dx = was.x - at.x;
+      const dy = was.y - at.y;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) c.animate([{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { duration: 320, easing: "cubic-bezier(.4, 0, .2, 1)" });
+    });
+    last.current = next;
+  });
+  return box;
+}
 
 export function ViewPanel({ view }: { view: View }) {
   switch (view.kind) {
@@ -100,7 +149,7 @@ function ArrayPanel({ v }: { v: ArrayView }) {
             const tone = v.tones?.[i];
             return (
               <div key={i} className="av-cell" data-tone={tone} data-size={sizeClass(s)} style={{ left: x(i) }}>
-                <span>{s}</span>
+                <Val text={s} />
                 {tone && TONE_WORD[tone] && <i className="av-mark">{TONE_WORD[tone]}</i>}
               </div>
             );
@@ -131,7 +180,7 @@ function GridPanel({ v }: { v: GridView }) {
     <div className="av av-grid">
       <Label text={v.label} extra={`(${v.cells.length}×${cols})`} />
       <div className="av-scroll">
-        <div className="av-gridwrap" style={{ gridTemplateColumns: `${hasRow ? "auto " : ""}repeat(${cols}, minmax(34px, auto))` }}>
+        <div className="av-gridwrap" style={{ gridTemplateColumns: `${hasRow ? "auto " : ""}repeat(${cols}, minmax(30px, auto))` }}>
           {hasCol && (
             <>
               {hasRow && <span />}
@@ -149,8 +198,8 @@ function GridPanel({ v }: { v: GridView }) {
                 const s = c < row.length ? fmt(row[c]) : "";
                 const tone = v.tones?.[`${r},${c}`];
                 return (
-                  <span key={c} className="av-gcell" data-tone={tone} data-size={sizeClass(s)}>
-                    {s}
+                  <span key={c} className="av-gcell" data-tone={tone} data-size={sizeClass(s)} data-empty={s === "" || undefined}>
+                    <Val text={s} />
                     {tone && TONE_WORD[tone] && <i className="av-mark">{TONE_WORD[tone]}</i>}
                   </span>
                 );
@@ -165,15 +214,17 @@ function GridPanel({ v }: { v: GridView }) {
 
 // ------------------------------------------------------------------ map / set
 function MapPanel({ v }: { v: MapView }) {
+  const box = useFlip<HTMLDivElement>();
   return (
     <div className="av av-map">
       <Label text={v.label} extra={`(size ${v.entries.length})`} />
-      <div className="av-chips">
+      <div className="av-chips" ref={box}>
         {v.entries.length === 0 && <span className="av-empty">empty</span>}
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} mode="popLayout">
           {v.entries.map(([k, val]) => (
             <m.span
               key={String(k)}
+              data-flip={String(k)}
               className="av-chip"
               data-tone={v.tones?.[String(k)]}
               initial={{ opacity: 0, scale: 0.7 }}
@@ -183,7 +234,7 @@ function MapPanel({ v }: { v: MapView }) {
             >
               <b>{fmt(k)}</b>
               <span className="av-arrow">→</span>
-              {fmt(val)}
+              <Val text={fmt(val)} />
             </m.span>
           ))}
         </AnimatePresence>
@@ -193,15 +244,17 @@ function MapPanel({ v }: { v: MapView }) {
 }
 
 function SetPanel({ v }: { v: SetView }) {
+  const box = useFlip<HTMLDivElement>();
   return (
     <div className="av av-map">
       <Label text={v.label} extra={`(size ${v.items.length})`} />
-      <div className="av-chips">
+      <div className="av-chips" ref={box}>
         {v.items.length === 0 && <span className="av-empty">empty</span>}
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} mode="popLayout">
           {v.items.map((k) => (
             <m.span
               key={String(k)}
+              data-flip={String(k)}
               className="av-chip"
               data-tone={v.tones?.[String(k)]}
               initial={{ opacity: 0, scale: 0.7 }}
@@ -292,7 +345,12 @@ function QueuePanel({ v }: { v: QueueView }) {
               </m.div>
             ))}
           </AnimatePresence>
-          {v.items.length > 0 && (
+          {v.items.length === 1 && (
+            <span className="av-qlabel" style={{ left: 0 }}>
+              front = back
+            </span>
+          )}
+          {v.items.length > 1 && (
             <>
               <span className="av-qlabel" style={{ left: 0 }}>
                 front
@@ -421,7 +479,7 @@ function ListPanel({ v }: { v: ListView }) {
 // ------------------------------------------------------------------ tree
 const TR = 17;
 const TX = 42;
-const TY = 58;
+const TY = 52;
 
 function TreePanel({ v }: { v: TreeView }) {
   const byId = new Map(v.nodes.map((n) => [n.id, n]));
@@ -461,7 +519,7 @@ function TreePanel({ v }: { v: TreeView }) {
         ) : (
           <svg viewBox={`0 0 ${width} ${height}`} style={shrink(width)} role="img" aria-label={`Tree with ${pos.size} nodes`}>
             {edges.map((e) => (
-              <m.line key={e.key} className="av-tedge" initial={false} animate={{ x1: e.a.x, y1: e.a.y, x2: e.b.x, y2: e.b.y }} transition={ease} />
+              <m.line key={e.key} className="av-tedge" initial={{ x1: e.a.x, y1: e.a.y, x2: e.b.x, y2: e.b.y, opacity: 0 }} animate={{ x1: e.a.x, y1: e.a.y, x2: e.b.x, y2: e.b.y, opacity: 1 }} transition={ease} />
             ))}
             {v.nodes
               .filter((n) => pos.has(n.id))
@@ -470,21 +528,15 @@ function TreePanel({ v }: { v: TreeView }) {
                 const s = fmt(n.value);
                 const tone = v.tones?.[n.id];
                 return (
-                  <m.g key={n.id} className="av-tnode" data-tone={tone} initial={false} animate={{ x: p.x, y: p.y }} transition={ease}>
+                  <m.g key={n.id} className="av-tnode" data-tone={tone} initial={{ x: p.x, y: p.y, opacity: 0 }} animate={{ x: p.x, y: p.y, opacity: 1 }} transition={ease}>
                     <circle r={TR} />
-                    <text y={4.5} textAnchor="middle" data-size={sizeClass(s)}>
-                      {s}
-                    </text>
+                    <SvgVal text={s} y={4.5} textAnchor="middle" data-size={sizeClass(s)} />
                     {tone && TONE_WORD[tone] && (
                       <text x={TR - 2} y={-TR + 5} className="av-tmark">
                         {TONE_WORD[tone]}
                       </text>
                     )}
-                    {v.badges?.[n.id] !== undefined && (
-                      <text x={TR + 3} y={-TR + 2} className="av-badge">
-                        {fmt(v.badges[n.id])}
-                      </text>
-                    )}
+                    {v.badges?.[n.id] !== undefined && <SvgVal text={fmt(v.badges[n.id])} x={TR + 3} y={-TR + 2} className="av-badge" />}
                   </m.g>
                 );
               })}
@@ -505,21 +557,38 @@ function TreePanel({ v }: { v: TreeView }) {
 }
 
 // ------------------------------------------------------------------ graph
-const GW = 520;
-const GH = 290;
 const GR = 18;
 const GPAD = 30;
 
+/** Width of an element, tracked with ResizeObserver (undefined until measured, so the server render is stable). */
+function useWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState<number>();
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width] as const;
+}
+
 function GraphPanel({ v }: { v: GraphView }) {
   const uid = useId().replace(/:/g, "");
+  // A squarer canvas on narrow stages keeps nodes and labels readable instead of shrinking a wide drawing.
+  const [box, width] = useWidth<HTMLDivElement>();
+  const narrow = width !== undefined && width < 460;
+  const GW = narrow ? 380 : 520;
+  const GH = narrow ? 280 : 270;
   const P = new Map(v.nodes.map((n) => [n.id, { x: GPAD + (n.x / 100) * (GW - 2 * GPAD), y: GPAD + (n.y / 100) * (GH - 2 * GPAD) }]));
   const edgeTone = (a: string, b: string) => v.edgeTones?.[`${a}-${b}`] ?? (v.directed ? undefined : v.edgeTones?.[`${b}-${a}`]);
   const hasPair = new Set(v.edges.map((e) => `${e.from}-${e.to}`));
   return (
-    <div className="av av-graph">
+    <div className="av av-graph" ref={box}>
       <Label text={v.label} />
       <div className="av-scroll">
-        <svg viewBox={`0 0 ${GW} ${GH}`} style={{ width: "100%", maxWidth: GW, minWidth: 320 }} role="img" aria-label={`Graph with ${v.nodes.length} nodes and ${v.edges.length} edges`}>
+        <svg viewBox={`0 0 ${GW} ${GH}`} style={{ width: "100%", maxWidth: GW, minWidth: 260 }} role="img" aria-label={`Graph with ${v.nodes.length} nodes and ${v.edges.length} edges`}>
           <defs>
             <marker id={`${uid}g`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0 0L10 5L0 10z" className="av-head-fill" />
@@ -543,14 +612,14 @@ function GraphPanel({ v }: { v: GraphView }) {
             const cx = (sx + ex) / 2 - uy * bend;
             const cy = (sy + ey) / 2 + ux * bend;
             return (
-              <g key={`${e.from}-${e.to}-${i}`} className="av-gedge" data-tone={edgeTone(e.from, e.to)}>
+              <m.g key={`${e.from}-${e.to}-${i}`} className="av-gedge" data-tone={edgeTone(e.from, e.to)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={ease}>
                 <path d={`M${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`} markerEnd={v.directed ? `url(#${uid}g)` : undefined} />
                 {e.w !== undefined && e.w !== null && (
                   <text x={cx} y={cy - 4} textAnchor="middle" className="av-weight">
                     {fmt(e.w)}
                   </text>
                 )}
-              </g>
+              </m.g>
             );
           })}
           {v.nodes.map((n) => {
@@ -558,23 +627,23 @@ function GraphPanel({ v }: { v: GraphView }) {
             const tone = v.tones?.[n.id];
             return (
               <g key={n.id} className="av-gnode" data-tone={tone} transform={`translate(${p.x},${p.y})`}>
-                <circle r={GR} />
-                <text y={4.5} textAnchor="middle" data-size={sizeClass(n.label ?? n.id)}>
-                  {n.label ?? n.id}
-                </text>
-                {tone && TONE_WORD[tone] && (
-                  <text x={GR - 3} y={-GR + 5} className="av-tmark">
-                    {TONE_WORD[tone]}
+                <m.g initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} transition={ease}>
+                  <circle r={GR} />
+                  <text y={4.5} textAnchor="middle" data-size={sizeClass(n.label ?? n.id)}>
+                    {n.label ?? n.id}
                   </text>
-                )}
-                {v.badges?.[n.id] !== undefined && (
-                  <g transform={`translate(0,${GR + 12})`}>
-                    <rect x={-17} y={-9} width={34} height={16} rx={8} className="av-gbadge" />
-                    <text y={3} textAnchor="middle" className="av-gbadge-text">
-                      {fmt(v.badges[n.id])}
+                  {tone && TONE_WORD[tone] && (
+                    <text x={GR - 3} y={-GR + 5} className="av-tmark">
+                      {TONE_WORD[tone]}
                     </text>
-                  </g>
-                )}
+                  )}
+                  {v.badges?.[n.id] !== undefined && (
+                    <g transform={`translate(0,${GR + 12})`}>
+                      <rect x={-17} y={-9} width={34} height={16} rx={8} className="av-gbadge" />
+                      <SvgVal text={fmt(v.badges[n.id])} y={3} textAnchor="middle" className="av-gbadge-text" />
+                    </g>
+                  )}
+                </m.g>
               </g>
             );
           })}

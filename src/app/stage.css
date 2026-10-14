@@ -1,1 +1,10 @@
-/* stage.css: see the file header comment once written. */
+/* stage.css: the box a section's visuals live in (`.sec-stage > .sec-fit`; `.sec-fit` is a size container named
+   `stage`, see reader.css). From ~1080 px it is the pinned pane on the left, about 560–850 px wide and the viewport's
+   height under the reader bar (StagePane.tsx lays the visual out a little wider when that helps and scales it to fit,
+   never below 0.8); below that it is the full card width under the text.
+   Widgets own their layout (container queries inside the widget). These are small, layout-level overrides scoped to
+   the stage; anything that needs more than CSS belongs in the widget. */
+
+/* Control rows: a long segmented control wraps inside the widget instead of pushing out of it. */
+.sec-stage .controls > .control { max-width: 100%; }
+.sec-stage .seg { max-width: 100%; }

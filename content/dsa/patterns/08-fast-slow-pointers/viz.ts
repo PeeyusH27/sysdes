@@ -21,6 +21,7 @@ function middleNode(head) {
     { label: "Odd length", input: { values: [1, 2, 3, 4, 5, 6, 7] } },
     { label: "Even length", input: { values: [1, 2, 3, 4, 5, 6] } },
   ],
+  fields: { values: { maxItems: 8 } },
   run(t, { values }) {
     const nodes = buildList(values);
     let slow: LNode | null = nodes[0];
@@ -75,6 +76,8 @@ function cycleStart(head) {
     { label: "Cycle", input: { values: [3, 8, 5, 1, 9, 4, 7], pos: 2 } },
     { label: "No cycle", input: { values: [1, 2, 3, 4, 5], pos: -1 } },
   ],
+  fields: { values: { maxItems: 8 }, pos: { min: -1, max: 7, help: "Index the last node links back to, or -1 for no cycle." } },
+  validate: ({ values, pos }) => pos >= values.length && `pos must be -1 (no cycle) or an index from 0 to ${values.length - 1}.`,
   run(t, { values, pos }) {
     const nodes = buildList(values);
     if (pos >= 0) nodes[nodes.length - 1].next = nodes[pos];
@@ -155,6 +158,15 @@ function floyd(f, x0) {
     { label: "Lookup table", input: { table: [4, 0, 7, 2, 6, 3, 2, 5], x0: 0 } },
     { label: "Squares mod 10", input: { table: [1, 2, 5, 0, 7, 6, 7, 0, 5, 2], x0: 3 } },
   ],
+  fields: {
+    table: { maxItems: 10, min: 0, max: 9, help: "f(0), f(1), f(2)…: each value must be an index of the table (up to 10)." },
+    x0: { min: 0, max: 9, help: "Where the sequence starts: an index of the table." },
+  },
+  validate: ({ table, x0 }) => {
+    const bad = table.findIndex((v) => v >= table.length);
+    if (bad !== -1) return `f(${bad}) = ${table[bad]}, but the table only has indices 0 to ${table.length - 1}.`;
+    return x0 >= table.length && `x0 must be an index of the table, 0 to ${table.length - 1}.`;
+  },
   run(t, { table, x0 }) {
     const f = (x: number) => table[x];
     const seq: number[] = [x0];

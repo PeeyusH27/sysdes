@@ -2,31 +2,33 @@ import { notificationPipeline } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Accept notifications asynchronously (`202`), look up the user's preferences, and publish one message per enabled channel onto **queues split by channel and priority**, so an OTP never waits behind a marketing blast. Workers dedupe on a deterministic `eventId:channel` id and send through providers behind **circuit breakers with failover**. Quiet hours, daily caps and suppression lists protect users; provider webhooks close the loop on delivery.
+Accept with `202`, check preferences, publish one message per channel onto **queues split by channel and priority**, so an OTP never waits behind a marketing blast. Dedupe on `eventId:channel`, send via providers behind **circuit breakers with failover**; quiet hours, caps and suppression lists protect users.
 </TLDR>
 
 ## Why it matters
 
-Shows queues, fan-out, user preferences, deduplication, and external providers that fail. Where the URL shortener was read-heavy and synchronous, this system is **write-heavy and asynchronous**: almost nothing happens in the request, and the hard parts are isolation (one slow channel or one huge campaign must not hurt the rest), exactly-once *behaviour* on top of at-least-once queues, and depending on third parties you don't control.
+Unlike the URL shortener, this system is **write-heavy and asynchronous**: almost nothing happens in the request. The hard parts are isolation (one slow channel or huge campaign mustn't hurt the rest), exactly-once *behaviour* on at-least-once queues, and providers you don't control.
+
+Play all four scenarios: **Normal fan-out**, **SMS provider down**, **Duplicate event dropped** and **Quiet hours**.
 
 <FlowDiagram spec={notificationPipeline} />
 
 ## Requirements
 
 <Requirements
-  functional={["Send push, email and SMS", "Per-user preferences by channel and notification type", "Templates with localisation", "Priorities: an OTP must never wait behind a marketing blast", "Scheduled sends and quiet hours", "Rate limits and daily caps per user", "Delivery tracking and analytics", "No duplicates"]}
-  nonFunctional={["Critical messages (OTPs) delivered within seconds", "At-least-once delivery, deduplicated so the user sees each message once", "A provider outage must not stop delivery", "Absorb campaign bursts of 50K+/s without slowing critical traffic", "Never lose a message silently: failures end in a DLQ with an alert"]}
-  outOfScope={["Running our own push, email or SMS delivery (we use providers)", "The campaign editor UI", "A rich in-app inbox"]}
+  functional={["Send push, email and SMS", "Per-user preferences by channel and type", "Templates with localisation", "Priorities: an OTP never waits behind marketing", "Scheduled sends and quiet hours", "Per-user rate limits and daily caps", "Delivery tracking and analytics", "No duplicates"]}
+  nonFunctional={["OTPs delivered within seconds", "At-least-once delivery; users see each message once", "A provider outage doesn't stop delivery", "Absorb 50K+/s campaign bursts without slowing critical traffic", "No silent loss: failures end in a DLQ, with an alert"]}
+  outOfScope={["Running our own push, email or SMS delivery", "The campaign editor UI", "A rich in-app inbox"]}
 />
 
-Ask early which notification types exist and how urgent each one is. The answer drives the most important design decision on this page: **priority isolation**.
+Ask early which notification types exist and how urgent each is. The answer drives the key decision: **priority isolation**.
 
 ## Estimation
 
-- 50M users × 10 notifications a day = 500M a day ≈ **5.8K/s** on average.
-- Campaigns burst to **50K+/s**, far above what providers accept, so queues must absorb the burst and campaign fan-out must be throttled.
-- Delivery log: 500M rows a day × ~200 B ≈ **100 GB a day**. Partition it by day and keep 30–90 days.
-- Most volume is push; SMS is the smallest share because every message costs money.
+- 50M users × 10 a day = 500M a day ≈ **5.8K/s** average.
+- Campaigns burst to **50K+/s**, far above provider limits: queues absorb it; campaign fan-out is throttled.
+- Delivery log: 500M rows × ~200 B ≈ **100 GB a day**, partitioned by day, kept 30–90 days.
+- Most volume is push; SMS is smallest, since each message costs money.
 
 <StatTiles items={[
   { label: "Average", value: "5.8K/s", sub: "500M a day" },
@@ -42,7 +44,7 @@ Ask early which notification types exist and how urgent each one is. The answer 
 | PUT | `/v1/users/:id/notification-preferences` | `{ channels: { push, email, sms }, types: {…}, quietHours: { start, end }, tz }` |
 | POST | `/webhooks/:provider` | Delivery status callbacks (delivered, bounced, complained) |
 
-The send endpoint returns **`202 Accepted`**, not `200`: the request only means "queued". A retry with the same `idempotencyKey` returns the same `notificationId` instead of sending again.
+**`202 Accepted`** means "queued", not "sent". A retry with the same `idempotencyKey` returns the same `notificationId`.
 
 ## Data model
 
@@ -56,11 +58,11 @@ CREATE TABLE deliveries (id text PRIMARY KEY,                       -- `${eventI
 CREATE INDEX deliveries_provider_msg ON deliveries (provider_msg_id);  -- webhook lookups
 ```
 
-Preferences are read for **every** notification (5.8K/s) and change rarely, so they sit behind a cache. A user has one device token per app install, so `device_tokens` is keyed by the token, not the user. `deliveries` is the busiest table by far: append-mostly, partitioned by day, and looked up by `provider_msg_id` when webhooks arrive.
+Preferences are read for **every** notification (5.8K/s) and rarely change: cache them. `device_tokens` is keyed by token (one per app install). `deliveries` is the busiest table: append-mostly, partitioned by day, looked up by `provider_msg_id` when webhooks arrive.
 
 ## Fan-out with queues
 
-One queue per channel lets workers scale and fail independently, and slow SMS doesn't block push. Go one step further and split by **channel and priority**:
+A queue per channel lets workers scale and fail independently: slow SMS never blocks push. Better: split by **channel and priority**.
 
 | Queue | Typical messages | Workers |
 |---|---|---|
@@ -69,128 +71,126 @@ One queue per channel lets workers scale and fail independently, and slow SMS do
 | `notif.email.normal` | Receipts, comment replies | Scaled on queue depth |
 | `notif.push.low` | Marketing, digests | Throttled, paused first under load |
 
-Each queue gets its own consumer group, so a backlog in one never steals workers from another. Queues deliver **at least once**, so every worker must be idempotent (see dedupe below), and a message that keeps failing ends in a **dead-letter queue** with an alert instead of retrying forever. Play **Normal fan-out** in the diagram: one event becomes three parallel messages.
+Each queue has its own consumer group, so no backlog steals another's workers. A message that keeps failing lands in a **dead-letter queue** with an alert.
 
 ## Priorities: the OTP never waits
 
-Picture a single shared queue. A 1M-message campaign is enqueued at 08:00 and workers drain it at 2,000/s, which takes about **8 minutes**. A user who asks for a login code at 08:01 waits behind all of it, and the code expires before it arrives.
+08:00: a 1M-message campaign hits one shared queue, drained at 2,000/s: about **8 minutes**. 08:01: a login code joins the back of the line and expires before arriving.
 
-With separate lanes, the campaign only fills `notif.push.low`. The OTP lands on `notif.sms.critical`, where dedicated workers are idle, and goes out in milliseconds. Reserve provider capacity for critical traffic too (a separate account or sender, or part of the rate limit), because a campaign can exhaust the provider's limit even when your queues are separate.
+With lanes, the campaign fills only `notif.push.low`; the OTP takes `notif.sms.critical`, where dedicated workers sit idle, and leaves in milliseconds. Reserve provider capacity too (a separate account or sender, or a slice of the rate limit), or a campaign can exhaust the provider's limit anyway.
+
+Choose **Shared queue**, press **Launch 1M campaign**, and watch logins stall. Then switch to **Two lanes**.
 
 <PriorityLanes />
 
 ## Templates and localisation
 
-- A notification references a **template id + version + locale**, never raw text. Product teams edit templates without deploying code.
-- **Render in the worker**, as late as possible, so the message uses fresh data and the user's current language.
-- Fall back along a locale chain (`pt-BR` → `pt` → `en`) when a translation is missing.
-- Keep a variant per channel: a short push title, an HTML email, and an SMS that fits one segment (160 GSM-7 characters, or only 70 once it contains a character outside that alphabet, such as an emoji or Devanagari).
-- Escape user data in HTML emails, and store the template version in the delivery row so you can debug what a user actually received.
+Copy changes weekly; deploys shouldn't have to.
+
+- Reference a **template id + version + locale**, never raw text, so product teams edit without a deploy.
+- **Render in the worker**, late: fresh data, current language, locale fallback (`pt-BR` → `pt` → `en`).
+- One variant per channel: push title, HTML email, one-segment SMS (160 GSM-7 characters, or 70 with any other character, like an emoji or Devanagari).
+- Escape user data in HTML; store the template version in the delivery row to debug what a user got.
 
 ## Scheduling and quiet hours
 
-Some messages shouldn't go out yet: a scheduled `sendAt`, or a marketing push at 3 a.m. Both become a **`notBefore`** timestamp on the message.
+A scheduled `sendAt` and a 3 a.m. marketing push get the same fix: a **`notBefore`** timestamp.
 
-- Store an **IANA time zone** per user (`Asia/Kolkata`, not `+05:30`, which breaks when daylight saving changes).
-- Evaluate quiet hours **at send time, in the user's time zone**. "22:00" means 22:00 where the user lives, and a message may sit in a queue for a while before it's sent.
-- Low-priority messages get `notBefore` set to the end of the quiet window. **Critical ones ignore quiet hours**: nobody wants their OTP at 08:00.
-- Messages with a future `notBefore` wait in a **delayed queue**, for example a Redis sorted set scored by `notBefore` that a scheduler polls every second, moving due messages onto the channel queue. (Broker delays are often capped; SQS, for example, allows at most 15 minutes.)
-- The worker re-checks quiet hours and caps right before sending, because preferences can change while a message waits.
-
-Play **Quiet hours** in the diagram to follow a late-night marketing push through the delayed queue.
+- Store an **IANA time zone** per user (`Asia/Kolkata`, not `+05:30`, which breaks with daylight saving).
+- Check quiet hours **at send time, in the user's zone**. Low priority gets `notBefore` = end of the window; **critical ignores quiet hours**.
+- Waiting messages sit in a **delayed queue**: a Redis sorted set scored by `notBefore`, which a scheduler polls every second, moving due messages to the channel queue. (Broker delays are often capped: SQS allows 15 minutes.)
+- Workers re-check quiet hours and caps right before sending; preferences change.
 
 ## Reliability: providers fail
 
-Every external provider will eventually be slow, rate-limit you, or go down. Put them behind a **provider abstraction** (`send(msg)` returns a provider message id), with a **circuit breaker** per provider and a **failover order** per channel (for SMS, often per country too).
+Every provider will be slow, throttle you, or go down. Wrap them in a **provider abstraction** (`send(msg)` returns a provider message id), with a **circuit breaker** each and a **failover order** per channel (for SMS, often per country).
 
 | Error | Examples | What to do |
 |---|---|---|
-| Transient | Timeout, `429`, `5xx` | Try the next provider; the queue retries with exponential backoff and jitter |
-| Permanent | Invalid number, unregistered device token, hard bounce, user unsubscribed | Don't retry. Mark it failed, delete the token or suppress the address |
+| Transient | Timeout, `429`, `5xx` | Next provider; the queue retries with exponential backoff and jitter |
+| Permanent | Invalid number, unregistered device token, hard bounce, user unsubscribed | Don't retry: mark failed, delete the token or suppress the address |
 
-When the breaker opens, workers stop waiting on a dead provider and go straight to the backup. After a cool-down it lets one trial message through (half-open) and closes again if that succeeds. Track the **delivery rate per provider** and alert on drops: a provider that accepts messages but silently fails to deliver them is worse than one that errors. Play **SMS provider down** in the diagram, and see the [reliability lesson](/learn/reliability-observability) for breakers and backoff in depth.
+An open breaker sends workers straight to the backup; after a cool-down, one half-open trial decides whether it closes. Track **delivery rate per provider**: accepting but silently not delivering is worse than erroring. More in the [reliability lesson](/learn/reliability-observability).
 
 ## Dedupe and idempotency
 
-Duplicates come from three places: a client retrying the API call, a producer re-emitting an event, and the queue redelivering a message after a worker crash. Defend in layers:
+Duplicates come from client retries, re-emitted events and redelivery after a crash. Defend in layers:
 
-1. **API idempotency key.** The first request with a key stores `key → notificationId` (`SET NX` with a TTL); a retry gets the same id back.
-2. **Deterministic message ids.** Every message is `eventId:channel`, so the same event always produces the same ids, however many times it's processed.
-3. **Check before sending.** The worker skips any id that has a `sent:<id>` key, and sets that key only **after** the provider accepts the message, so a failed send can still be retried.
+1. **API idempotency key.** Store `key → notificationId` (`SET NX` with a TTL); a retry gets the same id.
+2. **Deterministic message ids.** `eventId:channel`: reprocessing yields the same ids.
+3. **Check before sending.** Skip ids with a `sent:<id>` key; set it only **after** the provider accepts, so failed sends can retry.
 
-There's still a small window: if a worker crashes after the provider accepts but before it writes `sent:<id>`, the retry sends again. Narrow it by passing the id as the provider's idempotency key where the provider supports one, and claim the message with a short `SET processing:<id> NX PX` lock if two workers can receive the same message at once (see the [async messaging lesson](/learn/async-messaging)). Exactly-once delivery to a phone is impossible; **effectively once** is the goal. Play **Duplicate event dropped** to watch the check in action.
+The gap: a crash between provider acceptance and writing `sent:<id>` resends. Narrow it with the id as the provider's idempotency key, plus a short `SET processing:<id> NX PX` claim if two workers can get one message ([async messaging lesson](/learn/async-messaging)). Exactly-once to a phone is impossible; aim for **effectively once**.
 
 ## Protecting users
 
-Rate limit and batch notifications, honour quiet hours, and let users opt out per channel. In practice:
+Every extra ping risks an uninstall.
 
-- **Daily caps per type**, for example at most 3 marketing pushes per user per day. The counter in `daily-cap.js` resets on the UTC date; key it by the user's local date if that matters.
-- **Digests.** Batch 20 likes into one push ("Priya and 19 others liked your photo") instead of 20 pings.
-- **One-click unsubscribe** in every marketing email (the `List-Unsubscribe` header), which large mailbox providers now require from bulk senders.
-- **Suppression lists.** Never email an address that hard-bounced or marked you as spam. Mailbox providers judge your whole domain by it.
+- **Daily caps per type**: say 3 marketing pushes a day. `daily-cap.js` resets on the UTC date; key by local date if needed.
+- **Digests**: 20 likes become one push ("Priya and 19 others liked your photo").
+- **One-click unsubscribe** (`List-Unsubscribe` header) in every marketing email: large mailbox providers now require it of bulk senders.
+- **Suppression lists**: never email addresses that hard-bounced or flagged you as spam. Your whole domain's reputation rides on it.
 
 ## Device token lifecycle
 
-- Register or refresh the token on every app start, and update `last_seen`.
-- When the push service reports a token as invalid or unregistered, **delete it** right away; it's a permanent error.
-- Expire tokens that haven't been seen for months.
-- A user with three devices gets three pushes, so render once and send to each token.
+Tokens rot: phones get wiped, apps get uninstalled.
+
+- Register or refresh the token on every app start; update `last_seen`.
+- Invalid or unregistered? **Delete it** now: a permanent error.
+- Expire tokens unseen for months.
+- Three devices, three pushes: render once, send to each token.
 
 ## Delivery tracking
 
-Providers report what happened after they accepted a message through **webhooks**: delivered, bounced, complained, opened. Each callback updates the delivery row (found by `provider_msg_id`) and feeds analytics: **sent → delivered → opened → clicked**, and the click-through rate per template and channel.
+Providers report back by **webhook** (delivered, bounced, complained, opened), updating the delivery row by `provider_msg_id` and feeding **sent → delivered → opened → clicked** per template and channel.
 
-- Verify the signature over the **raw** request body before parsing it.
-- Webhooks are retried too, so updates must be idempotent.
-- Callbacks can arrive out of order: rank the statuses and never move one backwards (an `opened` must not be overwritten by a late `delivered`).
+- Verify the signature over the **raw** body before parsing.
+- Webhooks retry too: updates must be idempotent.
+- They arrive out of order: rank statuses and never go backwards (a late `delivered` mustn't overwrite `opened`).
 
 ## Large campaigns
 
 A 10M-user campaign is a batch job, not 10M API calls:
 
-- **Resolve the segment in pages** (keyset pagination by user id), never in one giant query.
-- **Enqueue in batches** of about 1,000 messages onto the low-priority lanes.
-- **Throttle to the providers' rate limits.** At 5,000 sends/s, 10M messages take about 33 minutes, so plan for it.
-- **Run on separate workers** so critical traffic keeps its capacity.
-- **Dedupe per user** (`campaignId:userId:channel`), so a user in two overlapping segments gets one message.
-- **Support pause and cancel**: workers check the campaign's status before sending, so a typo can be stopped mid-send.
+- **Resolve the segment in pages** (keyset pagination by user id).
+- **Enqueue in batches** of ~1,000 onto low-priority lanes, on **separate workers**, so critical traffic keeps capacity.
+- **Throttle to provider limits**: at 5,000 sends/s, 10M take about 33 minutes.
+- **Dedupe per user** (`campaignId:userId:channel`) across overlapping segments.
+- **Pause and cancel**: workers check campaign status before sending, so a typo can be stopped mid-send.
 
 ## Code
 
-<CodeTabs files={['snippets/notify.js', 'snippets/quiet-hours.js', 'snippets/deliver.js', 'snippets/daily-cap.js', 'snippets/email-webhook.js']} />
+`notify.js` routes by priority with deterministic ids. `quiet-hours.js` handles windows that cross midnight, in the user's zone. `deliver.js` skips open breakers, fails over in order, never retries permanent errors, and writes `sent:<id>` only after acceptance. `email-webhook.js` verifies the raw-body signature and feeds the suppression list.
 
-`notify.js` routes by priority and gives each message a deterministic id. `quiet-hours.js` handles windows that cross midnight and computes the next allowed send time in the user's zone. `deliver.js` skips open breakers, fails over in order, never retries permanent errors, and records `sent:<id>` only after a provider accepts. `email-webhook.js` verifies the signature over the raw body and feeds the suppression list.
+<CodeTabs files={['snippets/notify.js', 'snippets/quiet-hours.js', 'snippets/deliver.js', 'snippets/daily-cap.js', 'snippets/email-webhook.js']} />
 
 ## Build it in the playground
 
-Try the [notification system challenge](/playground/notification-system): build the pipeline on a canvas and get graded on a gateway in front, a preferences database, separate queues per channel plus a DLQ, workers that call external providers, and a fast dedupe store.
+Try the [notification system challenge](/playground/notification-system): build the pipeline on a canvas, graded on a gateway in front, a preferences database, per-channel queues plus a DLQ, workers calling external providers, and a fast dedupe store.
 
-<Callout kind="warning">
+<Callout kind="warning" title="Classic mistakes">
 - Calling providers inside the API request instead of queueing.
-- One shared queue for OTPs and marketing campaigns.
-- Marking a message as sent before the provider accepts it.
-- Retrying permanent errors such as invalid numbers or unsubscribed users.
+- Marking a message sent before the provider accepts it.
 - Evaluating quiet hours in UTC, or when the event is created.
-- No suppression list, so you keep emailing addresses that bounced or complained.
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
   <FollowUp q="How do you make sure a notification isn't sent twice?">
-    Give each notification a deterministic id (`eventId:channel`), check it before sending, and record it atomically after the provider accepts. Make workers idempotent, because queues deliver at least once. Add an idempotency key on the API so client retries return the same notification id.
+    Queues deliver at least once, so dedupe on deterministic `eventId:channel` ids, marked sent only after the provider accepts. An API idempotency key covers client retries.
   </FollowUp>
   <FollowUp q="A 10M-user campaign is running. How do OTPs still arrive in seconds?">
-    Separate priority queues with dedicated workers, rate-limited campaign fan-out, and provider capacity reserved for critical traffic. The campaign can only fill the low-priority lane.
+    Priority lanes with dedicated workers and reserved provider capacity: the campaign can only fill the low lane.
   </FollowUp>
   <FollowUp q="The SMS provider goes down. What happens?">
-    The breaker opens after repeated failures, traffic fails over to the backup provider, retries back off, and permanent failures go to the DLQ with alerts. Track delivery rate per provider, so you also catch a provider that accepts messages but doesn't deliver them.
+    The breaker opens and traffic fails over to the backup provider. Per-provider delivery rate catches one that accepts but doesn't deliver.
   </FollowUp>
   <FollowUp q="How do quiet hours work across time zones?">
-    Store the IANA time zone per user and evaluate at send time. Low-priority messages get `notBefore` set to the next allowed time and wait in a delayed queue. Critical ones ignore quiet hours.
+    Store an IANA zone per user and evaluate at send time; low priority waits in a delayed queue, critical never does.
   </FollowUp>
   <FollowUp q="How do you send 10M campaign notifications without hurting the system?">
-    Resolve the segment in pages, enqueue in batches, throttle to provider limits, run on separate workers, dedupe per user, and support pause/cancel.
+    As a throttled batch job on separate workers: paged segment, batched enqueue, per-user dedupe, pause and cancel.
   </FollowUp>
 </FollowUps>
 

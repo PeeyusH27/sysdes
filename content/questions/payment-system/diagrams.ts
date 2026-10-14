@@ -4,7 +4,7 @@ export const architecture: FlowSpec = {
   id: "payment-system-architecture",
   title: "Payment system architecture",
   description:
-    "The Payments API claims an idempotency key and writes the payment in Postgres before it calls the PSP. Signed webhooks settle unknown outcomes, an outbox relay announces payments to the rest of the company, and a daily job reconciles the ledger with the PSP's settlement report.",
+    "The Payments API claims an idempotency key and writes the payment in Postgres before calling the PSP. Signed webhooks settle unknown outcomes, an outbox relay announces payments, and a daily job reconciles the ledger with the PSP's settlement report.",
   nodes: [
     { id: "client", label: "Checkout app", kind: "client", col: 0, row: 1, note: "The PSP's SDK turns the card into a token in the browser, so card numbers never reach our servers." },
     { id: "api", label: "Payments API", kind: "service", col: 1, row: 1, sub: "stateless ×N" },
@@ -150,7 +150,7 @@ export const paymentSequence: SequenceSpec = {
   id: "payment-system-sequence",
   title: "Charge a card, whatever the PSP says",
   description:
-    "The payment is claimed and committed before the PSP call, and the outcome is written in a second transaction. Switch branches: succeeded, declined, or a timeout that leaves the outcome unknown until a webhook or a status query settles it.",
+    "The payment is committed before the PSP call and the outcome written in a second transaction. Branches: succeeded, declined, or a timeout that stays unknown until a webhook or status query settles it.",
   actors: [
     { id: "app", label: "Checkout app", kind: "client" },
     { id: "api", label: "Payments API", kind: "service" },

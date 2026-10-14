@@ -45,7 +45,7 @@ export const cacheAside: FlowSpec = {
       steps: [
         {
           edge: "client>app",
-          caption: "A hot key just expired and a burst of requests arrives at once.",
+          caption: "A hot key has expired, and a burst of requests arrives at once.",
           with: [{ edge: "client>app", caption: "" }, { edge: "client>app", caption: "" }],
           mark: [{ node: "app", state: "busy" }],
         },

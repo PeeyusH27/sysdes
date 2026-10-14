@@ -39,6 +39,16 @@ Every `##` section is wrapped in a numbered card automatically (`src/lib/mdx/reh
 - Never write `<LessonSection>` yourself; the plugin adds it.
 - Content before the first `##` (the `<TLDR>`) stays outside the cards.
 
+**Split layout.** The same plugin splits each section into text (paragraphs, lists, tables, `TLDR`, `Callout`, `Requirements`, `Steps`, `FollowUps`…) and visuals (every other component, plus top-level fenced code). From 1080 px wide, visuals sit in a sticky column on the left (about 515–690 px wide) and the text on the right; narrower screens stack them, text first. When `###` subsections each have their own visual, each gets its own row. So:
+
+- Never refer to a visual by position ("below", "on the left"). Say "the diagram", "the simulator".
+- Put the sentence that says what to try in the same section as its widget or diagram.
+- Keep tables to 4 columns or fewer: they sit in the narrower text column.
+
+## Writing style
+
+Short, vivid, correct. Talk to the reader, open each section with a one-line hook (why it matters, or a concrete scene), use one accurate analogy at most, bold only the 1–3 terms worth remembering, and keep every real number. TLDRs are at most 2 sentences; interview answers 1–2 sentences; "common mistakes" lists keep only what the body doesn't already say. No em dashes as glue, no exclamation marks, no emojis.
+
 ## Components available in MDX
 
 | Component | Props |
@@ -49,7 +59,7 @@ Every `##` section is wrapped in a numbered card automatically (`src/lib/mdx/reh
 | `Steps` / `Step` | `<Steps><Step title="…">markdown…</Step></Steps>` (auto-numbered) |
 | `FollowUps` / `FollowUp` | `<FollowUp q="Question?">answer markdown</FollowUp>` |
 | `Quiz` | `items={quiz}` |
-| `CodeTabs` | `files={['snippets/a.js', 'snippets/b.lua']}` optional `titles={[…]}` |
+| `CodeTabs` | `files={['snippets/a.js', 'snippets/b.lua']}` optional `titles={[…]}`; optional `java={[…]}` and `python={[…]}` add a site-wide JavaScript / Java / Python switch (used by the LLD questions; their Java and Python tests run in `tests/lld-langs.test.ts`) |
 | `CodeBlock` | `src="snippets/a.js"` optional `title` |
 | `StatTiles` | `items={[{ label, value, sub? }]}` |
 | `BarChart` | `title`, `data={[{ label, value, display? }]}`, `unit`, `scale="linear" \| "log"` |
@@ -59,7 +69,7 @@ Every `##` section is wrapped in a numbered card automatically (`src/lib/mdx/reh
 | `ClassDiagram` | `spec={…}` |
 | `DecisionTree` | `spec={…}` |
 | `Timeline` | `spec={…}` |
-| Widgets | `CapacityCalculator` (`preset="default" \| "twitter" \| "instagram" \| "url-shortener" \| "chat" \| "news-feed"`), `LatencyHitRatio`, `LoadBalancerSim`, `HashRing`, `TokenBucketViz`, `FixedVsSliding`, `QuorumPlayground`, `PollingRace`, `QueueSim`, `SeatRace`, `DebounceViz`, `LRUViz`, `CircuitBreakerSim`, `AvailabilityCalc`, `RetryStorm`, `KafkaPartitions`, `ReplicationLag`, `VirtualListViz`, `ChatSim`, `PoolSim`, `HandshakeTimeline`, `FanoutCalc`, `TraceWaterfall`, `PatternComparator`, `PriorityLanes`, `Base62Playground`, `InterviewTimer`, `RaftElection`, `ParkingLotSim`, `ElevatorSim`, `VendingMachineSim`, `LeaderboardRace`, `PaymentFlowSim`, `RideMatchSim` (no props), `DiagramQuiz` (`spec`, `slot` = node id to hide, `options` = NodeKind[], `answer` = NodeKind, `explain`) |
+| Widgets | `CapacityCalculator` (`preset="default" \| "twitter" \| "instagram" \| "url-shortener" \| "chat" \| "news-feed"`), `LatencyHitRatio`, `LoadBalancerSim`, `HashRing`, `TokenBucketViz`, `FixedVsSliding`, `QuorumPlayground`, `PollingRace`, `QueueSim`, `SeatRace`, `DebounceViz`, `LRUViz`, `CircuitBreakerSim`, `AvailabilityCalc`, `RetryStorm`, `KafkaPartitions`, `ReplicationLag`, `VirtualListViz`, `ChatSim`, `PoolSim`, `HandshakeTimeline`, `FanoutCalc`, `TraceWaterfall`, `PatternComparator`, `PriorityLanes`, `Base62Playground`, `InterviewTimer`, `RaftElection`, `ParkingLotSim`, `ElevatorSim`, `VendingMachineSim`, `LeaderboardRace`, `PaymentFlowSim`, `RideMatchSim`, and one lab per DSA pattern (`HashingLab`, `TwoPointersLab`, … `BitLab`; see `src/components/widgets/index.ts`) (no props), `DiagramQuiz` (`spec`, `slot` = node id to hide, `options` = NodeKind[], `answer` = NodeKind, `explain`) |
 
 All types are in `src/components/diagram/types.ts`. Import them in `diagrams.ts`:
 `import type { FlowSpec, SequenceSpec, ClassSpec, DecisionSpec, TimelineSpec } from "@/components/diagram/types";`

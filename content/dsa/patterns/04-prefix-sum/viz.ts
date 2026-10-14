@@ -23,6 +23,14 @@ function rangeSum(prefix, left, right) {
     { label: "Two queries", input: { nums: [3, 1, 4, 1, 5, 9], queries: [[2, 4], [0, 5]] as [number, number][] } },
     { label: "Negatives, from index 0", input: { nums: [-2, 5, -1, 4], queries: [[0, 1], [1, 3]] as [number, number][] } },
   ],
+  fields: {
+    nums: { maxItems: 10 },
+    queries: { maxItems: 4, min: 0, max: 9, colNames: ["left", "right"], help: "One range per line: left right (up to 4)." },
+  },
+  validate: ({ nums, queries }) => {
+    const bad = queries.find(([l, r]) => l > r || r >= nums.length);
+    return bad && `The range ${bad[0]} ${bad[1]} needs left ≤ right < ${nums.length}, the length of nums.`;
+  },
   run(t, { nums, queries }) {
     const prefix: (number | string)[] = new Array(nums.length + 1).fill("");
     prefix[0] = 0;
@@ -157,6 +165,14 @@ function applyRangeAdds(n, updates) {
     { label: "Three updates", input: { n: 6, updates: [[1, 3, 2], [2, 5, 3], [0, 1, -1]] as [number, number, number][] } },
     { label: "Updates that cancel", input: { n: 4, updates: [[0, 2, 5], [0, 2, -5], [3, 3, 1]] as [number, number, number][] } },
   ],
+  fields: {
+    n: { min: 1, max: 12, help: "Array length, 1 to 12." },
+    updates: { maxItems: 5, min: -99, max: 99, colNames: ["left", "right", "delta"], help: "One update per line: left right delta (up to 5)." },
+  },
+  validate: ({ n, updates }) => {
+    const bad = updates.find(([l, r]) => l < 0 || l > r || r >= n);
+    return bad && `The update ${bad.join(" ")} needs 0 ≤ left ≤ right < n (${n}).`;
+  },
   run(t, { n, updates }) {
     const diff = new Array(n + 1).fill(0);
     const out: (number | string)[] = new Array(n).fill("");

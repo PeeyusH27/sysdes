@@ -120,6 +120,16 @@ View builders (`@/components/algo/trace`). Tones: `active` (being looked at), `c
 
 Use several views in one frame when the algorithm has several structures (array + map, grid + queue, graph + heap + distance array).
 
+**Reader input ("Edit input").** Every walkthrough lets readers type their own input and re-runs the trace in the browser, with caps (12 array values, 16 characters, 10 graph nodes, 400 frames). The form is generated from the first preset's input shape. Three optional `defineTrace` keys tune it:
+
+- `fields`: per-key form hints (label, syntax), or `false` to hide a key from the form.
+- `validate(input)`: return a sentence explaining what's wrong, or `null`.
+- `prepare(input, say)`: normalise reader input only (e.g. sort it), and `say("why")` so the player can tell the reader.
+
+A new trace must also be added to `src/components/algo/registry.ts` (the browser loads `run` from there); `tests/algo-engine.test.ts` fails if one is missing.
+
+**Labs.** Each pattern also has a playable lab widget (`src/components/widgets/<Name>Lab.tsx`, shown in the page's `## Play with it` section). Labs are game-like and focus on intuition, not code lines; they follow the widget rules in `docs/AUTHORING.md`.
+
 ### quiz.ts
 
 ```ts

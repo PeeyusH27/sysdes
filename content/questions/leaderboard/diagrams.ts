@@ -4,7 +4,7 @@ export const architecture: FlowSpec = {
   id: "leaderboard-architecture",
   title: "Real-time leaderboard architecture",
   description:
-    "Match results are validated, appended to Kafka, and applied to Redis sorted sets by a board updater; a DB writer keeps the durable copy. Players read the top 100 from a one-second cache and their own rank from a Redis replica.",
+    "Match results are validated, appended to Kafka and applied to Redis sorted sets by a board updater, while a DB writer keeps the durable copy. Players read the top 100 from a one-second cache and their own rank from a Redis replica.",
   nodes: [
     { id: "match", label: "Match server", kind: "service", col: 0, row: 0, sub: "signs results", note: "Server-authoritative: it computes the points. The player's phone never submits its own score." },
     { id: "scoreapi", label: "Score API", kind: "service", col: 1, row: 0, sub: "×N" },

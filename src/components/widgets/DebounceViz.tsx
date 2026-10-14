@@ -73,13 +73,53 @@ export function keyLabel(prev: string, next: string) {
 }
 
 // ---------------------------------------------------------------- picture
-const SPAN = 6_000;
-const W = 600;
-const L = 86;
-const R = 590;
 const ROW = { keys: 40, timer: 86, req: 132 };
 const SESSION_GAP = 3_000;
 const SAMPLE = "system design";
+
+/** Drawing geometry: the same three rows everywhere; a narrower box with bigger text (`k`) on a phone. */
+interface Geo {
+  w: number;
+  l: number;
+  r: number;
+  k: number;
+  /** ms of timeline in view */
+  span: number;
+}
+const WIDE: Geo = { w: 600, l: 86, r: 590, k: 1, span: 6_000 };
+const NARROW: Geo = { w: 340, l: 72, r: 334, k: 1.2, span: 4_000 };
+
+/** True while the widget is narrower than `px`, i.e. on a phone. */
+function useNarrow(px: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [px]);
+  return [ref, narrow] as const;
+}
+
+const CSS = `
+.db { container: db / inline-size; }
+.db-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; align-items: end; margin: 4px 0 8px; }
+.db-inputs .control { min-width: 0; }
+.db-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
+.db .legend { font-size: 12px; gap: 2px 12px; margin-top: 2px !important; }
+.db-stats { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 6px 0 0 !important; font-size: 13px; }
+.db-stats > div { display: block; }
+.db-stats dt, .db-stats dd { display: inline; }
+.db-stats dt { color: var(--muted); }
+.db-stats dd { margin: 0 0 0 5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.db-stats small { font-size: 12px; font-weight: 400; }
+@container db (max-width: 479px) {
+  .db-inputs { grid-template-columns: minmax(0, 1fr); }
+  .db-bar .wbtn { padding: 0 9px; }
+}
+`;
 
 export function DebounceViz() {
   const uid = useId();
@@ -92,6 +132,9 @@ export function DebounceViz() {
   const [autoTyping, setAutoTyping] = useState(false);
   const autoTimers = useRef<number[]>([]);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const [boxRef, narrow] = useNarrow(480);
+  const g = narrow ? NARROW : WIDE;
+  const { l: L, r: R, k, span: SPAN } = g;
 
   // Seeded server latencies (120–700 ms), different for each session so out-of-order replies happen.
   const latencies = useMemo(() => {
@@ -182,150 +225,169 @@ export function DebounceViz() {
 
   return (
     <WidgetFrame title="Debounce a search box" sub="Type for real. Each keystroke restarts the timer; only a pause fires a request. Slow responses that a newer request has made obsolete are aborted.">
-      <div className="controls">
-        <label className="control" htmlFor={`${uid}q`} style={{ minWidth: 200 }}>
-          <span>Search</span>
-          <input id={`${uid}q`} type="text" value={text} onChange={(e) => record(e.target.value)} placeholder="Type here, e.g. system design" autoComplete="off" spellCheck={false} disabled={autoTyping} />
-        </label>
-        <Slider label="Debounce delay" value={delay} min={0} max={600} step={50} onChange={(v) => {
-            setDelay(v);
-            clearTimeline();
-          }} format={(v) => `${v} ms`} />
-      </div>
-      <div className="controls" style={{ marginTop: 0 }}>
-        <button type="button" className="wbtn primary" onClick={simulate} disabled={autoTyping}>
-          <Keyboard size={14} aria-hidden /> Type “{SAMPLE}” for me
-        </button>
-        <button type="button" className="wbtn" aria-pressed={abort} onClick={() => {
-            setAbort((a) => !a);
-            clearTimeline();
-          }}>
-          {abort ? "✓" : "✕"} Abort stale requests
-        </button>
-        <button type="button" className="wbtn" onClick={clear}>
-          <Eraser size={14} aria-hidden /> Clear
-        </button>
-      </div>
-      <div ref={ref} style={{ overflowX: "auto" }}>
-        <svg viewBox={`0 0 ${W} 186`} className="sim-svg" style={{ minWidth: 460 }} role="img" aria-label={`Timeline of up to 6 seconds: ${keys.length} keystrokes, ${fired} requests, ${aborted} aborted`}>
-          {[
-            ["Keystrokes", ROW.keys],
-            ["Timer", ROW.timer],
-            ["Requests", ROW.req],
-          ].map(([label, y]) => (
-            <g key={label}>
-              <text x={8} y={(y as number) + 4} style={{ fontWeight: 650, fontSize: 12 }}>
-                {label}
-              </text>
-              <line x1={L} x2={R} y1={(y as number) + 18} y2={(y as number) + 18} stroke="var(--grid)" />
-            </g>
-          ))}
-          {keys.map((k, i) =>
-            visibleAt(k.t) ? (
-              <g key={`k${i}`}>
-                <line x1={x(k.t)} x2={x(k.t)} y1={ROW.keys - 4} y2={ROW.keys + 12} stroke="var(--fg)" strokeWidth={1.5} />
-                <text x={x(k.t)} y={ROW.keys - 8} textAnchor="middle" style={{ fontSize: 11, fontWeight: 650 }}>
-                  {keyLabels[i]}
+      <style href="w-debounce" precedence="widgets">
+        {CSS}
+      </style>
+      <div className="db" ref={boxRef}>
+        <div className="db-inputs">
+          <label className="control" htmlFor={`${uid}q`}>
+            <span>Search</span>
+            <input id={`${uid}q`} type="text" value={text} onChange={(e) => record(e.target.value)} placeholder="Type here, e.g. system design" autoComplete="off" spellCheck={false} disabled={autoTyping} />
+          </label>
+          <Slider
+            label="Debounce delay"
+            value={delay}
+            min={0}
+            max={600}
+            step={50}
+            onChange={(v) => {
+              setDelay(v);
+              clearTimeline();
+            }}
+            format={(v) => `${v} ms`}
+          />
+        </div>
+        <div className="db-bar">
+          <button type="button" className="wbtn primary" onClick={simulate} disabled={autoTyping}>
+            <Keyboard size={14} aria-hidden /> Type “{SAMPLE}” for me
+          </button>
+          <button
+            type="button"
+            className="wbtn"
+            aria-pressed={abort}
+            onClick={() => {
+              setAbort((a) => !a);
+              clearTimeline();
+            }}
+          >
+            {abort ? "✓" : "✕"} Abort stale requests
+          </button>
+          <button type="button" className="wbtn" onClick={clear}>
+            <Eraser size={14} aria-hidden /> Clear
+          </button>
+        </div>
+        <div ref={ref}>
+          <svg viewBox={`0 0 ${g.w} 186`} className="sim-svg" style={{ maxWidth: 640, margin: "0 auto" }} role="img" aria-label={`Timeline of up to ${SPAN / 1000} seconds: ${keys.length} keystrokes, ${fired} requests, ${aborted} aborted`}>
+            {[
+              [narrow ? "Keys" : "Keystrokes", ROW.keys],
+              ["Timer", ROW.timer],
+              ["Requests", ROW.req],
+            ].map(([label, y]) => (
+              <g key={y}>
+                <text x={6} y={(y as number) + 4} style={{ fontWeight: 650, fontSize: 12 * k }}>
+                  {label}
                 </text>
+                <line x1={L} x2={R} y1={(y as number) + 18} y2={(y as number) + 18} stroke="var(--grid)" />
               </g>
-            ) : null,
-          )}
-          {tl.timers.map((t, i) => {
-            if (!visibleAt(t.end)) return null;
-            const end = t.state === "running" ? Math.min(now, t.end) : t.end;
-            const w = Math.max(delay === 0 ? 0 : 2, x(end) - x(t.start));
-            const fill = t.state === "fired" ? "var(--series-3)" : t.state === "running" ? "var(--accent)" : "var(--border-strong)";
-            return (
-              <g key={`t${i}`}>
-                {w > 0 && <rect x={x(t.start)} y={ROW.timer - 5} width={w} height={10} rx={3} fill={fill} opacity={t.state === "reset" ? 0.6 : 0.85} />}
-                {t.state === "reset" && <line x1={x(end)} x2={x(end)} y1={ROW.timer - 8} y2={ROW.timer + 8} stroke="var(--muted)" strokeWidth={1.5} />}
-                {t.state === "fired" && <path d={`M${x(end)} ${ROW.timer - 8} l4 8 l-4 8 z`} fill="var(--series-3)" />}
-              </g>
-            );
-          })}
-          {delay === 0 && keys.length > 0 && (
-            <text x={L + 4} y={ROW.timer + 4} className="muted-text">
-              no debounce: every keystroke fires at once
-            </text>
-          )}
-          {tl.requests.map((r) => {
-            const stop = r.status === "aborted" ? r.abortedAt! : r.status === "pending" ? now : r.arrive;
-            if (!visibleAt(stop)) return null;
-            const lane = ROW.req + (r.id % 2 ? 7 : -5);
-            const color = r.status === "aborted" ? "var(--critical)" : r.status === "stale" ? "var(--warning)" : "var(--series-1)";
-            const w = Math.max(2, x(stop) - x(r.at));
-            const tag = r.status === "aborted" ? "✕" : r.status === "stale" ? "⚠" : r.status === "applied" ? "✓" : "";
-            return (
-              <g key={`r${r.id}`}>
-                <rect x={x(r.at)} y={lane - 4} width={w} height={8} rx={3} fill={color} opacity={r.status === "pending" ? 0.55 : 0.9} />
-                {tag && (
-                  <text x={x(stop) + 3} y={lane + 4} style={{ fontSize: 10.5, fontWeight: 700, fill: r.status === "aborted" ? "var(--critical-ink)" : r.status === "stale" ? "var(--warning-ink)" : "var(--good-ink)" }}>
-                    {tag}
+            ))}
+            {keys.map((key, i) =>
+              visibleAt(key.t) ? (
+                <g key={`k${i}`}>
+                  <line x1={x(key.t)} x2={x(key.t)} y1={ROW.keys - 4} y2={ROW.keys + 12} stroke="var(--fg)" strokeWidth={1.5} />
+                  <text x={x(key.t)} y={ROW.keys - 8} textAnchor="middle" style={{ fontSize: 11 * k, fontWeight: 650 }}>
+                    {keyLabels[i]}
                   </text>
-                )}
-                {w > r.query.length * 6 + 8 && (
-                  <text x={x(r.at) + 3} y={lane - 7} className="muted-text" style={{ fontSize: 10 }}>
-                    “{r.query}”
-                  </text>
-                )}
-              </g>
-            );
-          })}
-          {ticks.map((k) => (
-            <text key={k} x={x(base + k * 1000)} y={180} textAnchor="middle" className="muted-text" style={{ fontSize: 10 }}>
-              {k} s
-            </text>
-          ))}
-          {busy && <line x1={x(now)} x2={x(now)} y1={22} y2={160} stroke="var(--fg)" strokeWidth={1} opacity={0.4} />}
-        </svg>
-      </div>
-      <ul className="legend" aria-label="Legend" style={{ marginTop: 4 }}>
-        <li>
-          <span className="line-key" style={{ background: "var(--border-strong)", height: 8 }} aria-hidden />
-          timer reset by a keystroke
-        </li>
-        <li>
-          <span className="line-key" style={{ background: "var(--series-3)", height: 8 }} aria-hidden />
-          timer ran out → request fires
-        </li>
-        <li>
-          <span className="line-key" style={{ background: "var(--series-1)", height: 8 }} aria-hidden />✓ response applied
-        </li>
-        <li>
-          <span className="line-key" style={{ background: "var(--critical)", height: 8 }} aria-hidden />✕ aborted (stale)
-        </li>
-        {!abort && (
+                </g>
+              ) : null,
+            )}
+            {tl.timers.map((t, i) => {
+              if (!visibleAt(t.end)) return null;
+              const end = t.state === "running" ? Math.min(now, t.end) : t.end;
+              const w = Math.max(delay === 0 ? 0 : 2, x(end) - x(t.start));
+              const fill = t.state === "fired" ? "var(--series-3)" : t.state === "running" ? "var(--accent)" : "var(--border-strong)";
+              return (
+                <g key={`t${i}`}>
+                  {w > 0 && <rect x={x(t.start)} y={ROW.timer - 5} width={w} height={10} rx={3} fill={fill} opacity={t.state === "reset" ? 0.6 : 0.85} />}
+                  {t.state === "reset" && <line x1={x(end)} x2={x(end)} y1={ROW.timer - 8} y2={ROW.timer + 8} stroke="var(--muted)" strokeWidth={1.5} />}
+                  {t.state === "fired" && <path d={`M${x(end)} ${ROW.timer - 8} l4 8 l-4 8 z`} fill="var(--series-3)" />}
+                </g>
+              );
+            })}
+            {delay === 0 && keys.length > 0 && (
+              <text x={L + 4} y={ROW.timer + 4} className="muted-text" style={{ fontSize: 11.5 * k }}>
+                no debounce: every keystroke fires at once
+              </text>
+            )}
+            {tl.requests.map((r) => {
+              const stop = r.status === "aborted" ? r.abortedAt! : r.status === "pending" ? now : r.arrive;
+              if (!visibleAt(stop)) return null;
+              const lane = ROW.req + (r.id % 2 ? 7 : -5);
+              const color = r.status === "aborted" ? "var(--critical)" : r.status === "stale" ? "var(--warning)" : "var(--series-1)";
+              const w = Math.max(2, x(stop) - x(r.at));
+              const tag = r.status === "aborted" ? "✕" : r.status === "stale" ? "⚠" : r.status === "applied" ? "✓" : "";
+              return (
+                <g key={`r${r.id}`}>
+                  <rect x={x(r.at)} y={lane - 4} width={w} height={8} rx={3} fill={color} opacity={r.status === "pending" ? 0.55 : 0.9} />
+                  {tag && (
+                    <text x={x(stop) + 3} y={lane + 4} style={{ fontSize: 10.5 * k, fontWeight: 700, fill: r.status === "aborted" ? "var(--critical-ink)" : r.status === "stale" ? "var(--warning-ink)" : "var(--good-ink)" }}>
+                      {tag}
+                    </text>
+                  )}
+                  {w > (r.query.length * 6 + 8) * k && (
+                    <text x={x(r.at) + 3} y={lane - 7} className="muted-text" style={{ fontSize: 10 * k }}>
+                      “{r.query}”
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+            {ticks.map((t) => (
+              <text key={t} x={x(base + t * 1000)} y={180} textAnchor={x(base + t * 1000) > R - 12 ? "end" : "middle"} className="muted-text" style={{ fontSize: 10 * k }}>
+                {t} s
+              </text>
+            ))}
+            {busy && <line x1={x(now)} x2={x(now)} y1={22} y2={160} stroke="var(--fg)" strokeWidth={1} opacity={0.4} />}
+          </svg>
+        </div>
+        <ul className="legend" aria-label="Legend">
           <li>
-            <span className="line-key" style={{ background: "var(--warning)", height: 8 }} aria-hidden />⚠ late reply overwrote newer results
+            <span className="line-key" style={{ background: "var(--border-strong)", height: 8 }} aria-hidden />
+            timer reset by a keystroke
           </li>
-        )}
-      </ul>
-      <div className="stat-tiles" style={{ marginTop: 10 }}>
-        <div className="stat-tile">
-          <div className="stat-label">Keystrokes</div>
-          <div className="stat-value">{keys.length}</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-label">Requests fired</div>
-          <div className="stat-value">{fired}</div>
-          <div className="stat-sub">{pending ? `${pending} in flight` : keys.length ? `${saved}% fewer than keystrokes` : "–"}</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-label">{abort ? "Aborted (stale)" : "Stale overwrites"}</div>
-          <div className="stat-value">{abort ? aborted : stale}</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-label">Results shown</div>
-          <div className="stat-value" style={{ fontSize: 16, paddingTop: 6 }}>
-            {tl.shown === null ? "–" : `“${tl.shown}”`}
+          <li>
+            <span className="line-key" style={{ background: "var(--series-3)", height: 8 }} aria-hidden />
+            timer ran out → request fires
+          </li>
+          <li>
+            <span className="line-key" style={{ background: "var(--series-1)", height: 8 }} aria-hidden />✓ response applied
+          </li>
+          <li>
+            <span className="line-key" style={{ background: "var(--critical)", height: 8 }} aria-hidden />✕ aborted (stale)
+          </li>
+          {!abort && (
+            <li>
+              <span className="line-key" style={{ background: "var(--warning)", height: 8 }} aria-hidden />⚠ late reply overwrote newer results
+            </li>
+          )}
+        </ul>
+        <dl className="db-stats">
+          <div>
+            <dt>Keystrokes</dt>
+            <dd>{keys.length}</dd>
           </div>
-          {tl.shownIsStale && <div className="stat-sub warn-ink">⚠ stale: not what you typed</div>}
-        </div>
+          <div>
+            <dt>Requests fired</dt>
+            <dd>
+              {fired} {(pending > 0 || keys.length > 0) && <small className="muted">({pending ? `${pending} in flight` : `${saved}% fewer than keystrokes`})</small>}
+            </dd>
+          </div>
+          <div>
+            <dt>{abort ? "Aborted (stale)" : "Stale overwrites"}</dt>
+            <dd>{abort ? aborted : stale}</dd>
+          </div>
+          <div>
+            <dt>Results shown</dt>
+            <dd>
+              {tl.shown === null ? "–" : `“${tl.shown}”`}
+              {tl.shownIsStale && <small className="warn-ink"> ⚠ stale: not what you typed</small>}
+            </dd>
+          </div>
+        </dl>
+        <p className="readout" aria-live="polite">
+          {said}
+          <ReducedNote reduce={reduce} what="Reduced motion: the timeline updates only when something happens." />
+        </p>
       </div>
-      <p className="readout" aria-live="polite">
-        {said}
-        <ReducedNote reduce={reduce} what="Reduced motion: the timeline updates only when something happens." />
-      </p>
     </WidgetFrame>
   );
 }

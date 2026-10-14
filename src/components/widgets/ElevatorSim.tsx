@@ -1,10 +1,10 @@
 "use client";
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState, type RefObject } from "react";
 import { m } from "motion/react";
 import { hash32, mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Seg, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 export const FLOORS = 8; // G, 1 … 7
@@ -556,45 +556,110 @@ export function waitStats(s: Sim) {
 
 // ---------------------------------------------------------------- picture
 const SEED = 7;
-const VW = 440;
-const TOP = 52;
-const FH = 60;
-const VH = TOP + FLOORS * FH + 12;
-const SX = [178, 266, 354]; // shaft x
-const SW = 82;
-const CW = 70; // car
-const CH = 50;
-const QX = 162; // first place in a floor's queue
-const MAXQ = 6; // people drawn per queue
 const COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
 const STRATEGY_LABEL: Record<Strategy, string> = { fcfs: "FCFS", nearest: "Nearest car", collective: "Collective (LOOK)" };
-const floorTop = (f: number) => TOP + (FLOORS - 1 - f) * FH;
-const slab = (f: number) => floorTop(f) + FH;
-const carY = (pos: number) => floorTop(pos) + FH - CH - 2;
-/** Riders stand in two rows: four at the front, two behind. */
-const slotX = (i: number, slot: number) => SX[i] + 6 + (slot < 4 ? 12 + slot * 15 : 19.5 + (slot - 4) * 30);
+/** Below this content width the building drops its side column and uses the narrow drawing. */
+const NARROW_BELOW = 480;
+/** The building never grows taller than this (px), so the whole widget fits the desktop visual pane. */
+const MAX_H = 284;
+
+/**
+ * Drawing geometry. Landscape: floors are short and the scene is laid out sideways, left to right: floor label,
+ * hall-button plate, the queue, then the three shafts. `narrow` trims the queue and the shafts for phones.
+ */
+interface Geo {
+  narrow: boolean;
+  VW: number;
+  VH: number;
+  /** Indicator band above the shafts. */
+  TOP: number;
+  /** Floor height. */
+  FH: number;
+  /** Shaft x, shaft width, car width and height. */
+  SX: number[];
+  SW: number;
+  CW: number;
+  CH: number;
+  /** Hall-button plate x and width (two 22 px buttons side by side must fit at the drawn scale). */
+  PX: number;
+  PW: number;
+  /** First place in a floor's queue, the gap between people, and how many are drawn. */
+  QX: number;
+  QG: number;
+  MAXQ: number;
+  /** Scale of a waiting person, and of a rider inside a car. */
+  pk: number;
+  rk: number;
+  /** Font sizes: floor label, car indicator, state word, destination tag. */
+  fs: { floor: number; ind: number; state: number; tag: number };
+  stateWord: Record<CarState, string>;
+}
+const geo = (narrow: boolean): Geo => {
+  const FH = 30;
+  const TOP = 36;
+  const g = narrow
+    ? { SX: [150, 213, 276], SW: 58, CW: 50, PX: 17, PW: 64, QX: 124, QG: 24, MAXQ: 2, VW: 337, fs: { floor: 13, ind: 14, state: 11, tag: 10.5 } }
+    : { SX: [194, 274, 354], SW: 72, CW: 60, PX: 21, PW: 56, QX: 166, QG: 23, MAXQ: 4, VW: 432, fs: { floor: 13, ind: 14, state: 10.5, tag: 10.5 } };
+  return {
+    ...g,
+    narrow,
+    TOP,
+    FH,
+    VH: TOP + FLOORS * FH + 5,
+    CH: 26,
+    pk: 0.85,
+    rk: narrow ? 0.66 : 0.72,
+    stateWord: narrow ? { IDLE: "IDLE", MOVING_UP: "MOVING ↑", MOVING_DOWN: "MOVING ↓", DOORS_OPEN: "OPEN", OUT_OF_SERVICE: "OFF" } : STATE_WORD,
+  };
+};
+const WIDE = geo(false);
+const NARROW = geo(true);
 const pct = (v: number, of: number) => `${((v / of) * 100).toFixed(2)}%`;
 const stateText = (c: Car) => STATE_WORD[carState(c)];
+const tint = (c: string, p: number) => `color-mix(in srgb, ${c} ${p}%, var(--card))`;
 
-function Figure({ color, tag }: { color: string; tag?: string }) {
+/** True while the element is narrower than `below` px (ResizeObserver; false on the server and in jsdom). */
+function useNarrow(ref: RefObject<HTMLElement | null>, below: number) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < below));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, below]);
+  return narrow;
+}
+
+/** A person, standing on y = 0. `k` scales the body; the destination tag sits beside the head at full size. */
+function Figure({ color, tag, k, fs }: { color: string; tag?: string; k: number; fs: number }) {
   return (
     <>
+      <g transform={`scale(${k})`}>
+        <circle cy={-17.5} r={4.4} fill="var(--fg)" />
+        <rect x={-5} y={-12.5} width={10} height={10.5} rx={3.5} fill={color} />
+        <path d="M-2.2 -2.6 v2.6 M2.2 -2.6 v2.6" stroke={color} strokeWidth={2.4} strokeLinecap="round" />
+      </g>
       {tag && (
-        <g transform="translate(0,-37)">
-          <rect x={-8} y={-7} width={16} height={13} rx={4} fill="var(--card)" stroke="var(--border-strong)" />
-          <text y={3.5} textAnchor="middle" style={{ fontSize: 10, fontWeight: 750 }}>
+        <g transform="translate(11.5,-21)">
+          <rect x={-7} y={-6.5} width={14} height={12.5} rx={4} fill="var(--card)" stroke="var(--border-strong)" />
+          <text y={fs * 0.36} textAnchor="middle" style={{ fontSize: fs, fontWeight: 750 }}>
             {tag}
           </text>
         </g>
       )}
-      <circle cy={-17.5} r={4.4} fill="var(--fg)" />
-      <rect x={-5} y={-12.5} width={10} height={10.5} rx={3.5} fill={color} />
-      <path d="M-2.2 -2.6 v2.6 M2.2 -2.6 v2.6" stroke={color} strokeWidth={2.4} strokeLinecap="round" />
     </>
   );
 }
 
-function Building({ s, reduce, uid }: { s: Sim; reduce: boolean; uid: string }) {
+function Building({ s, reduce, uid, g, sel }: { s: Sim; reduce: boolean; uid: string; g: Geo; sel: number }) {
+  const { VW, VH, TOP, FH, SX, SW, CW, CH, PX, PW, QX, QG, MAXQ, fs } = g;
+  const floorTop = (f: number) => TOP + (FLOORS - 1 - f) * FH;
+  const slab = (f: number) => floorTop(f) + FH;
+  const carY = (pos: number) => floorTop(pos) + FH - CH - 2;
+  const inset = (SW - CW) / 2;
+  /** Riders stand in two rows: four at the front, two behind. */
+  const slotX = (slot: number) => (slot < 4 ? CW / 2 + (slot - 1.5) * (CW - 16) / 3 : CW / 2 + (slot === 4 ? -1 : 1) * (CW - 16) / 4);
   const tr = { duration: reduce ? 0 : 0.1, ease: "linear" as const };
   const queues = new Map<number, Person[]>();
   for (const p of s.people.filter((x) => x.stage === "waiting").sort((a, b) => a.since - b.since || a.id - b.id)) queues.set(p.from, [...(queues.get(p.from) ?? []), p]);
@@ -610,14 +675,14 @@ function Building({ s, reduce, uid }: { s: Sim; reduce: boolean; uid: string }) 
         const n = queues.get(f)?.length ?? 0;
         return (
           <g key={f}>
-            <rect x={0} y={floorTop(f)} width={VW} height={FH} fill={f % 2 ? "var(--card-2)" : "var(--card)"} />
-            <line x1={0} x2={VW} y1={slab(f)} y2={slab(f)} stroke="var(--border-strong)" strokeWidth={2} />
-            <text x={13} y={floorTop(f) + FH / 2 + 5} textAnchor="middle" style={{ fontSize: 15, fontWeight: 750 }}>
+            <rect x={0} y={floorTop(f)} width={SX[0]} height={FH} fill={f % 2 ? "var(--card-2)" : "var(--card)"} />
+            <line x1={0} x2={SX[2] + SW} y1={slab(f)} y2={slab(f)} stroke="var(--border-strong)" strokeWidth={1.6} />
+            <text x={PX / 2} y={floorTop(f) + FH / 2 + fs.floor * 0.36} textAnchor="middle" style={{ fontSize: fs.floor, fontWeight: 750 }}>
               {floorName(f)}
             </text>
-            <rect x={28} y={floorTop(f) + 7} width={26} height={FH - 14} rx={7} fill="var(--card)" stroke="var(--border)" />
+            <rect x={PX} y={floorTop(f) + 4} width={PW} height={FH - 8} rx={7} fill="var(--card)" stroke="var(--border)" />
             {n > MAXQ && (
-              <text x={QX - MAXQ * 16 - 2} y={slab(f) - 8} textAnchor="end" className="muted-text" style={{ fontSize: 11, fontWeight: 750 }}>
+              <text x={QX - MAXQ * QG + 9} y={slab(f) - 9} textAnchor="end" className="muted-text" style={{ fontSize: 10.5, fontWeight: 750 }}>
                 +{n - MAXQ}
               </text>
             )}
@@ -635,26 +700,26 @@ function Building({ s, reduce, uid }: { s: Sim; reduce: boolean; uid: string }) 
               <line key={x} x1={x} x2={x} y1={TOP} y2={TOP + FLOORS * FH} stroke="var(--border)" strokeWidth={1.5} />
             ))}
             <m.line x1={SX[i] + SW / 2} x2={SX[i] + SW / 2} y1={TOP} initial={false} animate={{ y2: carY(c.pos) }} transition={tr} stroke="var(--border-strong)" strokeWidth={1.5} />
-            <rect x={SX[i] + 4} y={4} width={SW - 8} height={27} rx={7} fill="var(--card)" stroke={c.oos ? "var(--critical)" : COLORS[i]} strokeWidth={1.8} />
-            <text x={SX[i] + 14} y={22} className="muted-text" style={{ fontSize: 11, fontWeight: 750 }}>
+            <rect x={SX[i] + 3} y={2} width={SW - 6} height={19} rx={6} style={{ fill: i === sel ? tint(COLORS[i], 16) : "var(--card)" }} stroke={c.oos ? "var(--critical)" : COLORS[i]} strokeWidth={i === sel ? 2.4 : 1.6} />
+            <text x={SX[i] + 10} y={16} className="muted-text" style={{ fontSize: 10.5, fontWeight: 750 }}>
               {CARS[i]}
             </text>
-            <text x={SX[i] + SW / 2 + 7} y={24} textAnchor="middle" style={{ fontSize: 16, fontWeight: 750, fontVariantNumeric: "tabular-nums" }}>
+            <text x={SX[i] + SW / 2 + 6} y={17} textAnchor="middle" style={{ fontSize: fs.ind, fontWeight: 750, fontVariantNumeric: "tabular-nums" }}>
               {parked ? "⚠" : `${floorName(Math.round(c.pos))}${arrow}`}
             </text>
-            <text x={SX[i] + SW / 2} y={45} textAnchor="middle" style={{ fontSize: 9.5, fontWeight: 750, fill: parked ? "var(--critical-ink)" : state === "DOORS_OPEN" ? "var(--good-ink)" : "var(--muted)" }}>
-              {STATE_WORD[state]}
+            <text x={SX[i] + SW / 2} y={32} textAnchor="middle" style={{ fontSize: fs.state, fontWeight: 750, fill: parked ? "var(--critical-ink)" : state === "DOORS_OPEN" ? "var(--good-ink)" : "var(--muted)" }}>
+              {g.stateWord[state]}
             </text>
           </g>
         );
       })}
       {/* car bodies, behind the riders */}
       {s.cars.map((c, i) => (
-        <g key={i} transform={`translate(${SX[i] + 6},0)`}>
+        <g key={i} transform={`translate(${SX[i] + inset},0)`}>
           <m.g initial={false} animate={{ y: carY(c.pos) }} transition={tr}>
             <rect width={CW} height={CH} rx={4} fill="var(--card)" />
             <rect x={3} y={3} width={CW - 6} height={CH - 6} fill="var(--card-2)" />
-            <line x1={12} x2={CW - 12} y1={6.5} y2={6.5} stroke="var(--warning)" strokeWidth={2} strokeLinecap="round" opacity={0.7} />
+            <line x1={10} x2={CW - 10} y1={5.5} y2={5.5} stroke="var(--warning)" strokeWidth={1.6} strokeLinecap="round" opacity={0.7} />
           </m.g>
         </g>
       ))}
@@ -663,63 +728,63 @@ function Building({ s, reduce, uid }: { s: Sim; reduce: boolean; uid: string }) 
         let y: number;
         let opacity = 1;
         let walk = 0.45;
+        let k = g.pk;
         if (p.stage === "waiting") {
           const j = queues.get(p.from)!.indexOf(p);
-          x = QX - j * 16;
-          y = slab(p.from) - 2;
+          x = QX - j * QG;
+          y = slab(p.from) - 1;
           if (j >= MAXQ) opacity = 0;
         } else if (p.stage === "riding") {
           const slot = s.cars[p.car].riders.indexOf(p.id);
-          x = slotX(p.car, slot);
-          y = carY(s.cars[p.car].pos) + CH - 4 - (slot >= 4 ? 5 : 0);
+          x = SX[p.car] + inset + slotX(slot);
+          y = carY(s.cars[p.car].pos) + CH - 3 - (slot >= 4 ? 3 : 0);
+          k = g.rk;
         } else {
           // delivered: step out of the car and fade away
           const q = Math.min(1, (s.t - p.at) / LEAVE_MS);
-          x = SX[p.car] + SW / 2 - q * 64;
-          y = slab(p.to) - 2;
+          x = SX[p.car] + SW / 2 - q * 56;
+          y = slab(p.to) - 1;
           opacity = 1 - q;
           walk = 0.1;
         }
         const color = dirOf(p) === "up" ? "var(--k-client)" : "var(--k-gateway)";
         return (
-          <m.g key={p.id} initial={reduce ? false : { x: 60, y, opacity: 0 }} animate={{ x, y, opacity }} transition={reduce ? { duration: 0 } : { x: { duration: walk, ease: "easeInOut" }, y: tr, opacity: { duration: 0.2 } }}>
-            <Figure color={color} tag={p.stage === "waiting" ? floorName(p.to) : undefined} />
+          <m.g key={p.id} initial={reduce ? false : { x: PX + PW, y, opacity: 0 }} animate={{ x, y, opacity }} transition={reduce ? { duration: 0 } : { x: { duration: walk, ease: "easeInOut" }, y: tr, opacity: { duration: 0.2 } }}>
+            <Figure color={color} k={k} fs={fs.tag} tag={p.stage === "waiting" ? floorName(p.to) : undefined} />
           </m.g>
         );
       })}
       {/* doors and frames, in front of the riders */}
       {s.cars.map((c, i) => {
-        const gap = c.door * ((CW - 6) / 2 - 2);
+        const half = (CW - 6) / 2;
+        const gap = c.door * (half - 2);
         return (
-          <g key={i} transform={`translate(${SX[i] + 6},0)`}>
+          <g key={i} transform={`translate(${SX[i] + inset},0)`}>
             <m.g initial={false} animate={{ y: carY(c.pos) }} transition={tr}>
               <clipPath id={`${uid}-door-${i}`}>
                 <rect x={3} y={3} width={CW - 6} height={CH - 6} />
               </clipPath>
               <g clipPath={`url(#${uid}-door-${i})`}>
                 <m.g initial={false} animate={{ x: -gap }} transition={tr}>
-                  <rect x={3} y={3} width={(CW - 6) / 2} height={CH - 6} fill="var(--border)" stroke="var(--border-strong)" />
-                  <line x1={CW / 2 - 5} x2={CW / 2 - 5} y1={20} y2={30} stroke="var(--border-strong)" strokeWidth={2} strokeLinecap="round" />
+                  <rect x={3} y={3} width={half} height={CH - 6} fill="var(--border)" stroke="var(--border-strong)" />
+                  <line x1={CW / 2 - 4} x2={CW / 2 - 4} y1={10} y2={16} stroke="var(--border-strong)" strokeWidth={2} strokeLinecap="round" />
                 </m.g>
                 <m.g initial={false} animate={{ x: gap }} transition={tr}>
-                  <rect x={CW / 2} y={3} width={(CW - 6) / 2} height={CH - 6} fill="var(--border)" stroke="var(--border-strong)" />
-                  <line x1={CW / 2 + 5} x2={CW / 2 + 5} y1={20} y2={30} stroke="var(--border-strong)" strokeWidth={2} strokeLinecap="round" />
+                  <rect x={CW / 2} y={3} width={half} height={CH - 6} fill="var(--border)" stroke="var(--border-strong)" />
+                  <line x1={CW / 2 + 4} x2={CW / 2 + 4} y1={10} y2={16} stroke="var(--border-strong)" strokeWidth={2} strokeLinecap="round" />
                 </m.g>
               </g>
-              <rect width={CW} height={CH} rx={4} fill="none" stroke={c.oos ? "var(--critical)" : COLORS[i]} strokeWidth={2.4} />
+              <rect width={CW} height={CH} rx={4} fill="none" stroke={c.oos ? "var(--critical)" : COLORS[i]} strokeWidth={2.2} />
               {carState(c) === "OUT_OF_SERVICE" && (
                 <g>
-                  <rect x={4} y={13} width={CW - 8} height={24} rx={3} fill="var(--card)" stroke="var(--critical)" strokeDasharray="3 2" />
-                  <text x={CW / 2} y={23} textAnchor="middle" style={{ fontSize: 8, fontWeight: 800, fill: "var(--critical-ink)" }}>
-                    OUT OF
-                  </text>
-                  <text x={CW / 2} y={33} textAnchor="middle" style={{ fontSize: 8, fontWeight: 800, fill: "var(--critical-ink)" }}>
-                    SERVICE
+                  <rect x={3} y={4} width={CW - 6} height={CH - 8} rx={3} fill="var(--card)" stroke="var(--critical)" strokeDasharray="3 2" />
+                  <text x={CW / 2} y={CH / 2 + 3.5} textAnchor="middle" style={{ fontSize: 10, fontWeight: 800, fill: "var(--critical-ink)" }}>
+                    ⚠ OFF
                   </text>
                 </g>
               )}
               {c.riders.length > 0 && c.door < 0.4 && (
-                <text x={CW / 2} y={CH - 7} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 750 }}>
+                <text x={CW / 2} y={CH / 2 + 4} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 750 }}>
                   {c.riders.length}/{CAP}
                 </text>
               )}
@@ -747,13 +812,32 @@ const roundBtn = (lit: boolean, w: number, h: number) =>
     transition: "background-color .2s, box-shadow .2s",
   }) as const;
 
+/** A segmented choice with its label on the same line (it wraps under the label when the row is too narrow). */
+function InlineSeg<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string; title?: string }[]; onChange: (v: T) => void }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 6px", fontSize: 12.5, color: "var(--muted)" }}>
+      <span>{label}</span>
+      <div className="seg" role="group" aria-label={label}>
+        {options.map((o) => (
+          <button key={o.value} type="button" title={o.title} aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ElevatorSim() {
   const [strategy, setStrategy] = useState<Strategy>("collective");
   const [traffic, setTraffic] = useState<Traffic>("random");
   const [speed, setSpeed] = useState(1.5);
   const [rate, setRate] = useState(16);
   const [running, setRunning] = useState(true);
+  const [sel, setSel] = useState(0);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const narrow = useNarrow(ref, NARROW_BELOW);
+  const g = narrow ? NARROW : WIDE;
   const uid = useId().replace(/[^a-zA-Z0-9-]/g, "");
 
   const step = useCallback((st: Sim, dt: number) => stepSim(st.rate === rate ? st : { ...st, rate }, dt * speed), [speed, rate]);
@@ -795,107 +879,149 @@ export function ElevatorSim() {
     { label: "Floors travelled", value: w.floors.toFixed(0) },
   ];
 
-  return (
-    <WidgetFrame
-      title="Lift dispatch simulator"
-      sub="Three cars, eight floors. Press ▲ or ▼ on a floor to add a person, or a floor button inside a car. Every strategy replays the same passengers (same seed), so compare the numbers at the same sim time."
-    >
-      <div className="controls">
-        <Seg<Strategy>
-          label="Strategy"
-          value={strategy}
-          onChange={(v) => {
-            setStrategy(v);
-            restart({ strategy: v });
-          }}
-          options={[
-            { value: "fcfs", label: "FCFS" },
-            { value: "nearest", label: "Nearest car" },
-            { value: "collective", label: "Collective (LOOK)" },
-          ]}
-        />
-        <Seg<Traffic>
-          label="Traffic"
-          value={traffic}
-          onChange={(v) => {
-            setTraffic(v);
-            restart({ traffic: v });
-          }}
-          options={[
-            { value: "manual", label: "Manual" },
-            { value: "rush", label: "Morning rush" },
-            { value: "random", label: "Random" },
-          ]}
-        />
-      </div>
-      <div className="controls" style={{ marginTop: 0 }}>
-        <SimButtons running={running && !reduce} reduce={reduce} onToggle={() => setRunning((r) => !r)} onStep={() => reset(stepSim(s, 500))} onReset={() => restart({})} stepHint="Advance half a second" />
-        <Slider label="Speed" value={speed} min={0.5} max={4} step={0.5} onChange={setSpeed} format={(v) => `${v}×`} />
-        <Slider label="Passengers per minute" value={rate} min={2} max={30} onChange={setRate} />
-        <button type="button" className={`wbtn ${oosB ? "" : "danger"}`} onClick={() => reset(setOutOfService(s, 1, !oosB))}>
-          {oosB ? "Put car B back in service" : "Take car B out of service"}
-        </button>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start", justifyContent: "center" }}>
-        <div ref={ref} style={{ position: "relative", flex: "4 1 340px", maxWidth: 520 }}>
-          <Building s={s} reduce={reduce} uid={uid} />
-          <div role="group" aria-label="Hall call buttons">
-            {Array.from({ length: FLOORS }, (_, f) =>
-              (["up", "down"] as Dir[])
-                .filter((d) => (d === "up" ? f < FLOORS - 1 : f > 0))
-                .map((d) => {
-                  const on = !!findCall(s, f, d);
-                  const name = `Call ${d} at floor ${floorName(f)}`;
-                  return (
-                    <button
-                      key={`${f}${d}`}
-                      type="button"
-                      onClick={() => callHall(f, d)}
-                      aria-label={on ? `${name} (lit)` : name}
-                      title={name}
-                      style={{ ...roundBtn(on, 22, 17), fontSize: 9, position: "absolute", left: pct(41, VW), top: pct(floorTop(f) + FH * (d === "up" ? 0.33 : 0.67), VH), transform: "translate(-50%, -50%)" }}
-                    >
-                      {d === "up" ? "▲" : "▼"}
-                    </button>
-                  );
-                }),
-            )}
-          </div>
-        </div>
-        <div style={{ flex: "1 1 112px", minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8, alignContent: "start" }}>
-          {s.cars.map((c, i) => (
-            <div key={i} role="group" aria-label={`Car ${CARS[i]} panel`} style={{ border: `1px solid ${c.oos ? "var(--critical)" : "var(--border)"}`, borderTop: `3px solid ${c.oos ? "var(--critical)" : COLORS[i]}`, borderRadius: 10, padding: "6px 8px 8px", background: "var(--card-2)", textAlign: "center" }}>
-              <div style={{ fontSize: 12.5, fontWeight: 750 }}>Car {CARS[i]}</div>
-              <div className={c.oos ? "bad-ink" : carState(c) === "DOORS_OPEN" ? "ok-ink" : "muted"} style={{ fontSize: 11, fontWeight: 650, marginBottom: 5, whiteSpace: "nowrap" }}>
-                {stateText(c)}
-              </div>
-              {/* two columns like a real panel: 6 7 / 4 5 / 2 3 / G 1 */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 28px)", gap: 5, justifyContent: "center" }}>
-                {Array.from({ length: FLOORS }, (_, k) => FLOORS - 2 - Math.floor(k / 2) * 2 + (k % 2)).map((f) => {
-                  const on = c.calls.includes(f);
-                  return (
-                    <button key={f} type="button" disabled={c.oos} onClick={() => callCar(i, f)} aria-label={`Car ${CARS[i]}: go to floor ${floorName(f)}${on ? " (lit)" : ""}`} style={{ ...roundBtn(on, 28, 28), fontSize: 12, opacity: c.oos ? 0.5 : 1 }}>
-                      {floorName(f)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+  const car = s.cars[sel];
+  const oosButton = (
+    <button type="button" className={`wbtn ${oosB ? "" : "danger"}`} onClick={() => reset(setOutOfService(s, 1, !oosB))}>
+      {oosB ? "Put car B back in service" : "Take car B out of service"}
+    </button>
+  );
+  // One car's panel at a time: pick the car, then press a floor (two columns like a real panel: 6 7 / 4 5 / 2 3 / G 1).
+  const panelFloors = narrow ? Array.from({ length: FLOORS }, (_, f) => f) : Array.from({ length: FLOORS }, (_, k) => FLOORS - 2 - Math.floor(k / 2) * 2 + (k % 2));
+  const panel = (
+    <div role="group" aria-label={`Car ${CARS[sel]} panel`} style={{ border: `1px solid ${car.oos ? "var(--critical)" : "var(--border)"}`, borderTop: `3px solid ${car.oos ? "var(--critical)" : COLORS[sel]}`, borderRadius: 10, padding: "5px 8px 8px", background: "var(--card-2)" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: narrow ? "flex-start" : "center", gap: "4px 6px" }}>
+        <span className="muted" aria-hidden style={{ fontSize: 12.5 }}>
+          Car
+        </span>
+        <div className="seg" role="group" aria-label="Car panel to show" style={{ padding: 2 }}>
+          {CARS.map((n, i) => (
+            <button key={n} type="button" aria-pressed={i === sel} aria-label={`Show car ${n}'s panel`} onClick={() => setSel(i)} style={{ padding: "2px 8px", fontWeight: 750 }}>
+              {n}
+            </button>
           ))}
         </div>
+        {narrow && (
+          <span className={car.oos ? "bad-ink" : carState(car) === "DOORS_OPEN" ? "ok-ink" : "muted"} style={{ fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>
+            {stateText(car)}
+          </span>
+        )}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-        {tiles.map((t) => (
-          <div key={t.label} className="stat-tile" style={{ flex: "1 1 80px", padding: "6px 10px" }}>
-            <div className="stat-label">{t.label}</div>
-            <div style={{ fontSize: 18, fontWeight: 650, fontVariantNumeric: "tabular-nums" }}>{t.value}</div>
+      <div style={{ display: "grid", gridTemplateColumns: narrow ? "repeat(8, 26px)" : "repeat(2, 26px)", gap: 4, justifyContent: narrow ? "start" : "center", marginTop: 6 }}>
+        {panelFloors.map((f) => {
+          const on = car.calls.includes(f);
+          return (
+            <button key={f} type="button" disabled={car.oos} onClick={() => callCar(sel, f)} aria-label={`Car ${CARS[sel]}: go to floor ${floorName(f)}${on ? " (lit)" : ""}`} style={{ ...roundBtn(on, 26, 26), fontSize: 12, opacity: car.oos ? 0.5 : 1 }}>
+              {floorName(f)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+  const stats = (
+    <dl aria-label="Statistics" style={{ margin: 0, display: "grid", gridTemplateColumns: narrow ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", gap: narrow ? "1px 14px" : 1, fontSize: 12.5, lineHeight: 1.35 }}>
+      {tiles.map((t) => (
+        <div key={t.label} style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+          <dt className="muted" style={{ whiteSpace: "nowrap" }}>
+            {t.label}
+          </dt>
+          <dd style={{ margin: 0, fontWeight: 650, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{t.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+
+  return (
+    <WidgetFrame title="Lift dispatch simulator" sub="Three cars, eight floors. Press ▲ or ▼ on a floor to add a person.">
+      <div ref={ref}>
+        <div className="controls" style={{ gap: "8px 14px", margin: "2px 0 8px" }}>
+          <SimButtons running={running && !reduce} reduce={reduce} onToggle={() => setRunning((r) => !r)} onStep={() => reset(stepSim(s, 500))} onReset={() => restart({})} stepHint="Advance half a second" />
+          <InlineSeg<Strategy>
+            label="Strategy"
+            value={strategy}
+            onChange={(v) => {
+              setStrategy(v);
+              restart({ strategy: v });
+            }}
+            options={[
+              { value: "fcfs", label: "FCFS", title: "First come, first served" },
+              { value: "nearest", label: "Nearest car" },
+              { value: "collective", label: "Collective", title: "Collective control (LOOK)" },
+            ]}
+          />
+          <InlineSeg<Traffic>
+            label="Traffic"
+            value={traffic}
+            onChange={(v) => {
+              setTraffic(v);
+              restart({ traffic: v });
+            }}
+            options={[
+              { value: "manual", label: "Manual" },
+              { value: "rush", label: "Rush", title: "Morning rush: most trips start at G going up" },
+              { value: "random", label: "Random" },
+            ]}
+          />
+          {!narrow && oosButton}
+        </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", justifyContent: "center" }}>
+          <div style={{ position: "relative", flex: "1 1 auto", minWidth: 0, maxWidth: Math.round((MAX_H * g.VW) / g.VH) }}>
+            <Building s={s} reduce={reduce} uid={uid} g={g} sel={sel} />
+            <div role="group" aria-label="Hall call buttons">
+              {Array.from({ length: FLOORS }, (_, f) =>
+                (["up", "down"] as Dir[])
+                  .filter((d) => (d === "up" ? f < FLOORS - 1 : f > 0))
+                  .map((d) => {
+                    const on = !!findCall(s, f, d);
+                    const name = `Call ${d} at floor ${floorName(f)}`;
+                    return (
+                      <button
+                        key={`${f}${d}`}
+                        type="button"
+                        onClick={() => callHall(f, d)}
+                        aria-label={on ? `${name} (lit)` : name}
+                        title={name}
+                        style={{
+                          ...roundBtn(on, 22, 18),
+                          fontSize: 9,
+                          position: "absolute",
+                          left: `calc(${pct(g.PX + g.PW / 2, g.VW)} ${d === "up" ? "-" : "+"} 12px)`,
+                          top: pct(g.TOP + (FLOORS - 1 - f) * g.FH + g.FH / 2, g.VH),
+                          transform: "translate(-50%, -50%)",
+                        }}
+                      >
+                        {d === "up" ? "▲" : "▼"}
+                      </button>
+                    );
+                  }),
+              )}
+            </div>
           </div>
-        ))}
+          {!narrow && (
+            <div style={{ flex: "0 0 140px", display: "grid", gap: 8, alignContent: "start" }}>
+              {panel}
+              {stats}
+            </div>
+          )}
+        </div>
+        {narrow && (
+          <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+            {panel}
+            {stats}
+          </div>
+        )}
+        <p className="readout" aria-live="polite" style={{ minHeight: "3em" }}>
+          {said}
+          <ReducedNote reduce={reduce} what="Animation paused (reduced motion): Step advances half a second." />
+        </p>
+        <More>
+          <div className="controls" style={{ marginBottom: 0 }}>
+            <Slider label="Speed" value={speed} min={0.5} max={4} step={0.5} onChange={setSpeed} format={(v) => `${v}×`} />
+            <Slider label="Passengers per minute" value={rate} min={2} max={30} onChange={setRate} />
+            {narrow && oosButton}
+          </div>
+        </More>
       </div>
-      <p className="readout" aria-live="polite">
-        {said}
-        <ReducedNote reduce={reduce} what="Animation paused (reduced motion): Step advances half a second." />
-      </p>
     </WidgetFrame>
   );
 }

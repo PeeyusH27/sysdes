@@ -2,35 +2,35 @@ import { requestPath } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Make services **stateless** (sessions in Redis, files in object storage, everything else in the database) and put a **load balancer** in front, so you add capacity by adding machines and lose nothing when one dies. Pick least-connections or power-of-two-choices when servers can be slow, health-check with up/down thresholds, and design REST endpoints with correct status codes, cursor pagination and idempotency keys.
+Make services **stateless** and put a **load balancer** in front: capacity becomes "add a machine", and a crash loses nothing. Use least-connections or power-of-two-choices when servers can be slow, health-check with up/down thresholds, and give the API correct status codes, cursor pagination and idempotency keys.
 </TLDR>
 
 ## Why it matters
 
-One server is a limit and a single point of failure. Stateless servers plus a balancer let you add capacity by adding machines.
+One server is a ceiling and a single point of failure. Stateless servers behind a balancer, the first scaling move in almost every design, make deploys, crashes and spikes routine: the balancer routes around a dead instance, autoscaling adds new ones, nobody gets logged out.
 
-This is the first scaling move in almost every design, and it only works if any instance can serve any request. Get it right and deploys, crashes and traffic spikes become routine: the balancer routes around a dead instance, autoscaling adds new ones, and nobody gets logged out. The API on top of it is the contract every client depends on, so status codes, pagination and safe retries are part of the design, not polish.
+The API on top is every client's contract, so status codes, pagination and safe retries are design, not polish.
 
 ## The request path
 
-Before a request reaches your code it passes through several hops, each adding one thing:
+Each hop before your code adds one thing:
 
 | Hop | What it adds |
 |---|---|
-| **DNS** (GeoDNS / Anycast) | Turns the name into the IP of the nearest healthy region |
-| **CDN** | Serves static files and cacheable responses from the edge; absorbs DDoS traffic |
+| **DNS** (GeoDNS / Anycast) | The IP of the nearest healthy region |
+| **CDN** | Static files and cacheable responses from the edge; absorbs DDoS |
 | **Load balancer** | Spreads requests over healthy instances; terminates TLS |
-| **API gateway** | Authentication, rate limits, routing to the right service, request logging |
-| **Services** | Business logic, stateless, scaled horizontally |
-| **Data** | Databases, caches, queues and object storage: where the state lives |
+| **API gateway** | Auth, rate limits, routing to the right service, request logs |
+| **Services** | Business logic: stateless, scaled horizontally |
+| **Data** | Databases, caches, queues, object storage: where state lives |
 
-The diagram puts the gateway in front of the balancer, as managed gateways do. Self-hosted stacks often put an L4 balancer in front of a fleet of gateways, and each service has its own internal balancer. Both are fine; just say which one you mean. The [request flows deep dive](/deep-dives/request-flows) follows one request through every hop with timings.
+The diagram puts the gateway first, as managed gateways do; self-hosted stacks often put an L4 balancer in front of a gateway fleet. Both are fine: say which you mean. Play **Happy path** to follow one request; the [request flows deep dive](/deep-dives/request-flows) times every hop.
 
 <FlowDiagram spec={requestPath} />
 
 ## Stateless services
 
-Keep sessions in Redis and files in S3, so any instance can serve any request and instances can die freely. "Stateless" doesn't mean the system has no state; it means **no instance owns any**:
+Stateless doesn't mean no state. It means **no instance owns any**, so any instance can serve any request, and any can die.
 
 | State | Where it goes instead |
 |---|---|
@@ -39,13 +39,15 @@ Keep sessions in Redis and files in S3, so any instance can serve any request an
 | Rate-limit counters, locks | Redis |
 | Business data | The database |
 | Long-running work | A queue plus a jobs table |
-| In-process caches | Fine, as long as losing one only makes things slower |
+| In-process caches | Fine, if losing one only makes things slower |
 
-Switch the diagram to **Sticky-session pitfall** to see what goes wrong when a session lives in one instance's memory, then to **Fix: shared session store**. Sticky sessions (the balancer pins a user to one instance with a cookie) can be a useful optimisation for warm caches or WebSockets, but never the only place state lives: deploys, crashes and autoscaling all break the pin.
+Play **Sticky-session pitfall** in the diagram, then **Fix: shared session store**. Sticky sessions (a cookie pins a user to one instance) can help warm caches or WebSockets, but never as the only home for state: deploys, crashes and autoscaling break the pin.
+
+<FlowDiagram spec={requestPath} scenario="sticky" />
 
 ## L4 vs L7 load balancing
 
-L4 routes TCP by IP and port, which is fast. L7 reads HTTP, so it can route by path, terminate TLS, and retry.
+L4 sees connections; L7 reads requests.
 
 | | L4 (TCP/UDP) | L7 (HTTP) |
 |---|---|---|
@@ -54,78 +56,72 @@ L4 routes TCP by IP and port, which is fast. L7 reads HTTP, so it can route by p
 | Cost | Very low | More CPU per request |
 | Examples | AWS NLB, IPVS, Maglev | AWS ALB, NGINX, Envoy, HAProxy (HTTP mode) |
 
-Most web stacks use both: an L4 network balancer spreads connections over a fleet of L7 proxies, which make per-request decisions.
+Most web stacks use both: an L4 network balancer spreads connections over a fleet of L7 proxies, which decide per request.
 
 ## Balancing algorithms
 
-The algorithm decides which healthy instance gets the next request. There is no single best one: it depends on whether servers and requests are uniform.
+Which healthy instance gets the next request? It depends on whether servers and requests are uniform.
 
 | Algorithm | How it picks | Wins when | Weakness |
 |---|---|---|---|
-| Round robin | Next one in order | Identical servers, similar requests | Ignores load: keeps feeding a slow server |
-| Weighted (smooth WRR) | In proportion to weights, spread out | Mixed instance sizes; canary at 5% | Static weights don't react to slowness |
-| Least connections | Fewest in-flight requests | Long or variable requests (uploads, streaming) | Needs an accurate count for every server |
-| Power of two choices | Sample 2 at random, take the less loaded | Many balancers, large fleets | Slightly less precise than a full scan |
-| IP or consistent hash | Hash of the client or a key | You need affinity: per-key caches, shards | Hot keys overload one server |
+| Round robin | Next in order | Identical servers, similar requests | Ignores load: keeps feeding a slow server |
+| Weighted (smooth WRR) | By weight, spread out | Mixed instance sizes; 5% canary | Static weights ignore slowness |
+| Least connections | Fewest in-flight requests | Long or variable requests (uploads, streaming) | Needs an accurate count per server |
+| Power of two choices | 2 at random, take the less loaded | Many balancers, large fleets | Slightly less precise than a full scan |
+| IP or consistent hash | Hash of the client or a key | Affinity: per-key caches, shards | Hot keys overload one server |
 
-**Power of two choices (P2C)** is the surprising one: checking just two random servers instead of all of them gives almost the same balance as least-connections, without a global scan or shared state between balancers. Envoy's least-request policy and NGINX's `random two least_conn` work this way.
+**Power of two choices (P2C)** is the surprise: two random samples balance almost as well as least-connections, with no global scan and no state shared between balancers. Envoy's least-request policy and NGINX's `random two least_conn` work this way.
 
-Try it below. Pick **round robin** and make server C slow: its queue keeps growing, because round robin hands it one request in four no matter what. Switch to **least connections** or **P2C** and C gets fewer requests until it recovers.
+In the simulator, make server C slow under **round robin**: its queue grows, because it still gets one request in four. Switch to **least connections** or **P2C** and C gets less work until it recovers.
 
 <LoadBalancerSim />
 
 <CodeTabs files={['snippets/round-robin.js', 'snippets/smooth-weighted-rr.js', 'snippets/least-connections.js', 'snippets/p2c.js']} />
 
-Smooth weighted round robin (the nginx algorithm) interleaves picks, so weights of 5, 1 and 1 give `a a b a c a a` instead of five `a`s in a row followed by a burst on b and c.
+Smooth WRR (nginx's algorithm) interleaves picks: weights 5, 1, 1 give `a a b a c a a`, not five `a`s then a burst on b and c.
 
 ## Health checks
 
 The balancer can only route around failures it can see.
 
-- **Active checks**: the balancer calls `/readyz` every few seconds (for example every 5 s with a 2 s timeout). Use thresholds so a single blip doesn't flap an instance: **3 failures to mark it down, 2 successes to mark it up**. Switch the diagram to **Instance failure** to watch this.
-- **Passive checks** (outlier detection): the balancer watches real traffic and ejects an instance whose errors or timeouts spike, say 5 consecutive 5xx responses, for 30 seconds. It reacts faster than probes do.
-- **Liveness vs readiness**: liveness asks "is the process alive?" and a failure means *restart it*. Readiness asks "should it get traffic right now?" and a failure means *stop routing here*. Failing liveness because the database is down causes restart loops; failing readiness on an optional dependency (recommendations, analytics) takes the whole fleet out at once.
-- **Connection draining on deploy**: on `SIGTERM`, readiness starts failing, the balancer stops sending new requests, in-flight ones finish, and only then does the process exit. Without it, every deploy drops requests.
+- **Active checks** call `/readyz` every few seconds (say every 5 s, 2 s timeout), with thresholds so a blip can't flap an instance: **3 failures to mark it down, 2 successes to mark it up**. Play **Instance failure** in the diagram.
+- **Passive checks** (outlier detection) eject an instance whose real-traffic errors or timeouts spike (say 5 consecutive 5xx) for 30 seconds. Faster than probes.
+- **Liveness** asks "is the process alive?" (fail: restart it); **readiness** asks "should it get traffic now?" (fail: stop routing). Failing liveness because the database is down causes restart loops; failing readiness on an optional dependency (recommendations, analytics) takes the whole fleet out at once.
+- **Connection draining**: on `SIGTERM`, readiness fails, new requests stop, in-flight ones finish, then the process exits. Without it, every deploy drops requests.
+
+<FlowDiagram spec={requestPath} scenario="failure" />
 
 <CodeBlock src="snippets/health.js" />
 
 ## REST API design
 
-Nouns for resources, correct status codes, cursor pagination, and idempotency keys so retries are safe. Resources are plural nouns, verbs come from HTTP, and nesting stops at one level:
+Clients hard-code whatever you ship, so make it predictable: plural nouns for resources, HTTP for verbs, one level of nesting.
 
-| Method | Path | Does | Idempotent | Success |
-|---|---|---|---|---|
-| GET | `/orders?cursor=…` | List orders | Yes | 200 |
-| GET | `/orders/123` | Read one order | Yes | 200 |
-| POST | `/orders` | Create an order | No: send an `Idempotency-Key` | 201 + `Location` |
-| PUT | `/orders/123` | Replace the whole order | Yes | 200 or 204 |
-| PATCH | `/orders/123` | Change some fields | Not necessarily | 200 |
-| DELETE | `/orders/123` | Delete it | Yes | 204 |
-| GET | `/users/7/orders` | One user's orders | Yes | 200 |
-
-Actions that aren't plain CRUD can be sub-resources: `POST /orders/123/cancel`.
+- `GET /orders?cursor=…` lists, `GET /orders/123` reads one, `GET /users/7/orders` gets one user's orders.
+- `POST /orders` creates; `PUT /orders/123` replaces the whole order; `PATCH /orders/123` changes some fields; `DELETE /orders/123` deletes.
+- Non-CRUD actions can be sub-resources: `POST /orders/123/cancel`.
 
 **Status codes** tell clients and proxies what happened without parsing the body:
 
-| Code | Meaning | Use it for |
-|---|---|---|
-| 200 OK | Success with a body | Reads; updates that return the resource |
-| 201 Created | A resource was created | POST that creates; add a `Location` header |
-| 202 Accepted | Queued, not done yet | Async work: return a job id or a status URL |
-| 204 No Content | Success, no body | DELETE; PUT with nothing to return |
-| 301 / 302 | Moved permanently / temporarily | Redirects; browsers cache 301 |
-| 304 Not Modified | The client's copy is still valid | Conditional GET with `If-None-Match` |
-| 400 Bad Request | Malformed request | Invalid JSON, a missing field |
-| 401 Unauthorized | Not authenticated | Missing or expired token |
-| 403 Forbidden | Authenticated, but not allowed | Alice reading Bob's orders |
-| 404 Not Found | No such resource | Also to hide that a resource exists |
-| 409 Conflict | Clashes with the current state | Duplicates, version mismatch, a key still in progress |
-| 422 Unprocessable Content | Well-formed but invalid | Validation errors: end date before start date |
-| 429 Too Many Requests | Rate limited | Always add `Retry-After` |
-| 500 Internal Server Error | A bug or unexpected failure | Never for client mistakes |
-| 503 Service Unavailable | Overloaded or temporarily down | Load shedding, failing readiness; add `Retry-After` |
+| Code | Use it for |
+|---|---|
+| 200 OK | Success with a body: reads, updates returning the resource |
+| 201 Created | Created by a POST; add a `Location` header |
+| 202 Accepted | Queued, not done: return a job id or status URL |
+| 204 No Content | Success, no body: DELETE, or PUT with nothing to return |
+| 301 / 302 | Moved permanently / temporarily; browsers cache 301 |
+| 304 Not Modified | Client's copy still valid (conditional GET, `If-None-Match`) |
+| 400 Bad Request | Malformed: invalid JSON, a missing field |
+| 401 Unauthorized | Not authenticated: missing or expired token |
+| 403 Forbidden | Authenticated, not allowed: Alice reading Bob's orders |
+| 404 Not Found | No such resource (or hiding that one exists) |
+| 409 Conflict | Clashes with current state: duplicate, version mismatch, key in progress |
+| 422 Unprocessable Content | Well-formed but invalid: end date before start date |
+| 429 Too Many Requests | Rate limited; always add `Retry-After` |
+| 500 Internal Server Error | Bug or unexpected failure, never a client mistake |
+| 503 Service Unavailable | Overloaded, shedding load or failing readiness; add `Retry-After` |
 
-**Versioning.** Put the major version in the path (`/v1/orders`): it's visible, easy to route and cache-friendly. A header (`Accept: application/vnd.example.v2+json`, or a dated version header) keeps URLs stable but is easy to forget. Additive changes such as new optional fields don't need a new version; removing or renaming a field does.
+**Versioning.** Put the major version in the path (`/v1/orders`): visible, easy to route, cache-friendly. A header (`Accept: application/vnd.example.v2+json`, or a dated version) keeps URLs stable but is easy to forget. Adding optional fields needs no new version; removing or renaming one does.
 
 **Errors** should be machine-readable. RFC 9457 "problem details" is the standard shape, sent as `application/problem+json`:
 
@@ -136,73 +132,75 @@ Actions that aren't plain CRUD can be sub-resources: `POST /orders/123/cancel`.
 
 ## Pagination and safe retries
 
-**Offset vs cursor pagination.** Offsets are fine for admin tables; feeds need cursors.
+Page 50 of a feed, and the same POST sent twice: every busy API meets both.
+
+**Offset vs cursor.** Offsets suit admin tables; feeds need cursors.
 
 | | Offset: `?page=3&limit=20` | Cursor: `?cursor=…&limit=20` |
 |---|---|---|
 | Query | `LIMIT 20 OFFSET 40` | `WHERE id < $1 ORDER BY id DESC LIMIT 21` |
-| Deep pages | Slow: the database reads and throws away every skipped row | Fast: seeks straight into the index |
-| New items arrive | Rows shift: duplicates and skipped items | Stable |
+| Deep pages | Slow: reads and discards every skipped row | Fast: seeks straight into the index |
+| New items arrive | Rows shift: duplicates and skips | Stable |
 | Jump to page 50 | Yes | No, only next (and previous) |
 | Good for | Admin tables, numbered search results | Feeds, timelines, infinite scroll, sync APIs |
 
 <CodeBlock src="snippets/cursor-pagination.js" />
 
-Want a cursor on `(created_at, id)` instead? Postgres stores microseconds but a JavaScript `Date` keeps milliseconds, so serialize the timestamp as text (`created_at::text`) or rows will be skipped.
+Cursor on `(created_at, id)` instead? Postgres stores microseconds but a JavaScript `Date` keeps milliseconds, so serialise the timestamp as text (`created_at::text`) or rows get skipped.
 
-**Idempotency keys.** Networks fail after the server has done the work, so clients retry, and a retried `POST /payments` must not charge twice. The client generates one UUID per logical operation and sends it as `Idempotency-Key` on every retry. The server claims the key atomically (`SET NX`), stores the response, and replays it for repeats. A duplicate that arrives while the first is still running gets **409**; a 5xx releases the key so the client can try again.
+**Idempotency keys.** Networks fail after the server did the work, so clients retry, and a retried `POST /payments` must not charge twice. The client sends one UUID per logical operation as `Idempotency-Key`; the server claims it atomically (`SET NX`), stores the response and replays it for repeats. A duplicate arriving mid-flight gets **409**; a 5xx releases the key so the client can retry.
 
 <CodeBlock src="snippets/idempotency.js" />
 
-GET, PUT and DELETE are idempotent by definition, so balancers and clients may retry them. Never retry a POST automatically unless it carries an idempotency key.
+GET, PUT and DELETE are idempotent by definition, so they're safe to retry; PATCH isn't necessarily. Never auto-retry a POST without a key.
 
 ## API styles compared
+
+Pick the style by who's calling.
 
 | Style | Best fit | Strengths | Costs |
 |---|---|---|---|
 | REST | Public APIs, CRUD on resources | Simple, HTTP caching, tooling everywhere | Over- or under-fetching; several round trips per screen |
-| GraphQL | Many clients needing different shapes of the same data | Client picks the fields; one round trip; typed schema | N+1 resolvers, harder HTTP caching, needs query cost limits |
-| gRPC | Internal service-to-service calls | Compact, typed Protobuf; HTTP/2 streaming; generated clients | Not native in browsers (needs gRPC-Web); binary is harder to debug |
-| WebSocket | Chat, multiplayer, collaborative editing | Full duplex, low latency | Stateful connections are harder to balance, scale and deploy |
+| GraphQL | Many clients wanting different shapes of the same data | Client picks fields; one round trip; typed schema | N+1 resolvers, harder HTTP caching, needs query cost limits |
+| gRPC | Internal service-to-service calls | Compact typed Protobuf; HTTP/2 streaming; generated clients | Browsers need gRPC-Web; binary is harder to debug |
+| WebSocket | Chat, multiplayer, collaborative editing | Full duplex, low latency | Stateful connections: harder to balance, scale and deploy |
 | SSE | Notifications, live scores, progress, streamed LLM tokens | Plain HTTP, automatic reconnect | Server to client only; text only |
 
-The [polling, SSE and WebSockets deep dive](/deep-dives/polling-sse-websockets) compares the real-time options in detail.
+The [polling, SSE and WebSockets deep dive](/deep-dives/polling-sse-websockets) compares the real-time options in depth.
 
 ## API gateway and BFF
 
-An API gateway is one front door for auth, rate limiting, routing, and request logging, so services stay focused on business logic. It is also a hop (a few ms) and a potential single point of failure, so run several instances behind a balancer and keep business logic out of it.
+One front door, many services. An **API gateway** handles auth, rate limiting, routing and request logging, so services stick to business logic. It's also an extra hop (a few ms) and a possible single point of failure: run several instances behind a balancer, and keep business logic out.
 
-When web and mobile clients need very different payloads, add a **backend for frontend (BFF)**: a thin layer per client type, usually owned by that client's team. The mobile BFF calls three services and returns one compact response for a slow network; the web BFF can return richer data. Each client gets an API shaped for its screens without bloating the core services.
+Web and mobile need different payloads? Add a **backend for frontend (BFF)**, a thin layer per client type owned by that client's team: the mobile BFF calls three services and returns one compact response for a slow network, while the web BFF returns richer data.
 
 ## Place the load balancer
 
-<DiagramQuiz spec={requestPath} slot="lb" options={["lb", "cache", "queue", "database"]} answer="lb" explain="The load balancer sits between the gateway and the identical service instances. It spreads requests across them, health-checks them and routes around failures. A cache or a queue doesn't decide which instance serves a request." />
+One box is missing from the request path. Put it back.
+
+<DiagramQuiz spec={requestPath} slot="lb" options={["lb", "cache", "queue", "database"]} answer="lb" explain="The load balancer sits between the gateway and the identical instances, spreading requests, health-checking them and routing around failures. A cache or a queue doesn't pick which instance serves a request." />
 
 <Callout kind="warning">
-- Keeping sessions in an instance's memory.
-- Retrying non-idempotent POSTs.
-- Using offset pagination for feeds.
-- Letting the readiness check fail on optional dependencies, which takes the whole fleet out.
-- Returning 200 with an error in the body.
+Returning 200 with an error in the body: clients, proxies and monitoring all count it as a success.
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
   <FollowUp q="Why must services be stateless to scale horizontally?">
-    If state lives in one instance, requests must return to it, which breaks balancing and loses data on failure. Externalizing state to Redis or a database makes instances interchangeable: the balancer can send any request anywhere, autoscaling can add or remove instances, and a crash loses only the in-flight requests.
+    So the balancer can send any request to any instance. State in Redis or a database means a crash loses only in-flight requests.
   </FollowUp>
   <FollowUp q="L4 or L7?">
-    L4 when you only need fast TCP forwarding (databases, custom protocols). L7 when you need routing by path or header, TLS termination, retries or canaries. Most web stacks use both: an L4 network balancer in front of an L7 proxy.
+    L4 for fast TCP forwarding (databases, custom protocols); L7 for path routing, TLS termination, retries and canaries, usually behind an L4 balancer.
   </FollowUp>
   <FollowUp q="How does the LB know an instance is unhealthy?">
-    Active checks hit `/readyz` every few seconds with up/down thresholds (for example 3 failures down, 2 successes up). Passive checks eject instances whose error rate spikes. On deploy, readiness fails first so connections drain before the process exits.
+    Active `/readyz` checks with thresholds (3 failures down, 2 successes up) plus passive ejection on error spikes. On deploy, readiness fails first so connections drain.
   </FollowUp>
   <FollowUp q="REST, GraphQL or gRPC?">
-    REST for public, cacheable resource APIs. GraphQL when many clients need different shapes of the same data (watch for N+1 queries and caching). gRPC for internal service-to-service calls: typed, fast, with streaming.
+    REST for public, cacheable resources; GraphQL when clients need different shapes of the same data (watch N+1 queries); gRPC for typed, fast internal calls.
   </FollowUp>
   <FollowUp q="How do you make POST retries safe?">
-    The client sends an `Idempotency-Key`. The server claims it atomically (`SET NX`), stores the response, and replays it for repeats. Concurrent duplicates get 409, and a server error releases the key so the retry can run.
+    An `Idempotency-Key` the server claims with `SET NX`, replaying the stored response for repeats. In-flight duplicates get 409; a 5xx releases the key.
   </FollowUp>
 </FollowUps>
 

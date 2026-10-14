@@ -2,14 +2,14 @@ import { requestFlows } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Know five flows cold: **read** (CDN, then cache, then database), **write** (validate, transaction + outbox, respond, let consumers update the rest), **async** (202 + a status URL, a worker, then poll or push), **failure** (timeout, circuit breaker, fallback) and **idempotent retry** (same key, stored result). Give every request a latency budget and enforce it with timeouts and deadline propagation.
+Know five flows cold: **read** (CDN, cache, database), **write** (validate, transaction + outbox, respond), **async** (202, a worker, poll or push), **failure** (timeout, breaker, fallback) and **idempotent retry** (same key, stored result). Budget every request's latency; enforce it with timeouts and deadline propagation.
 </TLDR>
 
 ## Why it matters
 
-"Walk me through what happens when…" is the most common follow-up in a design interview. It checks whether each box on your diagram has a job: what the CDN absorbs, when the cache is consulted, where the transaction ends, what happens when a dependency is slow, and why a retry doesn't charge the card twice. The same five flows cover almost every system.
+"Walk me through what happens when…" is the most common follow-up in a design interview. It tests whether every box on your diagram has a job, and five flows cover almost every system.
 
-Pick a flow in the diagram. The **Read** flow has its own branches: try a CDN miss followed by a Redis miss to see the slowest path.
+Pick a flow in the diagram. In **Read**, try a CDN miss, then a Redis miss, for the slowest path.
 
 <SequenceDiagram spec={requestFlows} />
 
@@ -25,7 +25,7 @@ Pick a flow in the diagram. The **Read** flow has its own branches: try a CDN mi
 
 ## Latency budgets
 
-Start from the user-facing p99 target and split it across the hops on the critical path, keeping headroom for the things you can't plan. A budget of 200 ms p99 for an API call might look like this:
+Split the user-facing p99 target across the critical-path hops, keeping headroom. A 200 ms p99 API budget:
 
 | Hop | p99 budget | Enforced by |
 |---|---|---|
@@ -38,139 +38,120 @@ Start from the user-facing p99 target and split it across the hops on the critic
 | Headroom | 40 ms | Retries, GC pauses, noisy neighbours |
 | **Total** | **200 ms** | |
 
-Tail latency compounds. If a page calls 10 services in parallel, each with a 1% chance of a slow response, about **10%** of page loads hit at least one slow call (1 − 0.99¹⁰ ≈ 9.6%). That's why per-hop budgets must be tighter than the page's.
+Tail latency compounds: make 10 parallel calls, each with a 1% chance of being slow, and about **10%** of page loads hit a slow one (1 − 0.99¹⁰ ≈ 9.6%). So per-hop budgets must be tighter than the page's.
 
 ## Watch the budget
 
-The waterfall shows each span (DNS, TLS, CDN, API, Redis, database, queue publish) against a 200 ms budget line. Turn the CDN hit and cache hit off, make the database slow, or let a dependency time out, and see which hop blows the budget.
+In the waterfall, each span (DNS, TLS, CDN, API, Redis, database, queue publish) runs against a 200 ms budget line. Turn off the CDN and cache hits, slow the database, or time out a dependency: which hop blows the budget?
 
 <TraceWaterfall />
 
 ## Read path
 
-The CDN first, then the cache, then the database. Each layer absorbs traffic, so the database sees only a small fraction: with an 80% CDN hit ratio and a 90% Redis hit ratio, only 0.2 × 0.1 = **2%** of reads reach it. Per-user responses can't be shared at the CDN (`Cache-Control: private`), so for those Redis does the work. Reads that still reach the database can go to replicas, except reads that must see the user's own fresh write. The [caching lesson](/learn/caching) covers the patterns.
+CDN, cache, database: each layer soaks up traffic. At 80% CDN hits and 90% Redis hits, only 0.2 × 0.1 = **2%** of reads reach the database. Per-user responses can't be shared at the CDN (`Cache-Control: private`), so Redis carries those. Remaining reads can go to replicas, unless they must see the user's own fresh write. The [caching lesson](/learn/caching) covers the patterns.
 
 ## Write path
 
-Validate, write the source of truth in **one transaction**, respond, and let everything else catch up asynchronously:
+Commit the source of truth in **one transaction**, respond, let the rest catch up:
 
-1. Validate input and check permissions before touching the database.
-2. In one transaction, insert the order **and** an outbox row describing the event.
+1. Validate input and permissions before touching the database.
+2. In one transaction, insert the order **and** an outbox row for the event.
 3. Respond `201 Created` with a `Location` header.
-4. A relay (polling the outbox, or CDC such as Debezium) publishes `order.created` to the queue.
-5. Consumers update caches, the search index, analytics and email. They dedupe by event id, because delivery is at least once.
+4. A relay (polling the outbox, or CDC such as Debezium) publishes `order.created`.
+5. Consumers update caches, search, analytics and email, deduping by event id (delivery is at least once).
 
-Why the outbox? Writing the row and then publishing separately is a **dual write**: crash between the two and the event is lost; publish first and roll back, and you've announced an order that doesn't exist. The outbox makes the event part of the same commit.
+Saving, then publishing separately is a **dual write**: crash between the two and the event is lost; publish first and roll back, and you've announced an order that doesn't exist. The outbox makes the event part of the commit.
 
 ## Async path
 
-Anything slower than a second or two (reports, video encoding, bulk imports) leaves the request. The API enqueues a job and answers `202 Accepted` with a `Location` pointing at a status resource. The client learns about completion in one of three ways:
+Work slower than a second or two (reports, video encoding, bulk imports) leaves the request: enqueue a job, answer `202 Accepted` with a `Location` for a status resource. The client learns it's done by:
 
-- **Polling** the status URL, ideally guided by a `Retry-After` header.
+- **Polling** the status URL, paced by a `Retry-After` header.
 - A **webhook** to the caller's server, for server-to-server APIs.
-- **SSE** or a WebSocket, for a browser that is still open.
+- **SSE** or a WebSocket, while the browser is open.
 
-Workers retry failed jobs with exponential backoff, and jobs that keep failing land in a **dead letter queue** for a human to inspect. Since a job can run twice, make it idempotent.
+Workers retry with exponential backoff; repeat failures land in a **dead letter queue** for a human. A job can run twice, so make it idempotent.
 
 ## Failure path
 
-Dependencies fail, and the goal is that their outage doesn't become yours:
+A dependency's outage shouldn't become yours:
 
-- **Timeouts** on every call, within the request's deadline.
-- **Retries** only for idempotent operations, with jittered backoff and a small budget (one retry, not five at every layer).
-- A **circuit breaker** that stops calling a dependency after repeated failures, fails fast for a cooldown, then lets one trial request through (half-open).
-- A **fallback**: cached data, a default, or a smaller page. A slightly worse response beats an error page.
+- **Timeouts** on every call, inside the request's deadline.
+- **Retries** only for idempotent operations: jittered backoff, small budget (one retry, not five at every layer).
+- A **circuit breaker**: after repeated failures, fail fast for a cooldown, then let one trial request through (half-open).
+- A **fallback**: cached data, a default, a smaller page. Slightly worse beats an error page.
 
-The [reliability lesson](/learn/reliability-observability) has a circuit breaker you can play with.
+Try a live circuit breaker in the [reliability lesson](/learn/reliability-observability).
 
 ## Idempotent retries
 
-Clients retry on timeouts, and a timeout doesn't mean the work failed: the response may simply have been lost. So every non-idempotent write (payments, orders) takes an **idempotency key**: a UUID the client generates once per logical operation and reuses on every retry.
+A timed-out request may have succeeded with only the response lost, and clients retry. So every non-idempotent write (payments, orders) carries an **idempotency key**: a UUID made once per operation and reused on every retry.
 
-The server claims the key atomically (`SET key pending NX`) before doing the work, stores the result under it for about 24 hours, and replays that result for any repeat. A second request that arrives while the first is still running gets `409 Conflict` instead of a second charge. Pass the same key to the payment provider too, so it dedupes on its side.
+The server claims it atomically (`SET key pending NX`) before working, stores the result for about 24 hours, and replays it for repeats. A duplicate arriving mid-flight gets `409 Conflict`, not a second charge. Pass the key to the payment provider too, so it dedupes as well.
 
 ## Trace context propagation
 
-A request that crosses five services needs one id that ties their logs and spans together. The W3C standard header is `traceparent`: version, trace id, parent span id and flags.
+Five services, one request: one id must tie their logs and spans together. That's the W3C `traceparent` header (version, trace id, parent span id, flags).
 
 ```http
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
 
-OpenTelemetry's auto-instrumentation adds and reads it for HTTP, gRPC, database and Redis clients, so you rarely touch it by hand. Two things to do yourself: put the trace id in every log line, and copy the header into message headers when you publish to a queue, so async consumers join the same trace.
+OpenTelemetry auto-instrumentation handles it for HTTP, gRPC, database and Redis clients. Two jobs are yours: put the trace id in every log line, and copy the header into queue message headers so async consumers join the trace.
 
 ## Code
 
 ### Read path
 
-CDN first, then cache, then database. One header makes the response cacheable by the CDN and the browser; `getProduct` handles Redis and the database.
+One header makes the response cacheable by the CDN and the browser; `getProduct` handles Redis and the database.
 
 <CodeBlock src="snippets/read-path.js" />
 
 ### Write path
 
-Validate, write the source of truth and an outbox event in one transaction, respond, and let consumers update caches and indexes.
-
 <CodeBlock src="snippets/write-path.js" />
 
 ### Outbox relay
 
-Publishes committed events in order and then marks them sent. `FOR UPDATE SKIP LOCKED` lets several relays run without sending the same row twice at the same time.
+Publishes committed events in order, then marks them sent; `FOR UPDATE SKIP LOCKED` lets several relays run without double-sending a row.
 
 <CodeBlock src="snippets/outbox-relay.js" />
 
 ### Async path
 
-Slow work leaves the request: enqueue a job, return 202 with a `Location`, and expose a status endpoint. Workers retry with backoff, and failed jobs stay inspectable.
-
 <CodeBlock src="snippets/async-path.js" />
 
 ### Failure path
 
-Timeouts, retries with jitter, a circuit breaker and a fallback stop a dependency outage from becoming your outage. Here a slow recommender degrades to cached popular items after 300 ms.
+A slow recommender degrades to cached popular items after 300 ms.
 
 <CodeTabs files={['snippets/failure-path.js', 'snippets/with-timeout.js']} />
 
 ### Idempotent retries
 
-Clients retry on timeouts, so writes need an idempotency key. The source let two concurrent requests with the same key both charge the card; claiming the key with `SET NX` first makes it race-free.
-
 <CodeBlock src="snippets/idempotent-payment.js" />
 
 <Callout kind="warning" title="Common mistakes">
-- Saving to the database and publishing to the queue as two separate steps (the dual write).
-- Doing slow work inside the request instead of returning 202.
-- Retrying non-idempotent writes, or retrying at every layer.
-- No timeout on a dependency, so its outage becomes yours.
-- Checking the idempotency key and then claiming it in two steps (two requests both pass the check).
-- Losing the trace id at the queue boundary.
+- Checking, then claiming, an idempotency key in two steps (the original code did): two concurrent requests both pass the check and both charge.
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
   <FollowUp q="Walk me through what happens when a user clicks 'Buy'.">
-
-    1. DNS, TLS, then the CDN (no cache for `POST`).
-    2. Load balancer → gateway (auth, rate limit) → order service.
-    3. Validate, then the idempotency check.
-    4. One transaction: reserve stock and insert the order and the outbox row.
-    5. Respond 201.
-    6. The relay publishes `order.created`, and consumers handle email, analytics and the search index.
-    7. Payment confirmation arrives later by webhook.
-
+    DNS, TLS and the CDN (no cache for `POST`), then load balancer → gateway (auth, rate limit) → order service, which validates, checks the idempotency key and, in one transaction, reserves stock and writes the order plus an outbox row before answering 201. The relay fans `order.created` out to email, analytics and search; payment confirmation arrives later by webhook.
   </FollowUp>
   <FollowUp q="How do you set a latency budget?">
-    Start from the user-facing p99 target, subtract network and edge time, then split the rest across the hops on the critical path and keep headroom. Enforce it with per-call timeouts and deadline propagation, and watch the per-hop p99s on a tracing dashboard.
+    Split the user-facing p99, minus network and edge time, across critical-path hops with headroom; enforce it with per-call timeouts and deadline propagation, and watch per-hop p99s in tracing.
   </FollowUp>
   <FollowUp q="The client timed out, but the charge went through. What now?">
-    The client retries with the same idempotency key and gets the stored result: no second charge. If the key had expired, it calls a status endpoint by order id before trying again.
+    It retries with the same idempotency key and gets the stored result; if the key expired, it checks the order's status endpoint first.
   </FollowUp>
   <FollowUp q="Why not just publish the event right after the database commit?">
-    Because the process can crash between the commit and the publish, and the event is lost forever; reversing the order publishes events for writes that roll back. The outbox commits the event with the data, and a relay publishes it at least once. Consumers dedupe by event id.
+    A crash between the two loses the event (and publishing first announces writes that may roll back); the outbox commits the event with the data and a relay publishes it at least once.
   </FollowUp>
   <FollowUp q="Some requests are slow, but only sometimes. How do you find the hop responsible?">
-    Distributed tracing. With `traceparent` propagated everywhere, pull the slowest traces (tail-based sampling keeps them) and read the waterfall: the widest span is the culprit. Then correlate with that service's metrics (pool wait, GC, lock waits) and logs by trace id.
+    Distributed tracing: with `traceparent` everywhere, tail-based sampling keeps the slowest traces, and the widest span in the waterfall is the culprit.
   </FollowUp>
 </FollowUps>
 

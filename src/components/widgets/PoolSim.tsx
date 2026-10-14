@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { CircleCheck, Flame, Hourglass, TriangleAlert } from "lucide-react";
 import { LineChart } from "@/components/charts/LineChart";
 import { niceTicks } from "@/components/charts/scales";
@@ -8,7 +8,7 @@ import { int } from "@/lib/format";
 import { useFixedStep } from "@/lib/sim-loop";
 import { draw } from "./lib/draw-rng";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
 /* ------------------------------------------------------------------ pure model */
 
@@ -194,6 +194,33 @@ export function liveStats(s: LiveState) {
 
 const ms = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`);
 
+/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
+function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => {
+      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, px]);
+  return narrow;
+}
+
+const CSS = `
+.w-pool { container-type: inline-size; }
+.w-pool .controls { margin-bottom: 6px; }
+.w-pool .control { min-width: 118px; }
+.w-pool .stat-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.w-pool .stat-tile { padding: 5px 9px; border-radius: 10px; }
+.w-pool .stat-label, .w-pool .stat-sub { font-size: 11.5px; line-height: 1.35; }
+.w-pool .stat-value { font-size: 17px; line-height: 1.3; }
+.w-pool .chart { margin: 6px 0 0; padding: 10px 12px 6px; }
+@container (max-width: 520px) { .w-pool .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+`;
+
 export function PoolSim() {
   const [pool, setPool] = useState(10);
   const [rate, setRate] = useState(340);
@@ -201,6 +228,8 @@ export function PoolSim() {
   const [cores, setCores] = useState(4);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const box = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(box);
 
   const inputs = useMemo(() => ({ pool, rate, queryMs, cores }), [pool, rate, queryMs, cores]);
   const step = useCallback((s: LiveState, dt: number) => stepLive(s, dt, inputs), [inputs]);
@@ -260,122 +289,156 @@ export function PoolSim() {
   const oldest = qLen ? live.t - live.queue[0] : 0;
   const busy = live.active.length;
   const over = busy > k;
-  const cols = 10;
   const shown = Math.min(pool, 60);
-  const rows = Math.ceil(shown / cols);
+  const perQuery = ms(queryTime(queryMs, busy, cores));
+
+  // Landscape: queue | pool | database in one row. Phone: queue and pool side by side, the database under them.
+  const L = narrow
+    ? { w: 264, h: 274, qx: 4, qy: 0, qCols: 6, px: 140, py: 0, pCols: 8, cell: 15, dx: 4, dy: 162, dw: 256, qTitle: "Queue", pTitle: `Pool ${busy}/${pool}` }
+    : { w: 600, h: 146, qx: 8, qy: 0, qCols: 10, px: 214, py: 0, pCols: 10, cell: 17, dx: 412, dy: 0, dw: 182, qTitle: "Waiting for a connection", pTitle: `Pool: ${busy}/${pool} busy` };
+  const qMax = L.qCols * 4;
+  const qw = L.qCols * 16 + 12;
+  const dbH = narrow ? 70 : 100;
+  const dcx = L.dx + L.dw / 2;
+  const meterW = L.dw - 40;
 
   return (
-    <WidgetFrame title="Connection pool simulator" sub="Requests borrow a database connection, run a query and give it back. Too few connections and requests queue until they time out; too many and the database itself slows down.">
-      <div className="controls">
-        <Slider label="Pool size" value={pool} min={1} max={60} onChange={setPool} format={(v) => `${v} connections`} />
-        <Slider label="Request rate" value={rate} min={20} max={1000} step={10} onChange={setRate} format={(v) => `${v}/s`} />
-        <Slider label="Query time (idle DB)" value={queryMs} min={5} max={200} step={5} onChange={setQueryMs} format={(v) => `${v} ms`} />
-        <Slider label="DB cores" value={cores} min={1} max={16} onChange={setCores} />
-        <SimButtons
-          running={running && inView}
-          reduce={reduce}
-          onToggle={() => setRunning((r) => !r)}
-          onStep={() => reset(advance(live, step, 20))}
-          stepHint="Run the live pool for 1 second"
-          onReset={() => reset(initLive())}
+    <WidgetFrame title="Connection pool simulator" sub="Too few connections and requests queue until they time out; too many and the database itself slows down.">
+      <style href="w-pool-sim" precedence="widgets">
+        {CSS}
+      </style>
+      <div className="w-pool" ref={box}>
+        <div className="controls">
+          <Slider label="Pool size" value={pool} min={1} max={60} onChange={setPool} valueText={`Pool size ${pool} connections`} />
+          <Slider label="Request rate" value={rate} min={20} max={1000} step={10} onChange={setRate} format={(v) => `${v}/s`} />
+          <Slider label="Query time" value={queryMs} min={5} max={200} step={5} onChange={setQueryMs} format={(v) => `${v} ms`} valueText={`Query time on an idle database ${queryMs} ms`} />
+          <Slider label="DB cores" value={cores} min={1} max={16} onChange={setCores} />
+          <SimButtons
+            running={running && inView}
+            reduce={reduce}
+            onToggle={() => setRunning((r) => !r)}
+            onStep={() => reset(advance(live, step, 20))}
+            stepHint="Run the live pool for 1 second"
+            onReset={() => reset(initLive())}
+          />
+        </div>
+
+        <div ref={ref}>
+          <svg viewBox={`0 0 ${L.w} ${L.h}`} className="sim-svg" role="img" aria-label={`Live pool: ${qLen} requests waiting, ${busy} of ${pool} connections busy, ${busy} queries running on ${cores} cores.`}>
+            {/* queue */}
+            <text x={L.qx} y={L.qy + 13} style={{ fontWeight: 650 }}>
+              {L.qTitle}
+            </text>
+            <rect x={L.qx} y={L.qy + 22} width={qw} height={84} rx={10} fill="var(--card-2)" stroke="var(--border-strong)" />
+            {Array.from({ length: Math.min(qLen, qMax) }, (_, n) => (
+              <rect key={n} x={L.qx + 9 + (n % L.qCols) * 16} y={L.qy + 87 - Math.floor(n / L.qCols) * 19} width={12} height={12} rx={3} fill={oldest > TIMEOUT_MS * 0.6 ? "var(--warning)" : "var(--series-3)"} />
+            ))}
+            <text x={L.qx + qw / 2} y={L.qy + 123} textAnchor="middle" style={{ fontWeight: 700 }}>
+              {int(qLen)} queued{qLen > qMax && !narrow ? ` (${qMax} shown)` : ""}
+            </text>
+            <text x={L.qx + qw / 2} y={L.qy + 138} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
+              {narrow ? `oldest ${ms(oldest)}` : `oldest ${ms(oldest)} · timeout 2 s`}
+            </text>
+
+            {/* pool */}
+            <text x={L.px} y={L.py + 13} style={{ fontWeight: 650 }}>
+              {L.pTitle}
+            </text>
+            {Array.from({ length: shown }, (_, n) => (
+              <rect
+                key={n}
+                x={L.px + (n % L.pCols) * L.cell}
+                y={L.py + 24 + Math.floor(n / L.pCols) * L.cell}
+                width={L.cell - 4}
+                height={L.cell - 4}
+                rx={3}
+                fill={n < busy ? "var(--series-1)" : "var(--card-2)"}
+                stroke={n < busy ? "none" : "var(--border-strong)"}
+              />
+            ))}
+            <text x={L.px} y={L.py + (narrow ? 154 : 138)} className="muted-text" style={{ fontSize: 10.5 }}>
+              {narrow ? "filled = in use" : "filled = connection in use"}
+            </text>
+
+            {/* database */}
+            <text x={L.dx} y={L.dy + 13} style={{ fontWeight: 650 }}>
+              Database · {cores} cores
+            </text>
+            <rect x={L.dx} y={L.dy + 22} width={L.dw} height={dbH} rx={10} fill="var(--card-2)" stroke={over ? "var(--warning)" : "var(--k-database)"} strokeWidth={1.6} />
+            <text x={narrow ? L.dx + 14 : dcx} y={L.dy + 44} textAnchor={narrow ? "start" : "middle"} style={{ fontWeight: 700, fontSize: 15 }}>
+              {busy} running
+            </text>
+            <rect x={L.dx + 20} y={L.dy + 54} width={meterW} height={9} rx={4.5} fill="var(--border)" />
+            <rect x={L.dx + 20} y={L.dy + 54} width={Math.min(meterW, (meterW * busy) / Math.max(1, 2 * k))} height={9} rx={4.5} fill={over ? "var(--warning)" : "var(--series-1)"} />
+            <line x1={L.dx + 20 + meterW / 2} x2={L.dx + 20 + meterW / 2} y1={L.dy + 50} y2={L.dy + 67} stroke="var(--fg)" strokeWidth={1.2} />
+            {narrow ? (
+              <>
+                <text x={L.dx + L.dw - 14} y={L.dy + 44} textAnchor="end" style={{ fontWeight: 650, fill: over ? "var(--warning-ink)" : "var(--fg)" }}>
+                  {over ? "⚠ " : ""}query ≈ {perQuery}
+                </text>
+                <text x={dcx} y={L.dy + 81} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
+                  sweet spot ≤ {k} (2 × cores){over ? " · contended" : ""}
+                </text>
+              </>
+            ) : (
+              <>
+                <text x={dcx} y={L.dy + 80} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
+                  sweet spot ≤ {k} (2 × cores)
+                </text>
+                <text x={dcx} y={L.dy + 98} textAnchor="middle" style={{ fontWeight: 650 }}>
+                  each query ≈ {perQuery}
+                </text>
+                {over && (
+                  <text x={dcx} y={L.dy + 114} textAnchor="middle" style={{ fontWeight: 700, fontSize: 10.5, fill: "var(--warning-ink)" }}>
+                    ⚠ contended
+                  </text>
+                )}
+              </>
+            )}
+            <text x={dcx} y={L.dy + 22 + dbH + 17} textAnchor="middle" style={{ fontWeight: 650 }}>
+              {int(stats.perSec)}/s done ·{" "}
+              <tspan className="muted-text" style={{ fontWeight: 400, fontSize: 10.5 }}>
+                {stats.timeoutsPerSec > 0 ? `${int(stats.timeoutsPerSec)}/s timing out` : "no timeouts"} (last 5 s)
+              </tspan>
+            </text>
+          </svg>
+        </div>
+
+        <StatTiles
+          items={[
+            { label: "Connection wait", value: ms(now.avgWait), sub: `live: ${ms(stats.avgWait)}` },
+            { label: "Query in the DB", value: ms(now.avgQuery), sub: `${ms(queryMs)} uncontended` },
+            { label: "Total per request", value: ms(now.avgTotal), sub: `best: ${ms(best.avgTotal)} at ${curve.best}` },
+            { label: "Timeouts", value: `${(now.timeoutRate * 100).toFixed(now.timeoutRate > 0 && now.timeoutRate < 0.01 ? 2 : 0)}%`, sub: "waited over 2 s" },
+          ]}
         />
+        <p className="readout" aria-live="polite" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+          <VerdictIcon size={15} aria-hidden className={verdict.tone === "ok" ? "ok-ink" : verdict.tone === "warn" ? "warn-ink" : "bad-ink"} style={{ flex: "none", position: "relative", top: 2 }} />
+          <span>
+            {said}
+            <ReducedNote reduce={reduce} what="Live pool paused (reduced motion): Step runs it for 1 s. The numbers and the chart don't need animation." />
+          </span>
+        </p>
+        <More label="Chart: average time vs pool size">
+          <LineChart
+            title={`Average time vs pool size at ${int(rate)} req/s${clipped ? ` (axis stops at ${ms(yMax)}; timeouts go off the top, see the table)` : ""}`}
+            x={POOL_X}
+            series={[
+              { id: "wait", name: "Wait for a connection", values: wait },
+              { id: "total", name: "Wait + query", values: total },
+            ]}
+            xLabel="Pool size (connections)"
+            yUnit="ms"
+            marker={pool}
+            yMax={yMax}
+            height={220}
+          />
+          <p className="muted" style={{ fontSize: 13, margin: "8px 0 0", display: "flex", gap: 6 }}>
+            <Hourglass size={13} aria-hidden style={{ flex: "none", position: "relative", top: 3 }} />
+            Model: Poisson arrivals, exponential query times, up to 2 × cores queries at full speed, then time-sharing plus {CONTENTION * 100}% contention per extra connection per knee. The PostgreSQL rule of thumb for the pool is (cores × 2) + disks.
+          </p>
+        </More>
       </div>
-
-      <div ref={ref}>
-        <svg viewBox="0 0 560 200" className="sim-svg" role="img" aria-label={`Live pool: ${qLen} requests waiting, ${busy} of ${pool} connections busy, ${busy} queries running on ${cores} cores.`}>
-          {/* queue */}
-          <text x={14} y={22} style={{ fontWeight: 650 }}>
-            Waiting for a connection
-          </text>
-          <rect x={14} y={34} width={150} height={120} rx={10} fill="var(--card-2)" stroke="var(--border-strong)" />
-          {Array.from({ length: Math.min(qLen, 40) }, (_, n) => (
-            <rect key={n} x={24 + (n % 8) * 17} y={140 - Math.floor(n / 8) * 20} width={12} height={12} rx={3} fill={oldest > TIMEOUT_MS * 0.6 ? "var(--warning)" : "var(--series-3)"} />
-          ))}
-          <text x={89} y={174} textAnchor="middle" style={{ fontWeight: 700 }}>
-            {int(qLen)} queued{qLen > 40 ? " (40 shown)" : ""}
-          </text>
-          <text x={89} y={191} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
-            oldest {ms(oldest)} · timeout 2 s
-          </text>
-
-          {/* pool */}
-          <text x={200} y={22} style={{ fontWeight: 650 }}>
-            Pool: {busy}/{pool} busy
-          </text>
-          {Array.from({ length: shown }, (_, n) => (
-            <rect
-              key={n}
-              x={200 + (n % cols) * 17}
-              y={34 + Math.floor(n / cols) * 17}
-              width={13}
-              height={13}
-              rx={3}
-              fill={n < busy ? "var(--series-1)" : "var(--card-2)"}
-              stroke={n < busy ? "none" : "var(--border-strong)"}
-            />
-          ))}
-          <text x={200} y={Math.max(34 + rows * 17 + 14, 150)} className="muted-text" style={{ fontSize: 10.5 }}>
-            filled = connection in use
-          </text>
-
-          {/* database */}
-          <text x={392} y={22} style={{ fontWeight: 650 }}>
-            Database · {cores} cores
-          </text>
-          <rect x={392} y={34} width={154} height={120} rx={10} fill="var(--card-2)" stroke={over ? "var(--warning)" : "var(--k-database)"} strokeWidth={1.6} />
-          <text x={469} y={64} textAnchor="middle" style={{ fontWeight: 700, fontSize: 15 }}>
-            {busy} running
-          </text>
-          <rect x={406} y={76} width={126} height={10} rx={5} fill="var(--border)" />
-          <rect x={406} y={76} width={Math.min(126, (126 * busy) / Math.max(1, 2 * k))} height={10} rx={5} fill={over ? "var(--warning)" : "var(--series-1)"} />
-          <line x1={406 + 63} x2={406 + 63} y1={72} y2={90} stroke="var(--fg)" strokeWidth={1.2} />
-          <text x={469} y={104} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
-            sweet spot ≤ {k} (2 × cores)
-          </text>
-          <text x={469} y={124} textAnchor="middle" style={{ fontWeight: 650, fill: over ? "var(--warning-ink)" : "var(--fg)" }}>
-            {over ? "contended: " : ""}each query ≈ {ms(queryTime(queryMs, busy, cores))}
-          </text>
-          <text x={469} y={174} textAnchor="middle" style={{ fontWeight: 650 }}>
-            {int(stats.perSec)}/s done
-          </text>
-          <text x={469} y={191} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
-            {stats.timeoutsPerSec > 0 ? `${int(stats.timeoutsPerSec)}/s timing out` : "no timeouts"} (last 5 s)
-          </text>
-        </svg>
-      </div>
-
-      <StatTiles
-        items={[
-          { label: "Wait for a connection", value: ms(now.avgWait), sub: `live: ${ms(stats.avgWait)}` },
-          { label: "Query time in the DB", value: ms(now.avgQuery), sub: `${ms(queryMs)} when the DB isn't contended` },
-          { label: "Total per request", value: ms(now.avgTotal), sub: `best: ${ms(best.avgTotal)} at ${curve.best} connections` },
-          { label: "Timeouts", value: `${(now.timeoutRate * 100).toFixed(now.timeoutRate > 0 && now.timeoutRate < 0.01 ? 2 : 0)}%`, sub: "waited more than 2 s" },
-        ]}
-      />
-      <LineChart
-        title={`Average time vs pool size at ${int(rate)} req/s${clipped ? ` (axis stops at ${ms(yMax)}; timeouts go off the top, see the table)` : ""}`}
-        x={POOL_X}
-        series={[
-          { id: "wait", name: "Wait for a connection", values: wait },
-          { id: "total", name: "Wait + query", values: total },
-        ]}
-        xLabel="Pool size (connections)"
-        yUnit="ms"
-        marker={pool}
-        yMax={yMax}
-        height={240}
-      />
-      <p className="readout" aria-live="polite" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-        <VerdictIcon size={15} aria-hidden className={verdict.tone === "ok" ? "ok-ink" : verdict.tone === "warn" ? "warn-ink" : "bad-ink"} style={{ flex: "none", position: "relative", top: 2 }} />
-        <span>
-          {said}
-          <ReducedNote reduce={reduce} what="Live pool paused (reduced motion): Step runs it for 1 s. The chart and numbers above don't need animation." />
-        </span>
-      </p>
-      <p className="muted" style={{ fontSize: 13, margin: "6px 0 0", display: "flex", gap: 6 }}>
-        <Hourglass size={13} aria-hidden style={{ flex: "none", position: "relative", top: 3 }} />
-        Model: Poisson arrivals, exponential query times, up to 2 × cores queries at full speed, then time-sharing plus {CONTENTION * 100}% contention per extra connection per knee. The PostgreSQL rule of thumb for the pool is (cores × 2) + disks.
-      </p>
     </WidgetFrame>
   );
 }

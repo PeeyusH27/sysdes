@@ -2,7 +2,7 @@
 //   node scripts/check-content.mjs [path-filter]
 // - compiles every MDX file (syntax errors, unescaped < or { in prose…)
 // - every <Component> used must be registered in src/mdx-components.tsx
-// - every CodeTabs/CodeBlock/RunCode file and every relative import must exist
+// - every CodeTabs (files, java, python)/CodeBlock/RunCode file and every relative import must exist
 // - DSA: <JsRef to> ids and <ProblemLink slug> values must exist
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import path from "node:path";
@@ -51,11 +51,16 @@ for (const file of files) {
   for (const m of noFences.matchAll(/<([A-Z][A-Za-z0-9]*)/g)) {
     if (!allowed.has(m[1])) fail(file, `unknown component <${m[1]}> (not registered in src/mdx-components.tsx)`);
   }
-  for (const m of noFences.matchAll(/files=\{\[([^\]]*)\]\}/g)) {
-    for (const f of m[1].match(/['"]([^'"]+)['"]/g) ?? []) {
-      const rel = f.slice(1, -1);
-      if (!existsSync(path.join(dir, rel))) fail(file, `CodeTabs file not found: ${rel}`);
+  // <CodeTabs files={[…]} java={[…]} python={[…]} />: every listed file must exist, and a language list must
+  // contain at least one file of that language (shared files such as a .sql may ride along).
+  for (const m of noFences.matchAll(/\b(files|java|python)=\{\[([^\]]*)\]\}/g)) {
+    const [, prop, list] = m;
+    const rels = (list.match(/['"]([^'"]+)['"]/g) ?? []).map((f) => f.slice(1, -1));
+    for (const rel of rels) {
+      if (!existsSync(path.join(dir, rel))) fail(file, `CodeTabs ${prop === "files" ? "file" : `${prop} file`} not found: ${rel}`);
     }
+    const ext = { java: ".java", python: ".py" }[prop];
+    if (ext && !rels.some((r) => r.endsWith(ext))) fail(file, `CodeTabs ${prop}={[…]} lists no ${ext} file`);
   }
   for (const m of noFences.matchAll(/<(CodeBlock|RunCode)[^>]*\ssrc=["']([^"']+)["']/g)) {
     if (!existsSync(path.join(dir, m[2]))) fail(file, `${m[1]} src not found: ${m[2]}`);

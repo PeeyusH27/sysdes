@@ -2,44 +2,51 @@ import Link from "next/link";
 import { ArrowRight, Clock } from "lucide-react";
 import { deepDives } from "@content/registry";
 import { shorts } from "@content/shorts";
-import { DoneBadge, ShortsStrip } from "@/components/content/HubBits";
+import { DoneBadge, HubTabs, ShortsStrip } from "@/components/content/HubBits";
 
 export const metadata = { title: "Deep dives", description: "The techniques that come up again and again." };
 
 export default function DeepDivesIndex() {
   return (
-    <div className="container">
-      <header className="page-head">
-        <span className="eyebrow">Deep dives</span>
+    <div className="container hub" data-track="sd">
+      <header className="page-head hub-head">
+        <p className="eyebrow">System design · Deep dives</p>
         <h1>
-          The techniques <span className="grad">that matter</span>
+          The techniques <span className="grad">that keep coming up</span>
         </h1>
-        <p className="lede">Caching, sharding, storage, real-time delivery, connections and request flows: each with an animated diagram, a simulator, a comparison table and code cards.</p>
+        <p className="lede">
+          {deepDives.length} ideas interviewers circle back to. Each one plays out in a diagram, lets you push it in a widget, then boils down to a trade-off table.
+        </p>
       </header>
+      <HubTabs track="sd" />
       <ShortsStrip count={shorts.filter((s) => s.track === "System design" && s.source?.startsWith("/deep-dives/")).length} label="these techniques" />
-      <div className="grid-auto" style={{ marginTop: 18 }}>
+      <ol className="grid-auto hub-cards">
         {deepDives.map((d) => (
-          <Link key={d.slug} href={`/deep-dives/${d.slug}`} className="card card-link topic-card">
-            <span className="tc-top">
-              <span className="tc-num">{String(d.order).padStart(2, "0")}</span>
-              <span className="tc-min">
-                <Clock size={12} aria-hidden /> {d.minutes} min
+          <li key={d.slug}>
+            <Link href={`/deep-dives/${d.slug}`} className="card card-link topic-card">
+              <span className="tc-top">
+                <span className="tc-num">{String(d.order).padStart(2, "0")}</span>
+                <span className="tc-min">
+                  <Clock size={12} aria-hidden /> {d.minutes} min
+                </span>
+                <DoneBadge href={`/deep-dives/${d.slug}`} />
               </span>
-              <DoneBadge href={`/deep-dives/${d.slug}`} />
-            </span>
-            <h3>{d.title}</h3>
-            <p>{d.summary}</p>
-            <span className="tags">
-              {d.tags.slice(0, 4).map((t) => (
-                <span key={t} className="tag">{t}</span>
-              ))}
-            </span>
-            <span className="tc-go">
-              Open deep dive <ArrowRight size={14} aria-hidden />
-            </span>
-          </Link>
+              <h2 className="tc-title">{d.title}</h2>
+              <p>{d.summary}</p>
+              <span className="tags">
+                {d.tags.slice(0, 4).map((t) => (
+                  <span key={t} className="tag">
+                    {t}
+                  </span>
+                ))}
+              </span>
+              <span className="tc-go">
+                Open the deep dive <ArrowRight size={14} aria-hidden />
+              </span>
+            </Link>
+          </li>
         ))}
-      </div>
+      </ol>
     </div>
   );
 }

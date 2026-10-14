@@ -2,101 +2,103 @@ import { pathCompression, unionByRank } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Union-find (also called disjoint set union) keeps items in separate groups, each stored as a tree whose **root names the group**. `find(x)` climbs to the root and `union(a, b)` hangs one root under the other, so "are these two connected?" becomes "do they have the same root?". With **path compression** and **union by rank**, both operations are effectively O(1), so adding m edges to n items costs about O(n + m) instead of re-running a graph search after every edge.
+Union-find (disjoint set union) stores each group as a tree whose **root names the group**, so "are these connected?" becomes "same root?". With **path compression** and **union by rank**, `find` and `union` are effectively O(1): m edges on n items cost about O(n + m).
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- The answer is a number of **groups**: connected components, provinces, friend circles, networks.
-- Links **arrive one at a time** and you need connectivity after each one.
-- "Does this edge **create a cycle**?" or "is this a valid tree?" in an **undirected** graph.
-- Items are **equivalent** through a chain of links: accounts that share an email, variables constrained by `a == b`, similar strings.
-- You need a minimum spanning tree (Kruskal's algorithm).
+- The answer is a number of **groups**: components, provinces, friend circles.
+- Links **arrive one at a time** and you need connectivity after each.
+- "Does this edge **create a cycle**?" in an **undirected** graph.
+- Items **equivalent** through chains of links: shared emails, `a == b` constraints.
 
 </Callout>
 
-| Variant | Items | What you watch | Classic problems |
-|---|---|---|---|
-| Count groups | indices `0 … n - 1` | `count`, lowered by every union that merges | number of provinces, connected components |
-| Cycle detection | the edges of an undirected graph | `union` returning `false` (both ends share a root) | redundant connection, graph valid tree |
-| Keyed groups | strings, emails, `"r,c"` cells in a `Map` | each item's root, and the size of each group | accounts merge, largest group, islands added one by one |
-| Kruskal's MST | edges sorted by weight | take an edge only if it joins two groups | min cost to connect all points |
+| Variant | What you watch | Classic problems |
+|---|---|---|
+| Count groups | `count`, down one per merge | number of provinces, connected components |
+| Cycle detection | `union` returning `false` | redundant connection, graph valid tree |
+| Keyed groups | roots and group sizes in a `Map` | accounts merge, islands added one by one |
+| Kruskal's MST | edges that join two groups | min cost to connect all points |
 
 ## The core idea: one root per group
 
-Every item has a `parent`. A root is an item that is its own parent, and following parent pointers from any item always ends at its group's root. So:
+A group is a chain of command: everyone has a `parent`, and following parents ends at the **root**, the one item that is its own parent. Same group? Compare `find(a)` with `find(b)`. Merge? Point one root at the other.
 
-- **same group?** Compare `find(a)` with `find(b)`.
-- **merge two groups?** Find both roots and point one at the other. Every item below the old root now reaches the new root too.
+Linking is O(1); the cost is the climb inside `find`, which is as long as the tree is tall. Two tricks keep trees flat:
 
-Linking roots is O(1); the only real cost is the climb inside `find`, which is as long as the tree is tall. Two tricks keep trees almost flat:
+- **Union by rank**: hang the shorter tree (by rank, an upper bound on height) under the taller. Height grows only when equals merge, so no tree passes log₂ n.
+- **Path compression**: after `find(x)` reaches the root, point every node it passed straight at it. The next `find` from any of them is one hop.
 
-- **Union by rank.** Each root stores a rank, an upper bound on its tree's height. Always hang the shorter tree under the taller one. Height only grows when two equally tall trees merge, so no tree is taller than log₂ n.
-- **Path compression.** After `find(x)` has found the root, point every node it passed straight at the root. The next `find` from any of them is a single hop.
-
-Watch the badges (each node's root) change as edges arrive. The edge 3-0 is rejected because both ends already share root 0, and finding 3 flattens its path on the way:
+Watch the badges (each node's root). The edge 3-0 is rejected because both ends already share root 0, and finding 3 flattens its path. Try your own edges with Edit input.
 
 <AlgoViz trace={unionByRank} />
 
-With both tricks, any sequence of m operations on n items costs O(m α(n)), where α is the inverse Ackermann function: at most 4 for any input that fits in the universe. Treat it as constant.
+With both, m operations on n items cost O(m α(n)), where α, the inverse Ackermann function, is at most 4 for any input that fits in the universe. Treat it as constant.
+
+## Play with it
+
+Click two people to make them friends and watch whole trees glide under a new root. Then press Worst case for a 9-link chain, turn path compression on, switch clicks to Find and find 0: one climb, and the chain snaps flat.
+
+<UnionFindLab />
 
 ## Step by step
 
 <Steps>
   <Step title="Decide what the items are">
-    Number them `0 … n - 1` when you can: cities, nodes, account indices, grid cells as `r * cols + c`. If the items are strings you can't easily number, use the keyed version with a `Map`.
+    Number them `0 … n - 1` (grid cells as `r * cols + c`), or use the keyed version with a `Map`.
   </Step>
   <Step title="Decide what links two items">
-    An edge, a shared email, an equation `a == b`, two adjacent land cells. Each link is one `union` call.
+    An edge, a shared email, `a == b`, two adjacent land cells: one `union` each.
   </Step>
   <Step title="Initialise">
     `parent[i] = i`, `rank[i] = 0`, and `count = n` if you need the number of groups.
   </Step>
   <Step title="Union every link and use the return value">
-    `true` means two groups merged (lower the count). `false` means the two items were already connected: in a graph, that edge closes a cycle.
+    `true`: merged, lower the count. `false`: already connected, so that edge closes a cycle.
   </Step>
   <Step title="Read the answer through find">
-    The answer is `count`, a comparison `find(a) === find(b)`, or the items bucketed by `find(i)`. Never read `parent[i]` directly: a parent is not always a root.
+    `count`, `find(a) === find(b)`, or items bucketed by `find(i)`. Never `parent[i]`: a parent is not always a root.
   </Step>
 </Steps>
 
 ## Template 1: the UnionFind class
 
-This is the version to memorise. `find` uses a loop in two passes: climb to the root, then walk the path again and re-point each node at the root. `union` returns whether it merged anything, which most problems need.
+The version to memorise. `find` loops twice (climb, then re-point the path at the root); `union` returns whether it merged.
 
 <CodeTabs files={['snippets/union-find.js']} />
 
-Path compression is what keeps repeated finds cheap. Here it flattens a chain, and then a second find reuses the work of the first:
+Here path compression flattens a chain, and a second find reuses the first one's work:
 
 <AlgoViz trace={pathCompression} />
 
-You will also see the recursive one-liner `if (parent[x] !== x) parent[x] = find(parent[x]); return parent[x];`. It does the same compression. The loop version is safer in JavaScript: without union by rank, a chain of 100,000 nodes would overflow the call stack.
+The recursive one-liner `if (parent[x] !== x) parent[x] = find(parent[x]); return parent[x];` compresses too, but the loop is safer in JavaScript: without union by rank, a chain of 100,000 nodes overflows the call stack.
 
 ## Template 2: count groups
 
-Start with `n` groups. Every successful union removes exactly one, so the count left at the end is the number of components. Isolated items need no special case: they were counted from the start.
+Start with `n` groups; every successful union removes exactly one, so what's left is the number of components. Isolated items need no special case.
 
 <CodeTabs files={['snippets/count-groups.js']} />
 
-This solves <ProblemLink slug="number-of-provinces" /> (union every 1 in the matrix) and <ProblemLink slug="number-of-connected-components" />. To list the groups instead of counting them, bucket each item under `find(i)`.
+This solves <ProblemLink slug="number-of-provinces" /> (union every 1 in the matrix) and <ProblemLink slug="number-of-connected-components" />. To list the groups, bucket each item under `find(i)`.
 
 ## Template 3: cycle detection
 
-In an undirected graph, an edge whose two ends already share a root closes a cycle: they were connected without it. The first such edge in input order is the last edge of the first cycle to form.
+In an undirected graph, an edge whose ends already share a root closes a cycle. The first such edge is the last edge of the first cycle to form.
 
 <CodeTabs files={['snippets/cycle-edge.js']} />
 
-That is all of <ProblemLink slug="redundant-connection" />. <ProblemLink slug="graph-valid-tree" /> adds a counting fact: a graph on n nodes is a tree exactly when it has n - 1 edges and none of them closes a cycle. This test only works for **undirected** graphs; cycles in directed graphs need [Topological Sort](/dsa/patterns/topological-sort) or a DFS with colours.
+That is all of <ProblemLink slug="redundant-connection" />. <ProblemLink slug="graph-valid-tree" /> adds a counting fact: n nodes form a tree exactly when there are n - 1 edges and none closes a cycle. Directed cycles need [Topological Sort](/dsa/patterns/topological-sort) or a DFS with colours.
 
 ## Template 4: items that aren't numbers
 
-When the items are emails, words or coordinates, store `parent` in a `Map` and add each key the first time you see it. This version uses **union by size** instead of rank: the smaller group joins the larger one, which keeps trees just as shallow and gives you every group's size for free.
+For emails, words or coordinates, keep `parent` in a `Map` and add each key on first sight. This version uses **union by size**: the smaller group joins the larger, which keeps trees just as shallow and gives every group's size for free.
 
 <CodeTabs files={['snippets/keyed-union-find.js']} />
 
-For <ProblemLink slug="accounts-merge" /> you can union emails directly with this class, or keep the numeric class and union **account indices**, using a `Map` from email to the first account that listed it.
+For <ProblemLink slug="accounts-merge" />, union emails directly with this class, or union **account indices** with a `Map` from email to the first account that listed it.
 
 ## Try it
 
@@ -106,10 +108,10 @@ For <ProblemLink slug="accounts-merge" /> you can union emails directly with thi
 
 | Version | find / union | Extra space |
 |---|---|---|
-| Path compression + union by rank (or size) | O(α(n)) amortised, effectively O(1) | O(n) for parent and rank |
+| Path compression + union by rank (or size) | O(α(n)) amortised, effectively O(1) | O(n) |
 | Union by rank only | O(log n) worst case | O(n) |
 | Path compression only | O(log n) amortised | O(n) |
-| Neither (always link a under b) | O(n) worst case: the trees become chains | O(n) |
+| Neither (always link a under b) | O(n) worst case: trees become chains | O(n) |
 | n items, m unions and finds, both tricks | O(n + m α(n)) total | O(n) |
 
 Kruskal's MST is dominated by sorting the edges: O(E log E).
@@ -126,15 +128,13 @@ const id = (r, c) => r * cols + c;                      // grid cell → item nu
 const uf = new UnionFind(n + 1);                        // labels 1 … n: one extra slot
 ```
 
-The main JavaScript trap is recursion depth: a recursive `find` on a long chain throws `RangeError: Maximum call stack size exceeded`. Union by rank prevents long chains; the loop version never recurses at all.
+The JavaScript trap is recursion depth: a recursive `find` on a long chain throws `RangeError: Maximum call stack size exceeded`.
 
 <Callout kind="warning">
 
-- Comparing `parent[a] === parent[b]` instead of `find(a) === find(b)`. Two items can share a root while their direct parents differ.
-- Linking the items instead of their roots: `parent[a] = b` cuts `a` out of its old tree and leaves the rest of that tree behind.
+- Linking the items instead of their roots: `parent[a] = b` cuts `a` out of its tree and leaves the rest behind.
 - Lowering `count` on every union call, including the ones that return `false`.
 - Labels that start at 1 with arrays of size n: node `n` has no slot. Allocate `n + 1`.
-- Grouping items by `parent[i]` at the end. Call `find(i)` for each item first.
 
 </Callout>
 
@@ -142,19 +142,19 @@ The main JavaScript trap is recursion depth: a recursive `find` on a long chain 
 
 <FollowUps>
   <FollowUp q="Union-find or BFS/DFS for connected components: which would you pick?">
-    For a fixed graph both are linear in practice: BFS/DFS is O(V + E) and also gives you paths and distances. Union-find needs no adjacency list and shines when edges **arrive over time**: after each new edge you can answer "how many groups?" or "are x and y connected?" in near-constant time, where BFS would have to start again.
+    On a fixed graph both are linear, and BFS/DFS also gives paths. Union-find wins when edges **arrive over time**: each answer is near-constant, where BFS would start again.
   </FollowUp>
   <FollowUp q="Can union-find remove an edge?">
-    Not directly: merges can't be undone once paths are compressed. If all queries are known in advance, process them **offline in reverse**: start from the final graph and turn deletions into additions. If you must undo in last-in-first-out order (backtracking), use union by rank **without** path compression and keep a stack of the links you made, so each undo just restores one parent and one rank.
+    Not directly. With all queries known, run them **offline in reverse** so deletions become additions; for last-in-first-out undo, skip compression and keep a stack of links to restore.
   </FollowUp>
   <FollowUp q="How would you find the size of the largest group?">
-    Use union by size: keep `size[root]`, add the smaller group's size to the larger root on every merge, and update a running maximum. The same trick answers "how many items are connected to x?" with `size[find(x)]`.
+    Union by size: add the smaller `size` to the larger root on each merge and track the maximum. `size[find(x)]` counts x's group.
   </FollowUp>
   <FollowUp q="How does Kruskal's algorithm use union-find?">
-    Sort the edges by weight and walk through them. Take an edge only if `union(a, b)` returns `true` (it joins two different trees); skip it otherwise, because it would close a cycle. Stop after n - 1 edges. Sorting is O(E log E) and the unions are almost free.
+    Sort edges by weight and take one only if `union(a, b)` returns `true` (otherwise it closes a cycle), stopping at n - 1 edges. Sorting is O(E log E); the unions are almost free.
   </FollowUp>
   <FollowUp q="How do you use union-find on a grid, for example islands appearing one cell at a time?">
-    Number each cell `r * cols + c`. When a cell becomes land, add it as a new group (count + 1) and union it with each neighbouring land cell (count - 1 for every union that merges). Each new cell costs O(α(n)), so k additions cost about O(k) instead of a fresh flood fill each time.
+    Number cells `r * cols + c`. New land adds a group (count + 1) and unions with each land neighbour (count - 1 per merge): about O(k) for k additions, not a flood fill each time.
   </FollowUp>
 </FollowUps>
 

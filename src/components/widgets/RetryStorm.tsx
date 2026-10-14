@@ -5,7 +5,7 @@ import { LineChart } from "@/components/charts/LineChart";
 import { StatTiles } from "@/components/charts/ChartBits";
 import { int } from "@/lib/format";
 import { mulberry32 } from "@/lib/rng";
-import { Seg, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 export type Policy = "none" | "fixed" | "exp" | "jitter";
 export const POLICY_NAMES: Record<Policy, string> = { none: "No retries", fixed: "Fixed 1 s", exp: "Exponential", jitter: "Exponential + full jitter" };
@@ -101,6 +101,20 @@ const DURATION = 30_000;
 const X = Array.from({ length: DURATION / SLOT }, (_, i) => +((i * SLOT) / 1000).toFixed(1));
 const CAPACITY = 20;
 
+const CSS = `
+.w-retry { container-type: inline-size; }
+.w-retry .controls { margin-bottom: 4px; align-items: flex-end; }
+.w-retry .control { min-width: 100px; }
+.w-retry .seg button { padding: 5px 8px; }
+.w-retry .stat-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.w-retry .stat-tile { padding: 5px 9px; border-radius: 10px; }
+.w-retry .stat-label, .w-retry .stat-sub { font-size: 11.5px; line-height: 1.35; }
+.w-retry .stat-value { font-size: 17px; line-height: 1.3; }
+.w-retry .chart { margin: 6px 0 0; padding: 8px 12px 4px; }
+.w-retry .chart-title { font-size: 13.5px; margin-bottom: 2px; }
+@container (max-width: 520px) { .w-retry .stat-tiles { grid-template-columns: minmax(0, 1fr); } .w-retry .stat-tile { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; } }
+`;
+
 export function RetryStorm() {
   const [clients, setClients] = useState(300);
   const [policy, setPolicy] = useState<Policy>("exp");
@@ -117,6 +131,8 @@ export function RetryStorm() {
           { id: "jitter", name: "Full jitter", values: jitter.load },
         ];
   const finish = (r: typeof chosen) => (r.doneAt !== null ? `${(r.doneAt / 1000).toFixed(1)} s` : r.gaveUp ? `${int(r.gaveUp)} gave up` : `${int(r.stillWaiting)} still failing at 30 s`);
+  /** Short form for the stat tile; the detail goes in its sub-line. */
+  const finishShort = (r: typeof chosen) => (r.doneAt !== null ? `${(r.doneAt / 1000).toFixed(1)} s` : r.gaveUp ? "never" : "not by 30 s");
 
   let sentence: string;
   if (policy === "none")
@@ -127,33 +143,44 @@ export function RetryStorm() {
     sentence = `${POLICY_NAMES[policy]}: the retries stay synchronised, so the recovering server's worst 100 ms saw ${int(chosen.peakAfterRecovery)} requests (it can answer ${CAPACITY}) against ${int(jitter.peakAfterRecovery)} with full jitter. ${chosen.doneAt !== null ? `Everyone was served by ${finish(chosen)} vs ${finish(jitter)} with jitter.` : `At 30 s, ${int(chosen.stillWaiting)} clients were still failing; with jitter everyone was served by ${finish(jitter)}.`}`;
 
   return (
-    <WidgetFrame title="Retry storm" sub={`${int(clients)} clients fail at once when the server goes down. It recovers at t = 10 s and can answer ${CAPACITY} requests per 100 ms. Compare how each retry policy hits it.`}>
-      <div className="controls">
-        <Slider label="Clients" value={clients} min={50} max={1000} step={50} onChange={setClients} format={int} />
-        <Seg<Policy>
-          label="Retry policy"
-          value={policy}
-          onChange={setPolicy}
-          options={(Object.keys(POLICY_NAMES) as Policy[]).map((p) => ({ value: p, label: POLICY_NAMES[p] }))}
+    <WidgetFrame title="Retry storm" sub={`${int(clients)} clients fail at once; the server is back at 10 s and answers ${CAPACITY} requests per 100 ms.`}>
+      <style href="w-retry-storm" precedence="widgets">
+        {CSS}
+      </style>
+      <div className="w-retry">
+        <div className="controls">
+          <Seg<Policy>
+            label="Retry policy"
+            value={policy}
+            onChange={setPolicy}
+            options={(Object.keys(POLICY_NAMES) as Policy[]).map((p) => ({ value: p, label: POLICY_NAMES[p] }))}
+          />
+          <Slider label="Clients" value={clients} min={50} max={1000} step={50} onChange={setClients} format={int} />
+        </div>
+        <StatTiles
+          items={[
+            { label: "Peak after recovery", value: `${int(chosen.peakAfterRecovery)} / 100 ms`, sub: policy === "jitter" ? `capacity ${CAPACITY}` : `full jitter: ${int(jitter.peakAfterRecovery)}` },
+            {
+              label: "Everyone served by",
+              value: policy === "none" ? "never" : finishShort(chosen),
+              sub: policy === "jitter" ? "server back at 10 s" : `${chosen.doneAt === null && policy !== "none" ? `${int(chosen.stillWaiting)} failing · ` : ""}full jitter: ${finish(jitter)}`,
+            },
+            { label: "Requests sent", value: int(chosen.sent), sub: `${(chosen.sent / c).toFixed(1)} per client` },
+          ]}
         />
-        <button type="button" className="wbtn" onClick={() => setSeed((s) => s + 1)}>
-          <Shuffle size={14} aria-hidden /> Reshuffle
-        </button>
+        <LineChart title="Requests arriving at the server per 100 ms (line: recovery at 10 s)" x={X} series={series} xLabel="Time (s)" yUnit="req" marker={10} height={150} />
+        <p className="readout" aria-live="polite">
+          {sentence}
+        </p>
+        <More label="How the model works">
+          <p className="muted" style={{ fontSize: 13, margin: "0 0 8px" }}>
+            Exponential delays are 1, 2, 4, 8 s, then 8 s (capped); full jitter waits a random time between 0 and that. Past its capacity the server wastes time on rejections, so it answers fewer. Each run uses a seeded random stream: reshuffle for another.
+          </p>
+          <button type="button" className="wbtn" onClick={() => setSeed((s) => s + 1)}>
+            <Shuffle size={14} aria-hidden /> Reshuffle
+          </button>
+        </More>
       </div>
-      <StatTiles
-        items={[
-          { label: "Peak after recovery", value: `${int(chosen.peakAfterRecovery)} / 100 ms`, sub: policy === "jitter" ? `capacity ${CAPACITY}` : `full jitter: ${int(jitter.peakAfterRecovery)}` },
-          { label: "Everyone served by", value: policy === "none" ? "never" : finish(chosen), sub: policy === "jitter" ? "server back at 10 s" : `full jitter: ${finish(jitter)}` },
-          { label: "Requests sent", value: int(chosen.sent), sub: `${(chosen.sent / c).toFixed(1)} per client` },
-        ]}
-      />
-      <LineChart title="Requests arriving at the server per 100 ms" x={X} series={series} xLabel="Time (s)" yUnit="req" marker={10} height={250} />
-      <p className="readout muted" style={{ fontSize: 13 }}>
-        The vertical line marks recovery at 10 s. Exponential delays are 1, 2, 4, 8 s, then 8 s (capped); full jitter waits a random time between 0 and that. Past its capacity the server wastes time on rejections, so it answers fewer.
-      </p>
-      <p className="readout" aria-live="polite">
-        {sentence}
-      </p>
     </WidgetFrame>
   );
 }

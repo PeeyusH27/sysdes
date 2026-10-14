@@ -30,6 +30,7 @@ function lcs(a, b) {
     { label: "CLOUD vs COLD", input: { a: "CLOUD", b: "COLD" } },
     { label: "Nothing in common", input: { a: "ABC", b: "XY" } },
   ],
+  fields: { a: { chars: "A-Za-z", maxLength: 7, help: "Letters, up to 7." }, b: { chars: "A-Za-z", maxLength: 7, help: "Letters, up to 7." } },
   run(t, { a, b }) {
     const m = a.length;
     const n = b.length;
@@ -119,6 +120,8 @@ function knapsack(weights, values, W) {
     { label: "3 items, capacity 5", input: { weights: [2, 3, 4], values: [3, 4, 6], W: 5 } },
     { label: "Ratio greedy fails", input: { weights: [3, 2, 2], values: [5, 3, 3], W: 4 } },
   ],
+  fields: { weights: { min: 1, max: 10, maxItems: 4 }, values: { min: 0, max: 99, maxItems: 4 }, W: { min: 1, max: 10, help: "Capacity, 1 to 10." } },
+  validate: ({ weights, values }) => weights.length !== values.length && `weights and values need the same length (${weights.length} and ${values.length}).`,
   run(t, { weights, values, W }) {
     const n = weights.length;
     const dp: (number | string)[][] = Array.from({ length: n + 1 }, (_, i) => new Array(W + 1).fill(i === 0 ? 0 : ""));
@@ -209,6 +212,8 @@ function bestValue(items, W, unbounded) {
     { label: "0/1: high to low", input: { items: [[2, 3], [3, 5]] as [number, number][], W: 6, unbounded: false } },
     { label: "Unbounded: low to high", input: { items: [[2, 3], [3, 5]] as [number, number][], W: 6, unbounded: true } },
   ],
+  fields: { items: { maxItems: 4, min: 0, max: 99, colNames: ["weight", "value"], help: "One item per line: weight value (up to 4)." }, W: { min: 1, max: 12, help: "Capacity, 1 to 12." } },
+  validate: ({ items }) => items.some(([w]) => w < 1) && "Every weight must be at least 1.",
   run(t, { items, W, unbounded }) {
     const dp: number[] = new Array(W + 1).fill(0);
     const view = (c: number | null, band: [number, number] | null, tones: Record<number, Tone> = {}) =>

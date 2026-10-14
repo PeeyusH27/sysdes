@@ -31,6 +31,7 @@ function bestMemo(i, memo) {                            //@mcall
     { label: "Plain recursion", input: { cost: [1, 4, 2, 3, 1], memo: false } },
     { label: "With a memo", input: { cost: [1, 4, 2, 3, 1], memo: true } },
   ],
+  fields: { cost: { min: 0, max: 20, minItems: 2, maxItems: 6, help: "Cost of each step, 2 to 6 values (each extra step about doubles the calls)." } },
   run(t, { cost, memo: useMemo }) {
     const ids = new NodeIds();
     const memo = new Map<number, number>();
@@ -149,6 +150,7 @@ function minCost(cost) {
     { label: "Seven steps", input: { cost: [1, 4, 2, 3, 1, 5, 2] } },
     { label: "Two steps", input: { cost: [10, 15] } },
   ],
+  fields: { cost: { min: 0, max: 99, minItems: 2, maxItems: 12 } },
   run(t, { cost }) {
     const n = cost.length;
     const dp: number[] = new Array(n + 1).fill(0);
@@ -224,6 +226,7 @@ function numSquares(n) {
     { label: "n = 12", input: { n: 12 } },
     { label: "n = 7", input: { n: 7 } },
   ],
+  fields: { n: { min: 1, max: 13, help: "The amount, 1 to 13." } },
   run(t, { n }) {
     const dp: number[] = new Array(n + 1).fill(Infinity);
     const pick: number[] = new Array(n + 1).fill(0);

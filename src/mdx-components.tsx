@@ -4,6 +4,7 @@ import { Callout, FollowUp, FollowUps, Requirements, Step, Steps, TLDR } from "@
 import { LessonSection } from "@/components/content/LessonSection";
 import { CodeBlock, CodeTabs, Pre } from "@/components/content/CodeBlock";
 import { Quiz } from "@/components/content/Quiz";
+import { TableWrap } from "@/components/content/TableWrap";
 import { BarChart } from "@/components/charts/BarChart";
 import { LineChart } from "@/components/charts/LineChart";
 import { StatTiles } from "@/components/charts/ChartBits";
@@ -28,11 +29,8 @@ const components = {
         {children}
       </a>
     ),
-  table: (props) => (
-    <div className="table-wrap">
-      <table {...props} />
-    </div>
-  ),
+  // Becomes a focusable region only when it overflows the reading column.
+  table: (props) => <TableWrap {...props} />,
   pre: Pre as MDXComponents["pre"],
   // GFM task lists render disabled checkboxes: show a decorative box instead of an unlabelled control.
   input: (props) =>

@@ -2,125 +2,120 @@ import { cacheAsideSequence, writeInvalidate } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Choose a caching pattern by what you can live with when the cache is **stale, cold or down**. Cache-aside with delete-on-write and a TTL is the default; write-through buys fresh reads with slower writes; write-behind buys fast writes by risking data loss. Reach for an in-process L1, refresh-ahead or a Bloom filter only when you've measured the problem each one solves.
+Pick a caching pattern by what you can live with when the cache is **stale, cold or down**. Default to cache-aside with delete-on-write and a TTL; write-through trades slower writes for fresh reads, write-behind risks data loss for fast writes.
 </TLDR>
 
 ## Why the technique matters
 
-Every cache answers the same question differently: **who keeps the copy in sync with the database, and when?** That one decision fixes three behaviours you'll be asked about in an interview:
+A cache is a copy, and copies drift. Each pattern decides **who re-syncs it, and when**, and that fixes three things:
 
-- **Staleness:** how long a reader can see the old value after a write.
-- **Cold start:** what happens when the cache is empty after a deploy or a restart.
-- **Cache loss:** whether losing the cache makes you slower, wrong, or loses data.
+- **Staleness:** how long readers see the old value.
+- **Cold start:** what an empty cache does after a deploy or restart.
+- **Cache loss:** slower, wrong, or lost data?
 
-The [Caching lesson](/learn/caching) covers where caches live, TTLs, eviction and stampedes. This page compares the patterns side by side and gives you code for each.
+TTLs, eviction and stampedes: see the [Caching lesson](/learn/caching). Add an L1, refresh-ahead or a Bloom filter only for a measured problem.
 
 ## The read path: cache-aside
 
-The app talks to the cache and the database itself. Pick **cache hit** or **cache miss** to step through each branch.
+Cache first, database on a miss. Pick **cache hit** or **cache miss** in the diagram.
 
 <SequenceDiagram spec={cacheAsideSequence} />
 
-A hit costs one Redis round trip (about 1 ms). A miss costs the Redis check **plus** the database query **plus** the `SET`, so a cold cache is slower than no cache at all. The jittered TTL stops keys written together from expiring together.
+A hit is one Redis round trip, about 1 ms. A miss pays the check, the query **and** the `SET`, so a cold cache is slower than none. TTL jitter stops keys written together from expiring together.
 
 ## The write path: update, then delete
 
-On a write, change the database first, then **delete** the key. The next read misses and loads the truth.
+Update the database, then **delete** the key; the next read loads the truth.
 
 <SequenceDiagram spec={writeInvalidate} />
 
-Why delete rather than `SET` the new value? With two concurrent writers, the cache writes can land in the opposite order to the database writes, leaving the older value cached until the TTL. A delete can't be "out of order": whichever happens last, the next read reloads from the database. The one remaining race (a slow reader refilling an old value) is bounded by the TTL; the Caching lesson shows it step by step.
+Why not `SET` the new value? Two concurrent writers can land cache writes in the opposite order to their database writes, pinning the old value until the TTL; a delete can't be out of order. The last race, a slow reader refilling an old value, is bounded by the TTL.
 
 ## Six patterns compared
 
-| Pattern | Read path | Write path | Staleness | If the cache dies | Use for |
-|---|---|---|---|---|---|
-| Cache-aside | App checks the cache, loads the DB on a miss, fills the cache | App writes the DB, deletes the key | Until the delete or TTL | Slower, still correct | The default |
-| Read-through | The cache loader fetches from the DB | — | Same as cache-aside | Depends on the library | CDN, caching libraries |
-| Write-through | Always fresh | Write DB + cache synchronously | Minimal | Correct | Read-after-write heavy data |
-| Write-behind | From the cache | Cache now, DB later in batches | The DB lags | **Unflushed writes are lost** | Counters, metrics |
-| Write-around | The first read after a write misses | DB only | None (next read loads) | Correct | Write-once, rarely-read data |
-| Refresh-ahead | Hot keys always hit | — | Bounded by the refresh interval | Correct | Hot, predictable keys |
+| Pattern | Write path | Staleness | If the cache dies |
+|---|---|---|---|
+| Cache-aside | App writes DB, deletes key | Until delete or TTL | Slower, still correct |
+| Read-through | — | Same as cache-aside | Depends on the library |
+| Write-through | DB + cache, synchronously | Minimal | Correct |
+| Write-behind | Cache now, DB later in batches | The DB lags | **Unflushed writes are lost** |
+| Write-around | DB only | None (next read loads) | Correct |
+| Refresh-ahead | — | Up to the refresh interval | Correct |
 
-How to pick in practice:
+**Start with cache-aside**: simple, any store, and losing Redis only costs latency. Switch only when:
 
-- **Start with cache-aside.** It is simple, works with any store, and losing Redis only costs latency.
-- **Users must see their own write immediately?** Write-through, or delete the key and read your own write from the primary.
-- **The database can't keep up with writes, and losing a few seconds is fine?** Write-behind (view counters, analytics).
-- **Written once, rarely read** (audit logs, old orders)? Write-around, so it never pollutes the cache.
-- **A handful of very hot keys whose misses hurt?** Refresh-ahead, so they never expire under load.
+- users must see their own write: write-through, or delete and read from the primary;
+- the DB can't keep up with writes and a few seconds' loss is fine (counters, metrics): write-behind;
+- data is written once, rarely read (audit logs, old orders): write-around keeps it out of the cache;
+- a few hot, predictable keys hurt on a miss: refresh-ahead stops them expiring under load.
 
 ## Watch the patterns side by side
 
-Each tab runs the same story, **write price = 12, then read it twice**, through the App, Cache and DB lanes. The staleness bar shows how long a reader could still see the old price.
+Every tab of the comparator plays **write price = 12, then read it twice** across the App, Cache and DB lanes; the staleness bar shows how long a reader could still see the old price.
 
 <PatternComparator />
 
-Notice that only write-behind leaves the database behind the cache. Write-around, and cache-aside or read-through with delete-on-write, all make the first read after a write pay for a miss; write-through keeps it a hit with the new value.
+Only write-behind leaves the database behind the cache. Write-through keeps the first read after a write a hit; write-around and the delete-on-write patterns make it miss.
 
 ## Code
 
 ### Cache-aside (lazy loading)
 
-The app checks the cache, loads from the database on a miss, then stores the result with a TTL. The safest default: if the cache dies you only get slower.
+The safest default. The [Caching lesson](/learn/caching) version adds a per-key lock, TTL jitter and a short "not found" entry.
 
 <CodeBlock src="snippets/cache-aside.js" />
 
-The production version in the [Caching lesson](/learn/caching) adds a per-key lock, TTL jitter and a short-lived "not found" entry.
-
 ### Write-through
 
-Every write goes to the database and the cache together, so reads are always fresh. Writes cost double, and rarely read data wastes memory.
+Fresh reads, but writes cost double and rarely read data wastes memory.
 
 <CodeBlock src="snippets/write-through.js" />
 
 ### Write-behind (write-back)
 
-Write to the cache now and flush to the database later in batches. Very fast writes, but a crash can lose unflushed data.
-
 <CodeBlock src="snippets/write-behind.js" />
 
-The naive version clears the buffer **before** the database call, so a failed flush silently drops the batch, and a slow flush can overlap the next one. This version puts the batch back on failure without overwriting newer values, and the `flushing` flag keeps flushes from running in parallel.
+The naive version clears the buffer **before** the database call, so a failed flush drops the batch and a slow one overlaps the next. Here a failed batch goes back without overwriting newer values, and `flushing` blocks parallel flushes.
 
 ### Invalidation
 
-Delete the key on write, keep a TTL as a safety net, or put a version in the key so old entries are simply never read. State the staleness you accept.
+Delete on write, keep a TTL as a safety net, or version the key so old entries are never read. State the staleness you accept.
 
 <CodeBlock src="snippets/invalidation.js" />
 
 ### Stampede protection (single flight)
 
-When a hot key expires, thousands of requests hit the database. Let one request rebuild while the others share its promise.
+A hot key expires; thousands of requests stampede the database. One rebuilds, the rest share its promise.
 
 <CodeBlock src="snippets/single-flight.js" />
 
 <Callout kind="note" title="Per process only">
-Single flight collapses concurrent misses **inside one process**. With 50 app instances, up to 50 rebuilds can still reach the database at once. Across instances, combine it with the Redis `SET lock NX` pattern from the [Caching lesson](/learn/caching).
+It collapses misses **inside one process**: 50 app instances can still send 50 rebuilds. Across instances, add Redis `SET lock NX` from the [Caching lesson](/learn/caching).
 </Callout>
 
 ### Two-level cache (L1 + L2)
 
-An in-process map answers in microseconds and absorbs hot keys before they reach Redis. Every instance holds its own copy, so invalidations fan out over pub/sub, and a short L1 TTL covers the messages pub/sub drops.
+An in-process map answers in microseconds and absorbs hot keys before Redis. Each instance holds its own copy, so invalidations fan out over pub/sub; a short L1 TTL covers dropped messages.
 
 <CodeBlock src="snippets/two-level-cache.js" />
 
 ### Refresh-ahead
 
-Once 80% of a key's TTL has passed, the next read triggers a background refresh. Readers keep getting the cached value and the key never actually expires while it's hot.
+Past 80% of a key's TTL, the next read triggers a background refresh. Readers keep the cached value; a hot key never expires.
 
 <CodeBlock src="snippets/refresh-ahead.js" />
 
 ### Bloom filter against penetration
 
-Lookups for ids that don't exist always miss the cache and always hit the database: a cheap attack. A Bloom filter of every real id answers "definitely not present" in memory, so those requests stop before the cache.
+Ids that don't exist always miss the cache and hit the database: a cheap attack. A Bloom filter of real ids rejects them in memory first.
 
 <CodeBlock src="snippets/bloom-filter.js" />
 
-The two hash functions use independent seeds and a murmur-style finaliser, so the 7 bit positions are spread evenly. The test adds 100K keys to 1M bits and measures about 0.65% false positives, matching the formula `(1 − e^(−kn/m))^k`, with zero false negatives.
+Two independently seeded hashes with a murmur-style finaliser spread the 7 bit positions evenly. With 100K keys in 1M bits, the test sees about 0.65% false positives, as `(1 − e^(−kn/m))^k` predicts, and zero false negatives.
 
 ### Eviction policy
 
-When memory is full, Redis evicts according to `maxmemory-policy`. For a pure cache, let it evict any key.
+When memory fills, Redis evicts by `maxmemory-policy`. A pure cache can evict any key.
 
 ```ini
 # redis.conf for a pure cache: evict any key by recency (or allkeys-lfu by frequency).
@@ -130,30 +125,26 @@ maxmemory-policy allkeys-lru
 ```
 
 <Callout kind="warning" title="Common mistakes">
-- Write-behind for data you can't afford to lose (orders, payments).
-- Updating the cache on write instead of deleting the key.
-- An in-process cache with no TTL, trusting pub/sub alone.
-- Treating single flight as cluster-wide protection.
-- Caching without measuring the hit ratio first and after.
+- Adding a cache without measuring the hit ratio before and after: a low ratio adds a hop and saves nothing.
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
   <FollowUp q="Cache-aside or write-through?">
-    Cache-aside is the default: simple, and resilient to cache loss because the database is always the source of truth. Use write-through when reads right after writes dominate and you can afford slower writes.
+    Cache-aside by default: losing the cache only costs latency. Write-through when users must read their own writes and can afford slower writes.
   </FollowUp>
   <FollowUp q="How do you keep in-process caches consistent across 50 instances?">
-    Publish invalidations over pub/sub **and** keep L1 TTLs short, because pub/sub is fire-and-forget: an instance that misses a message keeps its stale copy until the TTL. Or only use L1 for data that tolerates seconds of staleness.
+    Pub/sub invalidations **plus** short L1 TTLs, because a missed fire-and-forget message leaves a stale copy until the TTL. Use L1 only where seconds of staleness are fine.
   </FollowUp>
   <FollowUp q="When is write-behind acceptable?">
-    When losing a few seconds of updates is fine (view counters, analytics) and the store benefits a lot from batching. Never for money or orders. Flush on graceful shutdown to shrink the loss window, and accept that a crash still loses the buffer.
+    When losing seconds of updates is fine (view counters, analytics), never for money or orders. A shutdown flush shrinks the window; a crash still loses the buffer.
   </FollowUp>
   <FollowUp q="What's the difference between cache-aside and read-through?">
-    The behaviour is the same; the difference is who runs the miss path. In cache-aside your code loads the database and fills the cache. In read-through the cache (a library, a CDN, DAX) has a loader and does it for you, so app code only talks to the cache.
+    Who runs the miss path: your code in cache-aside, the cache's own loader (a library, a CDN, DAX) in read-through.
   </FollowUp>
   <FollowUp q="Requests for non-existent ids are hammering your database. What do you do?">
-    Cache the "not found" result briefly (negative caching) and put a Bloom filter of real ids in front of the cache, so ids that are definitely absent are rejected in memory. Rate-limit the callers if it looks like an attack.
+    Cache "not found" briefly, put a Bloom filter of real ids in front, and rate-limit callers if it looks like an attack.
   </FollowUp>
 </FollowUps>
 

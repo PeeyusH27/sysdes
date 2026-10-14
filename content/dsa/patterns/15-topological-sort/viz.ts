@@ -1,5 +1,6 @@
-import { arr, defineTrace, graph, note, queue, stack } from "@/components/algo/trace";
+import { arr, autoLayout, defineTrace, graph, note, queue, stack } from "@/components/algo/trace";
 import type { Tone } from "@/components/algo/types";
+import { edgeProblem } from "@/components/algo/checks";
 
 interface DagInput {
   n: number;
@@ -52,6 +53,13 @@ function topoSortKahn(n, edges) {
       } as DagInput,
     },
   ],
+  fields: {
+    n: { min: 1, max: 9, help: "Nodes are numbered 0 to n - 1 (up to 9)." },
+    edges: { minItems: 0, maxItems: 14, min: 0, max: 8, colNames: ["from", "to"], help: "One directed edge per line: from to (up to 14)." },
+    pos: false,
+  },
+  validate: ({ n, edges }) => edgeProblem(n, edges, { directed: true }),
+  prepare: (input) => ({ ...input, pos: autoLayout(input.n, input.edges, { directed: true }) }),
   run(t, { n, edges, pos }) {
     const adj: number[][] = Array.from({ length: n }, () => []);
     const indegree = new Array(n).fill(0);
@@ -185,6 +193,12 @@ function topoSortDfs(n, adj) {
       input: { adj: [[1, 3], [2], [3], [1]], pos: [[8, 50], [40, 15], [90, 25], [62, 82]] } as DfsInput,
     },
   ],
+  fields: {
+    adj: { maxItems: 8, maxRow: 7, min: 0, max: 7, help: "Line i lists the nodes that node i points to, - for none (up to 8 nodes)." },
+    pos: false,
+  },
+  validate: ({ adj }) => edgeProblem(adj.length, adj.flatMap((outs, u) => outs.map((v) => [u, v])), { directed: true }),
+  prepare: (input) => ({ ...input, pos: autoLayout(input.adj.length, input.adj.flatMap((outs, u) => outs.map((v) => [u, v])), { directed: true }) }),
   run(t, { adj, pos }) {
     const n = adj.length;
     const WHITE = 0;

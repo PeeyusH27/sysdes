@@ -31,7 +31,7 @@ export const urlShortener: FlowSpec = {
       id: "create",
       name: "Create link",
       steps: [
-        { edge: "client>cdn", caption: "POST /api/urls with a long URL. Writes are never cached, so the CDN simply forwards the request." },
+        { edge: "client>cdn", caption: "POST /api/urls with a long URL. Writes are never cached, so the CDN forwards it." },
         { edge: "cdn>app", caption: "An app server checks the rate limit and validates the URL: only http and https are allowed." },
         {
           edge: "app>ids",
@@ -124,7 +124,7 @@ export const urlShortener: FlowSpec = {
         {
           edge: "queue>worker",
           tone: "error",
-          caption: "If the analytics store goes down, events simply wait in the queue. Redirects keep working, and the worker catches up later.",
+          caption: "If the analytics store goes down, events wait in the queue. Redirects keep working; the worker catches up later.",
           mark: [{ node: "olap", state: "down" }, { node: "queue", state: "busy" }],
           ms: 1800,
         },

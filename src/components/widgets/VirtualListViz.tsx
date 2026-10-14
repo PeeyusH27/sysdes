@@ -2,12 +2,12 @@
 import { useRef, useState } from "react";
 import { ArrowDownToLine, ArrowUpToLine, Layers } from "lucide-react";
 import { int } from "@/lib/format";
-import { Seg, WidgetFrame } from "./WidgetFrame";
+import { WidgetFrame } from "./WidgetFrame";
 
 /* ------------------------------------------------------------------ pure windowing */
 
 export const ROW_H = 44;
-export const VIEWPORT_H = 320;
+export const VIEWPORT_H = 264;
 export const OVERSCAN = 3;
 /** Without virtualization we stop here, so the demo can't freeze the page. */
 export const NON_VIRTUAL_CAP = 2_000;
@@ -48,6 +48,8 @@ function Row({ i, total, style }: { i: number; total: number; style?: React.CSSP
 }
 
 const CSS = `
+.vl-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 8px; }
+.vl-jumps { display: flex; gap: 6px; }
 .vl-wrap { position: relative; }
 .vl-scroll { height: ${VIEWPORT_H}px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--card-2); overscroll-behavior: contain; }
 .vl-row { height: ${ROW_H}px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--border); font-size: 13.5px; box-sizing: border-box; background: var(--card); }
@@ -56,6 +58,7 @@ const CSS = `
 .vl-idx { flex: none; font: 12px var(--font-mono); color: var(--muted); }
 .vl-badge { position: absolute; top: 8px; right: 22px; z-index: 2; pointer-events: none; background: var(--card); border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; box-shadow: var(--shadow); font-variant-numeric: tabular-nums; }
 .vl-more { padding: 14px 12px; font-size: 13px; color: var(--muted); text-align: center; }
+.vl-note { font-size: 13px; margin: 6px 0 0 !important; }
 `;
 
 export function VirtualListViz() {
@@ -83,25 +86,28 @@ export function VirtualListViz() {
       <style href="w-virtual-list" precedence="widgets">
         {CSS}
       </style>
-      <div className="controls">
-        <Seg<number>
-          label="Items"
-          value={total}
-          onChange={(v) => {
-            setTotal(v);
-            setScrollTop(0);
-            if (box.current) box.current.scrollTop = 0;
-          }}
-          options={[
-            { value: 1_000, label: "1,000" },
-            { value: 10_000, label: "10,000" },
-            { value: 100_000, label: "100,000" },
-          ]}
-        />
+      <div className="vl-bar">
+        <div className="seg" role="group" aria-label="Items in the feed">
+          {[1_000, 10_000, 100_000].map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={total === v}
+              title={`${int(v)} items`}
+              onClick={() => {
+                setTotal(v);
+                setScrollTop(0);
+                if (box.current) box.current.scrollTop = 0;
+              }}
+            >
+              {v >= 1_000 ? `${v / 1_000}k` : v}
+            </button>
+          ))}
+        </div>
         <button type="button" className="wbtn primary" aria-pressed={virtual} onClick={() => setVirtual((v) => !v)}>
           <Layers size={14} aria-hidden /> Virtualization: {virtual ? "on" : "off"}
         </button>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div className="vl-jumps">
           <button type="button" className="wbtn" onClick={() => jump("top")}>
             <ArrowUpToLine size={14} aria-hidden /> Top
           </button>
@@ -149,7 +155,7 @@ export function VirtualListViz() {
         </div>
       </div>
 
-      <p className="muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
+      <p className="muted vl-note">
         In view: rows {int(firstVisible)}–{int(lastVisible)}
         {virtual && (
           <>

@@ -1,11 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { m } from "motion/react";
 import { BookOpen, Circle, CircleCheck, PenLine, TriangleAlert } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
 import { draw } from "./lib/draw-rng";
 import { advance, ReducedNote, SimButtons, useSimGate } from "./lib/sim-kit";
-import { Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
 /* ------------------------------------------------------------------ pure model */
 
@@ -110,33 +110,107 @@ export function describeRead(ev: ReadEvent) {
 
 /* ------------------------------------------------------------------ view */
 
-const P = {
-  client: { x: 78, y: 110 },
-  primary: { x: 330, y: 52 },
+interface Pt {
+  x: number;
+  y: number;
+}
+/** Node positions: client left, primary top, replicas below on the desktop pane; a 2 × 2 grid on a phone. */
+interface Geo {
+  w: number;
+  h: number;
+  client: Pt;
+  primary: Pt;
+  replicas: Pt[];
+  repLabel: Pt & { anchor: "start" | "end" };
+  narrow: boolean;
+  k: number;
+}
+const WIDE: Geo = {
+  w: 560,
+  h: 220,
+  client: { x: 78, y: 100 },
+  primary: { x: 330, y: 40 },
   replicas: [
-    { x: 250, y: 212 },
-    { x: 470, y: 212 },
+    { x: 250, y: 170 },
+    { x: 470, y: 170 },
   ],
+  repLabel: { x: 256, y: 106, anchor: "end" },
+  narrow: false,
+  k: 1,
+};
+const NARROW: Geo = {
+  w: 320,
+  h: 240,
+  client: { x: 76, y: 34 },
+  primary: { x: 244, y: 34 },
+  replicas: [
+    { x: 76, y: 180 },
+    { x: 244, y: 180 },
+  ],
+  repLabel: { x: 250, y: 114, anchor: "start" },
+  narrow: true,
+  k: 1.2,
 };
 const BW = 124;
 const BH = 54;
+/** Where the line from box `a` towards box `b` leaves `a`'s border. */
+const edge = (a: Pt, b: Pt): Pt => {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const t = Math.min(dx ? BW / 2 / Math.abs(dx) : Infinity, dy ? BH / 2 / Math.abs(dy) : Infinity);
+  return { x: a.x + dx * t, y: a.y + dy * t };
+};
 
-function NodeBox({ x, y, title, version, latest, color, note }: { x: number; y: number; title: string; version?: number; latest?: number; color: string; note?: string }) {
+/** True while the widget is narrower than `px`, i.e. on a phone. */
+function useNarrow(px: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [px]);
+  return [ref, narrow] as const;
+}
+
+const CSS = `
+.rl { container: rl / inline-size; }
+.rl-opts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-end; margin: 4px 0 6px; }
+.rl-opts .control { min-width: 160px; }
+.rl-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+.rl-reads { list-style: none; padding: 0 !important; margin: 4px 0 0 !important; display: grid; gap: 2px; font-size: 13.5px; }
+.rl-reads li { display: flex; gap: 6px; align-items: baseline; margin: 0 !important; }
+.rl-note { font-size: 13px; margin: 6px 0 0 !important; }
+.rl-note--narrow { display: none; margin: 0 0 6px !important; }
+@container rl (max-width: 479px) {
+  .rl-note--wide { display: none; }
+  .rl-note--narrow { display: block; }
+  .rl-bar .wbtn { padding: 0 9px; }
+  .rl-opts .control { min-width: 100%; }
+}
+`;
+
+// Shown under the readout on the desktop pane, inside "Recent reads" on a phone (CSS picks one).
+const RYW_NOTE = `Read-your-writes keeps your own reads on the primary for ${RYW_WINDOW_MS / 1000} s after a write (or until the replica has caught up), so your change never vanishes. Other users can still hit a lagging replica.`;
+
+function NodeBox({ x, y, k, title, version, latest, color, note }: { x: number; y: number; k: number; title: string; version?: number; latest?: number; color: string; note?: string }) {
   const stale = version !== undefined && latest !== undefined && version < latest;
   return (
     <g>
       <rect x={x - BW / 2} y={y - BH / 2} width={BW} height={BH} rx={10} fill="var(--card-2)" stroke={color} strokeWidth={1.8} />
-      <text x={x} y={y - 9} textAnchor="middle" style={{ fontWeight: 650 }}>
+      <text x={x} y={y - 9} textAnchor="middle" style={{ fontWeight: 650, fontSize: 11.5 * k }}>
         {title}
       </text>
       {version !== undefined && (
-        <text x={x} y={y + 11} textAnchor="middle" style={{ fontWeight: 700, fontSize: 14, fill: stale ? "var(--warning-ink)" : "var(--fg)" }}>
+        <text x={x} y={y + 11 + (k - 1) * 8} textAnchor="middle" style={{ fontWeight: 700, fontSize: 14 * Math.min(k, 1.1), fill: stale ? "var(--warning-ink)" : "var(--fg)" }}>
           price v{version}
           {stale ? " (stale)" : ""}
         </text>
       )}
       {note && (
-        <text x={x} y={y + BH / 2 + 15} textAnchor="middle" className="muted-text" style={{ fontSize: 11 }}>
+        <text x={x} y={y + BH / 2 + 15 * k} textAnchor="middle" className="muted-text" style={{ fontSize: 11 * k }}>
           {note}
         </text>
       )}
@@ -149,6 +223,9 @@ export function ReplicationLag() {
   const [ryw, setRyw] = useState(false);
   const [message, setMessage] = useState("The primary and both replicas hold price v1. Write v2, then read before the replicas catch up.");
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const [boxRef, narrow] = useNarrow(480);
+  const g = narrow ? NARROW : WIDE;
+  const P = g;
   // The clock only runs while there is something to wait for (a change in flight or the read-your-writes window).
   const [busyFlag, setBusyFlag] = useState(false);
   const [s, reset] = useFixedStep<RLState>(initRL, stepRL, busyFlag && inView && !reduce);
@@ -174,154 +251,182 @@ export function ReplicationLag() {
   const pinLeft = pinned && s.lastWriteAt !== null ? RYW_WINDOW_MS - (s.t - s.lastWriteAt) : 0;
   const last = s.reads[0];
   const lastTarget = last ? (last.source < 0 ? P.primary : P.replicas[last.source]) : null;
+  const k = g.k;
+  const fromClient = (n: Pt) => edge(P.client, n);
 
   return (
     <WidgetFrame title="Replication lag and read-your-writes" sub="Writes go to the primary and reach the replicas a little later. Read from a replica inside that gap and you get the old value.">
-      <div className="controls">
-        <Slider label="Replication lag" value={lag} min={0} max={3000} step={100} onChange={setLag} format={(v) => `${v.toLocaleString("en")} ms`} />
-        <button type="button" className="wbtn primary" onClick={write}>
-          <PenLine size={14} aria-hidden /> Write v{s.primary + 1} to primary
-        </button>
-        <button type="button" className="wbtn" onClick={read}>
-          <BookOpen size={14} aria-hidden /> Read
-        </button>
-        <button type="button" className="wbtn" aria-pressed={ryw} onClick={() => setRyw((v) => !v)} style={ryw ? { borderColor: "var(--accent)" } : undefined}>
-          {ryw ? <CircleCheck size={14} aria-hidden className="ok-ink" /> : <Circle size={14} aria-hidden />}
-          Read-your-writes: {ryw ? "on" : "off"}
-        </button>
-        <SimButtons
-          running={busy && inView && !reduce}
-          reduce={reduce}
-          onStep={() => reset(advance(s, stepRL, 10))}
-          stepHint="Advance the clock 0.5 seconds"
-          onReset={() => {
-            reset(initRL());
-            setMessage("Reset: everyone holds price v1.");
-          }}
-        />
-      </div>
-      <div ref={ref}>
-        <svg viewBox="0 0 560 262" className="sim-svg" role="img" aria-label={`Primary has v${s.primary}. Replica 1 has v${s.replicas[0]}, replica 2 has v${s.replicas[1]}.`}>
-          {/* links */}
-          {P.replicas.map((r, i) => (
-            <line key={`rep${i}`} x1={P.primary.x} y1={P.primary.y + BH / 2} x2={r.x} y2={r.y - BH / 2} stroke="var(--border-strong)" strokeWidth={1.6} strokeDasharray="10 4 2 4" />
-          ))}
-          {[P.primary, ...P.replicas].map((n, i) => {
-            const hot = lastTarget === n;
-            return (
-              <line
-                key={`rd${i}`}
-                x1={P.client.x + BW / 2}
-                y1={P.client.y}
-                x2={n.x - BW / 2}
-                y2={n.y}
-                stroke={hot ? (last?.stale ? "var(--warning)" : "var(--accent)") : "var(--border)"}
-                strokeWidth={hot ? 2.4 : 1.2}
-              />
-            );
-          })}
-          <text x={(P.primary.x + P.replicas[0].x) / 2 - 34} y={(P.primary.y + P.replicas[0].y) / 2} textAnchor="end" className="muted-text" style={{ fontSize: 10.5 }}>
-            replication
-          </text>
+      <style href="w-replication-lag" precedence="widgets">
+        {CSS}
+      </style>
+      <div className="rl" ref={boxRef}>
+        <div className="rl-opts">
+          <Slider label="Replication lag" value={lag} min={0} max={3000} step={100} onChange={setLag} format={(v) => `${v.toLocaleString("en")} ms`} />
+          <button type="button" className="wbtn" aria-pressed={ryw} onClick={() => setRyw((v) => !v)} style={ryw ? { borderColor: "var(--accent)" } : undefined}>
+            {ryw ? <CircleCheck size={14} aria-hidden className="ok-ink" /> : <Circle size={14} aria-hidden />}
+            Read-your-writes: {ryw ? "on" : "off"}
+          </button>
+        </div>
+        <div className="rl-bar">
+          <button type="button" className="wbtn primary" onClick={write} aria-label={`Write v${s.primary + 1} to primary`}>
+            <PenLine size={14} aria-hidden /> Write v{s.primary + 1}
+          </button>
+          <button type="button" className="wbtn" onClick={read}>
+            <BookOpen size={14} aria-hidden /> Read
+          </button>
+          <SimButtons
+            running={busy && inView && !reduce}
+            reduce={reduce}
+            onStep={() => reset(advance(s, stepRL, 10))}
+            stepHint="Advance the clock 0.5 seconds"
+            onReset={() => {
+              reset(initRL());
+              setMessage("Reset: everyone holds price v1.");
+            }}
+          />
+        </div>
+        <div ref={ref}>
+          <svg viewBox={`0 0 ${g.w} ${g.h}`} className="sim-svg" style={{ maxWidth: 620, margin: "0 auto" }} role="img" aria-label={`Primary has v${s.primary}. Replica 1 has v${s.replicas[0]}, replica 2 has v${s.replicas[1]}.`}>
+            {/* links */}
+            {P.replicas.map((r, i) => {
+              const a = edge(P.primary, r);
+              const b = edge(r, P.primary);
+              return <line key={`rep${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--border-strong)" strokeWidth={1.6} strokeDasharray="10 4 2 4" />;
+            })}
+            {[P.primary, ...P.replicas].map((n, i) => {
+              const hot = lastTarget === n;
+              const a = fromClient(n);
+              const b = edge(n, P.client);
+              return (
+                <line
+                  key={`rd${i}`}
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke={hot ? (last?.stale ? "var(--warning)" : "var(--accent)") : "var(--border)"}
+                  strokeWidth={hot ? 2.4 : 1.2}
+                />
+              );
+            })}
+            <text x={P.repLabel.x} y={P.repLabel.y} textAnchor={P.repLabel.anchor} className="muted-text" style={{ fontSize: 10.5 * k }}>
+              replication
+            </text>
 
-          {/* nodes */}
-          <NodeBox {...P.client} title="You (app)" color="var(--k-client)" note={last ? `last read: v${last.version}${last.stale ? " (stale)" : ""}` : "no reads yet"} />
-          <NodeBox {...P.primary} title="Primary" version={s.primary} latest={s.primary} color="var(--k-database)" />
-          {pinned && (
-            <g>
-              <rect x={P.primary.x - BW / 2} y={P.primary.y + BH / 2 + 5} width={BW} height={5} rx={2.5} fill="var(--border)" />
-              <rect x={P.primary.x - BW / 2} y={P.primary.y + BH / 2 + 5} width={(BW * pinLeft) / RYW_WINDOW_MS} height={5} rx={2.5} fill="var(--accent)" />
-              <text x={P.primary.x + BW / 2 + 8} y={P.primary.y + BH / 2 + 11} className="muted-text" style={{ fontSize: 10.5 }}>
-                reads pinned here {(pinLeft / 1000).toFixed(1)} s
-              </text>
-            </g>
-          )}
-          {P.replicas.map((r, i) => {
-            const pending = s.ships.filter((x) => x.replica === i);
-            const eta = pending.length ? Math.max(0, Math.min(...pending.map((x) => x.applyAt)) - s.t) : 0;
-            return (
-              <NodeBox
-                key={i}
-                {...r}
-                title={`Replica ${i + 1}`}
-                version={s.replicas[i]}
-                latest={s.primary}
-                color="var(--k-database)"
-                note={pending.length ? `v${pending.at(-1)!.version} arrives in ${(eta / 1000).toFixed(1)} s` : "caught up"}
-              />
-            );
-          })}
-
-          {/* replication packets: position comes from the simulation clock */}
-          {s.ships.map((x, i) => {
-            const r = P.replicas[x.replica];
-            const p = Math.min(1, (s.t - x.sentAt) / Math.max(1, x.applyAt - x.sentAt));
-            const ax = P.primary.x;
-            const ay = P.primary.y + BH / 2;
-            const cx = ax + (r.x - ax) * p;
-            const cy = ay + (r.y - BH / 2 - ay) * p;
-            return (
-              <g key={`${x.version}-${x.replica}-${i}`} style={{ transform: `translate(${cx}px, ${cy}px)`, transition: reduce ? undefined : "transform 60ms linear" }}>
-                <circle r={7} fill="var(--series-2)" stroke="var(--card)" strokeWidth={2} />
-                <text x={10} y={4} style={{ fontSize: 10.5, fontWeight: 700 }}>
-                  v{x.version}
+            {/* nodes */}
+            <NodeBox {...P.client} k={k} title="You (app)" color="var(--k-client)" note={last ? `last read: v${last.version}${last.stale ? " (stale)" : ""}` : "no reads yet"} />
+            <NodeBox {...P.primary} k={k} title="Primary" version={s.primary} latest={s.primary} color="var(--k-database)" />
+            {pinned && (
+              <g>
+                <rect x={P.primary.x - BW / 2} y={P.primary.y + BH / 2 + 5} width={BW} height={5} rx={2.5} fill="var(--border)" />
+                <rect x={P.primary.x - BW / 2} y={P.primary.y + BH / 2 + 5} width={(BW * pinLeft) / RYW_WINDOW_MS} height={5} rx={2.5} fill="var(--accent)" />
+                <text
+                  x={g.narrow ? P.primary.x : P.primary.x + BW / 2 + 8}
+                  y={P.primary.y + BH / 2 + (g.narrow ? 26 : 11)}
+                  textAnchor={g.narrow ? "middle" : "start"}
+                  className="muted-text"
+                  style={{ fontSize: 10.5 * k }}
+                >
+                  reads pinned here {(pinLeft / 1000).toFixed(1)} s
                 </text>
               </g>
-            );
-          })}
+            )}
+            {P.replicas.map((r, i) => {
+              const pending = s.ships.filter((x) => x.replica === i);
+              const eta = pending.length ? Math.max(0, Math.min(...pending.map((x) => x.applyAt)) - s.t) : 0;
+              return (
+                <NodeBox
+                  key={i}
+                  {...r}
+                  k={k}
+                  title={`Replica ${i + 1}`}
+                  version={s.replicas[i]}
+                  latest={s.primary}
+                  color="var(--k-database)"
+                  note={pending.length ? `v${pending.at(-1)!.version} arrives in ${(eta / 1000).toFixed(1)} s` : "caught up"}
+                />
+              );
+            })}
 
-          {/* one-shot animations for the write and the latest read */}
-          {!reduce && s.lastWriteAt !== null && (
-            <m.circle
-              key={`w${s.primary}`}
-              r={6}
-              fill="var(--accent)"
-              stroke="var(--card)"
-              strokeWidth={2}
-              initial={{ cx: P.client.x + BW / 2, cy: P.client.y, opacity: 1 }}
-              animate={{ cx: P.primary.x - BW / 2, cy: P.primary.y, opacity: [1, 1, 0] }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            />
+            {/* replication packets: position comes from the simulation clock */}
+            {s.ships.map((x, i) => {
+              const r = P.replicas[x.replica];
+              const p = Math.min(1, (s.t - x.sentAt) / Math.max(1, x.applyAt - x.sentAt));
+              const a = edge(P.primary, r);
+              const b = edge(r, P.primary);
+              const cx = a.x + (b.x - a.x) * p;
+              const cy = a.y + (b.y - a.y) * p;
+              return (
+                <g key={`${x.version}-${x.replica}-${i}`} style={{ transform: `translate(${cx}px, ${cy}px)`, transition: reduce ? undefined : "transform 60ms linear" }}>
+                  <circle r={7} fill="var(--series-2)" stroke="var(--card)" strokeWidth={2} />
+                  <text x={10} y={4} style={{ fontSize: 10.5 * k, fontWeight: 700 }}>
+                    v{x.version}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* one-shot animations for the write and the latest read */}
+            {!reduce && s.lastWriteAt !== null && (
+              <m.circle
+                key={`w${s.primary}`}
+                r={6}
+                fill="var(--accent)"
+                stroke="var(--card)"
+                strokeWidth={2}
+                initial={{ cx: fromClient(P.primary).x, cy: fromClient(P.primary).y, opacity: 1 }}
+                animate={{ cx: edge(P.primary, P.client).x, cy: edge(P.primary, P.client).y, opacity: [1, 1, 0] }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+              />
+            )}
+            {!reduce && last && lastTarget && (
+              <m.circle
+                key={`r${last.n}`}
+                r={6}
+                fill={last.stale ? "var(--warning)" : "var(--good)"}
+                stroke="var(--card)"
+                strokeWidth={2}
+                initial={{ cx: fromClient(lastTarget).x, cy: fromClient(lastTarget).y, opacity: 1 }}
+                animate={{
+                  cx: [fromClient(lastTarget).x, edge(lastTarget, P.client).x, fromClient(lastTarget).x],
+                  cy: [fromClient(lastTarget).y, edge(lastTarget, P.client).y, fromClient(lastTarget).y],
+                  opacity: [1, 1, 0],
+                }}
+                transition={{ duration: 0.9, ease: "easeInOut" }}
+              />
+            )}
+          </svg>
+        </div>
+
+        <p className="readout" aria-live="polite">
+          {message} Stale reads so far: <strong>{s.staleCount}</strong> of <strong>{s.readCount}</strong>.
+          <ReducedNote reduce={reduce} what="Clock paused (reduced motion): Step advances 0.5 s, so press it to let replication catch up." />
+        </p>
+        <p className="muted rl-note rl-note--wide">{RYW_NOTE}</p>
+        <More label={`Recent reads (${s.reads.length})`}>
+          <p className="muted rl-note rl-note--narrow">{RYW_NOTE}</p>
+          {s.reads.length ? (
+            <ol aria-label="Recent reads" className="rl-reads">
+              {s.reads.map((ev) => (
+                <li key={ev.n}>
+                  {ev.stale ? <TriangleAlert size={13} aria-hidden className="warn-ink" /> : <CircleCheck size={13} aria-hidden className="ok-ink" />}
+                  <span>
+                    <strong>#{ev.n}</strong> {nodeName(ev.source)} → v{ev.version}{" "}
+                    <span className={ev.stale ? "warn-ink" : "ok-ink"} style={{ fontWeight: 600 }}>
+                      {ev.stale ? "stale" : "fresh"}
+                    </span>
+                    {ev.pinned && <span className="muted"> (pinned by read-your-writes)</span>}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+              No reads yet.
+            </p>
           )}
-          {!reduce && last && lastTarget && (
-            <m.circle
-              key={`r${last.n}`}
-              r={6}
-              fill={last.stale ? "var(--warning)" : "var(--good)"}
-              stroke="var(--card)"
-              strokeWidth={2}
-              initial={{ cx: P.client.x + BW / 2, cy: P.client.y, opacity: 1 }}
-              animate={{ cx: [P.client.x + BW / 2, lastTarget.x - BW / 2, P.client.x + BW / 2], cy: [P.client.y, lastTarget.y, P.client.y], opacity: [1, 1, 0] }}
-              transition={{ duration: 0.9, ease: "easeInOut" }}
-            />
-          )}
-        </svg>
+        </More>
       </div>
-
-      {s.reads.length > 0 && (
-        <ol aria-label="Recent reads" style={{ listStyle: "none", padding: 0, margin: "4px 0 0", display: "grid", gap: 2, fontSize: 13.5 }}>
-          {s.reads.map((ev) => (
-            <li key={ev.n} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
-              {ev.stale ? <TriangleAlert size={13} aria-hidden className="warn-ink" /> : <CircleCheck size={13} aria-hidden className="ok-ink" />}
-              <span>
-                <strong>#{ev.n}</strong> {nodeName(ev.source)} → v{ev.version}{" "}
-                <span className={ev.stale ? "warn-ink" : "ok-ink"} style={{ fontWeight: 600 }}>
-                  {ev.stale ? "stale" : "fresh"}
-                </span>
-                {ev.pinned && <span className="muted"> (pinned by read-your-writes)</span>}
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
-
-      <p className="readout" aria-live="polite">
-        {message} Stale reads so far: <strong>{s.staleCount}</strong> of <strong>{s.readCount}</strong>.
-        <ReducedNote reduce={reduce} what="Clock paused (reduced motion): Step advances 0.5 s, so press it to let replication catch up." />
-      </p>
-      <p className="muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
-        Read-your-writes routes your own reads to the primary for {RYW_WINDOW_MS / 1000} s after you write (or until the replica confirms it has your write&apos;s position), so you never see your change disappear. Other users can still read the old value from a lagging replica.
-      </p>
     </WidgetFrame>
   );
 }

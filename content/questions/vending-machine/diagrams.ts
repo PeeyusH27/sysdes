@@ -4,7 +4,7 @@ export const classes: ClassSpec = {
   id: "vending-machine-classes",
   title: "Vending machine class diagram",
   description:
-    "VendingMachine owns its inventory and coin box and points at its current state. Each state object (Idle, HasMoney, Dispensing, OutOfService) lists the events it accepts; HasMoney asks ChangeMaker for change before it sells. Payment methods sit behind one interface, and telemetry observes the machine without the machine knowing.",
+    "VendingMachine owns its inventory and coin box and points at its current state. Each state object (Idle, HasMoney, Dispensing, OutOfService) lists the events it accepts; HasMoney asks ChangeMaker for change before it sells. Payment methods share one interface, and telemetry observes the machine unseen.",
   classes: [
     { id: "payment", name: "PaymentMethod", col: 0, row: 0, stereotype: "interface", methods: ["credit(): cents", "commit(price)", "refund()"] },
     { id: "escrow", name: "CoinEscrow", col: 1, row: 0, fields: ["coins: Coin[]"], methods: ["credit(): sum of coins", "commit(price): to the tubes", "refund(): same coins back"] },

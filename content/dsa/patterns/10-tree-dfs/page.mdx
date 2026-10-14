@@ -2,119 +2,126 @@ import { subtreeHeight, carryDown, inorderStack } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-A tree is a root plus two smaller trees, so most tree problems are solved by **solving them for the left and right subtrees and combining the answers at the node**. Information either **returns up** (post-order: heights, sums, "is it balanced?") or is **carried down** as parameters (pre-order: running sums, the path maximum, BST bounds); the hardest problems return one thing and record a **global best** at every node. Each node is visited once: O(n) time and O(h) stack space.
+A tree is a root plus two smaller trees, so most tree problems are solved by **solving both subtrees and combining the answers at the node**. Answers **return up** (heights, sums) or are **carried down** (running sums, BST bounds); paths that bend keep a **global best**. O(n) time, O(h) stack.
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- The input is a **binary tree or BST** and the answer depends on whole subtrees: height, size, sum, balance, mirror image.
-- The problem talks about **root-to-leaf paths**: a path sum, the maximum on the path, collecting every path.
-- It asks for the **longest or largest path anywhere** in the tree (diameter, maximum path sum): the path may bend at any node.
-- A **BST** is involved: its ordering lets you skip whole subtrees, or you must check that the ordering holds.
-- Two nodes must be related: "where do their paths from the root split?" (lowest common ancestor).
+- A **binary tree or BST** whose answer depends on whole subtrees: height, size, balance, mirror image.
+- **Root-to-leaf paths**: a path sum, every path.
+- The **longest path anywhere** (diameter, maximum path sum): it may bend at any node.
+- Where two nodes' paths from the root split (lowest common ancestor).
 
 </Callout>
 
-| Variant | Information flows | When the node does its work | Classic problems |
-|---|---|---|---|
-| Return a value up | children → parent, as return values | post-order: after both children | max depth, invert tree, balanced tree, LCA |
-| Carry state down | parent → children, as parameters | pre-order: before the children | path sum, good nodes, validate BST |
-| Global best | return one value, record another | post-order plus an outer variable | diameter, maximum path sum |
-| BST walk | compare, then go one way | top-down, one branch only | search, range sum, kth smallest |
-| Explicit stack | an array replaces the call stack | any order | very deep trees, BST iterators |
+| Variant | Information flows | The node works |
+|---|---|---|
+| Return a value up | children → parent | post-order, after both children |
+| Carry state down | parent → children, as parameters | pre-order, before the children |
+| Global best | return one value, record another | post-order, plus an outer variable |
+| BST walk | compare, then one branch only | top-down |
+| Explicit stack | an array replaces the call stack | any order |
 
 ## The core idea: trust the recursive call
 
-Write a function `f(node)` that answers the question for the subtree rooted at `node`. Inside it, **assume** `f(node.left)` and `f(node.right)` already work: they are smaller trees, so the recursion is heading toward the base case, `f(null)`. All you write is two things:
+Write `f(node)` for the subtree at `node`, and **assume** `f(node.left)` and `f(node.right)` already work: they are smaller trees, heading for `f(null)`. You write only two things:
 
-- the **base case**: what is the answer for an empty tree (and, if the problem talks about leaves, for a leaf)?
-- the **combine step**: given the left answer and the right answer, what is this node's answer?
+- the **base case**: the answer for an empty tree (and for a leaf, if the problem talks about leaves);
+- the **combine step**: this node's answer, from the left and right answers.
 
-If both are right for one node, induction makes them right for the whole tree. Every node is entered once and does O(1) work, so the traversal is O(n). The recursion keeps one pending call per level, so it uses O(h) stack, where h is the height.
+Right for one node means right for the whole tree, by induction. Each node is entered once (O(n) time), and one call waits per level (O(h) stack, h = height).
 
-The three depth-first orders differ only in **when** the node does its work relative to its children. For the BST `[8, 3, 10, 1, 6, null, 14]`:
+The three depth-first orders differ only in **when** the node does its work. For the BST `[8, 3, 10, 1, 6, null, 14]`:
 
-| Order | Node's work happens | Visits | Use it to |
+| Order | Work happens | Visits | Use it to |
 |---|---|---|---|
-| Pre-order | before the children | 8, 3, 1, 6, 10, 14 | pass information down (depth, path so far, bounds), copy a tree |
+| Pre-order | before the children | 8, 3, 1, 6, 10, 14 | pass depth, paths or bounds down; copy a tree |
 | In-order | between left and right | 1, 3, 6, 8, 10, 14 | read a BST in sorted order |
-| Post-order | after both children | 1, 6, 3, 14, 10, 8 | combine the children's answers (height, sums, delete a tree) |
+| Post-order | after both children | 1, 6, 3, 14, 10, 8 | combine children's answers; delete a tree |
 
 <CodeTabs files={['snippets/orders.js']} />
 
-Watch post-order in action. Each node waits on the call stack while its subtrees answer, then returns its height (the badge) to its parent:
+In post-order, each node waits while its subtrees answer, then returns its height (the badge) to its parent:
 
 <AlgoViz trace={subtreeHeight} />
+
+Try a skewed tree of your own with Edit input: the stack grows to n.
+
+## Play with it
+
+Watch the walker dive while the call stack grows and shrinks. Then pick Predict and click the nodes in order yourself, or try Path sum.
+
+<TreeDfsLab />
 
 ## Step by step
 
 <Steps>
   <Step title="Say what the function returns for one subtree">
-    One sentence: "the height of the subtree rooted at node", "true if this subtree is a valid BST within (low, high)". If the final answer is not something a parent can build on (a diameter, a best path), return a helper value instead and keep the answer in an outer variable.
+    One sentence, like "the height of the subtree at node". If parents can't build on the answer (a diameter), return a helper value and keep the answer outside.
   </Step>
   <Step title="Write the base case">
-    Start with `if (node === null) return …`: 0 for heights and sums, `true` for "is valid", `-Infinity` for maximums. If the problem talks about **leaves**, add a leaf check too: a leaf has no left **and** no right child.
+    `if (node === null) return …`: 0 for sums, `true` for "valid", `-Infinity` for maximums.
   </Step>
   <Step title="Decide what flows down and what flows up">
-    Anything the node needs from its ancestors (depth, the remaining sum, the path maximum, BST bounds) becomes a parameter. Anything it needs from its descendants comes back as a return value.
+    Ancestors' info (depth, remaining sum, bounds) goes down as parameters; descendants' info comes back as return values.
   </Step>
   <Step title="Write the combine step">
-    Build this node's answer from `left`, `right` and `node.val`. If the answer can bend through the node (left + node + right), update the global best here, then return only what the parent can extend.
+    Build the answer from `left`, `right` and `node.val`. If it bends through the node, update the global best and return only the arm a parent can extend.
   </Step>
   <Step title="Check the shapes that break trees">
-    Empty tree, a single node, a skewed tree (height n, so recursion depth n), negative values, and nodes with exactly one child.
+    Empty, one node, skewed (recursion depth n), negative values, one-child nodes.
   </Step>
 </Steps>
 
 ## Template 1: return a value up
 
-Post-order: ask both subtrees, then combine. The combine line is the whole algorithm: `1 + Math.max(left, right)` for height, `left + right + 1` for size, `left && right && …` for a yes/no property. When a property needs two values (balanced needs heights **and** a verdict), squeeze them into one return value with a sentinel such as `-1`.
+Ask both subtrees, then combine: `1 + Math.max(left, right)` for height, `left + right + 1` for size. Need two values, like a height and a balanced verdict? Squeeze them into one with a sentinel such as `-1`.
 
 <CodeTabs files={['snippets/return-up.js']} />
 
-This template solves <ProblemLink slug="maximum-depth-of-binary-tree" /> directly, and <ProblemLink slug="invert-binary-tree" /> with a combine step that swaps the children. <ProblemLink slug="lowest-common-ancestor" /> returns "what I found in this subtree" upward, and the first node that hears back from both sides is the answer.
+That's <ProblemLink slug="maximum-depth-of-binary-tree" />, and <ProblemLink slug="invert-binary-tree" /> with a combine that swaps the children. <ProblemLink slug="lowest-common-ancestor" /> returns what it found below; the first node to hear back from both sides is the answer.
 
 ## Template 2: carry state down
 
-Pre-order: the node handles its own value using what its ancestors passed in, then calls its children with an updated copy. Numbers are passed by value, so each branch gets its own copy and nothing has to be undone. Arrays are shared, so a path you push onto must be popped when the call returns (that is backtracking), and copied when you store it.
+Use what the ancestors passed in, then call the children with an updated copy. Numbers are copied, so there's nothing to undo; a shared array must be popped after the call (backtracking) and copied when stored.
 
 <AlgoViz trace={carryDown} />
 
 <CodeTabs files={['snippets/carry-down.js']} />
 
-<ProblemLink slug="path-sum" /> carries the remaining sum down and checks it at each leaf. <ProblemLink slug="validate-binary-search-tree" /> carries the allowed range down (Template 4).
+<ProblemLink slug="path-sum" /> carries the remaining sum down and checks it at each leaf. <ProblemLink slug="validate-binary-search-tree" /> carries the allowed range (Template 4).
 
 ## Template 3: a global best updated at every node
 
-Some answers are paths that **bend**: they come up one subtree, pass through a node, and go down the other. Every path bends at exactly one highest node, so if each node computes "the best path that bends here", the best of those is the answer. But the parent can only extend a **straight** arm, not a bent path. So the helper does two jobs:
+Some paths **bend**: up one subtree, through a node, down the other. Each path bends at exactly one highest node, so the answer is the best bend over all nodes. But a parent can only extend a **straight** arm, so the helper:
 
-- **record** `leftArm + rightArm` (plus the node's value, for sums) in an outer `best` variable;
-- **return** only the longer single arm, the one the parent can extend.
+- **record** `leftArm + rightArm` (plus the node's value, for sums) in an outer `best`;
+- **return** only the longer arm.
 
 <CodeTabs files={['snippets/global-best.js']} />
 
-<ProblemLink slug="diameter-of-binary-tree" /> is exactly this with heights as arms. <ProblemLink slug="binary-tree-maximum-path-sum" /> uses sums as arms and drops an arm (treats it as 0) when it is negative, because a path is never forced to take a branch that lowers its sum.
+<ProblemLink slug="diameter-of-binary-tree" /> uses heights as arms. <ProblemLink slug="binary-tree-maximum-path-sum" /> uses sums and treats a negative arm as 0, since no path has to take a branch that lowers its sum.
 
 ## Template 4: BST bounds and ordering
 
-In a binary search tree, **every** value in a node's left subtree is smaller than the node and **every** value in its right subtree is larger. Two consequences:
+In a BST, **every** value left of a node is smaller and every value right of it is larger. So:
 
-- **One comparison rules out a whole subtree.** Searching, inserting and range queries walk down a single branch: O(h) instead of O(n).
-- **Each node lives inside a range set by all its ancestors.** Going left from a node with value v sets the upper bound to v; going right sets the lower bound to v. The root starts with (-∞, +∞).
+- **One comparison rules out a whole subtree.** Search, insert and range queries walk one branch: O(h), not O(n).
+- **Each node lives inside a range set by all its ancestors.** Going left from v sets the upper bound to v; going right sets the lower bound. The root starts at (-∞, +∞).
 
-That second point is what makes validation subtle. In `[5, 4, 6, null, null, 3, 7]`, every node is ordered correctly relative to its own children, yet 3 sits in the right subtree of 5, where every value must exceed 5. A check that only compares parents with children misses it; carrying `(low, high)` down catches it. Equivalently, an in-order traversal of a valid BST is strictly increasing.
+That makes validation subtle. In `[5, 4, 6, null, null, 3, 7]` each node suits its parent, yet 3 sits right of 5, where everything must exceed 5. Carry `(low, high)` down, or check that the in-order walk strictly increases.
 
 <CodeTabs files={['snippets/bst.js']} />
 
 ## Template 5: iterative DFS with an explicit stack
 
-Recursion uses the engine's call stack, which holds roughly 10,000 frames in V8 (Node and Chrome), fewer when each frame has many locals. A skewed tree with 10^5 nodes overflows it. An array used as a stack does the same job on the heap with no such limit, and some interviewers ask for it directly.
+V8 (Node and Chrome) holds roughly 10,000 frames, so a skewed tree of 10^5 nodes overflows it. An array stack does the same job on the heap, and some interviewers ask for it.
 
-- **Pre-order**: pop a node, visit it, push its **right** child first and its left child second, so the left one is popped next.
-- **In-order**: slide left pushing every node, pop one and visit it, then move into its right subtree. The stack always holds the ancestors still waiting for their left side to finish.
-- **Post-order**: run pre-order with the pushes swapped (node, right, left) and reverse the output.
+- **Pre-order**: pop, visit, push the **right** child, then the left, so the left pops next.
+- **In-order**: slide left pushing every node, pop and visit one, then step into its right subtree.
+- **Post-order**: pre-order with the pushes swapped (node, right, left), then reverse the output.
 
 <AlgoViz trace={inorderStack} />
 
@@ -149,14 +156,11 @@ const isLeaf = !node.left && !node.right;    // a leaf has NO children, not "at 
 [node.left, node.right] = [node.right, node.left]; // swap children in one line
 ```
 
-Numbers are passed by value: `dfs(node, best)` followed by `best = …` inside the call changes only that call's copy. Keep the running best in an outer `let` (or return it), and remember the opposite trap for arrays: a `path` array passed down is one shared object, so pop after recursing and push a copy into the results.
+Numbers are copied into each call, so keep a running best in an outer `let`. A `path` array is the opposite trap: one shared object.
 
 <Callout kind="warning">
 
-- Reading `node.left` before checking `node === null`: "Cannot read properties of null".
-- Treating a node with one child as a leaf. In path sum and minimum depth a leaf must have **both** children null.
-- Validating a BST by comparing each node only with its children, which misses violations two or more levels down.
-- Returning the global answer (a bent path) from the helper instead of the single arm the parent can extend.
+- Treating a node with one child as a leaf. In path sum and minimum depth, a leaf has **both** children null.
 - Starting a maximum at `0` when values can be negative: use `-Infinity`, or the root's value.
 - Pushing the shared `path` array into the results instead of a copy: every stored path ends up empty.
 
@@ -166,19 +170,19 @@ Numbers are passed by value: `dfs(node, best)` followed by `best = …` inside t
 
 <FollowUps>
   <FollowUp q="Recursive or iterative DFS?">
-    Recursive is shorter and easier to get right, so write it first unless told otherwise. Mention the risk: a skewed tree with 10^5 nodes means 10^5 nested calls, which overflows a typical JavaScript stack (V8 does not do tail-call elimination). The fix is an explicit stack: pre-order is a five-line loop, in-order needs the slide-left loop, and post-order is reversed pre-order or a stack with a "visited" flag.
+    Recursive first: shorter and easier to get right. Then name the risk: a skewed tree of 10^5 nodes overflows the stack (V8 has no tail-call elimination), and an explicit stack fixes it.
   </FollowUp>
   <FollowUp q="How does the lowest common ancestor change for a BST, or with parent pointers?">
-    In a BST, walk from the root: if both values are smaller go left, if both are larger go right, otherwise this node is where the paths split. That is O(h) with no recursion. In a general binary tree you need the post-order search, O(n). With parent pointers it becomes the intersection of two linked lists: walk up from both nodes, or record one node's ancestors in a set.
+    In a BST, go left while both values are smaller and right while both are larger; where they split is the answer, in O(h). With parent pointers it is the intersection of two linked lists.
   </FollowUp>
   <FollowUp q="Why isn't the diameter always the path through the root?">
-    Because one subtree can be much deeper and wider than the rest. If the root has a short right side and a huge left subtree, the longest path may bend at a node deep inside the left subtree and never touch the root. That is why the answer is the best bend over all nodes, kept in a global, not the root's left height plus right height.
+    One subtree can be much deeper and wider, so the longest path may bend deep inside it and never touch the root.
   </FollowUp>
   <FollowUp q="Can you traverse a tree in order with O(1) extra space?">
-    Yes, with Morris traversal. Before going left, find the node's in-order predecessor (the rightmost node of the left subtree) and point its right pointer back to the node; when you return through that thread, remove it and move right. It is O(n) time and O(1) space but temporarily modifies the tree, which interviewers mainly want you to know exists.
+    Yes, with Morris traversal: thread each node's in-order predecessor back to it and remove the thread on the way through. O(n) time, O(1) space, but the tree is modified while it runs.
   </FollowUp>
   <FollowUp q="When should you switch from DFS to BFS on a tree?">
-    When the question is about levels or the nearest something: level averages, the right side view, the minimum depth. DFS can answer them by passing the depth down, but BFS processes nodes level by level and can stop at the first leaf it meets. See [Tree BFS](/dsa/patterns/tree-bfs).
+    For levels or the nearest something: level averages, the right side view, minimum depth. BFS can stop at the first leaf; see [Tree BFS](/dsa/patterns/tree-bfs).
   </FollowUp>
 </FollowUps>
 

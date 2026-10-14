@@ -1,5 +1,6 @@
 import { arr, buildTree, defineTrace, NodeIds, note, stack, tree, type TNode } from "@/components/algo/trace";
 import type { Tone } from "@/components/algo/types";
+import { bstProblem, treeProblem } from "@/components/algo/checks";
 
 export const subtreeHeight = defineTrace({
   id: "tree-height",
@@ -16,6 +17,7 @@ function height(node) {              //@call
     { label: "Uneven tree", input: { values: [8, 3, 10, 1, 6, null, 14, null, null, 4, 7] as (number | null)[] } },
     { label: "Skewed tree", input: { values: [1, 2, null, 3, null, 4] as (number | null)[] } },
   ],
+  validate: ({ values }) => treeProblem(values),
   run(t, { values }) {
     const root = buildTree(values)!;
     const ids = new NodeIds();
@@ -100,6 +102,7 @@ function goodNodes(root) {
     { label: "Mixed values", input: { values: [5, 3, 8, 6, 2, 7, 9, 7] as (number | null)[] } },
     { label: "All negative", input: { values: [-1, -5, -3, null, -2] as (number | null)[] } },
   ],
+  validate: ({ values }) => treeProblem(values),
   run(t, { values }) {
     const root = buildTree(values)!;
     const ids = new NodeIds();
@@ -174,6 +177,7 @@ function inorder(root) {
     { label: "Balanced BST", input: { values: [6, 3, 9, 1, 4, 8, 10] as (number | null)[] } },
     { label: "Left-skewed BST", input: { values: [4, 3, null, 2, null, 1] as (number | null)[] } },
   ],
+  validate: ({ values }) => treeProblem(values) ?? bstProblem(values),
   run(t, { values }) {
     const root = buildTree(values);
     const ids = new NodeIds();

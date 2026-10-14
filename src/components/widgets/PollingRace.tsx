@@ -4,7 +4,7 @@ import { Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
 export type LaneId = "short" | "long" | "sse" | "ws";
 export interface Span {
@@ -109,30 +109,69 @@ export const fmtDelay = (ms: number) => (ms < 1_000 ? `${Math.round(ms)} ms` : `
 
 // ---------------------------------------------------------------- picture
 const D = 60_000;
-const W = 640;
-const L = 120;
-const R = 628;
-const TOP = 34;
-const LANE_H = 48;
 const SPEED = 7.5; // simulated ms per real ms: 60 s plays in 8 s
-const x = (t: number) => L + (Math.min(t, D) / D) * (R - L);
+
+/** Landscape: lane names in a left column. Phone: each lane's name sits above its track, so the track gets the full width. */
+function geometry(narrow: boolean) {
+  const W = narrow ? 300 : 640;
+  const L = narrow ? 8 : 128;
+  const R = W - 12;
+  const TOP = narrow ? 40 : 34;
+  const LANE_H = narrow ? 54 : 46;
+  const x = (t: number) => L + (Math.min(t, D) / D) * (R - L);
+  return { W, L, R, TOP, LANE_H, x, height: TOP + 4 * LANE_H + 24 };
+}
+type Geo = ReturnType<typeof geometry>;
 
 interface Play {
   t: number;
 }
 const play = (s: Play, dt: number): Play => (s.t >= D ? s : { t: Math.min(D, s.t + dt * SPEED) });
 
-function LaneView({ lane, y, at }: { lane: LaneResult; y: number; at: number }) {
-  const mid = y + LANE_H / 2;
+/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
+function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => {
+      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, px]);
+  return narrow;
+}
+
+const laneName = (lane: LaneResult) => (lane.id === "short" ? "Short polling" : lane.name);
+const laneStats = (lane: LaneResult) => `${lane.requestCount} req${lane.emptyCount ? `, ${lane.emptyCount} empty` : ""} · avg ${fmtDelay(lane.avgDelay)}`;
+
+function LaneView({ lane, y, at, g, narrow }: { lane: LaneResult; y: number; at: number; g: Geo; narrow: boolean }) {
+  const { x, L, R, LANE_H } = g;
+  const mid = narrow ? y + 28 : y + LANE_H / 2 - 4;
   const longLived = lane.id === "sse" || lane.id === "ws";
   return (
     <g>
-      <text x={8} y={mid - 2} style={{ fontWeight: 650, fontSize: 12 }}>
-        {lane.id === "short" ? "Short polling" : lane.name}
-      </text>
-      <text x={8} y={mid + 13} className="muted-text" style={{ fontSize: 10.5 }}>
-        {lane.requestCount} request{lane.requestCount === 1 ? "" : "s"}
-      </text>
+      {narrow ? (
+        <text x={L} y={y + 12} style={{ fontWeight: 650, fontSize: 12 }}>
+          {laneName(lane)}{" "}
+          <tspan className="muted-text" style={{ fontWeight: 400, fontSize: 11 }}>
+            · {laneStats(lane)}
+          </tspan>
+        </text>
+      ) : (
+        <>
+          <text x={8} y={mid - 2} style={{ fontWeight: 650, fontSize: 12 }}>
+            {laneName(lane)}
+          </text>
+          <text x={8} y={mid + 13} className="muted-text" style={{ fontSize: 10.5 }}>
+            {lane.requestCount} req{lane.emptyCount ? `, ${lane.emptyCount} empty` : ""}
+          </text>
+          <text x={8} y={mid + 26} className="muted-text" style={{ fontSize: 10.5 }}>
+            avg {fmtDelay(lane.avgDelay)}
+          </text>
+        </>
+      )}
       <line x1={L} x2={R} y1={y + LANE_H} y2={y + LANE_H} stroke="var(--grid)" />
       {lane.requests.map((r, i) => {
         if (r.start > at) return null;
@@ -162,6 +201,8 @@ export function PollingRace() {
   const [seed, setSeed] = useState(11);
   const [playing, setPlaying] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const box = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(box);
   const [state, reset] = useFixedStep<Play>({ t: D }, play, playing && inView && !reduce);
   const at = state.t;
 
@@ -186,100 +227,118 @@ export function PollingRace() {
     `${events.length} events in 60 s. Short polling every ${interval} s: ${short.requestCount} requests (${short.emptyCount} came back empty), average delay ${fmtDelay(short.avgDelay)}. Long polling: ${long.requestCount} requests, ${fmtDelay(long.avgDelay)}. SSE and WebSocket: one connection each, ${fmtDelay(sse.avgDelay)}.`,
     800,
   );
-  const height = TOP + lanes.length * LANE_H + 30;
+  const g = geometry(narrow);
+  const { W, TOP, LANE_H, x, height } = g;
+  const ticks = narrow ? [0, 20, 40, 60] : [0, 10, 20, 30, 40, 50, 60];
 
   return (
-    <WidgetFrame title="Polling race" sub="The same server events, delivered four ways over 60 simulated seconds (50 ms one-way latency). Amber bars are the time an event waits before the client has it.">
-      <div className="controls">
-        <Slider label="Short-poll interval" value={interval} min={1} max={20} onChange={setPollEvery} format={(v) => `${v} s`} />
-        <Slider label="Events per minute" value={perMinute} min={2} max={20} onChange={setPerMinute} />
-        <button type="button" className="wbtn" onClick={() => setSeed((s) => s + 1)}>
-          <Shuffle size={14} aria-hidden /> New events
-        </button>
-        <SimButtons
-          running={playing && !done && !reduce}
-          reduce={reduce}
-          onToggle={done ? replay : () => setPlaying((p) => !p)}
-          onStep={() => reset({ t: at >= D ? 0 : Math.min(D, at + 10_000) })}
-          stepHint={done ? "Restart at 0 seconds" : "Advance 10 seconds"}
-          onReset={() => {
-            setPlaying(false);
-            reset({ t: 0 });
-          }}
-        />
-      </div>
-      <div ref={ref} style={{ overflowX: "auto" }}>
-        <svg viewBox={`0 0 ${W} ${height}`} className="sim-svg" style={{ minWidth: 500 }} role="img" aria-label={`Timeline of ${events.length} events and how each technique delivers them; playhead at ${Math.round(at / 1000)} s`}>
-          <text x={8} y={TOP - 12} style={{ fontWeight: 650, fontSize: 12 }}>
-            Server events
-          </text>
-          {events.map((e) => (
-            <g key={e} opacity={e <= at ? 1 : 0.25}>
-              <line x1={x(e)} x2={x(e)} y1={TOP - 4} y2={TOP + lanes.length * LANE_H} stroke="var(--grid)" />
-              <path d={`M${x(e)} ${TOP - 22} l6 6 l-6 6 l-6 -6 z`} fill="var(--accent-2)" />
-            </g>
-          ))}
-          {lanes.map((lane, i) => (
-            <LaneView key={lane.id} lane={lane} y={TOP + i * LANE_H} at={at} />
-          ))}
-          {[0, 10, 20, 30, 40, 50, 60].map((s) => (
-            <text key={s} x={x(s * 1000)} y={height - 8} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
-              {s} s
+    <WidgetFrame title="Polling race" sub="The same server events, delivered four ways over 60 simulated seconds (50 ms one-way latency). Amber bars are the wait before the client has an event.">
+      <div ref={box}>
+        <div className="controls" style={{ marginBottom: 4 }}>
+          <Slider label="Short-poll interval" value={interval} min={1} max={20} onChange={setPollEvery} format={(v) => `${v} s`} />
+          <Slider label="Events per minute" value={perMinute} min={2} max={20} onChange={setPerMinute} />
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <button type="button" className="wbtn" onClick={() => setSeed((s) => s + 1)} aria-label="New events" title="New events">
+              <Shuffle size={14} aria-hidden />
+            </button>
+            <SimButtons
+              running={playing && !done && !reduce}
+              reduce={reduce}
+              onToggle={done ? replay : () => setPlaying((p) => !p)}
+              onStep={() => reset({ t: at >= D ? 0 : Math.min(D, at + 10_000) })}
+              stepHint={done ? "Restart at 0 seconds" : "Advance 10 seconds"}
+              onReset={() => {
+                setPlaying(false);
+                reset({ t: 0 });
+              }}
+            />
+          </div>
+        </div>
+        <div ref={ref}>
+          <svg viewBox={`0 0 ${W} ${height}`} className="sim-svg" role="img" aria-label={`Timeline of ${events.length} events and how each technique delivers them; playhead at ${Math.round(at / 1000)} s`}>
+            <text x={8} y={narrow ? 12 : TOP - 12} style={{ fontWeight: 650, fontSize: 12 }}>
+              Server events
             </text>
-          ))}
-          {!done && <line x1={x(at)} x2={x(at)} y1={TOP - 26} y2={TOP + lanes.length * LANE_H} stroke="var(--fg)" strokeWidth={1.5} opacity={0.55} />}
-        </svg>
-      </div>
-      <ul className="legend" aria-label="Legend" style={{ marginTop: 4 }}>
-        <li>
-          <svg width={12} height={12} aria-hidden>
-            <path d="M6 0 l6 6 l-6 6 l-6 -6 z" fill="var(--accent-2)" />
-          </svg>
-          event happens on the server
-        </li>
-        <li>
-          <span className="line-key" style={{ background: "var(--series-2)", height: 4 }} aria-hidden />
-          waiting to reach the client
-        </li>
-        <li>
-          <svg width={12} height={12} aria-hidden>
-            <circle cx={6} cy={6} r={4.5} fill="var(--series-1)" />
-          </svg>
-          client has it
-        </li>
-        <li>
-          <span className="line-key" style={{ background: "var(--series-3)", height: 8, opacity: 0.45 }} aria-hidden />
-          request or open connection (grey tick: empty poll)
-        </li>
-      </ul>
-      <div className="table-wrap" style={{ marginBottom: 0 }}>
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Technique</th>
-              <th scope="col">HTTP requests</th>
-              <th scope="col">Empty answers</th>
-              <th scope="col">Avg delay</th>
-              <th scope="col">Worst delay</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lanes.map((l) => (
-              <tr key={l.id}>
-                <th scope="row">{l.name}</th>
-                <td>{l.id === "sse" ? "1 (stream)" : l.id === "ws" ? "1 (upgrade)" : l.requestCount}</td>
-                <td>{l.emptyCount}</td>
-                <td>{fmtDelay(l.avgDelay)}</td>
-                <td>{fmtDelay(l.maxDelay)}</td>
-              </tr>
+            {events.map((e) => (
+              <g key={e} opacity={e <= at ? 1 : 0.25}>
+                <line x1={x(e)} x2={x(e)} y1={TOP - 4} y2={TOP + lanes.length * LANE_H} stroke="var(--grid)" />
+                <path d={`M${x(e)} ${TOP - 22} l6 6 l-6 6 l-6 -6 z`} fill="var(--accent-2)" />
+              </g>
             ))}
-          </tbody>
-        </table>
+            {lanes.map((lane, i) => (
+              <LaneView key={lane.id} lane={lane} y={TOP + i * LANE_H} at={at} g={g} narrow={narrow} />
+            ))}
+            {ticks.map((s, i) => (
+              <text key={s} x={x(s * 1000)} y={height - 6} textAnchor={i === ticks.length - 1 ? "end" : i === 0 && narrow ? "start" : "middle"} className="muted-text" style={{ fontSize: 10.5 }}>
+                {s} s
+              </text>
+            ))}
+            {!done && <line x1={x(at)} x2={x(at)} y1={TOP - 26} y2={TOP + lanes.length * LANE_H} stroke="var(--fg)" strokeWidth={1.5} opacity={0.55} />}
+          </svg>
+        </div>
+        <ul className="legend" aria-label="Legend" style={{ marginTop: 4 }}>
+          <li>
+            <svg width={12} height={12} aria-hidden>
+              <path d="M6 0 l6 6 l-6 6 l-6 -6 z" fill="var(--accent-2)" />
+            </svg>
+            event on the server
+          </li>
+          <li>
+            <span className="line-key" style={{ background: "var(--series-2)", height: 4 }} aria-hidden />
+            waiting
+          </li>
+          <li>
+            <svg width={12} height={12} aria-hidden>
+              <circle cx={6} cy={6} r={4.5} fill="var(--series-1)" />
+            </svg>
+            client has it
+          </li>
+          <li>
+            <span className="line-key" style={{ background: "var(--series-3)", height: 8, opacity: 0.45 }} aria-hidden />
+            request or connection (grey: empty poll)
+          </li>
+        </ul>
+        <p className="readout" aria-live="polite">
+          {said}
+          <ReducedNote reduce={reduce} what="Showing the full 60 s (reduced motion): Step replays it 10 s at a time." />
+        </p>
+        <More label="Results by technique">
+          {narrow ? (
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, display: "grid", gap: 4 }}>
+              {lanes.map((l) => (
+                <li key={l.id} style={{ margin: 0 }}>
+                  <strong>{l.name}</strong>: {l.id === "sse" ? "1 stream" : l.id === "ws" ? "1 upgrade" : `${l.requestCount} HTTP requests, ${l.emptyCount} empty`}; delay avg {fmtDelay(l.avgDelay)}, worst {fmtDelay(l.maxDelay)}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="table-wrap" style={{ margin: 0 }}>
+              <table style={{ fontSize: 13.5 }}>
+                <thead>
+                  <tr>
+                    <th scope="col">Technique</th>
+                    <th scope="col">HTTP requests</th>
+                    <th scope="col">Empty answers</th>
+                    <th scope="col">Avg delay</th>
+                    <th scope="col">Worst delay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lanes.map((l) => (
+                    <tr key={l.id}>
+                      <th scope="row">{l.name}</th>
+                      <td>{l.id === "sse" ? "1 (stream)" : l.id === "ws" ? "1 (upgrade)" : l.requestCount}</td>
+                      <td>{l.emptyCount}</td>
+                      <td>{fmtDelay(l.avgDelay)}</td>
+                      <td>{fmtDelay(l.maxDelay)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </More>
       </div>
-      <p className="readout" aria-live="polite">
-        {said}
-        <ReducedNote reduce={reduce} what="Showing the full 60 s (reduced motion): Step replays it 10 s at a time." />
-      </p>
     </WidgetFrame>
   );
 }

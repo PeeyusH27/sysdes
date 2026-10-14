@@ -1,11 +1,11 @@
 "use client";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { KeyRound, Megaphone, Rocket } from "lucide-react";
 import { LineChart } from "@/components/charts/LineChart";
 import { compact, int } from "@/lib/format";
 import { useFixedStep } from "@/lib/sim-loop";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Seg, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
 /* ------------------------------------------------------------------ pure simulation */
 
@@ -180,34 +180,107 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
   );
 });
 
-function Pipe({ y, label, sub, segs, workers, busy, color }: { y: number; label: string; sub: string; segs: QSeg[]; workers: number; busy: boolean; color: string }) {
+/** Drawing geometry: label column beside the pipes on the desktop pane, label above each pipe on a phone. */
+interface Geo {
+  w: number;
+  narrow: boolean;
+  x0: number;
+  x1: number;
+  workerX: number;
+  workerGap: number;
+  k: number;
+}
+const WIDE: Geo = { w: 560, narrow: false, x0: 150, x1: 430, workerX: 448, workerGap: 20, k: 1 };
+const NARROW: Geo = { w: 320, narrow: true, x0: 8, x1: 226, workerX: 240, workerGap: 16, k: 1.2 };
+
+/** True while the widget is narrower than `px`, i.e. on a phone. */
+function useNarrow(px: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [px]);
+  return [ref, narrow] as const;
+}
+
+const CSS = `
+.pl { container: pl / inline-size; }
+.pl-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 6px; }
+.pl-bar > div:last-child { flex-wrap: nowrap !important; }
+.pl .legend { font-size: 12px; gap: 2px 12px; margin-top: 2px !important; }
+.pl-stats { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 6px 0 0 !important; font-size: 13px; }
+.pl-stats > div { display: block; }
+.pl-stats dt, .pl-stats dd { display: inline; }
+.pl-stats dt { color: var(--muted); }
+.pl-stats dd { margin: 0 0 0 5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.pl-stats small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.pl .widget-more .chart { margin: 8px 0 0; padding: 0; border: 0; background: transparent; }
+@container pl (max-width: 479px) {
+  .pl-bar .wbtn { padding: 0 9px; }
+  .pl-bar .seg button { padding: 5px 8px; }
+}
+`;
+
+function Pipe({ g, y, label, sub, segs, workers, busy, color }: { g: Geo; y: number; label: string; sub: string; segs: QSeg[]; workers: number; busy: boolean; color: string }) {
   const total = queued(segs);
-  const otps = segs.filter((g) => g.kind === "otp").length;
+  const otps = segs.filter((s) => s.kind === "otp").length;
   const mkt = queued(segs, "mkt");
+  const { x0, x1, k } = g;
+  const room = x1 - x0 - 30;
   // marketing volume as a log-scaled fill; OTP codes drawn as dots at the tail when they're stuck behind it
-  const fillW = mkt ? Math.min(250, 20 + Math.log10(mkt + 1) * 38) : 0;
-  const x0 = 150;
-  const x1 = 430;
+  const fillW = mkt ? Math.min(room, 20 + Math.log10(mkt + 1) * 38 * (room / 250)) : 0;
+  const top = g.narrow ? y + 20 : y; // pipe top
+  // waiting OTP dots sit at the tail of the queue; when the backlog fills the pipe they overlap its bar instead of spilling out
+  const shownOtps = Math.min(otps, 8);
+  const shift = Math.max(0, x0 + 8 - (x1 - fillW - 10 - (shownOtps - 1) * 13));
+  const note = y + (g.narrow ? 66 : 46);
   return (
     <g>
-      <text x={14} y={y + 12} style={{ fontWeight: 650 }}>
-        {label}
-      </text>
-      <text x={14} y={y + 28} className="muted-text" style={{ fontSize: 10.5 }}>
-        {sub}
-      </text>
-      <rect x={x0} y={y} width={x1 - x0} height={30} rx={8} fill="var(--card-2)" stroke={color} strokeWidth={1.6} />
-      {fillW > 0 && <rect x={x1 - fillW} y={y + 4} width={fillW - 4} height={22} rx={5} fill="var(--series-2)" opacity={0.85} />}
-      {Array.from({ length: Math.min(otps, 8) }, (_, i) => (
-        <circle key={i} cx={x1 - fillW - 10 - i * 13} cy={y + 15} r={5} fill="var(--series-1)" stroke="var(--card)" strokeWidth={1.5} />
+      {g.narrow ? (
+        <text x={x0} y={y + 12} style={{ fontWeight: 650, fontSize: 11.5 * k }}>
+          {label}{" "}
+          <tspan className="muted-text" style={{ fontWeight: 400, fontSize: 10.5 * k }}>
+            · {sub}
+          </tspan>
+        </text>
+      ) : (
+        <>
+          <text x={14} y={y + 12} style={{ fontWeight: 650 }}>
+            {label}
+          </text>
+          <text x={14} y={y + 28} className="muted-text" style={{ fontSize: 10.5 }}>
+            {sub}
+          </text>
+        </>
+      )}
+      <rect x={x0} y={top} width={x1 - x0} height={30} rx={8} fill="var(--card-2)" stroke={color} strokeWidth={1.6} />
+      {fillW > 0 && <rect x={x1 - fillW} y={top + 4} width={fillW - 4} height={22} rx={5} fill="var(--series-2)" opacity={0.85} />}
+      {Array.from({ length: shownOtps }, (_, i) => (
+        <circle key={i} cx={x1 - fillW - 10 - i * 13 + shift} cy={top + 15} r={5} fill="var(--series-1)" stroke="var(--card)" strokeWidth={1.5} />
       ))}
-      <text x={x0 + 6} y={y + 46} className="muted-text" style={{ fontSize: 10.5 }}>
-        {total ? `${int(total)} waiting${mkt && otps ? ` (${otps} OTP${otps > 1 ? "s" : ""} behind ${compact(mkt)} marketing)` : ""}` : "empty"}
+      <text x={x0 + 6} y={note} className="muted-text" style={{ fontSize: 10.5 * k }}>
+        {!total
+          ? "empty"
+          : g.narrow
+            ? `${compact(total)} waiting${mkt && otps ? ` · ${otps} OTP${otps > 1 ? "s" : ""} stuck` : ""}`
+            : `${int(total)} waiting${mkt && otps ? ` (${otps} OTP${otps > 1 ? "s" : ""} behind ${compact(mkt)} marketing)` : ""}`}
       </text>
       {Array.from({ length: Math.min(workers, 10) }, (_, i) => (
-        <circle key={i} cx={448 + (i % 5) * 20} cy={y + 6 + Math.floor(i / 5) * 18} r={7} fill={busy ? color : "var(--card-2)"} stroke={color} strokeWidth={1.4} />
+        <circle
+          key={i}
+          cx={g.workerX + (i % 5) * g.workerGap}
+          cy={top + 6 + Math.floor(i / 5) * (g.narrow ? 16 : 18)}
+          r={g.narrow ? 6 : 7}
+          fill={busy ? color : "var(--card-2)"}
+          stroke={color}
+          strokeWidth={1.4}
+        />
       ))}
-      <text x={446} y={y + 46} className="muted-text" style={{ fontSize: 10.5 }}>
+      <text x={g.narrow ? g.w - 4 : g.workerX - 7} y={note} textAnchor={g.narrow ? "end" : "start"} className="muted-text" style={{ fontSize: 10.5 * k }}>
         {workers} workers {busy ? "busy" : "idle"}
       </text>
     </g>
@@ -218,6 +291,8 @@ export function PriorityLanes() {
   const [speed, setSpeed] = useState(10);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const [boxRef, narrow] = useNarrow(480);
+  const g = narrow ? NARROW : WIDE;
   const step = useCallback((s: PLState, dt: number) => sample(stepPL(s, dt * speed), speed * 250), [speed]);
   const [s, reset] = useFixedStep<PLState>(() => initPL(), step, running && inView && !reduce);
 
@@ -239,93 +314,108 @@ export function PriorityLanes() {
       : `One shared queue: fine while it's quiet (codes go out in ${dur(Math.max(lastLat, SERVICE_MS / 1000))}). Launch the campaign to see what FIFO does to them.`;
   }
   const said = useThrottled(sentence, 900);
+  // on a phone the single shared queue gets a shorter drawing instead of empty space above and below it
+  const lanesH = g.narrow ? (s.mode === "lanes" ? 162 : 82) : 172;
 
   return (
     <WidgetFrame title="Priority lanes" sub="Login codes (OTP) must arrive in seconds; marketing can wait hours. Give them separate queues and workers, or watch one campaign bury every login.">
-      <div className="controls">
-        <Seg<Mode>
-          label="Queues"
-          value={s.mode}
-          onChange={(m) => reset(setMode(s, m))}
-          options={[
-            { value: "lanes", label: "Two lanes" },
-            { value: "shared", label: "Single shared queue" },
-          ]}
-        />
-        <button type="button" className="wbtn danger" onClick={() => reset(launchCampaign(s))}>
-          <Rocket size={14} aria-hidden /> Launch 1M campaign
-        </button>
-        <Seg<number>
-          label="Speed"
-          value={speed}
-          onChange={setSpeed}
-          options={[
-            { value: 1, label: "1×" },
-            { value: 10, label: "10×" },
-            { value: 60, label: "60×" },
-          ]}
-        />
-        <SimButtons
-          running={running && inView}
-          reduce={reduce}
-          onToggle={() => setRunning((r) => !r)}
-          onStep={() => reset(sample(stepPL(s, 30_000), 0))}
-          stepHint="Advance 30 simulated seconds"
-          onReset={() => reset(initPL(s.mode))}
-        />
+      <style href="w-priority-lanes" precedence="widgets">
+        {CSS}
+      </style>
+      <div className="pl" ref={boxRef}>
+        <div className="pl-bar">
+          <div className="seg" role="group" aria-label="Queues">
+            {(
+              [
+                ["lanes", "Two lanes"],
+                ["shared", "Shared queue"],
+              ] as const
+            ).map(([v, l]) => (
+              <button key={v} type="button" aria-pressed={s.mode === v} onClick={() => reset(setMode(s, v))}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="wbtn danger" onClick={() => reset(launchCampaign(s))}>
+            <Rocket size={14} aria-hidden /> Launch 1M campaign
+          </button>
+          <SimButtons
+            running={running && inView}
+            reduce={reduce}
+            onToggle={() => setRunning((r) => !r)}
+            onStep={() => reset(sample(stepPL(s, 30_000), 0))}
+            stepHint="Advance 30 simulated seconds"
+            onReset={() => reset(initPL(s.mode))}
+          />
+        </div>
+
+        <div ref={ref}>
+          <svg viewBox={`0 0 ${g.w} ${lanesH}`} className="sim-svg" style={{ maxWidth: 620, margin: "0 auto" }} role="img" aria-label={`${s.mode === "lanes" ? "Two queues" : "One shared queue"}. Marketing backlog ${int(mktBacklog)}. An OTP sent now waits ${dur(wait)}.`}>
+            {s.mode === "lanes" ? (
+              <>
+                <Pipe g={g} y={g.narrow ? 4 : 14} label="OTP lane" sub="critical · login codes" segs={s.q.otp} workers={WORKERS.otp} busy={s.q.otp.length > 0} color="var(--series-1)" />
+                <Pipe g={g} y={g.narrow ? 86 : 96} label="Marketing lane" sub="low priority" segs={s.q.mkt} workers={WORKERS.mkt} busy={s.q.mkt.length > 0} color="var(--series-2)" />
+              </>
+            ) : (
+              <Pipe g={g} y={g.narrow ? 4 : 52} label="Shared queue" sub="FIFO: first in, first out" segs={s.q.shared} workers={WORKERS.shared} busy={s.q.shared.length > 0} color="var(--k-queue)" />
+            )}
+          </svg>
+        </div>
+        <ul className="legend" aria-label="Legend">
+          <li>
+            <KeyRound size={13} aria-hidden style={{ color: "var(--series-1)" }} /> OTP code (one every 0.5 s)
+          </li>
+          <li>
+            <Megaphone size={13} aria-hidden style={{ color: "var(--series-2)" }} /> marketing (log-scale bar)
+          </li>
+          <li>1 worker = 20 messages/s</li>
+        </ul>
+
+        <dl className="pl-stats">
+          <div>
+            <dt>OTP sent now waits</dt>
+            <dd className={wait > 30 ? "bad-ink" : undefined}>
+              {dur(wait + SERVICE_MS / 1000)} <small className={wait > 30 ? "bad-ink" : undefined}>{wait > 30 ? "✕ too late: codes expire in minutes" : "✓ on time"}</small>
+            </dd>
+          </div>
+          <div>
+            <dt>Oldest waiting OTP</dt>
+            <dd>
+              {oldest ? dur(oldest) : "none"} <small>({int(s.sent.otp)} delivered)</small>
+            </dd>
+          </div>
+          <div>
+            <dt>Marketing backlog</dt>
+            <dd>
+              {compact(mktBacklog)} <small>{mktBacklog > 1000 ? `drains in ~${dur(drain)}` : "keeping up"}</small>
+            </dd>
+          </div>
+          <div>
+            <dt>Simulated time</dt>
+            <dd>
+              {dur(s.t / 1000)} <small>({speed}× real time)</small>
+            </dd>
+          </div>
+        </dl>
+
+        <p className="readout" aria-live="polite">
+          {said}
+          <ReducedNote reduce={reduce} what="Paused (reduced motion): Step advances 30 simulated seconds." />
+        </p>
+        <More label="Speed and OTP wait chart">
+          <Seg<number>
+            label="Speed"
+            value={speed}
+            onChange={setSpeed}
+            options={[
+              { value: 1, label: "1×" },
+              { value: 10, label: "10×" },
+              { value: 60, label: "60×" },
+            ]}
+          />
+          <LatencyChart samples={s.samples} />
+        </More>
       </div>
-
-      <div ref={ref}>
-        <svg viewBox="0 0 560 172" className="sim-svg" role="img" aria-label={`${s.mode === "lanes" ? "Two queues" : "One shared queue"}. Marketing backlog ${int(mktBacklog)}. An OTP sent now waits ${dur(wait)}.`}>
-          {s.mode === "lanes" ? (
-            <>
-              <Pipe y={14} label="OTP lane" sub="critical · login codes" segs={s.q.otp} workers={WORKERS.otp} busy={s.q.otp.length > 0} color="var(--series-1)" />
-              <Pipe y={96} label="Marketing lane" sub="low priority" segs={s.q.mkt} workers={WORKERS.mkt} busy={s.q.mkt.length > 0} color="var(--series-2)" />
-            </>
-          ) : (
-            <Pipe y={52} label="Shared queue" sub="FIFO: first in, first out" segs={s.q.shared} workers={WORKERS.shared} busy={s.q.shared.length > 0} color="var(--k-queue)" />
-          )}
-        </svg>
-      </div>
-      <ul className="legend" aria-label="Legend" style={{ marginTop: 2 }}>
-        <li>
-          <KeyRound size={13} aria-hidden style={{ color: "var(--series-1)" }} /> OTP login code (one every 0.5 s)
-        </li>
-        <li>
-          <Megaphone size={13} aria-hidden style={{ color: "var(--series-2)" }} /> marketing (bar length is log scale)
-        </li>
-        <li>each worker sends 20 messages/s</li>
-      </ul>
-
-      <div className="stat-tiles" style={{ marginTop: 8 }}>
-        <div className="stat-tile">
-          <div className="stat-label">OTP sent now waits</div>
-          <div className={`stat-value ${wait > 30 ? "bad-ink" : ""}`}>{dur(wait + SERVICE_MS / 1000)}</div>
-          <div className="stat-sub">{wait > 30 ? "too late: codes expire in minutes" : "on time"}</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-label">Oldest waiting OTP</div>
-          <div className="stat-value">{oldest ? dur(oldest) : "none"}</div>
-          <div className="stat-sub">{int(s.sent.otp)} codes delivered</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-label">Marketing backlog</div>
-          <div className="stat-value">{compact(mktBacklog)}</div>
-          <div className="stat-sub">{mktBacklog > 1000 ? `drains in ~${dur(drain)}` : "keeping up"}</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-label">Simulated time</div>
-          <div className="stat-value">{dur(s.t / 1000)}</div>
-          <div className="stat-sub">{speed}× real time</div>
-        </div>
-      </div>
-
-      <LatencyChart samples={s.samples} />
-
-      <p className="readout" aria-live="polite">
-        {said}
-        <ReducedNote reduce={reduce} what="Paused (reduced motion): Step advances 30 simulated seconds." />
-      </p>
     </WidgetFrame>
   );
 }

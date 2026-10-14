@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Star } from "lucide-react";
 import { questions, type Category, type Level } from "@content/registry";
+import { isLowLevel } from "@content/home";
 import { useHydrated } from "@/lib/hooks";
 import { useProgress } from "@/lib/progress";
 
@@ -54,18 +55,19 @@ export function QuestionHub() {
             </button>
           ))}
         </div>
-        <input type="search" placeholder="Search questions, e.g. redis, websockets…" defaultValue={term} aria-label="Search questions" onChange={(e) => set("q", e.target.value || null)} />
+        <input type="search" placeholder="Search, e.g. redis, websockets…" defaultValue={term} aria-label="Search questions" onChange={(e) => set("q", e.target.value || null)} />
       </div>
-      <p className="muted" aria-live="polite" style={{ fontSize: 14 }}>
+      <p className="hub-count" aria-live="polite">
         {shown.length} question{shown.length === 1 ? "" : "s"}
       </p>
-      <div className="grid-auto">
+      <div className="grid-auto hub-cards">
         {shown.map((q) => {
           const href = `/questions/${q.slug}`;
           return (
             <Link key={q.slug} href={href} className="card card-link q-card">
               <div className="row">
                 <span className={`badge badge-${q.category}`}>{q.category}</span>
+                {isLowLevel(q) && <span className="badge badge-lld">LLD</span>}
                 <span className="badge badge-level">{q.level}</span>
                 <span className="muted" style={{ fontSize: 13 }}>{q.minutes} min</span>
                 {hydrated && done[href] && (
@@ -76,7 +78,7 @@ export function QuestionHub() {
                 {hydrated && bookmarks.includes(href) && <Star size={14} aria-label="Bookmarked" className="warn-ink" />}
                 {hydrated && q.challenge && challenge[q.challenge] !== undefined && <span className="tag">Challenge {challenge[q.challenge]}%</span>}
               </div>
-              <h3>{q.title}</h3>
+              <h2 className="tc-title">{q.title}</h2>
               <p>{q.summary}</p>
               <div className="tags">
                 {q.tags.slice(0, 4).map((t) => (
@@ -87,7 +89,7 @@ export function QuestionHub() {
           );
         })}
         {shown.length === 0 && (
-          <div className="card">
+          <div className="card hub-empty">
             No questions match.{" "}
             <button type="button" className="link" style={{ border: 0, background: "none", cursor: "pointer" }} onClick={() => router.replace(pathname)}>
               Clear filters

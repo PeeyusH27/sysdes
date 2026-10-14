@@ -1,10 +1,10 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { HeartPulse, Scissors, Skull, Unplug } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
 import { draw } from "./lib/draw-rng";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Seg, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
 /* ------------------------------------------------------------------ pure Raft (leader election only, no log) */
 
@@ -213,19 +213,57 @@ export function heal(s: RaftState): RaftState {
 
 /* ------------------------------------------------------------------ view */
 
-const CX = 210;
-const CY = 158;
-const RING = 112;
-const pos = (i: number) => {
+/** Drawing geometry: a wide pentagon for the desktop pane, a taller one for phones (`k` scales the text). */
+interface Geo {
+  w: number;
+  h: number;
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  k: number;
+}
+const WIDE: Geo = { w: 560, h: 246, cx: 280, cy: 130, rx: 212, ry: 72, k: 1 };
+const NARROW: Geo = { w: 320, h: 292, cx: 160, cy: 156, rx: 112, ry: 96, k: 1.18 };
+const pos = (g: Geo, i: number) => {
   const a = -Math.PI / 2 + (i * 2 * Math.PI) / N;
-  return { x: CX + Math.cos(a) * RING, y: CY + Math.sin(a) * RING };
+  return { x: g.cx + Math.cos(a) * g.rx, y: g.cy + Math.sin(a) * g.ry };
 };
 const MSG_COLOR: Record<MsgKind, string> = { "vote-req": "var(--series-2)", vote: "var(--series-1)", beat: "var(--series-3)", nack: "var(--muted)" };
+
+/** True while the widget is narrower than `px`, i.e. on a phone. */
+function useNarrow(px: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [px]);
+  return [ref, narrow] as const;
+}
+
+const CSS = `
+.raft { container: raft / inline-size; }
+.raft-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; margin: 4px 0 6px; }
+.raft-bar > div { flex-wrap: nowrap !important; }
+.raft .legend { font-size: 12px; gap: 2px 12px; }
+.raft-log { list-style: none; padding: 0 !important; margin: 8px 0 0 !important; display: grid; gap: 2px; font-size: 13px; }
+.raft-log li { margin: 0 !important; }
+@container raft (max-width: 479px) {
+  .raft-bar .wbtn { padding: 0 9px; }
+  .raft-faults .wbtn > svg { display: none; }
+}
+`;
 
 export function RaftElection() {
   const [speed, setSpeed] = useState(1);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const [boxRef, narrow] = useNarrow(480);
+  const g = narrow ? NARROW : WIDE;
   const step = useCallback((s: RaftState, dt: number) => stepRaft(s, dt * speed), [speed]);
   const [s, reset] = useFixedStep<RaftState>(() => initRaft(), step, running && inView && !reduce);
 
@@ -252,135 +290,145 @@ export function RaftElection() {
         ? ` Down: ${dead.map((n) => name(n.id)).join(", ")}. The other ${N - dead.length} still form a majority, so the cluster keeps working.`
         : ` Down: ${dead.map((n) => name(n.id)).join(", ")}. Only ${N - dead.length} left: no majority, so no leader can be elected.`;
   const said = useThrottled(sentence, 900);
+  const k = g.k;
 
   return (
-    <WidgetFrame title="Raft leader election" sub="Five nodes. A follower that hears no heartbeat before its random timeout becomes a candidate, bumps the term and asks for votes; a majority (3) makes it leader.">
-      <div className="controls">
-        <button type="button" className="wbtn danger" onClick={() => reset(killLeader(s))} disabled={!leader}>
-          <Skull size={14} aria-hidden /> Kill leader
-        </button>
-        <button type="button" className="wbtn" onClick={() => reset(cut ? heal(s) : partitionNode(s))}>
-          {cut ? <Unplug size={14} aria-hidden /> : <Scissors size={14} aria-hidden />} {cut ? `Heal partition (${name(cut.id)})` : "Partition a node"}
-        </button>
-        <button type="button" className="wbtn" onClick={() => reset(heal(s))} disabled={!dead.length}>
-          <HeartPulse size={14} aria-hidden /> Revive crashed
-        </button>
-        <Seg<number>
-          label="Speed"
-          value={speed}
-          onChange={setSpeed}
-          options={[
-            { value: 0.5, label: "0.5×" },
-            { value: 1, label: "1×" },
-            { value: 2, label: "2×" },
-          ]}
-        />
-        <SimButtons
-          running={running && inView}
-          reduce={reduce}
-          onToggle={() => setRunning((r) => !r)}
-          onStep={() => reset(advance(s, stepRaft, 10))}
-          stepHint="Advance 0.5 simulated seconds"
-          onReset={() => reset(initRaft())}
-        />
-      </div>
+    <WidgetFrame title="Raft leader election" sub="A follower that hears no heartbeat before its random timeout becomes a candidate, bumps the term and asks for votes. A majority (3 of 5) makes it leader.">
+      <style href="w-raft" precedence="widgets">
+        {CSS}
+      </style>
+      <div className="raft" ref={boxRef}>
+        <div className="raft-bar">
+          <SimButtons
+            running={running && inView}
+            reduce={reduce}
+            onToggle={() => setRunning((r) => !r)}
+            onStep={() => reset(advance(s, stepRaft, 10))}
+            stepHint="Advance 0.5 simulated seconds"
+            onReset={() => reset(initRaft())}
+          />
+          <div className="raft-faults" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button type="button" className="wbtn danger" onClick={() => reset(killLeader(s))} disabled={!leader}>
+              <Skull size={14} aria-hidden /> Kill leader
+            </button>
+            <button type="button" className="wbtn" onClick={() => reset(cut ? heal(s) : partitionNode(s))} aria-label={cut ? `Heal partition (${name(cut.id)})` : "Partition a node"}>
+              {cut ? <Unplug size={14} aria-hidden /> : <Scissors size={14} aria-hidden />} {cut ? `Heal ${name(cut.id)}` : narrow ? "Partition" : "Partition a node"}
+            </button>
+            <button type="button" className="wbtn" onClick={() => reset(heal(s))} disabled={!dead.length} aria-label="Revive crashed">
+              <HeartPulse size={14} aria-hidden /> Revive
+            </button>
+          </div>
+        </div>
 
-      <div ref={ref}>
-        <svg viewBox="0 0 420 320" className="sim-svg" style={{ maxWidth: 480, margin: "0 auto" }} role="img" aria-label={sentence}>
-          {s.nodes.map((a) =>
-            s.nodes
-              .filter((b) => b.id > a.id)
-              .map((b) => {
-                const p = pos(a.id);
-                const q = pos(b.id);
-                const ok = reachable(s, a.id, b.id);
-                return <line key={`${a.id}-${b.id}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke="var(--border)" strokeWidth={1} strokeDasharray={ok ? undefined : "3 5"} opacity={ok ? 1 : 0.6} />;
-              }),
+        <div ref={ref}>
+          <svg viewBox={`0 0 ${g.w} ${g.h}`} className="sim-svg" style={{ maxWidth: 620, margin: "0 auto" }} role="img" aria-label={sentence}>
+            {s.nodes.map((a) =>
+              s.nodes
+                .filter((b) => b.id > a.id)
+                .map((b) => {
+                  const p = pos(g, a.id);
+                  const q = pos(g, b.id);
+                  const ok = reachable(s, a.id, b.id);
+                  return <line key={`${a.id}-${b.id}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke="var(--border)" strokeWidth={1} strokeDasharray={ok ? undefined : "3 5"} opacity={ok ? 1 : 0.6} />;
+                }),
+            )}
+            {/* messages */}
+            {s.msgs.map((m) => {
+              const p = pos(g, m.from);
+              const q = pos(g, m.to);
+              const t = Math.min(1, Math.max(0, (s.t - m.sentAt) / (m.arriveAt - m.sentAt)));
+              const lost = !reachable(s, m.from, m.to);
+              if (lost && t > 0.5) return null;
+              return (
+                <circle
+                  key={m.id}
+                  r={m.kind === "beat" ? 4 : 5}
+                  fill={m.kind === "vote" && !m.granted ? "var(--card)" : MSG_COLOR[m.kind]}
+                  stroke={m.kind === "vote" && !m.granted ? "var(--muted)" : "var(--card)"}
+                  strokeWidth={1.5}
+                  style={{ transform: `translate(${p.x + (q.x - p.x) * t}px, ${p.y + (q.y - p.y) * t}px)`, transition: reduce ? undefined : "transform 60ms linear" }}
+                />
+              );
+            })}
+            {/* nodes */}
+            {s.nodes.map((n) => {
+              const { x, y } = pos(g, n.id);
+              const stroke = !n.alive ? "var(--critical)" : n.role === "leader" ? "var(--accent)" : n.role === "candidate" ? "var(--warning)" : "var(--border-strong)";
+              const frac = n.alive && n.role !== "leader" ? Math.min(1, Math.max(0, (n.deadline - s.t) / Math.max(1, n.deadline - n.armedAt))) : 0;
+              const circ = 2 * Math.PI * 35;
+              const role = !n.alive ? "down" : n.role;
+              const below = y > g.cy;
+              return (
+                <g key={n.id} opacity={n.alive ? 1 : 0.6}>
+                  {frac > 0 && (
+                    <circle cx={x} cy={y} r={35} fill="none" stroke="var(--border-strong)" strokeWidth={3} strokeDasharray={`${circ * frac} ${circ}`} transform={`rotate(-90 ${x} ${y})`} opacity={0.7} />
+                  )}
+                  <circle cx={x} cy={y} r={29} fill={n.role === "leader" && n.alive ? "color-mix(in srgb, var(--accent) 16%, var(--card-2))" : "var(--card-2)"} stroke={stroke} strokeWidth={n.role === "leader" ? 3 : 2} strokeDasharray={!n.alive || n.cut ? "5 4" : undefined} />
+                  <text x={x} y={y - 2} textAnchor="middle" style={{ fontWeight: 700, fontSize: 14 * k }}>
+                    {name(n.id)}
+                  </text>
+                  <text x={x} y={y + 14} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 * k }}>
+                    term {n.term}
+                  </text>
+                  <text
+                    x={x}
+                    y={below ? y + 50 : y - 42}
+                    textAnchor="middle"
+                    style={{ fontSize: 11 * k, fontWeight: 700, fill: !n.alive ? "var(--critical-ink)" : n.role === "leader" ? "var(--good-ink)" : n.role === "candidate" ? "var(--warning-ink)" : "var(--muted)" }}
+                  >
+                    {role === "leader" ? "★ leader" : role}
+                    {n.cut ? " · cut off" : ""}
+                    {n.alive && n.role === "candidate" ? ` (${n.votes.length}/${MAJORITY})` : ""}
+                  </text>
+                </g>
+              );
+            })}
+            <text x={g.cx} y={g.cy + 4} textAnchor="middle" className="muted-text" style={{ fontSize: 11 * k }}>
+              {leader ? `term ${leader.term}` : "electing…"}
+            </text>
+          </svg>
+        </div>
+        <ul className="legend" aria-label="Legend">
+          <li>
+            <span className="line-key" style={{ background: "var(--series-3)", width: 8, height: 8, borderRadius: 4 }} aria-hidden /> heartbeat
+          </li>
+          <li>
+            <span className="line-key" style={{ background: "var(--series-2)", width: 8, height: 8, borderRadius: 4 }} aria-hidden /> vote request
+          </li>
+          <li>
+            <span className="line-key" style={{ background: "var(--series-1)", width: 8, height: 8, borderRadius: 4 }} aria-hidden /> vote granted (hollow = refused)
+          </li>
+          <li>ring = time left before timeout</li>
+        </ul>
+        <p className="readout" aria-live="polite">
+          {said}
+          <ReducedNote reduce={reduce} what="Paused (reduced motion): Step advances 0.5 s." />
+        </p>
+        <More label="Speed and event log">
+          <Seg<number>
+            label="Speed"
+            value={speed}
+            onChange={setSpeed}
+            options={[
+              { value: 0.5, label: "0.5×" },
+              { value: 1, label: "1×" },
+              { value: 2, label: "2×" },
+            ]}
+          />
+          {s.log.length > 0 && (
+            <ol className="raft-log" aria-label="Event log">
+              {s.log.map((e) => (
+                <li key={e.n}>
+                  <span className="muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {(e.at / 1000).toFixed(1)} s
+                  </span>{" "}
+                  {e.text}
+                </li>
+              ))}
+            </ol>
           )}
-          {/* messages */}
-          {s.msgs.map((m) => {
-            const p = pos(m.from);
-            const q = pos(m.to);
-            const k = Math.min(1, Math.max(0, (s.t - m.sentAt) / (m.arriveAt - m.sentAt)));
-            const lost = !reachable(s, m.from, m.to);
-            if (lost && k > 0.5) return null;
-            return (
-              <circle
-                key={m.id}
-                r={m.kind === "beat" ? 4 : 5}
-                fill={m.kind === "vote" && !m.granted ? "var(--card)" : MSG_COLOR[m.kind]}
-                stroke={m.kind === "vote" && !m.granted ? "var(--muted)" : "var(--card)"}
-                strokeWidth={1.5}
-                style={{ transform: `translate(${p.x + (q.x - p.x) * k}px, ${p.y + (q.y - p.y) * k}px)`, transition: reduce ? undefined : "transform 60ms linear" }}
-              />
-            );
-          })}
-          {/* nodes */}
-          {s.nodes.map((n) => {
-            const { x, y } = pos(n.id);
-            const stroke = !n.alive ? "var(--critical)" : n.role === "leader" ? "var(--accent)" : n.role === "candidate" ? "var(--warning)" : "var(--border-strong)";
-            const frac = n.alive && n.role !== "leader" ? Math.min(1, Math.max(0, (n.deadline - s.t) / Math.max(1, n.deadline - n.armedAt))) : 0;
-            const circ = 2 * Math.PI * 36;
-            const role = !n.alive ? "down" : n.role;
-            const below = y > CY;
-            return (
-              <g key={n.id} opacity={n.alive ? 1 : 0.6}>
-                {frac > 0 && (
-                  <circle cx={x} cy={y} r={36} fill="none" stroke="var(--border-strong)" strokeWidth={3} strokeDasharray={`${circ * frac} ${circ}`} transform={`rotate(-90 ${x} ${y})`} opacity={0.7} />
-                )}
-                <circle cx={x} cy={y} r={30} fill={n.role === "leader" && n.alive ? "color-mix(in srgb, var(--accent) 16%, var(--card-2))" : "var(--card-2)"} stroke={stroke} strokeWidth={n.role === "leader" ? 3 : 2} strokeDasharray={!n.alive || n.cut ? "5 4" : undefined} />
-                <text x={x} y={y - 2} textAnchor="middle" style={{ fontWeight: 700, fontSize: 14 }}>
-                  {name(n.id)}
-                </text>
-                <text x={x} y={y + 14} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
-                  term {n.term}
-                </text>
-                <text
-                  x={x}
-                  y={below ? y + 52 : y - 44}
-                  textAnchor="middle"
-                  style={{ fontSize: 11, fontWeight: 700, fill: !n.alive ? "var(--critical-ink)" : n.role === "leader" ? "var(--good-ink)" : n.role === "candidate" ? "var(--warning-ink)" : "var(--muted)" }}
-                >
-                  {role === "leader" ? "★ leader" : role}
-                  {n.cut ? " · cut off" : ""}
-                  {n.alive && n.role === "candidate" ? ` (${n.votes.length}/${MAJORITY})` : ""}
-                </text>
-              </g>
-            );
-          })}
-          <text x={CX} y={CY + 4} textAnchor="middle" className="muted-text" style={{ fontSize: 11 }}>
-            {leader ? `term ${leader.term}` : "electing…"}
-          </text>
-        </svg>
+        </More>
       </div>
-      <ul className="legend" aria-label="Legend">
-        <li>
-          <span className="line-key" style={{ background: "var(--series-3)", width: 8, height: 8, borderRadius: 4 }} aria-hidden /> heartbeat
-        </li>
-        <li>
-          <span className="line-key" style={{ background: "var(--series-2)", width: 8, height: 8, borderRadius: 4 }} aria-hidden /> vote request
-        </li>
-        <li>
-          <span className="line-key" style={{ background: "var(--series-1)", width: 8, height: 8, borderRadius: 4 }} aria-hidden /> vote granted (hollow = refused)
-        </li>
-        <li>ring = time left before the node times out</li>
-      </ul>
-      {s.log.length > 0 && (
-        <ol style={{ listStyle: "none", padding: 0, margin: "8px 0 0", display: "grid", gap: 2, fontSize: 13 }} aria-label="Event log">
-          {s.log.slice(0, 4).map((e) => (
-            <li key={e.n}>
-              <span className="muted" style={{ fontVariantNumeric: "tabular-nums" }}>
-                {(e.at / 1000).toFixed(1)} s
-              </span>{" "}
-              {e.text}
-            </li>
-          ))}
-        </ol>
-      )}
-      <p className="readout" aria-live="polite">
-        {said}
-        <ReducedNote reduce={reduce} what="Paused (reduced motion): Step advances 0.5 s." />
-      </p>
     </WidgetFrame>
   );
 }

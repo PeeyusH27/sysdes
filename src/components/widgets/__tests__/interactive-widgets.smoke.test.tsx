@@ -42,6 +42,22 @@ import { GreedyLab } from "../GreedyLab";
 import { Dp1dLab } from "../Dp1dLab";
 import { Dp2dLab } from "../Dp2dLab";
 import { BitLab } from "../BitLab";
+import { Base62Playground } from "../Base62Playground";
+import { CapacityCalculator } from "../CapacityCalculator";
+import { ChatSim } from "../ChatSim";
+import { FanoutCalc } from "../FanoutCalc";
+import { HandshakeTimeline } from "../HandshakeTimeline";
+import { HashRing } from "../HashRing";
+import { InterviewTimer } from "../InterviewTimer";
+import { LatencyHitRatio } from "../LatencyHitRatio";
+import { LoadBalancerSim } from "../LoadBalancerSim";
+import { PatternComparator } from "../PatternComparator";
+import { PoolSim } from "../PoolSim";
+import { PriorityLanes } from "../PriorityLanes";
+import { RaftElection } from "../RaftElection";
+import { ReplicationLag } from "../ReplicationLag";
+import { TraceWaterfall } from "../TraceWaterfall";
+import { VirtualListViz } from "../VirtualListViz";
 
 const WIDGETS = { TokenBucketViz, FixedVsSliding, QuorumPlayground, PollingRace, QueueSim, SeatRace, DebounceViz, LRUViz, CircuitBreakerSim, AvailabilityCalc, RetryStorm, KafkaPartitions, ParkingLotSim, ElevatorSim, VendingMachineSim, LeaderboardRace, PaymentFlowSim, RideMatchSim, HashingLab, TwoPointersLab, SlidingWindowLab, PrefixSumLab, BinarySearchLab, StackLab, IntervalsLab, FastSlowLab, ListReversalLab, TreeDfsLab, TreeBfsLab, TrieLab, HeapLab, GraphTraversalLab, TopoSortLab, UnionFindLab, ShortestPathLab, BacktrackingLab, GreedyLab, Dp1dLab, Dp2dLab, BitLab };
 
@@ -55,7 +71,13 @@ beforeAll(() => {
       return [];
     }
   }
+  class RO {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
   Object.assign(globalThis, { IntersectionObserver: IO });
+  if (!("ResizeObserver" in globalThis)) Object.assign(globalThis, { ResizeObserver: RO });
   if (!window.matchMedia)
     window.matchMedia = (q: string) =>
       ({ matches: false, media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false }) as unknown as MediaQueryList;
@@ -87,3 +109,19 @@ test("DebounceViz records real typing", () => {
   for (const v of ["s", "sy", "sys"]) act(() => fireEvent.change(input, { target: { value: v } }));
   expect(container.textContent).toContain("Keystrokes3");
 });
+
+// Older widgets (some without an svg or a readout): they must render on the server and survive every button and slider.
+const MORE_WIDGETS = { Base62Playground, CapacityCalculator, ChatSim, FanoutCalc, HandshakeTimeline, HashRing, InterviewTimer, LatencyHitRatio, LoadBalancerSim, PatternComparator, PoolSim, PriorityLanes, RaftElection, ReplicationLag, TraceWaterfall, VirtualListViz };
+for (const [name, Widget] of Object.entries(MORE_WIDGETS)) {
+  test(`${name} renders on the server`, () => {
+    expect(renderToString(<Widget />).length).toBeGreaterThan(0);
+  });
+
+  test(`${name} survives clicking every button`, () => {
+    const { container } = render(<Widget />);
+    for (const b of container.querySelectorAll("button")) act(() => fireEvent.click(b));
+    for (const b of container.querySelectorAll("button")) act(() => fireEvent.click(b));
+    for (const r of container.querySelectorAll<HTMLInputElement>('input[type="range"]')) act(() => fireEvent.change(r, { target: { value: r.max } }));
+    expect(container.querySelector(".widget, section, figure")).not.toBeNull();
+  });
+}

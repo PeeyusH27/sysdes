@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, FileQuestion, Hammer, Library } from "lucide-react";
-import { deepDives, learnSteps, questions } from "@content/registry";
-import { requestJourney } from "@content/home";
+import { ArrowRight, BookA, BookOpen, FileQuestion, Gauge, Hammer, Library } from "lucide-react";
+import { deepDives, getDeepDive, getLearnStep, getQuestion, learnSteps, questions } from "@content/registry";
+import { glossary } from "@content/glossary";
+import { questionLabel, requestJourney } from "@content/home";
 import { FlowDiagram } from "@/components/diagram/FlowDiagram";
 import { CapacityCalculator } from "@/components/widgets/CapacityCalculator";
 import { shorts } from "@content/shorts";
-import { ShortsStrip } from "@/components/content/HubBits";
-import { ContinueLearning } from "../home-client";
+import { HubTabs, ShortsStrip } from "@/components/content/HubBits";
+import { NextUp } from "../home-client";
 
 export const metadata = {
   title: "System design track",
@@ -14,18 +15,44 @@ export const metadata = {
   alternates: { canonical: "/system-design" },
 };
 
+/** Curated routes for people who only have a week. Titles come from the registry so renames carry through. */
+const FOCUS: { label: "Frontend" | "Backend" | "Full-stack"; blurb: string; links: string[] }[] = [
+  { label: "Frontend", blurb: "Latency you can feel in the UI.", links: ["/learn/requirements-estimation", "/learn/api-load-balancing", "/learn/caching", "/questions/typeahead", "/questions/infinite-feed", "/deep-dives/polling-sse-websockets"] },
+  { label: "Backend", blurb: "Correctness under load.", links: ["/learn/databases-scaling", "/questions/rate-limiter", "/questions/movie-booking", "/questions/parking-lot", "/questions/payment-system", "/deep-dives/sharding-strategies"] },
+  { label: "Full-stack", blurb: "One feature, browser to database.", links: ["/learn/async-messaging", "/questions/chat", "/questions/news-feed", "/questions/ride-sharing", "/deep-dives/request-flows", "/playground"] },
+];
+
+function titleOf(href: string) {
+  const [, section, slug] = href.split("/");
+  if (section === "learn") return getLearnStep(slug)?.title;
+  if (section === "deep-dives") return getDeepDive(slug)?.title.split(":")[0];
+  if (section === "questions") {
+    const q = getQuestion(slug);
+    return q && questionLabel(q.title);
+  }
+  if (href === "/playground") return "Build it in the playground";
+  return undefined;
+}
+
 export default function SystemDesignHome() {
+  const entries = [
+    { href: "/learn", Icon: BookOpen, title: "HLD path", count: `${learnSteps.length} steps`, text: "Estimation, load balancing, data, caching, queues, consistency, reliability, then two case studies." },
+    { href: "/deep-dives", Icon: Library, title: "Deep dives", count: `${deepDives.length} techniques`, text: "Caching, sharding, storage, real-time, connections and request flows, one at a time." },
+    { href: "/questions", Icon: FileQuestion, title: "Interview questions", count: `${questions.length} questions`, text: "From a parking lot to Uber. Full answers with code, failure modes and follow-ups." },
+    { href: "/playground", Icon: Hammer, title: "Playground", count: "Graded", text: "Drag components onto a canvas, wire them up, simulate traffic and get a score." },
+    { href: "/cheatsheet", Icon: Gauge, title: "Cheatsheet", count: "Numbers", text: "Latencies, sizes and formulas to have at your fingertips." },
+    { href: "/glossary", Icon: BookA, title: "Glossary", count: `${glossary.length} terms`, text: "Every term on the site, one line each." },
+  ];
   return (
-    <div className="container">
-      <section className="hero">
+    <div className="container hub" data-track="sd">
+      <section className="hub-hero">
         <div>
-          <span className="eyebrow">System design track · from scratch to interview-ready</span>
+          <p className="eyebrow">System design track</p>
           <h1>
-            Learn system design, <span className="grad">then practise it.</span>
+            Boxes and arrows, <span className="grad">but they move.</span>
           </h1>
-          <p>
-            A step-by-step HLD path with animated diagrams you can play and pause, interactive simulators, detailed interview answers in
-            JavaScript, and a drag-and-drop playground that grades your designs.
+          <p className="lede">
+            Watch requests travel, caches miss and queues back up. Then design it yourself and defend every box in the interview.
           </p>
           <div className="hero-cta">
             <Link href="/learn" className="btn btn-primary">
@@ -36,33 +63,29 @@ export default function SystemDesignHome() {
             </Link>
           </div>
         </div>
-        <div className="hero-visual">
+        <div className="hub-visual">
           <FlowDiagram spec={requestJourney} autoplay loop compact />
         </div>
       </section>
 
-      <div className="entry-cards">
-        <Link href="/learn" className="card card-link">
-          <span className="icon"><BookOpen size={20} aria-hidden /></span>
-          <h3>HLD path</h3>
-          <p>{learnSteps.length} steps from estimation to case studies, each with diagrams, widgets, code and a quiz.</p>
-        </Link>
-        <Link href="/deep-dives" className="card card-link">
-          <span className="icon"><Library size={20} aria-hidden /></span>
-          <h3>Deep dives</h3>
-          <p>{deepDives.length} techniques that come up again and again: caching, sharding, storage, real-time, connections, request flows.</p>
-        </Link>
-        <Link href="/questions" className="card card-link">
-          <span className="icon"><FileQuestion size={20} aria-hidden /></span>
-          <h3>Interview questions</h3>
-          <p>{questions.length} famous frontend, backend and full-stack questions with step-by-step answers and full JavaScript code.</p>
-        </Link>
-        <Link href="/playground" className="card card-link">
-          <span className="icon"><Hammer size={20} aria-hidden /></span>
-          <h3>Playground</h3>
-          <p>Drag components onto a canvas, connect them, simulate traffic, and get graded on challenges.</p>
-        </Link>
-      </div>
+      <HubTabs track="sd" />
+
+      <ul className="entry-grid">
+        {entries.map(({ href, Icon, title, count, text }) => (
+          <li key={href}>
+            <Link href={href} className="card card-link entry">
+              <span className="entry-icon">
+                <Icon size={20} aria-hidden />
+              </span>
+              <span className="entry-count">{count}</span>
+              <h2 className="entry-title">{title}</h2>
+              <p>{text}</p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+
+      <NextUp variant="sd" shortsCount={shorts.length} />
 
       <ShortsStrip
         count={shorts.filter((s) => s.track === "Building blocks").length}
@@ -70,41 +93,24 @@ export default function SystemDesignHome() {
         href={`/shorts?s=${shorts.find((s) => s.track === "Building blocks")?.id ?? ""}`}
       />
 
-      <ContinueLearning />
-
-      <h2 className="section-title">Pick a focus</h2>
-      <div className="tracks">
-        <div className="card">
-          <span className="badge badge-Frontend">Frontend</span>
-          <ol>
-            <li><Link href="/learn/requirements-estimation">Requirements and estimation</Link></li>
-            <li><Link href="/learn/api-load-balancing">APIs and load balancing</Link></li>
-            <li><Link href="/learn/caching">Caching (incl. HTTP caching)</Link></li>
-            <li><Link href="/questions/typeahead">Typeahead</Link> and <Link href="/questions/infinite-feed">infinite feed</Link></li>
-            <li><Link href="/deep-dives/polling-sse-websockets">Polling, SSE and WebSockets</Link></li>
-          </ol>
-        </div>
-        <div className="card">
-          <span className="badge badge-Backend">Backend</span>
-          <ol>
-            <li><Link href="/learn/requirements-estimation">HLD path steps 1–7</Link></li>
-            <li><Link href="/questions/rate-limiter">Rate limiter</Link></li>
-            <li><Link href="/questions/movie-booking">Ticket booking</Link></li>
-            <li><Link href="/questions/parking-lot">Parking lot</Link>, <Link href="/questions/elevator">elevator</Link> and <Link href="/questions/vending-machine">vending machine</Link> (LLD)</li>
-            <li><Link href="/questions/leaderboard">Leaderboard</Link> and <Link href="/questions/payment-system">payment system</Link></li>
-            <li><Link href="/deep-dives/sharding-strategies">Sharding</Link> and <Link href="/deep-dives/connections-pooling">connections</Link></li>
-          </ol>
-        </div>
-        <div className="card">
-          <span className="badge badge-Full-stack">Full-stack</span>
-          <ol>
-            <li><Link href="/learn/requirements-estimation">HLD path steps 1–5</Link></li>
-            <li><Link href="/questions/chat">Real-time chat</Link></li>
-            <li><Link href="/questions/news-feed">News feed</Link> and <Link href="/questions/ride-sharing">Uber ride matching</Link></li>
-            <li><Link href="/deep-dives/request-flows">Request flows end to end</Link></li>
-            <li><Link href="/playground">Build it in the playground</Link></li>
-          </ol>
-        </div>
+      <h2 className="section-title">Got a week? Pick a focus</h2>
+      <div className="focus-grid">
+        {FOCUS.map((f) => (
+          <div key={f.label} className="card focus">
+            <span className={`badge badge-${f.label}`}>{f.label}</span>
+            <p className="focus-blurb">{f.blurb}</p>
+            <ol>
+              {f.links.map((href) => {
+                const title = titleOf(href);
+                return title ? (
+                  <li key={href}>
+                    <Link href={href}>{title}</Link>
+                  </li>
+                ) : null;
+              })}
+            </ol>
+          </div>
+        ))}
       </div>
 
       <h2 className="section-title">Try it: how many servers does your app need?</h2>

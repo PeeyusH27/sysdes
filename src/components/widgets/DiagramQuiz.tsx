@@ -6,7 +6,6 @@ import { FlowDiagram } from "@/components/diagram/FlowDiagram";
 import { KIND_META } from "@/components/diagram/kinds";
 import { layoutFlow, NODE, type Orientation } from "@/components/diagram/layout";
 import { NODE_KINDS, type FlowSpec, type NodeKind } from "@/components/diagram/types";
-import { useMediaQuery } from "@/lib/hooks";
 import { WidgetFrame } from "./WidgetFrame";
 
 /* ------------------------------------------------------------------ pure helpers */
@@ -57,7 +56,7 @@ export function hintFor(spec: FlowSpec, slot: string) {
 
 const CSS = `
 .dq-stage { position: relative; }
-.dq-stage .flow { margin: 0.6em 0; }
+.dq-stage .flow { margin: 6px 0; padding: 10px 10px 8px; }
 .dq-slot { position: absolute; z-index: 2; display: grid; place-items: center; border-radius: 10px; border: 2px dashed var(--border-strong); background: var(--card); color: var(--muted); font-weight: 700; text-align: center; line-height: 1.05; transition: border-color .15s, background .15s; }
 .dq-slot small { display: block; font-size: 10px; font-weight: 500; }
 .dq-slot[data-over] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--fg); }
@@ -116,8 +115,8 @@ export function DiagramQuiz({ spec, slot, options, answer, explain }: { spec: Fl
   const [placed, setPlaced] = useState<NodeKind | null>(null);
   const [tries, setTries] = useState(0);
   const solved = placed === answer;
-  const narrow = useMediaQuery("(max-width: 640px)"); // FlowDiagram switches to the vertical layout at the same width
-  const orientation: Orientation = narrow ? "vertical" : "horizontal";
+  // FlowDiagram picks its wide or transposed layout from its own width and tells us, so the drop slot lands on the box.
+  const [orientation, setOrientation] = useState<Orientation>("horizontal");
   const neutral = useMemo(() => pickNeutralKind(spec, slot, options), [spec, slot, options]);
   const shown = useMemo(() => quizSpec(spec, slot, placed, answer, neutral), [spec, slot, placed, answer, neutral]);
   const frac = useMemo(() => slotBox(spec, slot, orientation), [spec, slot, orientation]);
@@ -181,7 +180,7 @@ export function DiagramQuiz({ spec, slot, options, answer, explain }: { spec: Fl
           ))}
         </div>
         <div ref={stage} className="dq-stage">
-          <FlowDiagram spec={shown} />
+          <FlowDiagram spec={shown} onOrientation={setOrientation} />
           {!solved && box && <DropSlot box={box} wrong={placed !== null} />}
         </div>
       </DndContext>

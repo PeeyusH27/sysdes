@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { m } from "motion/react";
 import { Minus, Plus, Server, Shuffle, Skull, Zap } from "lucide-react";
 import { int } from "@/lib/format";
@@ -164,7 +164,7 @@ function Encoder() {
   return (
     <div>
       <div className="controls" style={{ marginBottom: 6 }}>
-        <label className="control" style={{ maxWidth: 260 }}>
+        <label className="control" style={{ maxWidth: 240 }}>
           <span>Numeric id (any size)</span>
           <input type="text" inputMode="numeric" value={text} onChange={(e) => setText(e.target.value)} aria-invalid={id === null} spellCheck={false} />
         </label>
@@ -186,10 +186,10 @@ function Encoder() {
         </p>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 10 }}>
-            <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", background: "var(--card-2)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 8 }}>
+            <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", background: "var(--card-2)", lineHeight: 1.45 }}>
               <div className="muted" style={{ fontSize: 12.5 }}>Plain base62 (divide by 62, read remainders bottom-up)</div>
-              <table style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", margin: "4px 0", width: "100%" }}>
+              <table style={{ fontSize: 12.5, lineHeight: 1.35, fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", margin: "2px 0", width: "100%" }}>
                 <thead>
                   <tr className="muted" style={{ textAlign: "left" }}>
                     <th style={{ fontWeight: 500 }}>n</th>
@@ -216,15 +216,15 @@ function Encoder() {
                   )}
                 </tbody>
               </table>
-              <div style={{ fontWeight: 650, wordBreak: "break-all" }}>
+              <div style={{ fontWeight: 650, overflowWrap: "anywhere" }}>
                 → <code style={{ fontSize: 15 }}>{plain}</code> <span className="muted" style={{ fontWeight: 400 }}>({plain.length} chars, decodes back to {fromBase62(plain).toLocaleString("en")})</span>
               </div>
             </div>
-            <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", background: "var(--card-2)" }}>
+            <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", background: "var(--card-2)", lineHeight: 1.45 }}>
               <div className="muted" style={{ fontSize: 12.5 }}>Scrambled short code: id × P mod 62⁷, padded to 7</div>
               {inRange ? (
                 <>
-                  <p style={{ margin: "6px 0", fontSize: 12.5, fontVariantNumeric: "tabular-nums", wordBreak: "break-all" }}>
+                  <p style={{ margin: "6px 0", fontSize: 12.5, lineHeight: 1.45, fontVariantNumeric: "tabular-nums", overflowWrap: "anywhere" }}>
                     {id.toLocaleString("en")} × {P.toLocaleString("en")} mod {M.toLocaleString("en")} = <strong>{scr!.toLocaleString("en")}</strong>
                   </p>
                   <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: 1 }}>
@@ -250,16 +250,44 @@ function Encoder() {
   );
 }
 
-const RX = 280;
-const RY = 40;
-const serverX = (i: number, n: number) => 60 + (i * 440) / Math.max(1, n - 1);
-const SY = 150;
+/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
+function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => {
+      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, px]);
+  return narrow;
+}
+
+/** Where each piece goes: one row of servers under Redis (landscape), or rows of three on a phone. */
+function allocLayout(n: number, narrow: boolean) {
+  const W = narrow ? 300 : 600;
+  const bw = narrow ? 92 : 104;
+  const bh = narrow ? 86 : 76;
+  const top = 86;
+  const cols = narrow ? Math.min(3, n) : n;
+  const pos = Array.from({ length: n }, (_, i) => {
+    const r = Math.floor(i / cols);
+    const inRow = Math.min(cols, n - r * cols);
+    const gap = narrow ? 100 : Math.min(140, (W - 40) / Math.max(1, n));
+    return { x: W / 2 + ((i % cols) - (inRow - 1) / 2) * gap, y: top + r * (bh + 12) };
+  });
+  return { W, bw, bh, pos, rx: W / 2, ry: 28, H: top + Math.ceil(n / cols) * (bh + 12) - 8 };
+}
 
 function Allocator() {
   const [servers, setServers] = useState(3);
   const [block, setBlock] = useState(1000);
   const [running, setRunning] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const box = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(box);
   // auto traffic: ~6 links/s on random servers
   const step = useCallback((s: AllocState) => {
     const [r, seed] = draw(s.seed);
@@ -275,9 +303,10 @@ function Allocator() {
     reset({ ...x, message: `Created ${k} links. ${x.message}` });
   };
   const fullest = s.servers.reduce((best, x, i) => (x.end - x.next > s.servers[best].end - s.servers[best].next ? i : best), 0);
+  const L = allocLayout(s.servers.length, narrow);
 
   return (
-    <div>
+    <div ref={box}>
       <div className="controls">
         <Slider label="App servers" value={servers} min={2} max={5} onChange={(v) => { setServers(v); restart(v, block); }} />
         <Seg<number>
@@ -291,13 +320,14 @@ function Allocator() {
           ]}
         />
         <button type="button" className="wbtn primary" onClick={() => reset(nextIdRandom(s))}>
-          <Shuffle size={14} aria-hidden /> Create a link
+          <Shuffle size={14} aria-hidden /> Create<span className="b62-long"> a link</span>
         </button>
         <button type="button" className="wbtn" onClick={() => bulk(block === 10 ? 25 : 250)}>
           <Zap size={14} aria-hidden /> +{block === 10 ? 25 : 250} links
         </button>
         <button type="button" className="wbtn danger" onClick={() => reset(crash(s, fullest))}>
-          <Skull size={14} aria-hidden /> Crash server {s.servers[fullest].name}
+          <Skull size={14} aria-hidden /> Crash <span className="b62-long">server </span>
+          {s.servers[fullest].name}
         </button>
         <SimButtons
           running={running && inView}
@@ -309,48 +339,57 @@ function Allocator() {
         />
       </div>
       <div ref={ref}>
-        <svg viewBox="0 0 560 236" className="sim-svg" role="img" aria-label={`Redis counter url:id = ${s.counter}. ${s.servers.length} servers.`}>
-          <rect x={RX - 96} y={RY - 26} width={192} height={52} rx={10} fill="var(--card-2)" stroke="var(--k-cache)" strokeWidth={1.8} />
-          <text x={RX} y={RY - 6} textAnchor="middle" style={{ fontWeight: 700 }}>
+        <svg viewBox={`0 0 ${L.W} ${L.H}`} className="sim-svg" role="img" aria-label={`Redis counter url:id = ${s.counter}. ${s.servers.length} servers.`}>
+          <rect x={L.rx - 90} y={L.ry - 24} width={180} height={48} rx={10} fill="var(--card-2)" stroke="var(--k-cache)" strokeWidth={1.8} />
+          <text x={L.rx} y={L.ry - 5} textAnchor="middle" style={{ fontWeight: 700 }}>
             Redis · url:id
           </text>
-          <text x={RX} y={RY + 14} textAnchor="middle" style={{ fontWeight: 700, fontSize: 15, fontVariantNumeric: "tabular-nums" }}>
+          <text x={L.rx} y={L.ry + 14} textAnchor="middle" style={{ fontWeight: 700, fontSize: 15, fontVariantNumeric: "tabular-nums" }}>
             {int(s.counter)}
           </text>
           {s.servers.map((srv, i) => {
-            const x = serverX(i, s.servers.length);
+            const { x, y } = L.pos[i];
             const used = srv.end > srv.start ? (srv.next - srv.start) / (srv.end - srv.start) : 1;
+            const half = L.bw / 2;
             return (
               <g key={srv.name}>
-                <line x1={x} y1={SY - 30} x2={RX} y2={RY + 26} stroke="var(--border)" strokeWidth={1.2} />
-                <rect x={x - 48} y={SY - 30} width={96} height={64} rx={10} fill="var(--card-2)" stroke="var(--k-service)" strokeWidth={1.6} />
-                <Server x={x - 42} y={SY - 24} width={13} height={13} aria-hidden style={{ color: "var(--k-service)" }} />
-                <text x={x + 6} y={SY - 13} textAnchor="middle" style={{ fontWeight: 700 }}>
+                <line x1={x} y1={y} x2={L.rx} y2={L.ry + 24} stroke="var(--border)" strokeWidth={1.2} />
+                <rect x={x - half} y={y} width={L.bw} height={L.bh} rx={10} fill="var(--card-2)" stroke="var(--k-service)" strokeWidth={1.6} />
+                <Server x={x - half + 6} y={y + 5} width={13} height={13} aria-hidden style={{ color: "var(--k-service)" }} />
+                <text x={x + 6} y={y + 16} textAnchor="middle" style={{ fontWeight: 700 }}>
                   Server {srv.name}
                 </text>
-                <text x={x} y={SY + 4} textAnchor="middle" style={{ fontSize: 10.5, fontVariantNumeric: "tabular-nums" }}>
+                <text x={x} y={y + 31} textAnchor="middle" style={{ fontSize: 10.5, fontVariantNumeric: "tabular-nums" }}>
                   {srv.end > 0 ? `[${int(srv.start)}, ${int(srv.end)})` : "no block yet"}
                 </text>
-                <rect x={x - 38} y={SY + 12} width={76} height={7} rx={3.5} fill="var(--border)" />
-                <rect x={x - 38} y={SY + 12} width={76 * Math.min(1, used)} height={7} rx={3.5} fill={used >= 0.9 ? "var(--warning)" : "var(--series-1)"} />
-                <text x={x} y={SY + 30} textAnchor="middle" className="muted-text" style={{ fontSize: 10 }}>
-                  next {srv.end > 0 ? int(srv.next) : "–"}
-                </text>
+                <rect x={x - half + 10} y={y + 37} width={L.bw - 20} height={6} rx={3} fill="var(--border)" />
+                <rect x={x - half + 10} y={y + 37} width={(L.bw - 20) * Math.min(1, used)} height={6} rx={3} fill={used >= 0.9 ? "var(--warning)" : "var(--series-1)"} />
+                {narrow ? (
+                  <>
+                    <text x={x} y={y + 56} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
+                      next {srv.end > 0 ? int(srv.next) : "–"}
+                    </text>
+                    <text x={x} y={y + 69} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
+                      {srv.issued} links
+                    </text>
+                  </>
+                ) : (
+                  <text x={x} y={y + 56} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
+                    next {srv.end > 0 ? int(srv.next) : "–"} · {srv.issued} links
+                  </text>
+                )}
                 {srv.last[0] && (
-                  <text x={x} y={SY + 50} textAnchor="middle" style={{ fontSize: 10.5, fontFamily: "var(--font-mono)" }}>
+                  <text x={x} y={y + L.bh - 7} textAnchor="middle" style={{ fontSize: 10.5, fontFamily: "var(--font-mono)" }}>
                     /{srv.last[0].code}
                   </text>
                 )}
-                <text x={x} y={SY + 66} textAnchor="middle" className="muted-text" style={{ fontSize: 10 }}>
-                  {srv.issued} links
-                </text>
               </g>
             );
           })}
           {!reduce &&
             s.calls.map((c) => {
-              const x = serverX(c.server, s.servers.length);
               if (c.server >= s.servers.length) return null;
+              const { x, y } = L.pos[c.server];
               return (
                 <g key={c.n}>
                   <m.circle
@@ -358,13 +397,13 @@ function Allocator() {
                     fill="var(--series-2)"
                     stroke="var(--card)"
                     strokeWidth={2}
-                    initial={{ cx: x, cy: SY - 30, opacity: 1 }}
-                    animate={{ cx: [x, RX, x], cy: [SY - 30, RY + 26, SY - 30], opacity: [1, 1, 1, 0] }}
+                    initial={{ cx: x, cy: y, opacity: 1 }}
+                    animate={{ cx: [x, L.rx, x], cy: [y, L.ry + 24, y], opacity: [1, 1, 1, 0] }}
                     transition={{ duration: 1.1, ease: "easeInOut" }}
                   />
                   <m.text
-                    x={(x + RX) / 2}
-                    y={(SY - 30 + RY + 26) / 2 - 6}
+                    x={(x + L.rx) / 2}
+                    y={(y + L.ry + 24) / 2 - 6}
                     textAnchor="middle"
                     style={{ fontSize: 10.5, fontWeight: 700, paintOrder: "stroke", stroke: "var(--card)", strokeWidth: 3 }}
                     initial={{ opacity: 1 }}
@@ -386,13 +425,41 @@ function Allocator() {
   );
 }
 
+const CSS = `
+.w-b62 { container-type: inline-size; }
+@container (max-width: 420px) { .w-b62 .b62-long { display: none; } .w-b62 .controls { gap: 8px 10px; } }
+`;
+
+const PARTS = [
+  { id: "encode", label: "1. Encode an id" },
+  { id: "alloc", label: "2. Range allocator" },
+] as const;
+
 export function Base62Playground() {
+  const [part, setPart] = useState<(typeof PARTS)[number]["id"]>("encode");
   return (
     <WidgetFrame title="Base62 codes and range allocation" sub="Turn an id into a short code, scramble it so neighbours don't look alike, and hand out ids without a hot counter.">
-      <h4 style={{ margin: "4px 0 6px", fontSize: 14.5 }}>1. Encode an id</h4>
-      <Encoder />
-      <h4 style={{ margin: "18px 0 6px", fontSize: 14.5 }}>2. Range allocator: one Redis call per block</h4>
-      <Allocator />
+      <style href="w-base62" precedence="widgets">
+        {CSS}
+      </style>
+      <div className="w-b62">
+        <div className="seg" role="group" aria-label="Part of the playground" style={{ marginBottom: 8 }}>
+          {PARTS.map((p) => (
+            <button key={p.id} type="button" aria-pressed={part === p.id} onClick={() => setPart(p.id)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div hidden={part !== "encode"}>
+          <Encoder />
+        </div>
+        <div hidden={part !== "alloc"}>
+          <p className="muted" style={{ margin: "0 0 4px", fontSize: 13, lineHeight: 1.45 }}>
+            One Redis call per block: each server grabs a range with INCRBY, then serves it from memory.
+          </p>
+          <Allocator />
+        </div>
+      </div>
     </WidgetFrame>
   );
 }

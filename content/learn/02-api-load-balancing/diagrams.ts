@@ -3,7 +3,7 @@ import type { FlowSpec } from "@/components/diagram/types";
 export const requestPath: FlowSpec = {
   id: "request-path",
   title: "Request path",
-  description: "Requests enter through the API gateway, the load balancer spreads them across identical stateless service instances, and every instance shares the same database and session store.",
+  description: "Requests enter through the API gateway, the load balancer spreads them over identical stateless instances, and every instance shares one database and session store.",
   nodes: [
     { id: "client", label: "Client", kind: "client", col: 0, row: 1, sub: "browser / app" },
     { id: "gateway", label: "API gateway", kind: "gateway", col: 1, row: 1, sub: "auth, rate limits" },
@@ -32,22 +32,22 @@ export const requestPath: FlowSpec = {
       name: "Happy path",
       steps: [
         { edge: "client>gateway", caption: "Requests arrive at the API gateway, the single front door." },
-        { edge: "gateway>lb", caption: "The gateway checks the token and the rate limit, then hands each request to the load balancer." },
+        { edge: "gateway>lb", caption: "The gateway checks the token and rate limit, then hands each request to the load balancer." },
         {
           edge: "lb>a",
-          caption: "The load balancer spreads requests across the healthy instances: one to A, the next to B, the next to C.",
+          caption: "The load balancer spreads requests over the healthy instances: one to A, the next to B, the next to C.",
           with: [{ edge: "lb>b", caption: "" }, { edge: "lb>c", caption: "" }],
         },
         {
           edge: "a>db",
-          caption: "The instances are identical and stateless: each one reads what it needs from the shared database.",
+          caption: "The instances are identical and stateless: each reads what it needs from the shared database.",
           with: [{ edge: "b>db", caption: "" }, { edge: "c>db", caption: "" }],
         },
         {
           edge: "lb>a",
           reverse: true,
           tone: "ok",
-          caption: "Responses flow back. To add capacity, you add another instance behind the load balancer.",
+          caption: "Responses flow back. Need more capacity? Add another instance behind the load balancer.",
           with: [{ edge: "lb>b", reverse: true, tone: "ok", caption: "" }, { edge: "lb>c", reverse: true, tone: "ok", caption: "" }],
         },
         { edge: "client>gateway", reverse: true, tone: "ok", caption: "The client never knows which instance served it." },
@@ -62,7 +62,7 @@ export const requestPath: FlowSpec = {
         { edge: "lb>c", tone: "error", caption: "Third failure in a row: the LB marks C down and stops routing to it.", mark: [{ node: "c", state: "down" }] },
         {
           edge: "lb>a",
-          caption: "New requests go only to A and B. Users see no errors, just a little more load on the survivors.",
+          caption: "New requests go only to A and B. Users see no errors, only a little more load on the survivors.",
           with: [{ edge: "lb>b", caption: "" }],
           mark: [{ node: "a", state: "busy" }, { node: "b", state: "busy" }],
         },
@@ -88,7 +88,7 @@ export const requestPath: FlowSpec = {
           edge: "client>gateway",
           reverse: true,
           tone: "error",
-          caption: "…so A answers 401 and Alice is logged out. Sticky sessions only hide this: she is still logged out when B crashes or is redeployed.",
+          caption: "…so A answers 401 and Alice is logged out. Sticky sessions only hide this: she is still logged out when B crashes or redeploys.",
         },
       ],
     },

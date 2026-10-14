@@ -1,5 +1,6 @@
 import { arr, defineTrace, grid, heapTree, note } from "@/components/algo/trace";
 import type { Tone, View } from "@/components/algo/types";
+import { intervalProblem } from "@/components/algo/checks";
 
 type Interval = [number, number];
 const fmt = ([s, e]: Interval) => `[${s},${e}]`;
@@ -46,6 +47,8 @@ function merge(intervals) {
     { label: "Groups with gaps", input: { intervals: [[7, 8], [2, 4], [10, 11], [1, 3], [4, 5]] as Interval[] } },
     { label: "Nested and touching", input: { intervals: [[4, 8], [1, 10], [10, 11], [2, 3]] as Interval[] } },
   ],
+  fields: { intervals: { maxItems: 6, min: 0, max: 30, colNames: ["start", "end"], help: "One interval per line: start end (up to 6)." } },
+  validate: ({ intervals }) => intervalProblem(intervals, { maxSpan: 15 }),
   run(t, { intervals }) {
     const from = Math.min(...intervals.map((iv) => iv[0]));
     const to = Math.max(...intervals.map((iv) => iv[1]));
@@ -112,6 +115,8 @@ function maxOverlap(intervals) {
     { label: "Busy afternoon", input: { intervals: [[1, 5], [2, 6], [4, 8], [6, 9], [8, 10]] as Interval[] } },
     { label: "Back to back", input: { intervals: [[1, 3], [3, 5], [5, 7]] as Interval[] } },
   ],
+  fields: { intervals: { maxItems: 6, min: 0, max: 30, colNames: ["start", "end"], help: "One meeting per line: start end (up to 6)." } },
+  validate: ({ intervals }) => intervalProblem(intervals, { strict: true, maxSpan: 16 }),
   run(t, { intervals }) {
     const from = Math.min(...intervals.map((iv) => iv[0]));
     const to = Math.max(...intervals.map((iv) => iv[1]));
@@ -178,6 +183,8 @@ function minRooms(intervals) {
   return ends.size;                             //@done
 }`,
   presets: [{ label: "Five meetings", input: { intervals: [[2, 7], [0, 5], [6, 9], [1, 3], [4, 6]] as Interval[] } }],
+  fields: { intervals: { maxItems: 7, min: 0, max: 99, colNames: ["start", "end"], help: "One meeting per line: start end (up to 7)." } },
+  validate: ({ intervals }) => intervalProblem(intervals, { strict: true }),
   run(t, { intervals }) {
     const heap: number[] = [];
     const push = (x: number) => {

@@ -4,7 +4,7 @@ import { ArrowDownToLine, ArrowUpFromLine, GitMerge } from "lucide-react";
 import { LineChart } from "@/components/charts/LineChart";
 import { StatTiles } from "@/components/charts/ChartBits";
 import { bytes, compact, int } from "@/lib/format";
-import { Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
 /* ------------------------------------------------------------------ pure model */
 
@@ -64,6 +64,24 @@ export function followerAxis(followers: number) {
 const fromExp = (e: number) => Math.min(50_000_000, Number((10 ** e).toPrecision(2)));
 const MAX_EXP = Math.log10(50_000_000);
 
+/** Compact results (four across in the desktop pane, two on a phone) and a flatter chart inside the widget. */
+const CSS = `
+.fan-results { container-type: inline-size; }
+.fan-results .stat-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.fan-results .stat-tile { padding: 6px 10px; border-radius: 10px; min-width: 0; }
+.fan-results .stat-label { font-size: 12px; line-height: 1.3; }
+.fan-results .stat-value { font-size: 17px; line-height: 1.3; }
+.fan-results .stat-sub { font-size: 11.5px; line-height: 1.3; }
+@container (max-width: 520px) { .fan-results .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fan-verdict { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; background: var(--card-2); margin-top: 8px; }
+.fan-verdict p { margin: 0; }
+.fan-verdict p:first-child { font-weight: 650; margin-bottom: 2px; }
+.fan-verdict p:first-child svg { display: inline; vertical-align: -2px; margin-right: 4px; }
+.fan-chart .chart { margin: 8px 0 0; padding: 0; border: 0; background: none; }
+.fan-chart .chart-title { font-size: 13px; line-height: 1.35; margin-bottom: 2px; }
+.fan-chart .chart-table { margin-top: 2px; }
+`;
+
 const VERDICT: Record<Strategy, { title: string; icon: typeof GitMerge; cls: string }> = {
   push: { title: "Push (fan-out on write)", icon: ArrowUpFromLine, cls: "ok-ink" },
   "push-queued": { title: "Push, through a queue", icon: ArrowUpFromLine, cls: "warn-ink" },
@@ -88,47 +106,58 @@ export function FanoutCalc() {
   const Icon = v.icon;
   const reason =
     r.strategy === "pull"
-      ? `${compact(followers)} followers means ${compact(r.writesPerPost)} feed writes for every post and ${humanTime(r.deliverSeconds)} before the last follower has it, and ${postsPerDay} posts/day take ${r.share >= 1 ? `${r.share.toFixed(0)}%` : "a noticeable share"} of the whole fan-out fleet. Store the post once in the author's timeline and merge it into followers' feeds when they open them: about ${int(r.pullReadsPerSec)} extra timeline reads/s, served from cache. Normal accounts keep push.`
+      ? `${compact(r.writesPerPost)} feed writes per post, ${humanTime(r.deliverSeconds)} until the last follower has it, and ${postsPerDay} posts/day eat ${r.share >= 1 ? `${r.share.toFixed(0)}%` : "a noticeable share"} of the fan-out fleet. Store the post once and merge it into feeds when they're opened: about ${int(r.pullReadsPerSec)} extra timeline reads/s, served from cache. Normal accounts keep push.`
       : r.strategy === "push-queued"
-        ? `${compact(r.writesPerPost)} writes per post still fits, but delivery takes ${humanTime(r.deliverSeconds)}, so publish once to a queue and let workers write the feeds in batches. The post shows up for followers over a few seconds, which is usually fine.`
+        ? `${compact(r.writesPerPost)} writes per post still fits, but delivery takes ${humanTime(r.deliverSeconds)}: publish once to a queue and let workers write the feeds in batches. Followers see the post over a few seconds, which is usually fine.`
         : `${compact(r.writesPerPost)} feed writes per post finish in ${humanTime(r.deliverSeconds)}. Every follower then reads one precomputed list: the cheapest read path there is.`;
 
   return (
-    <WidgetFrame title="Fan-out calculator" sub="Push copies each post into every follower's feed when it's written; pull assembles feeds when they're read. Followers decide which one hurts.">
+    <WidgetFrame title="Fan-out calculator" sub="Push copies a post into every feed; pull builds feeds on read.">
+      <style href="w-fanout-calc" precedence="widgets">
+        {CSS}
+      </style>
       <div className="controls">
         <Slider label="Followers" value={exp} min={1} max={MAX_EXP} step={0.02} onChange={setExp} format={() => compact(followers)} valueText={`${int(followers)} followers`} />
-        <Slider label="Posts per day (this author)" value={postsPerDay} min={1} max={50} onChange={setPostsPerDay} />
-        <Slider label="Fan-out throughput" value={tExp} min={3} max={6} step={0.05} onChange={setTExp} format={() => `${compact(throughput)} writes/s`} valueText={`${int(throughput)} writes per second`} />
+        <Slider label="Posts per day" value={postsPerDay} min={1} max={50} onChange={setPostsPerDay} valueText={`${postsPerDay} posts per day from this author`} />
+        <Slider label="Fan-out throughput" value={tExp} min={3} max={6} step={0.05} onChange={setTExp} format={() => `${compact(throughput)}/s`} valueText={`${int(throughput)} feed writes per second`} />
       </div>
-      <StatTiles
-        items={[
-          { label: "Writes per post", value: compact(r.writesPerPost), sub: "one feed insert per follower" },
-          { label: "Time to reach everyone", value: humanTime(r.deliverSeconds), sub: `at ${compact(throughput)} writes/s` },
-          { label: "Feed-cache memory", value: `${bytes(r.memoryPerDay)}/day`, sub: `${bytes(r.memoryPerPost)} per post at ~${ENTRY_BYTES} B per entry` },
-          { label: "Fan-out writes per day", value: compact(r.writesPerDay), sub: `${int(r.writesPerDay / 86_400)}/s on average` },
-        ]}
-      />
-      <div className="readout" aria-live="polite" style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: "var(--card-2)" }}>
-        <p style={{ margin: 0, display: "flex", alignItems: "center", gap: 8, fontWeight: 650 }}>
-          <Icon size={16} aria-hidden className={v.cls} /> Recommendation: <span className={v.cls}>{v.title}</span>
+      <div className="fan-results">
+        <StatTiles
+          items={[
+            { label: "Writes per post", value: compact(r.writesPerPost), sub: "one per follower" },
+            { label: "Reach everyone", value: humanTime(r.deliverSeconds), sub: `at ${compact(throughput)} writes/s` },
+            { label: "Feed memory", value: `${bytes(r.memoryPerDay)}/day`, sub: `${bytes(r.memoryPerPost)} per post` },
+            { label: "Writes per day", value: compact(r.writesPerDay), sub: `${r.writesPerDay < 86_400 ? "< 1" : int(r.writesPerDay / 86_400)}/s on average` },
+          ]}
+        />
+      </div>
+      <div className="readout fan-verdict" aria-live="polite">
+        <p>
+          <Icon size={16} aria-hidden className={v.cls} /> <span className="sr-only">Recommendation: </span>
+          <span className={v.cls}>{v.title}</span>
         </p>
-        <p style={{ margin: "4px 0 0" }}>{reason}</p>
+        <p>{reason}</p>
       </div>
-      <LineChart
-        title="Time for one post to reach every follower (push)"
-        x={xs}
-        series={[{ id: "push", name: "Push delivery time", values: secs.map((s) => s * scale) }]}
-        xLabel="Followers"
-        yUnit={unit}
-        xFormat="number"
-        marker={deferred.followers}
-        height={220}
-        area
-      />
-      <p className="muted" style={{ fontSize: 13, margin: "-8px 0 0", display: "flex", gap: 6, alignItems: "baseline" }}>
-        <ArrowDownToLine size={13} aria-hidden style={{ flex: "none", position: "relative", top: 2 }} />
-        Rule of thumb: push for accounts under ~{compact(CELEBRITY_THRESHOLD)} followers, pull (merge at read time) above it. The line is straight: delivery time grows with every follower you add.
-      </p>
+      <div className="fan-chart">
+        <LineChart
+          title="Push: time to reach every follower"
+          x={xs}
+          series={[{ id: "push", name: "Push delivery time", values: secs.map((s) => s * scale) }]}
+          xLabel="Followers"
+          yUnit={unit}
+          xFormat="number"
+          marker={deferred.followers}
+          height={140}
+          area
+        />
+      </div>
+      <More label="Rule of thumb and assumptions">
+        <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, margin: 0, display: "flex", gap: 6, alignItems: "baseline" }}>
+          <ArrowDownToLine size={13} aria-hidden style={{ flex: "none", position: "relative", top: 2 }} />
+          Push for accounts under ~{compact(CELEBRITY_THRESHOLD)} followers, pull (merge at read time) above it. The line is straight: delivery time grows with every follower you add. Each feed entry costs ~{ENTRY_BYTES} B in the cache (post id, score and
+          sorted-set overhead); the pull side assumes {FEED_OPENS_PER_DAY} feed opens per follower per day; a feed should feel fresh within {FRESH_SECONDS} s.
+        </p>
+      </More>
     </WidgetFrame>
   );
 }

@@ -1,5 +1,6 @@
 import { arr, defineTrace, note, span } from "@/components/algo/trace";
 import type { Tone } from "@/components/algo/types";
+import { sortField } from "@/components/algo/checks";
 
 /** Everything outside [left, right] has been ruled out: show it muted. */
 const outside = (n: number, left: number, right: number) => {
@@ -27,6 +28,8 @@ function pairSum(nums, target) {
     { label: "Pair exists", input: { nums: [1, 3, 4, 6, 8, 11], target: 10 } },
     { label: "No pair", input: { nums: [2, 4, 5, 9], target: 12 } },
   ],
+  fields: { nums: { minItems: 2 } },
+  prepare: (input, say) => sortField(input, "nums", "two pointers from both ends need sorted input.", say),
   run(t, { nums, target }) {
     let left = 0;
     let right = nums.length - 1;
@@ -85,6 +88,7 @@ function removeDuplicates(nums) {
     { label: "Sorted with repeats", input: { nums: [1, 1, 2, 3, 3, 3, 4] } },
     { label: "All the same", input: { nums: [7, 7, 7, 7] } },
   ],
+  prepare: (input, say) => sortField(input, "nums", "equal values must sit next to each other.", say),
   run(t, { nums }) {
     let write = 1;
     const view = (read: number | null, tones: Record<number, Tone> = {}) =>
@@ -127,6 +131,7 @@ function sortedSquares(nums) {
   return out;                                      //@done
 }`,
   presets: [{ label: "Negatives and positives", input: { nums: [-4, -1, 0, 3, 10] } }],
+  prepare: (input, say) => sortField(input, "nums", "the biggest squares must sit at the two ends.", say),
   run(t, { nums }) {
     const out: (number | null)[] = nums.map(() => null);
     let left = 0;

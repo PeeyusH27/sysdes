@@ -1,10 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, CheckCheck, CircleAlert, CircleCheck, Clock, Info, Send, Server, TriangleAlert, Wifi, WifiOff, X } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
 import { draw } from "./lib/draw-rng";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
 /* ------------------------------------------------------------------ pure model */
 
@@ -320,24 +320,39 @@ const TICK_META: Record<Tick, { icon: typeof Check; word: string; cls?: string }
 };
 
 const CSS = `
-.chat-phones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.chat-phone { border: 1.5px solid var(--border-strong); border-radius: 18px; background: var(--card-2); padding: 8px; display: grid; grid-template-rows: auto 1fr auto; min-width: 0; }
-.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-weight: 650; font-size: 13.5px; padding: 2px 4px 6px; border-bottom: 1px solid var(--border); }
-.chat-list { height: 210px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding: 8px 2px; }
-.chat-bubble { max-width: 92%; border-radius: 12px; padding: 5px 8px; font-size: 12.5px; line-height: 1.35; border: 1px solid var(--border); background: var(--card); overflow-wrap: anywhere; }
+.chat-phones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 4px; }
+.chat-phone { container-type: inline-size; border: 1.5px solid var(--border-strong); border-radius: 18px; background: var(--card-2); padding: 6px 8px 8px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto; min-width: 0; }
+.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-weight: 650; font-size: 13.5px; line-height: 1.4; padding: 0 4px 4px; border-bottom: 1px solid var(--border); }
+.chat-list { height: 188px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding: 6px 2px; }
+.chat-bubble { max-width: 92%; border-radius: 12px; padding: 4px 8px; font-size: 12.5px; line-height: 1.35; border: 1px solid var(--border); background: var(--card); overflow-wrap: anywhere; }
 .chat-bubble[data-own] { align-self: flex-end; background: color-mix(in srgb, var(--accent) 12%, var(--card)); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
-.chat-meta { display: flex; align-items: center; gap: 4px; justify-content: flex-end; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+.chat-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; justify-content: flex-end; font-size: 10.5px; line-height: 1.4; color: var(--muted); margin-top: 1px; }
 .chat-seq { font: 600 10.5px var(--font-mono); color: var(--muted); margin-right: auto; }
 .chat-form { display: flex; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
 .chat-form input { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--border); background: var(--card); color: var(--fg); border-radius: 8px; padding: 0 8px; font-size: 13px; }
 .chat-form button { flex: none; width: 34px; height: 30px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; }
-.chat-log { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 3px; font-size: 13px; }
+@container (max-width: 150px) { .chat-st-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+.chat-log { list-style: none; padding: 0; margin: 0; display: grid; gap: 3px; font-size: 13px; line-height: 1.45; }
 .chat-log li { display: flex; gap: 6px; align-items: baseline; }
 .chat-log svg { flex: none; position: relative; top: 2px; }
-@media (max-width: 420px) { .chat-list { height: 190px; } .chat-bubble { font-size: 12px; } }
+.chat-wire { display: block; width: 100%; }
+@container (max-width: 420px) { .chat-list { height: 150px; } .chat-bubble { font-size: 12px; } }
 `;
 
-const X_OF: Record<NodeId, number> = { alice: 30, server: 210, bob: 390 };
+/** The widget's width in px (0 until measured): the wire is drawn in real pixels so its labels never shrink. */
+function useWidth(ref: React.RefObject<HTMLElement | null>) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return w;
+}
+
+const WIRE_H = 60;
 
 function packetLabel(p: Packet) {
   if (p.kind === "send") return p.clientId;
@@ -357,7 +372,7 @@ function Phone({ s, who, onSend }: { s: ChatState; who: Who; onSend: (text: stri
       <div className="chat-head">
         <span>{NAME[who]}</span>
         <span className={`pill ${online ? "ok-ink" : "bad-ink"}`}>
-          {online ? <Wifi size={11} aria-hidden /> : <WifiOff size={11} aria-hidden />} {online ? "online" : "offline"}
+          {online ? <Wifi size={11} aria-hidden /> : <WifiOff size={11} aria-hidden />} <span className="chat-st-word">{online ? "online" : "offline"}</span>
         </span>
       </div>
       <div className="chat-list" role="log" aria-label={`${NAME[who]}'s conversation`}>
@@ -412,6 +427,8 @@ export function ChatSim() {
   const [s, reset] = useFixedStep<ChatState>(() => initChat(), tickStep, busyFlag && inView && !reduce);
   const busy = nextEventAt(s) !== null;
   if (busy !== busyFlag) setBusyFlag(busy); // the clock only runs while something is in flight
+  const W = Math.max(260, useWidth(ref) || 600);
+  const X_OF: Record<NodeId, number> = { alice: 22, server: W / 2, bob: W - 22 };
 
   const act = (a: ChatAction) => reset(chatReducer(s, a));
   const latest = s.events[0];
@@ -419,15 +436,15 @@ export function ChatSim() {
   const waiting = s.server.msgs.filter((m) => !m.delivered).length;
 
   return (
-    <WidgetFrame title="Chat delivery simulator" sub="Each message carries a clientId. Lost acks make the phone retry; the server dedupes by clientId and orders everything by its own sequence number.">
+    <WidgetFrame title="Chat delivery simulator" sub="Lost acks cause retries; the server dedupes them by clientId.">
       <style href="w-chat-sim" precedence="widgets">
         {CSS}
       </style>
       <div className="controls">
-        <Slider label="Network latency" value={s.net.latency} min={50} max={1500} step={50} onChange={(v) => act({ type: "net", latency: v })} format={(v) => `${v} ms`} />
-        <Slider label="Drop rate (sends and acks)" value={Math.round(s.net.drop * 100)} min={0} max={60} step={5} onChange={(v) => act({ type: "net", drop: v / 100 })} format={(v) => `${v}%`} />
+        <Slider label="Drop rate" value={Math.round(s.net.drop * 100)} min={0} max={60} step={5} onChange={(v) => act({ type: "net", drop: v / 100 })} format={(v) => `${v}%`} valueText={`${Math.round(s.net.drop * 100)}% of sends and acks dropped`} />
+        <Slider label="Latency" value={s.net.latency} min={50} max={1500} step={50} onChange={(v) => act({ type: "net", latency: v })} format={(v) => `${v} ms`} valueText={`Network latency ${s.net.latency} ms`} />
         <button type="button" className={`wbtn ${s.online.bob ? "" : "danger"}`} aria-pressed={!s.online.bob} onClick={() => act({ type: "online", who: "bob", online: !s.online.bob })}>
-          {s.online.bob ? <WifiOff size={14} aria-hidden /> : <Wifi size={14} aria-hidden />} {s.online.bob ? "Take Bob offline" : "Bring Bob online"}
+          <WifiOff size={14} aria-hidden /> Bob offline
         </button>
         <SimButtons
           running={busy && inView && !reduce}
@@ -440,27 +457,26 @@ export function ChatSim() {
       </div>
 
       <div ref={ref}>
-        <svg viewBox="0 0 420 74" className="sim-svg" style={{ maxWidth: 600, margin: "0 auto" }} role="img" aria-label={`${s.packets.length} packets in flight. Server sequence is at ${s.server.seq}.`}>
-          <line x1={X_OF.alice} x2={X_OF.bob} y1={34} y2={34} stroke="var(--border-strong)" strokeWidth={1.5} />
+        <svg viewBox={`0 0 ${W} ${WIRE_H}`} className="sim-svg chat-wire" role="img" aria-label={`${s.packets.length} packets in flight. Server sequence is at ${s.server.seq}.${waiting ? ` ${waiting} undelivered.` : ""}`}>
+          <line x1={X_OF.alice} x2={X_OF.bob} y1={30} y2={30} stroke="var(--border-strong)" strokeWidth={1.5} />
           {(["alice", "bob"] as Who[]).map((w) => (
             <g key={w}>
-              <circle cx={X_OF[w]} cy={34} r={16} fill="var(--card-2)" stroke="var(--k-client)" strokeWidth={1.6} strokeDasharray={s.online[w] ? undefined : "4 3"} />
-              <text x={X_OF[w]} y={38} textAnchor="middle" style={{ fontWeight: 700 }}>
+              <circle cx={X_OF[w]} cy={30} r={16} fill="var(--card-2)" stroke="var(--k-client)" strokeWidth={1.6} strokeDasharray={s.online[w] ? undefined : "4 3"} />
+              <text x={X_OF[w]} y={34} textAnchor="middle" style={{ fontWeight: 700 }}>
                 {NAME[w][0]}
-              </text>
-              <text x={w === "alice" ? X_OF[w] - 16 : X_OF[w] + 16} y={66} textAnchor={w === "alice" ? "start" : "end"} className="muted-text" style={{ fontSize: 10.5 }}>
-                {NAME[w]} {s.online[w] ? "" : "(offline)"}
               </text>
             </g>
           ))}
-          <rect x={X_OF.server - 44} y={18} width={88} height={32} rx={8} fill="var(--card-2)" stroke="var(--k-service)" strokeWidth={1.6} />
-          <Server x={X_OF.server - 38} y={26} width={15} height={15} aria-hidden style={{ color: "var(--k-service)" }} />
-          <text x={X_OF.server + 8} y={38} textAnchor="middle" style={{ fontWeight: 650 }}>
+          <rect x={X_OF.server - 50} y={14} width={100} height={32} rx={8} fill="var(--card-2)" stroke="var(--k-service)" strokeWidth={1.6} />
+          <Server x={X_OF.server - 44} y={22} width={15} height={15} aria-hidden style={{ color: "var(--k-service)" }} />
+          <text x={X_OF.server + 9} y={waiting ? 28 : 34} textAnchor="middle" style={{ fontWeight: 650 }}>
             seq {s.server.seq}
           </text>
-          <text x={X_OF.server} y={66} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
-            server{waiting ? ` · ${waiting} undelivered` : ""}
-          </text>
+          {waiting > 0 && (
+            <text x={X_OF.server + 9} y={41} textAnchor="middle" style={{ fontSize: 10, fill: "var(--warning-ink)", fontWeight: 650 }}>
+              {waiting} undelivered
+            </text>
+          )}
           {s.packets.map((p) => {
             const prog = Math.min(1, Math.max(0, (s.t - p.sentAt) / Math.max(1, p.arriveAt - p.sentAt)));
             const lost = p.drop && prog >= 0.5;
@@ -468,7 +484,7 @@ export function ChatSim() {
             const x = X_OF[p.from] + (X_OF[p.to] - X_OF[p.from]) * pos;
             const up = p.kind === "ack" || p.kind === "receipt";
             return (
-              <g key={p.id} style={{ transform: `translate(${x}px, ${up ? 22 : 46}px)`, transition: reduce ? undefined : "transform 60ms linear" }}>
+              <g key={p.id} style={{ transform: `translate(${x}px, ${up ? 19 : 41}px)`, transition: reduce ? undefined : "transform 60ms linear" }}>
                 {lost ? (
                   <>
                     <X x={-6} y={-6} width={12} height={12} aria-hidden style={{ color: "var(--critical)" }} />
@@ -479,7 +495,7 @@ export function ChatSim() {
                 ) : (
                   <>
                     <circle r={5} fill={packetColor[p.kind]} stroke="var(--card)" strokeWidth={1.5} />
-                    <text x={0} y={up ? -8 : 15} textAnchor="middle" style={{ fontSize: 9.5, fontWeight: 650 }}>
+                    <text x={0} y={up ? -8 : 16} textAnchor="middle" style={{ fontSize: 10, fontWeight: 650 }}>
                       {packetLabel(p)}
                     </text>
                   </>
@@ -495,9 +511,14 @@ export function ChatSim() {
         <Phone s={s} who="bob" onSend={(text) => act({ type: "send", from: "bob", text })} />
       </div>
 
-      {s.events.length > 0 && (
-        <ol className="chat-log" aria-label="Server and network log">
-          {s.events.slice(0, 4).map((e) => {
+      <p className="readout" aria-live="polite">
+        {said} <span className="muted">Totals: {s.stats.retries} retries, {s.stats.duplicates} duplicates ignored, {s.stats.lost} packets lost.</span>
+        <ReducedNote reduce={reduce} what="Clock paused (reduced motion): press Next event to move the network along." />
+      </p>
+      <More label={`Server and network log${s.events.length ? ` (${s.events.length})` : ""}`}>
+        {s.events.length === 0 && <p className="muted" style={{ fontSize: 13, margin: 0 }}>Nothing yet: send a message.</p>}
+        <ol className="chat-log" aria-label="Server and network log, newest first">
+          {s.events.map((e) => {
             const Icon = TONE_ICON[e.tone];
             return (
               <li key={e.n}>
@@ -512,11 +533,7 @@ export function ChatSim() {
             );
           })}
         </ol>
-      )}
-      <p className="readout" aria-live="polite">
-        {said} <span className="muted">Totals: {s.stats.retries} retries, {s.stats.duplicates} duplicates ignored, {s.stats.lost} packets lost.</span>
-        <ReducedNote reduce={reduce} what="Clock paused (reduced motion): press Next event to move the network along." />
-      </p>
+      </More>
     </WidgetFrame>
   );
 }

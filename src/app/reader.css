@@ -1,6 +1,19 @@
-/* Lesson reader: section cards, the sticky reader bar, Cards mode and the live "On this page" map.
-   Sections are server-rendered `.sec-card`s (src/lib/mdx/rehype-section-cards.mjs); src/components/layout/Reader.tsx
-   adds data-mode / data-active / data-dir. Without JS the page is a plain stack of cards. */
+/* Lesson reader: the detail-page frame, section cards, the pinned visual pane (desktop), the sticky reader bar,
+   Cards mode and the page drawer.
+   Sections are server-rendered `.sec-card`s; src/lib/mdx/rehype-section-cards.mjs splits each into `.sec-body` (the
+   words) and `.sec-stage > .sec-fit` (the visuals). src/components/layout/Reader.tsx adds data-mode / data-active /
+   data-current / data-dir; StagePane.tsx adds data-pane on `.reader` from 1080 px and shows one stage at a time over
+   the pane (--pane-x/y/w/h, --stick-top). Below 1080 px, or without JS, each stage follows its text. */
+
+/* ------------------------------------------------------------------ page frame (DocLayout) */
+.container-doc { max-width: 1560px; }
+.doc { --stage-gap: clamp(22px, 2.2vw, 36px); --pane-col: 1.3fr; padding-bottom: 80px; }
+.doc-main { min-width: 0; }
+:root[data-motion=reduce] { scroll-behavior: auto; }
+/* anchors land below the sticky nav and reader bar */
+.doc .prose :is(h2, h3, h4) { scroll-margin-top: calc(var(--stick-top, 116px) + 12px); }
+/* the intro before the first card (TL;DR) keeps a reading measure */
+.doc .prose > :is(p, ul, ol, .tldr, .callout) { max-width: 900px; }
 
 /* ------------------------------------------------------------------ lesson hero */
 .lesson-hero { position: relative; margin-top: 18px; padding: 26px 28px 22px !important; border: 1px solid var(--border); border-radius: var(--radius-lg); background:
@@ -16,36 +29,110 @@
 .sec-card {
   --kind: var(--accent);
   position: relative; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  padding: 20px 26px 18px; box-shadow: var(--shadow); scroll-margin-top: 136px;
-  transition: border-color .2s, box-shadow .2s;
+  padding: 20px 26px 18px; box-shadow: var(--shadow); scroll-margin-top: calc(var(--stick-top, 116px) + 2px);
+  transition: border-color .25s, box-shadow .25s;
 }
 .sec-card[data-kind=visual] { --kind: var(--k-client); }
 .sec-card[data-kind=code] { --kind: var(--k-gateway); }
 .sec-card[data-kind=practice] { --kind: var(--accent-2); }
-.sec-card::before { content: ""; position: absolute; left: -1px; top: 26px; width: 4px; height: 34px; border-radius: 0 4px 4px 0; background: var(--kind); }
+.sec-card::before { content: ""; position: absolute; left: -1px; top: 26px; width: 4px; height: 34px; border-radius: 0 4px 4px 0; background: var(--kind); transition: height .5s var(--ease-out); }
 .sec-card:hover { border-color: color-mix(in srgb, var(--kind) 30%, var(--border)); }
 .prose > .sec-card { margin-top: 22px; }
-.sec-card > * + * { margin-top: 1em; }
-.sec-card > :last-child { margin-bottom: 0; }
+.sec-card > * + * { margin-top: 10px; }
+.sec-card > :last-child, .sec-body > :last-child, .sec-fit > :last-child { margin-bottom: 0; }
 @media (max-width: 640px) { .sec-card { padding: 16px 16px 14px; border-radius: 18px; } .sec-card::before { top: 20px; height: 28px; } }
 
-.sec-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.sec-n { font: 700 12.5px var(--font-mono); letter-spacing: .04em; color: var(--kind); background: color-mix(in srgb, var(--kind) 12%, transparent); border-radius: 8px; padding: 2px 8px; }
+.sec-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 26px; }
+.sec-n { font: 700 12.5px var(--font-mono); letter-spacing: .04em; color: var(--kind); background: color-mix(in srgb, var(--kind) 12%, transparent); border-radius: 8px; padding: 2px 8px; transition: background .25s, color .25s; }
 .sec-kind { display: inline-flex; align-items: center; gap: 5px; font: 600 11.5px var(--font-sans); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 .sec-kind svg { color: var(--kind); }
 .sec-tick { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font: 650 12px var(--font-sans); color: var(--good-ink); background: color-mix(in srgb, var(--good) 12%, transparent); border-radius: 999px; padding: 2px 10px 2px 7px; animation: pop-in .35s var(--ease-spring); }
-.sec-card > h2 { margin: 8px 0 4px !important; font-size: clamp(22px, 2.6vw, 27px); letter-spacing: -.015em; scroll-margin-top: 140px; }
 
-/* readable measure + skimmable emphasis inside cards */
-.sec-card > p, .sec-card > ul, .sec-card > ol, .sec-card > blockquote { max-width: 74ch; }
-.sec-card > ul > li::marker { color: var(--kind); }
-.sec-card > ol > li::marker { color: var(--kind); font-weight: 700; }
+/* the words: h2 first, then a readable measure and skimmable emphasis */
+.sec-body > * + * { margin-top: 1em; }
+.sec-body > h2:first-child { margin: 0 0 4px !important; font-size: clamp(22px, 2.6vw, 27px); letter-spacing: -.015em; scroll-margin-top: calc(var(--stick-top, 116px) + 12px); }
+.sec-body > h3:first-child { margin-top: 0; }
+.sec-body > :is(p, ul, ol, blockquote):not(.steps) { max-width: 74ch; }
+.sec-body > ul > li::marker { color: var(--kind); }
+.sec-body > ol > li::marker { color: var(--kind); font-weight: 700; }
 .prose :is(p, li) > strong { background: linear-gradient(transparent 60%, color-mix(in srgb, var(--accent) 20%, transparent) 0); border-radius: 2px; padding: 0 .08em; }
-.sec-card > h3::before { content: ""; display: inline-block; vertical-align: .18em; width: 8px; height: 8px; margin-right: 10px; border-radius: 2px; background: var(--kind); transform: rotate(45deg); }
+.sec-body > h3::before { content: ""; display: inline-block; vertical-align: .18em; width: 8px; height: 8px; margin-right: 10px; border-radius: 2px; background: var(--kind); transform: rotate(45deg); }
+/* long inline code (`Object.create(null)`) may wrap, so a table rarely needs a sideways scroll in a narrow column */
+.sec-body > .table-wrap :is(td, th) code { overflow-wrap: anywhere; }
+
+/* the visuals: diagrams, widgets, code. `.sec-fit` is a size container, so widgets adapt to the width they get
+   (src/app/stage.css); on desktop the pane lays it out and scales it. */
+.sec-fit { container: stage / inline-size; min-width: 0; }
+.sec-body { min-width: 0; }
+.sec-card .sec-fit > * { margin-top: 0; margin-bottom: 0; }
+.sec-card .sec-fit > * + * { margin-top: 18px; }
+.sec-body + .sec-stage { margin-top: 1.4em; }
+.sec-row + .sec-row { margin-top: 26px; padding-top: 24px; border-top: 1px dashed var(--border); }
 
 /* things that are already cards, inside a card: flatter, so they read as part of it */
 .sec-card :is(.flow:not(.flow--compact), .widget, .chart, .quiz, .followups, .table-wrap, .callout, .code-block, .code-tabs, .req-grid section) { box-shadow: none; }
 .sec-card .flow:not(.flow--compact) { padding-left: 10px; padding-right: 10px; }
+
+/* ------------------------------------------------------------------ desktop: one pinned pane for the visuals, the words on the right */
+.pane, .pane-more { display: none; }
+@media (min-width: 1080px) {
+  .doc-cols:has(.sec-stage) { display: grid; grid-template-columns: minmax(0, var(--pane-col)) minmax(0, 1fr); column-gap: var(--stage-gap); align-items: start; }
+  .doc-cols:has(.sec-stage) > .pane { display: flex; }
+  .pane { position: sticky; top: var(--stick-top, 116px); flex-direction: column; min-width: 0; height: calc(100dvh - var(--stick-top, 116px) - 10px); margin-top: 22px; }
+  .pane-head { flex: none; display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 0 4px; }
+  .pane-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; border: 0; background: none; color: var(--fg); font: 650 14px var(--font-sans); padding: 4px 10px 4px 4px; border-radius: 10px; cursor: pointer; text-align: left; transition: background .15s; }
+  .pane-title:hover { background: color-mix(in srgb, var(--card) 80%, transparent); }
+  .pane-title-idle { color: var(--muted); cursor: default; padding-left: 8px; }
+  .pane-n { flex: none; font: 700 12px var(--font-mono); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 7px; padding: 2px 7px; }
+  .pane-rel { flex: none; font: 650 11px var(--font-sans); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .pane-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pane-sub { color: var(--muted); font-weight: 550; }
+  .pane-pager { flex: none; margin-left: auto; display: flex; align-items: center; gap: 2px; font: 600 12.5px var(--font-sans); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .pane-pager .icon-btn { width: 30px; height: 30px; border-color: var(--border); background: var(--card); }
+  .pane-count { padding: 0 6px; white-space: nowrap; }
+  .pane-body { flex: 1; min-height: 0; }
+  .pane-empty { margin: 0; height: 100%; display: grid; place-items: center; padding: 24px; text-align: center; border: 1.5px dashed var(--border); border-radius: var(--radius-lg); color: var(--muted); font-size: 14px; }
+  .pane:not([data-empty]) .pane-empty { visibility: hidden; }
+
+  /* Before the pane picks a stage (no JS yet) the stages wait out of sight; <noscript> in DocLayout puts them back inline. */
+  .reader:not([data-pane]) .sec-stage { display: none; }
+  /* The chosen stage is laid over the pane body. Nothing between it and the viewport may transform or filter,
+     which is why the reveal animations below move to the card's children in this mode. */
+  .reader[data-pane] .sec-stage { position: fixed; z-index: 5; left: var(--pane-x); top: var(--pane-y); width: var(--pane-w); height: var(--pane-h); margin: 0 !important; overflow: hidden auto; overscroll-behavior: auto; scrollbar-gutter: stable; scrollbar-width: thin; border-radius: var(--radius); transition: opacity .18s ease; }
+  .reader[data-pane] .sec-stage[hidden] { display: none; }
+  .reader[data-pane] .sec-stage[data-leaving] { opacity: 0; pointer-events: none; }
+  .reader[data-pane] .sec-stage:focus-visible { outline-offset: -2px; }
+  .reader[data-pane] .sec-fit { transform-origin: 0 0; }
+  .reader[data-pane] .sec-fit > [data-pane-off] { display: none !important; }
+  /* the visual fills the pane, so it needs no card of its own beyond what it draws */
+  .reader[data-pane] .sec-fit > :is(.widget, .flow, .chart, .quiz, .algo, .code-block, .code-tabs, .run-code) { box-shadow: var(--shadow); }
+  /* a pane that scrolls: fade + hint (outside the pane, which sits under the stage) */
+  .reader[data-pane] .pane-more:not([hidden]) { display: flex; position: fixed; z-index: 6; left: var(--pane-x); width: calc(var(--pane-w) - 14px); top: calc(var(--pane-y) + var(--pane-h) - 72px); height: 72px; align-items: flex-end; justify-content: center; padding: 0 0 10px; border: 0; border-radius: 0 0 var(--radius) var(--radius); background: linear-gradient(transparent, color-mix(in srgb, var(--bg) 94%, transparent) 70%); pointer-events: none; }
+  .pane-more-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--card); color: var(--fg); font: 650 12.5px var(--font-sans); box-shadow: var(--shadow); cursor: pointer; pointer-events: auto; }
+  .pane-more-chip svg { color: var(--accent); }
+  .pane-more:hover .pane-more-chip { border-color: var(--accent); }
+
+  /* the reading column: words only */
+  .reader[data-pane] .sec-card { padding: 20px 22px 18px; }
+  .reader[data-pane] .sec-body[data-has-stage] { scroll-margin-top: calc(var(--stick-top, 116px) + 14px); border-radius: 10px; }
+  .reader[data-pane] .sec-body[data-has-stage]:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
+  /* the text the pane is showing the visual for */
+  .reader[data-pane] .sec-body[data-pane-owner] { position: relative; }
+  .reader[data-pane] .sec-body[data-pane-owner]::before { content: ""; position: absolute; left: -13px; top: 3px; bottom: 3px; width: 3px; border-radius: 3px; background: var(--kind); animation: owner-in .3s var(--ease-out); }
+  @keyframes owner-in { from { transform: scaleY(.3); opacity: 0; } }
+
+  /* one column for sections without visuals is the same column: a comfortable measure, tables sized to content */
+  .sec-card[data-layout=single] > .sec-body > .table-wrap { width: fit-content; min-width: min(100%, 640px); max-width: 100%; }
+  .reader[data-pane] .sec-card[data-layout=split] .sec-body > .table-wrap :is(th, td) { padding: 8px 11px; }
+  .reader[data-pane] .sec-card .sec-body > .table-wrap table { font-size: 14px; }
+}
+@media (min-width: 1080px) and (max-width: 1279px) { .doc { --pane-col: 1.14fr; } }
+@starting-style { .reader[data-pane] .sec-stage { opacity: 0; } }
+
+/* ------------------------------------------------------------------ the section you're on */
+.reader[data-mode=scroll] .sec-card[data-current] { border-color: color-mix(in srgb, var(--kind) 34%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--kind) 10%, transparent), var(--shadow); }
+.reader[data-mode=scroll] .sec-card[data-current]::before { height: calc(100% - 52px); }
+.sec-card[data-current] .sec-n { background: var(--kind); color: var(--card); }
 
 /* footer: tick and move on */
 .sec-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 22px !important; padding-top: 14px; border-top: 1px dashed var(--border); }
@@ -68,7 +155,9 @@
 @keyframes sec-reveal { from { opacity: .3; transform: translateY(30px) scale(.985); } }
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    :root:not([data-motion=reduce]) .reader[data-mode=scroll] .sec-card { animation: sec-reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 30%; }
+    :root:not([data-motion=reduce]) .reader[data-mode=scroll]:not([data-pane]) .sec-card,
+    :root:not([data-motion=reduce]) .reader[data-mode=scroll][data-pane] .sec-card > :is(.sec-head, .sec-body, .sec-foot),
+    :root:not([data-motion=reduce]) .reader[data-mode=scroll][data-pane] .sec-row > .sec-body { animation: sec-reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 30%; }
   }
 }
 
@@ -80,6 +169,10 @@
   box-shadow: 0 10px 0 -5px var(--card), 0 10px 0 -4px var(--border), 0 20px 0 -10px var(--card), 0 20px 0 -9px var(--border), var(--shadow);
 }
 .reader[data-mode=cards][data-dir=prev] .sec-card[data-active] { animation-name: deck-prev; }
+/* with the pane, the card itself must not transform (its stage is fixed to the viewport): slide its words instead */
+.reader[data-pane][data-mode=cards] .sec-card[data-active] { animation: none; }
+.reader[data-pane][data-mode=cards] .sec-card[data-active] :is(.sec-head, .sec-body, .sec-foot) { animation: deck-next .45s var(--ease-out) both; }
+.reader[data-pane][data-mode=cards][data-dir=prev] .sec-card[data-active] :is(.sec-head, .sec-body, .sec-foot) { animation-name: deck-prev; }
 @keyframes deck-next { from { opacity: 0; transform: translateX(48px) rotate(.8deg); } }
 @keyframes deck-prev { from { opacity: 0; transform: translateX(-48px) rotate(-.8deg); } }
 
@@ -100,31 +193,63 @@
 }
 
 /* ------------------------------------------------------------------ reader bar */
-.reader-bar { position: sticky; top: 66px; z-index: 30; display: flex; align-items: center; gap: 8px; margin: 16px 0 4px; padding: 6px 6px 6px 8px; border: 1px solid var(--border); border-radius: 18px; background: color-mix(in srgb, var(--card) 86%, transparent); backdrop-filter: blur(12px) saturate(1.4); box-shadow: var(--shadow); }
+.reader-bar { position: sticky; top: 64px; z-index: 30; display: flex; align-items: center; gap: 8px; margin: 14px 0 0; padding: 4px; border: 1px solid var(--border); border-radius: 18px; background: color-mix(in srgb, var(--card) 97%, transparent); backdrop-filter: blur(12px) saturate(1.4); box-shadow: var(--shadow); }
 .reader-bar.is-celebrating { border-color: var(--good); animation: glow 1.2s ease-out 2; }
 @keyframes glow { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 22%, transparent), var(--shadow); } }
+
+/* page list button (opens the drawer) */
+.rb-pages { flex: none; display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px 0 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--fg); font: 600 13.5px var(--font-sans); cursor: pointer; transition: border-color .15s, background .15s; }
+.rb-pages:hover { border-color: var(--accent); }
+.rb-pages svg { color: var(--accent); }
+.rb-pages-n { font: 600 12px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+
 .rb-progress { flex: none; display: grid; }
-.rb-where { position: relative; flex: 1; min-width: 0; }
-.rb-current { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 6px; width: 100%; border: 0; background: transparent; color: var(--fg); text-align: left; padding: 3px 8px; border-radius: 10px; cursor: pointer; }
+.rb-where { position: relative; flex: 1 1 auto; min-width: 0; }
+.rb-current { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; border: 0; background: transparent; color: var(--fg); text-align: left; padding: 4px 10px 4px 6px; border-radius: 12px; cursor: pointer; }
 .rb-current:hover:not(:disabled) { background: var(--card-2); }
 .rb-current:disabled { opacity: 1; cursor: default; }
-.rb-current small { grid-column: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); line-height: 1.3; }
-.rb-title { grid-column: 1; font-weight: 650; font-size: 14.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: title-in .35s var(--ease-out); }
-.rb-chev { grid-column: 2; grid-row: 1 / span 2; color: var(--muted); transition: transform .2s; }
+.rb-count { flex: none; font: 700 13px var(--font-mono); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 8px; padding: 3px 8px; font-variant-numeric: tabular-nums; }
+.rb-of { color: var(--muted); font-weight: 600; }
+.rb-title { flex: 1; min-width: 0; font-weight: 650; font-size: 14.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: title-in .35s var(--ease-out); }
+.rb-chev { flex: none; color: var(--muted); transition: transform .2s; }
 .rb-current[aria-expanded=true] .rb-chev { transform: rotate(180deg); }
 @keyframes title-in { from { opacity: 0; transform: translateY(6px); } }
-.rb-menu { position: absolute; left: 0; top: calc(100% + 10px); width: min(420px, calc(100vw - 40px)); max-height: 60vh; overflow: auto; list-style: none; margin: 0; padding: 6px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--card); box-shadow: var(--shadow-lg); animation: menu-in .18s var(--ease-out); }
+
+.rb-menu { position: absolute; left: 0; top: calc(100% + 10px); width: min(440px, calc(100vw - 40px)); max-height: min(70vh, 640px); overflow: auto; padding: 6px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--card); box-shadow: var(--shadow-lg); animation: menu-in .18s var(--ease-out); }
+.rb-menu-head { display: flex; justify-content: space-between; gap: 12px; margin: 4px 10px 6px; font: 600 11.5px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.rb-menu ol { list-style: none; margin: 0; padding: 0; }
 @keyframes menu-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
 .rb-menu button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--fg); text-align: left; font-size: 14px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
 .rb-menu button:hover, .rb-menu button[aria-current=step] { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .rb-menu button[aria-current=step] { font-weight: 650; }
+.rb-menu-extra { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
 .rb-menu-n { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; border: 1px solid var(--border-strong); color: var(--muted); }
 .rb-menu-n[data-got=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.rb-menu button[aria-current=step] .rb-menu-n:not([data-got=true]) { border-color: var(--accent); color: var(--accent); }
+
+/* one segment per section: where you are, what you've ticked (pointer shortcut; desktop only) */
+.rb-track { display: none; }
+@media (min-width: 1080px) {
+  .rb-where { flex: 0 1 auto; max-width: 46%; }
+  .rb-track { display: flex; flex: 1 1 0; min-width: 120px; align-items: center; justify-content: flex-end; gap: 4px; height: 38px; padding: 0 8px; }
+  .rb-track button { position: relative; flex: 1 1 0; min-width: 6px; max-width: 44px; height: 6px; padding: 0; border: 0; border-radius: 999px; background: var(--border); cursor: pointer; transition: background .2s, height .25s var(--ease-out), box-shadow .2s; }
+  .rb-track button::after { content: ""; position: absolute; inset: -14px -2px; }
+  .rb-track button[data-past] { background: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+  .rb-track button[data-got] { background: var(--accent); }
+  .rb-track button[data-current] { height: 12px; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .rb-track button:hover { background: color-mix(in srgb, var(--accent) 70%, var(--border)); }
+}
+
 .rb-party { flex: none; color: var(--accent-2); animation: pop-in .5s var(--ease-spring); }
 .rb-step { display: flex; gap: 2px; }
 .rb-mode { flex: none; }
 .rb-mode button { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
-@media (max-width: 560px) { .rb-mode button span { display: none; } .rb-mode button { padding: 6px 8px; } .reader-bar { top: 64px; } .rb-step { display: none; } }
+@media (max-width: 760px) { .rb-pages-label { display: none; } .rb-pages { padding: 0 10px; } }
+@media (max-width: 560px) {
+  .rb-mode button span { display: none; } .rb-mode button { padding: 6px 8px; } .reader-bar { top: 64px; gap: 4px; } .rb-step { display: none; }
+  .rb-pages-n, .rb-progress { display: none; }
+  .rb-current { gap: 8px; padding-right: 4px; }
+}
 
 .progress-ring { display: block; overflow: visible; }
 .pr-track { fill: none; stroke: var(--border); stroke-width: 3.5; }
@@ -132,23 +257,43 @@
 .progress-ring[data-full=true] .pr-fill { stroke: var(--good); }
 .progress-ring text { font: 700 11px var(--font-sans); fill: var(--fg); }
 
-/* ------------------------------------------------------------------ live "On this page" */
-.section-map ul { border-left: 0; display: grid; gap: 2px; }
-.section-map a { display: flex; gap: 9px; align-items: flex-start; padding: 5px 8px; margin-left: 0; border-left: 0; border-radius: 9px; line-height: 1.4; transition: background .15s, color .15s; }
-.section-map a:hover { background: var(--card); border-left-color: transparent; }
-.section-map li[data-active] a { color: var(--fg); background: var(--card); font-weight: 600; box-shadow: inset 0 0 0 1px var(--border); }
-.sm-dot { flex: none; margin-top: 4px; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--border-strong); display: grid; place-items: center; transition: background .2s, border-color .2s; }
-.section-map li[data-active] .sm-dot { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-.section-map li[data-got] .sm-dot { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.sm-progress { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--muted); }
+/* ------------------------------------------------------------------ page drawer (Popover API) */
+.page-drawer { position: fixed; inset: 0 auto 0 0; width: min(360px, 88vw); height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0; border-right: 1px solid var(--border); border-radius: 0 20px 20px 0; background: var(--card); color: var(--fg); box-shadow: var(--shadow-lg); overflow: auto; overscroll-behavior: contain; }
+.page-drawer:popover-open { display: flex; flex-direction: column; }
+.page-drawer::backdrop { background: rgb(8 16 14 / .38); }
+.pd-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 12px 8px 22px; background: var(--card); }
+.pd-head h2 { margin: 0; font: 600 12px var(--font-sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.pd-list { list-style: none; margin: 0; padding: 4px 12px 16px; display: grid; gap: 2px; font-size: 14.5px; }
+.pd-list a { display: flex; gap: 12px; align-items: center; text-decoration: none; color: var(--fg); padding: 8px 10px; border-radius: 10px; line-height: 1.35; }
+.pd-list a:hover { background: var(--card-2); }
+.pd-list a[aria-current=page] { background: color-mix(in srgb, var(--accent) 11%, transparent); font-weight: 650; box-shadow: inset 3px 0 0 var(--accent); }
+.pd-list .dot-n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; border: 1px solid var(--border-strong); color: var(--muted); }
+.pd-list .dot-n[data-done=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.pd-list a[aria-current=page] .dot-n:not([data-done=true]) { border-color: var(--accent); color: var(--accent); }
+.pd-foot { position: sticky; bottom: 0; margin-top: auto; display: flex; justify-content: space-between; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--border); background: var(--card); }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion=reduce]) .page-drawer { transition: translate .32s var(--ease-out), display .32s allow-discrete, overlay .32s allow-discrete; translate: -105% 0; }
+  :root:not([data-motion=reduce]) .page-drawer:popover-open { translate: 0 0; }
+  :root:not([data-motion=reduce]) .page-drawer::backdrop { transition: background .32s, display .32s allow-discrete, overlay .32s allow-discrete; }
+  @starting-style {
+    :root:not([data-motion=reduce]) .page-drawer:popover-open { translate: -105% 0; }
+    :root:not([data-motion=reduce]) .page-drawer:popover-open::backdrop { background: rgb(8 16 14 / 0); }
+  }
+}
 
 /* ------------------------------------------------------------------ motion off */
 @media (prefers-reduced-motion: reduce) {
-  .reader .sec-card, .rb-title, .rb-menu, .sec-tick, .got-box, .got-box::after, .rb-party, .reader-bar.is-celebrating { animation: none !important; }
+  .reader .sec-card, .reader .sec-card :is(.sec-head, .sec-body, .sec-foot), .rb-title, .rb-menu, .sec-tick, .got-box, .got-box::after, .rb-party, .reader-bar.is-celebrating, .sec-body::before { animation: none !important; }
+  .sec-card::before, .reader .sec-stage { transition: none !important; }
 }
-:root[data-motion=reduce] :is(.reader .sec-card, .rb-title, .rb-menu, .sec-tick, .got-box, .got-box::after, .rb-party, .reader-bar.is-celebrating) { animation: none !important; }
+:root[data-motion=reduce] :is(.reader .sec-card, .reader .sec-card :is(.sec-head, .sec-body, .sec-foot), .rb-title, .rb-menu, .sec-tick, .got-box, .got-box::after, .rb-party, .reader-bar.is-celebrating, .sec-body::before) { animation: none !important; }
+:root[data-motion=reduce] .sec-card::before, :root[data-motion=reduce] .reader .sec-stage { transition: none !important; }
 
 @media print {
   .sec-card { box-shadow: none; break-inside: auto; }
   .reader[data-mode=cards] .sec-card:not([data-active]) { display: block; }
+  .doc-cols { display: block !important; }
+  .reader .sec-stage, .reader .sec-stage[hidden] { display: block !important; position: static !important; width: auto !important; height: auto !important; overflow: visible !important; opacity: 1 !important; margin-top: 1.4em !important; }
+  .reader .sec-fit { transform: none !important; width: auto !important; margin: 0 !important; }
+  .reader .sec-fit > [data-pane-off] { display: block !important; }
 }

@@ -1,5 +1,7 @@
 // Authoring API for algorithm animations. A trace runs a small instrumented copy of the algorithm on preset inputs
-// at build time and records frames (pure data), which <AlgoViz> plays back with the code line highlighted.
+// at build time and records frames (pure data), which <AlgoViz> plays back with the code line highlighted. Readers can
+// also run it on their own input ("Edit input"): the browser loads the viz module through ./registry and calls the
+// same `run` (see ./custom), after the optional `validate` and `prepare` hooks.
 //
 //   export const pairSum = defineTrace({
 //     id: "pair-sum", title: "…", description: "…",
@@ -7,6 +9,7 @@
 //       let left = 0, right = nums.length - 1;   //@init
 //       …`,
 //     presets: [{ label: "Found", input: { nums: [1, 3, 4, 6, 9], target: 10 } }],
+//     prepare: (input) => ({ ...input, nums: [...input.nums].sort((a, b) => a - b) }),   // reader input only
 //     run(t, { nums, target }) {
 //       let left = 0, right = nums.length - 1;
 //       t.step("init", "Start with one pointer at each end.", { views: [arr("nums", nums, { pointers: { left, right } })], vars: { left, right } });
@@ -14,8 +17,12 @@
 //     },
 //   });
 import type { ArrayView, Frame, GraphView, GridView, Json, ListView, MapView, NoteView, Prim, QueueView, SetView, StackView, Tone, TraceSpec, TreeView, View } from "./types";
+import { formatInput, inferFields, type FieldHint } from "./input";
 
+/** Most frames a preset may record (presets are hand-picked, so a long one is a mistake). */
 export const MAX_FRAMES = 80;
+/** Most frames a reader's own input may record; the walkthrough stops there and says so. */
+export const MAX_CUSTOM_FRAMES = 400;
 const MARK = /\s*\/\/@([\w-]+)\s*$/;
 
 /** Strips `//@label` markers and returns the clean code plus label → 1-based line. */
@@ -49,18 +56,29 @@ export function freeze<T>(v: T): T {
   return walk(v) as T;
 }
 
+/** Thrown inside `run` when a reader's input reaches MAX_CUSTOM_FRAMES; the frames so far are kept. */
+export class FrameLimit extends Error {
+  constructor() {
+    super("frame limit");
+  }
+}
+
 export class Tracer {
   readonly frames: Frame[] = [];
   constructor(
     private readonly labels: Record<string, number>,
     private readonly where: string,
+    /** Reader input: stop quietly at this many frames instead of failing. */
+    private readonly cap?: number,
   ) {}
 
   /** Records one frame. `at` is a //@label in the code. */
   step(at: string, caption: string, state: { views: View[]; vars?: Record<string, unknown> }) {
     const line = this.labels[at];
     if (!line) throw new Error(`${this.where}: unknown code label "${at}" (add //@${at} to a line of code)`);
-    if (this.frames.length >= MAX_FRAMES) throw new Error(`${this.where}: more than ${MAX_FRAMES} frames; use a smaller preset input`);
+    if (this.cap !== undefined) {
+      if (this.frames.length >= this.cap) throw new FrameLimit();
+    } else if (this.frames.length >= MAX_FRAMES) throw new Error(`${this.where}: more than ${MAX_FRAMES} frames; use a smaller preset input`);
     this.frames.push({ line, caption, views: freeze(state.views), vars: state.vars ? (freeze(state.vars) as Record<string, Json>) : undefined });
   }
 }
@@ -74,17 +92,40 @@ export interface TraceDef<I> {
   code: string;
   presets: { label: string; input: I }[];
   run: (t: Tracer, input: I) => void;
+  /**
+   * "Edit input" form hints per input key: caps, help text, column kinds. `false` hides a key (its value comes from the
+   * preset, or `prepare` derives it). Every other key gets a field inferred from the preset values.
+   */
+  fields?: { [K in keyof I & string]?: FieldHint | false };
+  /**
+   * Reader input only: return a short sentence when the input breaks a precondition of the algorithm or would not
+   * fit the views (an unsorted array is better fixed in `prepare`). Runs before `prepare`. Presets must pass it.
+   */
+  validate?: (input: I) => string | null | undefined | false;
+  /**
+   * Reader input only: normalise a valid input before it runs (sort it, lay out a graph, fill hidden fields).
+   * Call `say` to tell the reader what changed and why.
+   */
+  prepare?: (input: I, say: (note: string) => void) => I;
 }
+
+/** The authoring definition behind each spec, so the browser can re-run a trace on reader input (see ./custom). */
+const SOURCES = new WeakMap<TraceSpec, { def: TraceDef<unknown>; labels: Record<string, number> }>();
+export const traceSource = (spec: TraceSpec) => SOURCES.get(spec);
 
 export function defineTrace<I>(def: TraceDef<I>): TraceSpec {
   const { code, labels } = parseCode(def.code);
+  const inputs = def.presets.map((p) => p.input);
+  const fields = inferFields(inputs, def.fields as Record<string, FieldHint | false>);
   const presets = def.presets.map((p) => {
     const t = new Tracer(labels, `${def.id} › ${p.label}`);
     def.run(t, structuredClone(p.input));
     if (t.frames.length < 2) throw new Error(`${def.id} › ${p.label}: a preset needs at least 2 frames`);
-    return { label: p.label, frames: t.frames };
+    return fields.length ? { label: p.label, frames: t.frames, form: formatInput(fields, p.input) } : { label: p.label, frames: t.frames };
   });
-  return { id: def.id, title: def.title, description: def.description, code, presets };
+  const spec: TraceSpec = { id: def.id, title: def.title, description: def.description, code, presets, fields };
+  SOURCES.set(spec, { def: def as TraceDef<unknown>, labels });
+  return spec;
 }
 
 // ------------------------------------------------------------------ view builders
@@ -276,4 +317,111 @@ export function graph(
     edgeTones,
     badges,
   };
+}
+
+// ------------------------------------------------------------------ layouts for reader-made graphs
+type Pos = [number, number];
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+/** Layer of every node by longest path from a source, or null when the directed graph has a cycle. */
+export function dagLayers(n: number, edges: readonly (readonly number[])[]): number[] | null {
+  const indeg = new Array(n).fill(0);
+  const out: number[][] = range(n).map(() => []);
+  for (const [a, b] of edges) {
+    out[a].push(b);
+    indeg[b]++;
+  }
+  const layer = new Array(n).fill(0);
+  const q = range(n).filter((v) => indeg[v] === 0);
+  for (let h = 0; h < q.length; h++) {
+    for (const v of out[q[h]]) {
+      layer[v] = Math.max(layer[v], layer[q[h]] + 1);
+      if (--indeg[v] === 0) q.push(v);
+    }
+  }
+  return q.length === n ? layer : null;
+}
+
+/** Layer of every node by BFS distance from `start` (undirected); unreachable nodes go one layer past the rest. */
+export function bfsLayers(n: number, edges: readonly (readonly number[])[], start: number): number[] {
+  const adj: number[][] = range(n).map(() => []);
+  for (const [a, b] of edges) {
+    adj[a].push(b);
+    adj[b].push(a);
+  }
+  const d = new Array(n).fill(-1);
+  d[start] = 0;
+  const q = [start];
+  for (let h = 0; h < q.length; h++) {
+    for (const v of adj[q[h]]) {
+      if (d[v] !== -1) continue;
+      d[v] = d[q[h]] + 1;
+      q.push(v);
+    }
+  }
+  const far = Math.max(...d) + 1;
+  return d.map((x) => (x === -1 ? far : x));
+}
+
+/**
+ * Columns by layer (left to right), nodes spread down each column; lone nodes zig-zag so skipped edges stay visible.
+ * With `edges`, each column is ordered by where its neighbours sit in the previous column, which avoids most crossings.
+ */
+export function layeredLayout(layer: readonly number[], edges: readonly (readonly number[])[] = []): Pos[] {
+  const L = Math.max(0, ...layer);
+  const cols: number[][] = Array.from({ length: L + 1 }, () => []);
+  layer.forEach((l, v) => cols[l].push(v));
+  const rank = new Map<number, number>();
+  cols.forEach((vs, l) => {
+    if (l > 0) {
+      const score = (v: number) => {
+        const near = edges.flatMap(([a, b]) => (a === v ? [b] : b === v ? [a] : [])).filter((u) => layer[u] === l - 1);
+        return near.length ? near.reduce((t, u) => t + rank.get(u)!, 0) / near.length : Infinity;
+      };
+      const by = new Map(vs.map((v) => [v, score(v)]));
+      vs.sort((a, b) => by.get(a)! - by.get(b)! || a - b);
+    }
+    vs.forEach((v, j) => rank.set(v, j));
+  });
+  const pos: Pos[] = layer.map(() => [50, 50]);
+  cols.forEach((vs, l) => {
+    const x = L === 0 ? 50 : 6 + (88 * l) / L;
+    vs.forEach((v, j) => {
+      const y = vs.length === 1 ? 50 + (L === 0 ? 0 : l % 2 ? 16 : -16) : 8 + (84 * j) / (vs.length - 1) + (l % 2 ? 4 : -4);
+      pos[v] = [Math.round(x), Math.round(Math.min(100, Math.max(0, y)))];
+    });
+  });
+  return pos;
+}
+
+/** Positions for a reader's graph: layers for a DAG or a BFS from `start`, a circle otherwise. */
+export function autoLayout(n: number, edges: readonly (readonly number[])[], o: { directed?: boolean; start?: number } = {}): Pos[] {
+  const layer = o.directed ? dagLayers(n, edges) : o.start !== undefined ? bfsLayers(n, edges, o.start) : null;
+  if (layer) return layeredLayout(layer, edges);
+  const c = circleLayout(range(n));
+  return range(n).map((i) => [c[i].x, c[i].y]);
+}
+
+/** A parent-pointer forest drawn top-down: roots on top, each parent above the middle of its children. */
+export function forestLayout(parent: readonly number[]): Pos[] {
+  const n = parent.length;
+  const kids: number[][] = range(n).map(() => []);
+  parent.forEach((p, i) => p !== i && kids[p]?.push(i));
+  const depth = new Array(n).fill(0);
+  const x = new Array(n).fill(0);
+  let slot = 0;
+  const place = (v: number, d: number, guard: number) => {
+    depth[v] = d;
+    if (!kids[v].length || guard > n) {
+      x[v] = slot++;
+      return;
+    }
+    kids[v].forEach((k) => place(k, d + 1, guard + 1));
+    x[v] = (x[kids[v][0]] + x[kids[v][kids[v].length - 1]]) / 2;
+  };
+  range(n)
+    .filter((v) => parent[v] === v)
+    .forEach((r) => place(r, 0, 0));
+  const D = Math.max(0, ...depth);
+  return range(n).map((v) => [Math.round(slot <= 1 ? 50 : 8 + (84 * x[v]) / (slot - 1)), Math.round(D === 0 ? 50 : 6 + (88 * depth[v]) / D)]);
 }

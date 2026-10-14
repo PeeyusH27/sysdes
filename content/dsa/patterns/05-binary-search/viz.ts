@@ -1,5 +1,6 @@
 import { arr, defineTrace, note, span } from "@/components/algo/trace";
 import type { Tone } from "@/components/algo/types";
+import { sortField } from "@/components/algo/checks";
 
 /** Indices outside [lo, hi] have been ruled out: show them muted. */
 const outside = (n: number, lo: number, hi: number) => {
@@ -27,6 +28,7 @@ function binarySearch(nums, target) {
     { label: "Target present", input: { nums: [3, 8, 12, 17, 21, 30, 44, 52], target: 44 } },
     { label: "Target missing", input: { nums: [3, 8, 12, 17, 21, 30, 44, 52], target: 10 } },
   ],
+  prepare: (input, say) => sortField(input, "nums", "binary search only works on sorted values.", say),
   run(t, { nums, target }) {
     let lo = 0;
     let hi = nums.length - 1;
@@ -92,6 +94,7 @@ function lowerBound(nums, target) {
     { label: "Duplicates", input: { nums: [1, 3, 3, 3, 5, 8, 9], target: 3 } },
     { label: "Bigger than everything", input: { nums: [1, 3, 3, 3, 5, 8, 9], target: 10 } },
   ],
+  prepare: (input, say) => sortField(input, "nums", "binary search only works on sorted values.", say),
   run(t, { nums, target }) {
     let lo = 0;
     let hi = nums.length;
@@ -177,6 +180,11 @@ function daysNeeded(weights, cap) {
     { label: "Three days", input: { weights: [4, 2, 3, 1, 2], days: 3 } },
     { label: "One day", input: { weights: [4, 2, 3, 1, 2], days: 1 } },
   ],
+  fields: { weights: { min: 1, max: 20, maxItems: 8 }, days: { min: 1, max: 8 } },
+  validate: ({ weights }) => {
+    const count = weights.reduce((a, b) => a + b, 0) - Math.max(...weights) + 1;
+    return count > 16 && `That gives ${count} capacities to search. Keep the total weight minus the heaviest under 16 so the row fits.`;
+  },
   run(t, { weights, days }) {
     let lo = Math.max(...weights);
     let hi = weights.reduce((a, b) => a + b, 0);

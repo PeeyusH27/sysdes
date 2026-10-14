@@ -1,5 +1,6 @@
-import { arr, defineTrace, graph, grid, note } from "@/components/algo/trace";
+import { arr, autoLayout, dagLayers, defineTrace, graph, grid, note } from "@/components/algo/trace";
 import type { Tone } from "@/components/algo/types";
+import { edgeProblem, letterOf } from "@/components/algo/checks";
 
 type WEdge = [number, number, number];
 interface GNode {
@@ -100,6 +101,23 @@ function dijkstra(adj, source) {
       },
     },
   ],
+  fields: {
+    nodes: false,
+    edges: { cols: ["letter", "letter", "int"], colNames: ["from", "to", "weight"], min: -99, max: 99, maxItems: 12, help: "One road per line: from to weight, nodes A to H (up to 12)." },
+    source: { kind: "letter", max: 7 },
+  },
+  validate: ({ edges, source }) => {
+    const n = Math.max(source, ...edges.flatMap(([a, b]) => [a, b])) + 1;
+    if (n > 8) return "Use nodes A to H.";
+    const neg = edges.find(([, , w]) => w < 0);
+    if (neg) return `Dijkstra needs weights of 0 or more, but ${letterOf(neg[0])}-${letterOf(neg[1])} weighs ${neg[2]}. Bellman-Ford handles negative edges.`;
+    return edgeProblem(n, edges, { letters: true });
+  },
+  prepare: (input) => {
+    const n = Math.max(input.source, ...input.edges.flatMap(([a, b]) => [a, b])) + 1;
+    const pos = autoLayout(n, input.edges, { start: input.source });
+    return { ...input, nodes: pos.map(([x, y], id) => ({ id, label: letterOf(id), x, y })) };
+  },
   run(t, { nodes, edges, source }) {
     const n = nodes.length;
     const L = (i: number) => nodes[i].label;
@@ -237,6 +255,28 @@ function bellmanFord(n, edges, source, rounds) {
       },
     },
   ],
+  fields: {
+    nodes: false,
+    edges: { cols: ["letter", "letter", "int"], colNames: ["from", "to", "weight"], min: -99, max: 99, maxItems: 10, help: "One directed edge per line: from to weight. A is the source (up to 10)." },
+    rounds: { min: 1, max: 9, help: "Rounds to run. n - 1 rounds find every shortest path." },
+    why: false,
+    lesson: false,
+  },
+  validate: ({ edges }) => {
+    const n = Math.max(1, ...edges.flatMap(([a, b]) => [a, b])) + 1;
+    return n > 8 ? "Use nodes A to H." : edgeProblem(n, edges, { directed: true, letters: true });
+  },
+  prepare: (input) => {
+    const n = Math.max(1, ...input.edges.flatMap(([a, b]) => [a, b])) + 1;
+    const pos = autoLayout(n, input.edges, dagLayers(n, input.edges) ? { directed: true } : { start: 0 });
+    const r = input.rounds;
+    return {
+      ...input,
+      nodes: pos.map(([x, y], id) => ({ id, label: letterOf(id), x, y })),
+      why: r >= n - 1 ? `n - 1 = ${n - 1} rounds: enough for any shortest path` : `only ${r} round${r === 1 ? "" : "s"}: paths of at most ${r} edge${r === 1 ? "" : "s"}`,
+      lesson: `Each badge is the cheapest cost from A using at most ${r} edge${r === 1 ? "" : "s"}.`,
+    };
+  },
   run(t, { nodes, edges, rounds, why, lesson }) {
     const n = nodes.length;
     const L = (i: number) => nodes[i].label;

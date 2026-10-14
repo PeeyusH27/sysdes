@@ -1,11 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { m } from "motion/react";
 import { CloudLightning, CreditCard, Repeat, TimerOff, Webhook } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Seg, WidgetFrame } from "./WidgetFrame";
+import { More, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- rules (pure, tested)
 
@@ -512,19 +512,123 @@ export function runUntilIdle(s: Sim, maxEvents = 1000): Sim {
 // ---------------------------------------------------------------- picture
 
 type Pt = { x: number; y: number };
-const DOWN = 165; // requests travel down this lane
-const UP = 185; // replies travel up this one
-const SEG: Record<string, Pt[]> = {
-  "customer>api": [{ x: DOWN, y: 116 }, { x: DOWN, y: 175 }],
-  "api>customer": [{ x: UP, y: 175 }, { x: UP, y: 116 }],
-  "api>svc": [{ x: DOWN, y: 215 }, { x: DOWN, y: 300 }],
-  "svc>api": [{ x: UP, y: 300 }, { x: UP, y: 215 }],
-  "svc>psp": [{ x: DOWN, y: 340 }, { x: DOWN, y: 423 }],
-  "psp>svc": [{ x: UP, y: 423 }, { x: UP, y: 340 }],
-  "api>keys": [{ x: 115, y: 189 }, { x: 66, y: 189 }],
-  "keys>api": [{ x: 66, y: 201 }, { x: 115, y: 201 }],
+type Anchor = "start" | "middle" | "end";
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+}
+/**
+ * Two drawings of the same system. Landscape (the desktop pane): phone → API → payment service → PSP left to right,
+ * the idempotency store and the ledger under their services, webhooks looping back over the top and the coin flying
+ * from the customer's wallet to the merchant across the top. Portrait (a phone): the same chain top to bottom.
+ */
+interface PayLayout {
+  wide: boolean;
+  W: number;
+  H: number;
+  phone: Pt;
+  wallet: Pt & { label: Pt; anchor: Anchor };
+  merchant: Pt & { label: Pt; anchor: Anchor };
+  badge: Pt;
+  api: Rect;
+  svc: Rect;
+  psp: Pt; // roof apex
+  pspText: Pt & { anchor: Anchor };
+  keys: Pt & { caption: Pt; anchor: Anchor };
+  ledger: Pt & { caption: Pt; anchor: Anchor };
+  wires: { x1: number; y1: number; x2: number; y2: number; dashed?: boolean }[];
+  hook: Pt[];
+  hookLabel: Pt & { rotate: number };
+  seg: Record<string, Pt[]>;
+  coin: [Pt, Pt, Pt];
+}
+const BOX_H = 40;
+const WIDE: PayLayout = {
+  wide: true,
+  W: 640,
+  H: 194,
+  phone: { x: 14, y: 52 },
+  wallet: { x: 14, y: 6, label: { x: 74, y: 0 }, anchor: "start" },
+  merchant: { x: 566, y: 4, label: { x: 558, y: 0 }, anchor: "end" },
+  badge: { x: 320, y: 14 },
+  api: { x: 168, y: 75, w: 112 },
+  svc: { x: 346, y: 75, w: 128 },
+  psp: { x: 572, y: 66 },
+  pspText: { x: 638, y: 150, anchor: "end" },
+  keys: { x: 224, y: 160, caption: { x: 186, y: 164 }, anchor: "end" },
+  ledger: { x: 404, y: 160, caption: { x: 409, y: 133 }, anchor: "start" },
+  wires: [
+    { x1: 74, y1: 95, x2: 168, y2: 95 },
+    { x1: 280, y1: 95, x2: 346, y2: 95 },
+    { x1: 474, y1: 95, x2: 520, y2: 95 },
+    { x1: 224, y1: 115, x2: 224, y2: 143 },
+    { x1: 404, y1: 115, x2: 404, y2: 143, dashed: true },
+  ],
+  hook: [{ x: 522, y: 134 }, { x: 522, y: 176 }, { x: 462, y: 176 }, { x: 462, y: 119 }],
+  hookLabel: { x: 492, y: 190, rotate: 0 },
+  seg: {
+    "customer>api": [{ x: 76, y: 88 }, { x: 166, y: 88 }],
+    "api>customer": [{ x: 166, y: 102 }, { x: 76, y: 102 }],
+    "api>svc": [{ x: 282, y: 88 }, { x: 344, y: 88 }],
+    "svc>api": [{ x: 344, y: 102 }, { x: 282, y: 102 }],
+    "svc>psp": [{ x: 476, y: 88 }, { x: 528, y: 88 }],
+    "psp>svc": [{ x: 528, y: 102 }, { x: 476, y: 102 }],
+    "api>keys": [{ x: 216, y: 117 }, { x: 216, y: 143 }],
+    "keys>api": [{ x: 232, y: 143 }, { x: 232, y: 117 }],
+  },
+  coin: [{ x: 40, y: 23 }, { x: 320, y: -10 }, { x: 594, y: 30 }],
 };
-const HOOK: Pt[] = [{ x: 234, y: 462 }, { x: 330, y: 462 }, { x: 330, y: 320 }, { x: 237, y: 320 }];
+const DOWN = 165; // portrait: requests travel down this lane
+const UP = 185; // portrait: replies travel up this one
+const TALL: PayLayout = {
+  wide: false,
+  W: 360,
+  H: 436,
+  phone: { x: 145, y: 18 },
+  wallet: { x: 14, y: 44, label: { x: 40, y: 96 }, anchor: "middle" },
+  merchant: { x: 290, y: 37, label: { x: 318, y: 96 }, anchor: "middle" },
+  badge: { x: 175, y: 9 },
+  api: { x: 115, y: 146, w: 120 },
+  svc: { x: 115, y: 238, w: 120 },
+  psp: { x: 175, y: 322 },
+  pspText: { x: 175, y: 412, anchor: "middle" },
+  keys: { x: 38, y: 166, caption: { x: 38, y: 202 }, anchor: "middle" },
+  ledger: { x: 38, y: 258, caption: { x: 90, y: 252 }, anchor: "middle" },
+  wires: [
+    { x1: 175, y1: 104, x2: 175, y2: 146 },
+    { x1: 175, y1: 186, x2: 175, y2: 238 },
+    { x1: 175, y1: 278, x2: 175, y2: 320 },
+    { x1: 66, y1: 166, x2: 115, y2: 166 },
+    { x1: 66, y1: 258, x2: 115, y2: 258, dashed: true },
+  ],
+  hook: [{ x: 234, y: 378 }, { x: 330, y: 378 }, { x: 330, y: 258 }, { x: 237, y: 258 }],
+  hookLabel: { x: 346, y: 318, rotate: -90 },
+  seg: {
+    "customer>api": [{ x: DOWN, y: 106 }, { x: DOWN, y: 146 }],
+    "api>customer": [{ x: UP, y: 146 }, { x: UP, y: 106 }],
+    "api>svc": [{ x: DOWN, y: 186 }, { x: DOWN, y: 238 }],
+    "svc>api": [{ x: UP, y: 238 }, { x: UP, y: 186 }],
+    "svc>psp": [{ x: DOWN, y: 278 }, { x: DOWN, y: 325 }],
+    "psp>svc": [{ x: UP, y: 325 }, { x: UP, y: 278 }],
+    "api>keys": [{ x: 115, y: 160 }, { x: 66, y: 160 }],
+    "keys>api": [{ x: 66, y: 172 }, { x: 115, y: 172 }],
+  },
+  coin: [{ x: 40, y: 52 }, { x: 179, y: -40 }, { x: 318, y: 52 }],
+};
+
+/** The widget's width in px (0 until measured), to pick the landscape or the portrait drawing. */
+function useWidth(ref: React.RefObject<HTMLElement | null>) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return w;
+}
 
 function along(pts: Pt[], f: number): Pt & { seg: number } {
   const lens = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
@@ -541,22 +645,31 @@ function along(pts: Pt[], f: number): Pt & { seg: number } {
 
 const TONE: Record<Tone, string> = { req: "var(--series-3)", ok: "var(--series-1)", warn: "var(--warning)", bad: "var(--critical)", hook: "var(--series-2)" };
 const textW = (s: string, size = 11) => s.length * size * 0.56 + 10;
+const ORDER: Record<NodeId, number> = { customer: 0, api: 1, keys: 1.5, svc: 2, psp: 3 };
 
-function PacketG({ p, t, reduce }: { p: Packet; t: number; reduce: boolean }) {
+/** Where a packet's label sits relative to the packet, so labels stay beside their lane. */
+function labelAt(L: PayLayout, p: Packet, seg: number, w: number): [number, number] {
+  const fwd = ORDER[p.to] > ORDER[p.from];
+  if (L.wide) {
+    if (p.hook) return seg === 1 ? [-w / 2, -26] : [10, -7.5];
+    if (p.to === "keys") return [-w - 10, -7.5];
+    if (p.from === "keys") return [10, -7.5];
+    return fwd ? [-w / 2, -25] : [-w / 2, 10];
+  }
+  if (p.hook) return seg === 1 ? [-12 - w, -7.5] : [-w / 2, -24];
+  if (p.to === "keys") return [-w / 2, -26];
+  if (p.from === "keys") return [-w / 2, 10];
+  return fwd ? [-14 - w, -7.5] : [14, -7.5];
+}
+
+function PacketG({ L, p, t, reduce }: { L: PayLayout; p: Packet; t: number; reduce: boolean }) {
   const f = Math.max(0, Math.min(1, (t - p.start) / p.dur));
   const lost = p.lostAt !== undefined && f > p.lostAt;
   if (lost && f > p.lostAt! + 0.3) return null;
-  const pt = p.hook ? along(HOOK, f) : along(SEG[`${p.from}>${p.to}`], lost ? p.lostAt! : f);
+  const pt = p.hook ? along(L.hook, f) : along(L.seg[`${p.from}>${p.to}`], lost ? p.lostAt! : f);
   const label = lost ? "✕ reply lost" : p.label;
   const w = textW(label);
-  // Requests: label on the left. Replies: on the right. Key checks: above or below. Webhooks: beside the path.
-  let lx = 0;
-  let ly = 0;
-  if (p.hook) [lx, ly] = pt.seg === 1 ? [-12 - w, -7.5] : [-w / 2, -24];
-  else if (p.to === "keys") [lx, ly] = [-w / 2, -26];
-  else if (p.from === "keys") [lx, ly] = [-w / 2, 10];
-  else if (pt.x === DOWN) [lx, ly] = [-14 - w, -7.5];
-  else [lx, ly] = [14, -7.5];
+  const [lx, ly] = labelAt(L, p, pt.seg, w);
   const color = lost ? TONE.bad : TONE[p.tone];
   const body = (
     <>
@@ -584,11 +697,9 @@ function PacketG({ p, t, reduce }: { p: Packet; t: number; reduce: boolean }) {
   );
 }
 
-function coinAt(f: number): Pt {
+function coinAt(L: PayLayout, f: number): Pt {
   const e = f < 0.5 ? 4 * f * f * f : 1 - (-2 * f + 2) ** 3 / 2; // ease in-out
-  const a = { x: 40, y: 62 };
-  const c = { x: 179, y: -30 };
-  const b = { x: 318, y: 62 };
+  const [a, c, b] = L.coin;
   return { x: (1 - e) ** 2 * a.x + 2 * (1 - e) * e * c.x + e * e * b.x, y: (1 - e) ** 2 * a.y + 2 * (1 - e) * e * c.y + e * e * b.y };
 }
 
@@ -608,15 +719,16 @@ function Drum({ x, y, title, sub, hit }: { x: number; y: number; title: string; 
   );
 }
 
-function Box({ y, title, sub, subTone, hit, stroke }: { y: number; title: string; sub: string; subTone?: Flash["tone"]; hit: boolean; stroke: string }) {
+function Box({ r, title, sub, subTone, hit, stroke }: { r: Rect; title: string; sub: string; subTone?: Flash["tone"]; hit: boolean; stroke: string }) {
   const ink = subTone === "bad" ? "var(--critical-ink)" : subTone === "warn" ? "var(--warning-ink)" : subTone === "ok" ? "var(--good-ink)" : "var(--muted)";
+  const cx = r.x + r.w / 2;
   return (
     <g>
-      <rect x={115} y={y} width={120} height={40} rx={9} fill="var(--card-2)" stroke={hit ? "var(--accent)" : stroke} strokeWidth={hit ? 2.6 : 1.6} />
-      <text x={175} y={y + 16} textAnchor="middle" style={{ fontWeight: 700 }}>
+      <rect x={r.x} y={r.y} width={r.w} height={BOX_H} rx={9} fill="var(--card-2)" stroke={hit ? "var(--accent)" : stroke} strokeWidth={hit ? 2.6 : 1.6} />
+      <text x={cx} y={r.y + 16} textAnchor="middle" style={{ fontWeight: 700 }}>
         {title}
       </text>
-      <text x={175} y={y + 31} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: subTone ? 650 : 400, fill: ink }}>
+      <text x={cx} y={r.y + 31} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: subTone ? 650 : 400, fill: ink }}>
         {sub}
       </text>
     </g>
@@ -638,10 +750,38 @@ function screenOf(s: Sim): { text: string; ink: string } {
   return { text: "Paying…", ink: "var(--muted)" };
 }
 
+/** A segmented control with its label inline, so a toolbar row stays one button tall. */
+function InlineSeg<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+  return (
+    <div className="pay-seg">
+      <span aria-hidden>{label}</span>
+      <div className="seg" role="group" aria-label={label}>
+        {options.map((o) => (
+          <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const CSS = `
+.pay-seg { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); min-width: 0; max-width: 100%; }
+.pay-seg .seg { min-width: 0; flex: 0 1 auto; }
+.pay-seg .seg button { padding: 4px 10px; }
+@container (max-width: 420px) { .pay-seg { flex-direction: column; align-items: flex-start; gap: 2px; } }
+.pay-facts { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin-top: 6px; font-size: 13px; line-height: 1.5; }
+.pay-facts .pill { font-variant-numeric: tabular-nums; }
+.pay-ledger { font-size: 13px; line-height: 1.45; }
+`;
+
 export function PaymentFlowSim() {
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
   const [running, setRunning] = useState(true);
   const [s, reset] = useFixedStep<Sim>(() => initSim(), step, running && inView && !reduce);
+  const width = useWidth(ref);
+  const L = width && width < 520 ? TALL : WIDE;
   const t = s.t;
   const go = (a: Action, run = false) => {
     reset(act(s, a));
@@ -673,12 +813,13 @@ export function PaymentFlowSim() {
   const matches = cashAtPsp === charged * AMOUNT;
 
   const said = useThrottled<LogLine | null>(s.log[0] ?? null, 700);
+  const { phone: ph, wallet: wl, merchant: mc, psp } = L;
 
   return (
-    <WidgetFrame
-      title="Payment flow: exactly-once on a bad day"
-      sub="One $50 checkout through the API, its idempotency store, the payment service and the PSP. Inject a timeout, a second tap and a duplicate webhook, then switch the protections off and watch the coin fly twice."
-    >
+    <WidgetFrame title="Payment flow: exactly-once on a bad day" sub="One $50 checkout: a timeout, a second tap, a duplicate webhook.">
+      <style href="w-payment-flow" precedence="widgets">
+        {CSS}
+      </style>
       <div className="controls">
         <button type="button" className="wbtn primary" onClick={() => go("pay", true)}>
           <CreditCard size={14} aria-hidden /> Pay $50
@@ -695,81 +836,72 @@ export function PaymentFlowSim() {
           onReset={() => go("reset")}
         />
       </div>
-      <div className="controls" style={{ marginTop: 0 }}>
-        <Seg<"on" | "off"> label="Idempotency keys" value={s.keysOn ? "on" : "off"} onChange={(v) => go({ keys: v === "on" })} options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
-        <Seg<"on" | "off"> label="Webhook dedupe" value={s.dedupeOn ? "on" : "off"} onChange={(v) => go({ dedupe: v === "on" })} options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
-      </div>
-      <div className="controls" style={{ marginTop: 0 }} role="group" aria-label="Inject a failure">
-        <button type="button" className="wbtn" aria-pressed={s.armTimeout} onClick={() => go("armTimeout")} style={s.armTimeout ? ARMED : undefined}>
-          <TimerOff size={14} aria-hidden /> PSP times out on next call<span aria-hidden>{s.armTimeout ? " (armed)" : ""}</span>
-        </button>
-        <button type="button" className="wbtn" onClick={() => go("retry", true)}>
-          <Repeat size={14} aria-hidden /> Customer taps Pay again (retry)
-        </button>
-        <button type="button" className="wbtn" aria-pressed={s.armDupHook} onClick={() => go("dupWebhook", true)} style={s.armDupHook ? ARMED : undefined}>
-          <Webhook size={14} aria-hidden /> PSP sends the webhook twice<span aria-hidden>{s.armDupHook ? " (armed)" : ""}</span>
-        </button>
+      <div className="controls" style={{ marginTop: 0, alignItems: "center" }}>
+        <InlineSeg<"on" | "off"> label="Idempotency keys" value={s.keysOn ? "on" : "off"} onChange={(v) => go({ keys: v === "on" })} options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
+        <InlineSeg<"on" | "off"> label="Webhook dedupe" value={s.dedupeOn ? "on" : "off"} onChange={(v) => go({ dedupe: v === "on" })} options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
       </div>
 
-      <div ref={ref} style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 290px), 1fr))", alignItems: "start" }}>
+      <div ref={ref}>
         <svg
-          viewBox="0 0 360 522"
+          viewBox={`0 0 ${L.W} ${L.H}`}
           className="sim-svg"
-          style={{ maxWidth: 440, justifySelf: "center" }}
+          style={{ maxWidth: L.wide ? 640 : 420, margin: "0 auto" }}
           role="img"
           aria-label={`Payment flow. Customer charged ${charged} time${charged === 1 ? "" : "s"}. ${s.payments.map((p) => `${p.id} ${p.status}`).join(", ") || "No payment yet"}. ${s.ledger.length} ledger posting${s.ledger.length === 1 ? "" : "s"}. ${s.packets.length} message${s.packets.length === 1 ? "" : "s"} in flight.`}
         >
           {/* wires */}
           <g stroke="var(--border-strong)" strokeWidth={1.4}>
-            <line x1={175} y1={114} x2={175} y2={175} />
-            <line x1={175} y1={215} x2={175} y2={300} />
-            <line x1={175} y1={340} x2={175} y2={420} />
-            <line x1={66} y1={195} x2={115} y2={195} />
-            <line x1={66} y1={320} x2={115} y2={320} strokeDasharray="4 3" />
+            {L.wires.map((w, i) => (
+              <line key={i} x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2} strokeDasharray={w.dashed ? "4 3" : undefined} />
+            ))}
           </g>
-          <path d="M234,462 H330 V320 H245" fill="none" stroke="var(--series-2)" strokeWidth={1.6} strokeDasharray="5 4" />
-          <polygon points="237,320 246,315 246,325" fill="var(--series-2)" />
-          <text transform="translate(346 391) rotate(-90)" textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 650, fill: "var(--warning-ink)" }}>
+          <path d={`M${L.hook.map((p) => `${p.x},${p.y}`).join(" L")}`} fill="none" stroke="var(--series-2)" strokeWidth={1.6} strokeDasharray="5 4" />
+          {L.wide ? (
+            <polygon points={`${L.hook[3].x},${L.hook[3].y - 2} ${L.hook[3].x - 5},${L.hook[3].y + 7} ${L.hook[3].x + 5},${L.hook[3].y + 7}`} fill="var(--series-2)" />
+          ) : (
+            <polygon points={`${L.hook[3].x},${L.hook[3].y} ${L.hook[3].x + 9},${L.hook[3].y - 5} ${L.hook[3].x + 9},${L.hook[3].y + 5}`} fill="var(--series-2)" />
+          )}
+          <text transform={`translate(${L.hookLabel.x} ${L.hookLabel.y}) rotate(${L.hookLabel.rotate})`} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 650, fill: "var(--warning-ink)" }}>
             webhooks
           </text>
-          <text x={90} y={314} textAnchor="middle" className="muted-text" style={{ fontSize: 9 }}>
+          <text x={L.ledger.caption.x} y={L.ledger.caption.y} textAnchor={L.ledger.anchor} className="muted-text" style={{ fontSize: 9 }}>
             posts
           </text>
 
           {/* customer, phone, merchant */}
           <g>
-            <rect x={14} y={54} width={52} height={34} rx={6} fill="var(--card-2)" stroke="var(--series-2)" strokeWidth={1.6} />
-            <rect x={46} y={63} width={20} height={15} rx={4} fill="var(--card)" stroke="var(--series-2)" strokeWidth={1.4} />
-            <circle cx={54} cy={70.5} r={2.3} fill="var(--series-2)" />
-            <text x={30} y={76} textAnchor="middle" style={{ fontSize: 13, fontWeight: 800, fill: "var(--warning-ink)" }}>
+            <rect x={wl.x} y={wl.y} width={52} height={34} rx={6} fill="var(--card-2)" stroke="var(--series-2)" strokeWidth={1.6} />
+            <rect x={wl.x + 32} y={wl.y + 9} width={20} height={15} rx={4} fill="var(--card)" stroke="var(--series-2)" strokeWidth={1.4} />
+            <circle cx={wl.x + 40} cy={wl.y + 16.5} r={2.3} fill="var(--series-2)" />
+            <text x={wl.x + 16} y={wl.y + 22} textAnchor="middle" style={{ fontSize: 13, fontWeight: 800, fill: "var(--warning-ink)" }}>
               $
             </text>
-            <text x={40} y={106} textAnchor="middle" style={{ fontWeight: 700 }}>
+            <text x={wl.label.x} y={L.wide ? wl.y + 14 : wl.label.y} textAnchor={wl.anchor} style={{ fontWeight: 700 }}>
               Customer
             </text>
-            <text x={40} y={120} textAnchor="middle" className="muted-text">
+            <text x={wl.label.x} y={L.wide ? wl.y + 29 : wl.label.y + 14} textAnchor={wl.anchor} className="muted-text">
               {fmt(WALLET - coinsLeft * AMOUNT)}
             </text>
           </g>
           <g>
-            <rect x={145} y={28} width={60} height={86} rx={10} fill="var(--fg)" />
-            <rect x={149} y={36} width={52} height={68} rx={4} fill="var(--card)" />
-            <rect x={168} y={31} width={14} height={2.5} rx={1.2} fill="var(--card-2)" />
-            <circle cx={175} cy={109} r={2.2} fill="var(--card-2)" />
-            <text x={175} y={50} textAnchor="middle" className="muted-text" style={{ fontSize: 8.5 }}>
+            <rect x={ph.x} y={ph.y} width={60} height={86} rx={10} fill="var(--fg)" />
+            <rect x={ph.x + 4} y={ph.y + 8} width={52} height={68} rx={4} fill="var(--card)" />
+            <rect x={ph.x + 23} y={ph.y + 3} width={14} height={2.5} rx={1.2} fill="var(--card-2)" />
+            <circle cx={ph.x + 30} cy={ph.y + 81} r={2.2} fill="var(--card-2)" />
+            <text x={ph.x + 30} y={ph.y + 22} textAnchor="middle" className="muted-text" style={{ fontSize: 8.5 }}>
               Order #1
             </text>
-            <text x={175} y={66} textAnchor="middle" style={{ fontSize: 12, fontWeight: 750 }}>
+            <text x={ph.x + 30} y={ph.y + 38} textAnchor="middle" style={{ fontSize: 12, fontWeight: 750 }}>
               $50.00
             </text>
             {s.started ? (
-              <text x={175} y={89} textAnchor="middle" style={{ fontSize: 9.5, fontWeight: 750, fill: screen.ink }}>
+              <text x={ph.x + 30} y={ph.y + 61} textAnchor="middle" style={{ fontSize: 9.5, fontWeight: 750, fill: screen.ink }}>
                 {screen.text}
               </text>
             ) : (
               <g>
-                <rect x={153} y={77} width={44} height={17} rx={4} fill="var(--accent)" />
-                <text x={175} y={89} textAnchor="middle" style={{ fontSize: 9, fontWeight: 700, fill: "var(--accent-ink)" }}>
+                <rect x={ph.x + 8} y={ph.y + 49} width={44} height={17} rx={4} fill="var(--accent)" />
+                <text x={ph.x + 30} y={ph.y + 61} textAnchor="middle" style={{ fontSize: 9, fontWeight: 700, fill: "var(--accent-ink)" }}>
                   Pay $50
                 </text>
               </g>
@@ -779,69 +911,70 @@ export function PaymentFlowSim() {
                 .filter((at) => t - at >= 0 && t - at < TAP_MS)
                 .map((at) => {
                   const f = (t - at) / TAP_MS;
-                  return <circle key={at} cx={175} cy={85} r={6 + 22 * f} fill="none" stroke="var(--accent)" strokeWidth={2} opacity={1 - f} />;
+                  return <circle key={at} cx={ph.x + 30} cy={ph.y + 57} r={6 + 22 * f} fill="none" stroke="var(--accent)" strokeWidth={2} opacity={1 - f} />;
                 })}
           </g>
           <g>
             {[0, 1, 2, 3, 4].map((i) => (
-              <rect key={i} x={290 + i * 11.2} y={47} width={11.2} height={12} fill={i % 2 ? "var(--card)" : "var(--series-1)"} stroke="var(--series-1)" strokeWidth={0.8} />
+              <rect key={i} x={mc.x + i * 11.2} y={mc.y} width={11.2} height={12} fill={i % 2 ? "var(--card)" : "var(--series-1)"} stroke="var(--series-1)" strokeWidth={0.8} />
             ))}
-            <rect x={293} y={59} width={50} height={31} fill="var(--card-2)" stroke="var(--border-strong)" strokeWidth={1.3} />
-            <rect x={297} y={65} width={12} height={10} fill="var(--card)" stroke="var(--border-strong)" />
-            <rect x={314} y={70} width={11} height={20} fill="var(--border)" />
-            <text x={318} y={106} textAnchor="middle" style={{ fontWeight: 700 }}>
+            <rect x={mc.x + 3} y={mc.y + 12} width={50} height={31} fill="var(--card-2)" stroke="var(--border-strong)" strokeWidth={1.3} />
+            <rect x={mc.x + 7} y={mc.y + 18} width={12} height={10} fill="var(--card)" stroke="var(--border-strong)" />
+            <rect x={mc.x + 24} y={mc.y + 23} width={11} height={20} fill="var(--border)" />
+            <text x={mc.label.x} y={L.wide ? mc.y + 20 : mc.label.y} textAnchor={mc.anchor} style={{ fontWeight: 700 }}>
               Merchant
             </text>
-            <text x={318} y={120} textAnchor="middle" className="muted-text">
+            <text x={mc.label.x} y={L.wide ? mc.y + 35 : mc.label.y + 14} textAnchor={mc.anchor} className="muted-text">
               +{fmt(coinsLanded * AMOUNT)}
             </text>
           </g>
           {charged > 1 && (
             <g>
-              <rect x={124} y={4} width={102} height={18} rx={9} fill="var(--card)" stroke="var(--critical)" strokeWidth={1.4} />
-              <text x={175} y={17} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 750, fill: "var(--critical-ink)" }}>
+              <rect x={L.badge.x - 51} y={L.badge.y - 9} width={102} height={18} rx={9} fill="var(--card)" stroke="var(--critical)" strokeWidth={1.4} />
+              <text x={L.badge.x} y={L.badge.y + 4} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 750, fill: "var(--critical-ink)" }}>
                 ✕ charged {charged}×
               </text>
             </g>
           )}
 
           {/* API + idempotency store, payment service + ledger, PSP */}
-          <Box y={175} title="API" sub={apiFlash?.text ?? "POST /payments"} subTone={apiFlash?.tone} hit={recent(s.hits.api)} stroke="var(--k-gateway)" />
-          <Drum x={38} y={195} title="keys" sub={keysSub} hit={recent(s.hits.keys)} />
-          <text x={38} y={232} textAnchor="middle" className="muted-text" style={{ fontSize: 9 }}>
+          <Box r={L.api} title="API" sub={apiFlash?.text ?? "POST /payments"} subTone={apiFlash?.tone} hit={recent(s.hits.api)} stroke="var(--k-gateway)" />
+          <Drum x={L.keys.x} y={L.keys.y} title="keys" sub={keysSub} hit={recent(s.hits.keys)} />
+          <text x={L.keys.caption.x} y={L.keys.caption.y} textAnchor={L.keys.anchor} className="muted-text" style={{ fontSize: 9 }}>
             idempotency
           </text>
-          <Box y={300} title="Payment service" sub={svcSub.text} subTone={svcSub.tone} hit={recent(s.hits.svc)} stroke="var(--k-service)" />
-          {waits.length > 0 && <rect x={115} y={343} width={Math.max(0, (120 * (waits[0][1] - t)) / TIMEOUT_MS)} height={3} rx={1.5} fill="var(--warning)" />}
-          <Drum x={38} y={320} title="ledger" sub={`${s.ledger.length} posting${s.ledger.length === 1 ? "" : "s"}`} hit={recent(s.hits.ledger, 700)} />
+          <Box r={L.svc} title="Payment service" sub={svcSub.text} subTone={svcSub.tone} hit={recent(s.hits.svc)} stroke="var(--k-service)" />
+          {waits.length > 0 && <rect x={L.svc.x} y={L.svc.y + BOX_H + 3} width={Math.max(0, (L.svc.w * (waits[0][1] - t)) / TIMEOUT_MS)} height={3} rx={1.5} fill="var(--warning)" />}
+          <Drum x={L.ledger.x} y={L.ledger.y} title="ledger" sub={`${s.ledger.length} posting${s.ledger.length === 1 ? "" : "s"}`} hit={recent(s.hits.ledger, 700)} />
           <g>
-            <path d="M118,446 L175,418 L232,446 Z" fill="var(--card-2)" stroke={recent(s.hits.psp) ? "var(--accent)" : "var(--k-external)"} strokeWidth={recent(s.hits.psp) ? 2.4 : 1.6} />
-            <text x={175} y={440} textAnchor="middle" style={{ fontWeight: 750 }}>
+            <path d={`M${psp.x - 57},${psp.y + 28} L${psp.x},${psp.y} L${psp.x + 57},${psp.y + 28} Z`} fill="var(--card-2)" stroke={recent(s.hits.psp) ? "var(--accent)" : "var(--k-external)"} strokeWidth={recent(s.hits.psp) ? 2.4 : 1.6} />
+            <text x={psp.x} y={psp.y + 22} textAnchor="middle" style={{ fontWeight: 750 }}>
               PSP
             </text>
-            <rect x={122} y={446} width={106} height={5} fill="var(--k-external)" />
+            <rect x={psp.x - 53} y={psp.y + 28} width={106} height={5} fill="var(--k-external)" />
             {[0, 1, 2, 3, 4].map((i) => (
-              <rect key={i} x={128 + i * 20} y={453} width={10} height={24} fill="var(--card-2)" stroke="var(--k-external)" strokeWidth={1.2} />
+              <rect key={i} x={psp.x - 47 + i * 20} y={psp.y + 35} width={10} height={24} fill="var(--card-2)" stroke="var(--k-external)" strokeWidth={1.2} />
             ))}
-            <rect x={116} y={478} width={118} height={7} rx={1.5} fill="var(--k-external)" />
-            <text x={175} y={500} textAnchor="middle" className="muted-text">
-              bank side · {s.pspCalls} call{s.pspCalls === 1 ? "" : "s"}, {charged} charge{charged === 1 ? "" : "s"}
+            <rect x={psp.x - 59} y={psp.y + 60} width={118} height={7} rx={1.5} fill="var(--k-external)" />
+            <text x={L.pspText.x} y={L.pspText.y} textAnchor={L.pspText.anchor} className="muted-text">
+              {L.wide ? "" : "bank side · "}
+              {s.pspCalls} call{s.pspCalls === 1 ? "" : "s"}, {charged} charge{charged === 1 ? "" : "s"}
             </text>
             {hookTimer && hookTimer.msg.k === "sendWebhook" && (
-              <text x={175} y={515} textAnchor="middle" style={{ fontSize: 10.5, fill: "var(--warning-ink)" }}>
-                webhook {hookTimer.msg.evt} in {Math.max(0, (hookTimer.at - t) / 1000).toFixed(1)} s
+              <text x={L.pspText.x} y={L.pspText.y + 15} textAnchor={L.pspText.anchor} style={{ fontSize: 10.5, fill: "var(--warning-ink)" }}>
+                webhook {L.wide ? "" : `${hookTimer.msg.evt} `}in {Math.max(0, (hookTimer.at - t) / 1000).toFixed(1)} s
               </text>
             )}
           </g>
 
           {/* traffic */}
           {s.packets.map((p) => (
-            <PacketG key={p.id} p={p} t={t} reduce={reduce} />
+            <PacketG key={p.id} L={L} p={p} t={t} reduce={reduce} />
           ))}
           {s.coins
             .filter((c) => t >= c && t < c + COIN_MS)
             .map((c) => {
-              const pt = coinAt((t - c) / COIN_MS);
+              const pt = coinAt(L, (t - c) / COIN_MS);
               const coin = (
                 <>
                   <circle r={9} fill="var(--k-database)" stroke="var(--card)" strokeWidth={1.6} />
@@ -861,90 +994,29 @@ export function PaymentFlowSim() {
               );
             })}
         </svg>
+      </div>
 
-        <div style={{ display: "grid", gap: 10, minWidth: 0 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            <span className={`pill ${charged > 1 ? "bad-ink" : charged === 1 ? "ok-ink" : ""}`}>
-              Customer charged: {charged}× {fmt(charged * AMOUNT)} {charged > 1 ? "✕ double charge" : charged === 1 ? "✓" : ""}
-            </span>
-            <span className="pill">PSP calls: {s.pspCalls}</span>
-          </div>
-          <div style={{ fontSize: 13, display: "grid", gap: 4 }}>
-            {s.payments.length === 0 && <span className="muted">No payment yet.</span>}
-            {s.payments.map((p) => (
-              <div key={p.id}>
-                <b>{p.id}</b>{" "}
-                {p.history.map((st, i) => (
-                  <span key={i}>
-                    {i > 0 && <span className="muted"> → </span>}
-                    <span className={i === p.history.length - 1 ? `pill ${STATUS_INK[st]}` : `muted ${STATUS_INK[st]}`}>{STATUS_WORD[st]}</span>
-                  </span>
-                ))}
-              </div>
-            ))}
-          </div>
-          <div style={{ border: "1px solid var(--border)", borderRadius: 12, background: "var(--card-2)", padding: "8px 10px", fontSize: 13 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 6, marginBottom: 6 }}>
-              <b>Ledger (append-only)</b>
-              <span className={balanced ? "ok-ink" : "bad-ink"}>Σ every transaction = {fmt(s.ledger.reduce((a, p) => a + postingSum(p), 0))} {balanced ? "✓ balanced" : "✕ unbalanced"}</span>
-            </div>
-            {s.ledger.length === 0 && <p className="muted" style={{ margin: 0 }}>No entries yet. A capture is posted when a payment succeeds.</p>}
-            <ol aria-label="Ledger transactions, newest first" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
-              {[...s.ledger]
-                .reverse()
-                .slice(0, 3)
-                .map((p) => {
-                  const dup = s.ledger.filter((q) => q.payId === p.payId).length > 1;
-                  const inner = (
-                    <>
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        {p.id} · {p.payId} captured ({p.evt}) {dup && <span className="bad-ink">· ✕ duplicate posting</span>}
-                      </div>
-                      {p.lines.map((l) => (
-                        <div key={l.account} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontVariantNumeric: "tabular-nums" }}>
-                          <span>
-                            {l.amount > 0 ? "DR" : "CR"} {l.account}
-                          </span>
-                          <span>{fmt(Math.abs(l.amount))}</span>
-                        </div>
-                      ))}
-                      <div className="ok-ink" style={{ fontSize: 12, textAlign: "right" }}>
-                        Σ {fmt(postingSum(p))} ✓
-                      </div>
-                    </>
-                  );
-                  const style = { borderTop: "1px solid var(--border)", paddingTop: 4 };
-                  return reduce ? (
-                    <li key={p.id} style={style}>
-                      {inner}
-                    </li>
-                  ) : (
-                    <m.li key={p.id} style={style} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                      {inner}
-                    </m.li>
-                  );
-                })}
-            </ol>
-            {s.ledger.length > 3 && <div className="muted" style={{ fontSize: 12 }}>+{s.ledger.length - 3} earlier</div>}
-            <div style={{ borderTop: "1px solid var(--border)", marginTop: 6, paddingTop: 6, display: "grid", gap: 2 }}>
-              <span>Merchant payable: {fmt(merchantOwed)}</span>
-              {settled ? (
-                <span className={matches ? "ok-ink" : "bad-ink"}>
-                  {matches
-                    ? `✓ Reconciliation: ledger ${fmt(cashAtPsp)} matches the PSP's report (${charged} charge${charged === 1 ? "" : "s"}).`
-                    : `✕ Reconciliation: the ledger says the PSP holds ${fmt(cashAtPsp)}, its report says ${fmt(charged * AMOUNT)}.`}
+      <div className="pay-facts">
+        <span className={`pill ${charged > 1 ? "bad-ink" : charged === 1 ? "ok-ink" : ""}`}>
+          Charged {charged}× {fmt(charged * AMOUNT)} {charged > 1 ? "✕ double charge" : charged === 1 ? "✓" : ""}
+        </span>
+        <span className={`pill ${balanced ? "" : "bad-ink"}`}>
+          Ledger: {s.ledger.length} posting{s.ledger.length === 1 ? "" : "s"}, {balanced ? "✓ balanced" : "✕ unbalanced"}
+        </span>
+        {settled && <span className={`pill ${matches ? "ok-ink" : "bad-ink"}`}>{matches ? "✓ reconciles with PSP" : `✕ ledger ${fmt(cashAtPsp)} ≠ PSP ${fmt(charged * AMOUNT)}`}</span>}
+        {s.payments.map((p) => (
+          <span key={p.id}>
+            <b>{p.id}</b>{" "}
+            {p.history.map((st, i) => (
+              <span key={i}>
+                {i > 0 && <span className="muted"> → </span>}
+                <span className={i === p.history.length - 1 ? STATUS_INK[st] : `muted ${STATUS_INK[st]}`} style={i === p.history.length - 1 ? { fontWeight: 650 } : undefined}>
+                  {STATUS_WORD[st]}
                 </span>
-              ) : (
-                <span className="muted">Reconciliation runs once the traffic settles.</span>
-              )}
-            </div>
-          </div>
-          <ol aria-label="What happened, newest first" style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, display: "grid", gap: 3 }} className="muted">
-            {s.log.slice(1, 5).map((l) => (
-              <li key={`${l.t}-${l.text}`}>{l.text}</li>
+              </span>
             ))}
-          </ol>
-        </div>
+          </span>
+        ))}
       </div>
       <p className="readout" aria-live="polite">
         {said?.tone === "bad" && (
@@ -960,6 +1032,77 @@ export function PaymentFlowSim() {
         {said?.text ?? INTRO}
         <ReducedNote reduce={reduce} what="Animation paused (reduced motion): use Step to jump from message to message." />
       </p>
+
+      <More label="Inject one failure at a time">
+        <div className="controls" role="group" aria-label="Inject a failure" style={{ margin: 0 }}>
+          <button type="button" className="wbtn" aria-pressed={s.armTimeout} onClick={() => go("armTimeout")} style={s.armTimeout ? ARMED : undefined}>
+            <TimerOff size={14} aria-hidden /> PSP times out on next call<span aria-hidden>{s.armTimeout ? " (armed)" : ""}</span>
+          </button>
+          <button type="button" className="wbtn" onClick={() => go("retry", true)}>
+            <Repeat size={14} aria-hidden /> Customer taps Pay again (retry)
+          </button>
+          <button type="button" className="wbtn" aria-pressed={s.armDupHook} onClick={() => go("dupWebhook", true)} style={s.armDupHook ? ARMED : undefined}>
+            <Webhook size={14} aria-hidden /> PSP sends the webhook twice<span aria-hidden>{s.armDupHook ? " (armed)" : ""}</span>
+          </button>
+        </div>
+      </More>
+      <More label="Ledger and history">
+        <div className="pay-ledger" style={{ display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 6 }}>
+            <b>Ledger (append-only)</b>
+            <span className={balanced ? "ok-ink" : "bad-ink"}>
+              Σ every transaction = {fmt(s.ledger.reduce((a, p) => a + postingSum(p), 0))} {balanced ? "✓ balanced" : "✕ unbalanced"}
+            </span>
+          </div>
+          {s.ledger.length === 0 && <p className="muted" style={{ margin: 0 }}>No entries yet. A capture is posted when a payment succeeds.</p>}
+          <ol aria-label="Ledger transactions, newest first" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+            {[...s.ledger].reverse().map((p) => {
+              const dup = s.ledger.filter((q) => q.payId === p.payId).length > 1;
+              return (
+                <li key={p.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 4 }}>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {p.id} · {p.payId} captured ({p.evt}) {dup && <span className="bad-ink">· ✕ duplicate posting</span>}
+                  </div>
+                  {p.lines.map((l) => (
+                    <div key={l.account} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontVariantNumeric: "tabular-nums" }}>
+                      <span>
+                        {l.amount > 0 ? "DR" : "CR"} {l.account}
+                      </span>
+                      <span>{fmt(Math.abs(l.amount))}</span>
+                    </div>
+                  ))}
+                  <div className="ok-ink" style={{ fontSize: 12, textAlign: "right" }}>
+                    Σ {fmt(postingSum(p))} ✓
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 6, display: "grid", gap: 2 }}>
+            <span>
+              Merchant payable: {fmt(merchantOwed)} · PSP calls: {s.pspCalls}
+            </span>
+            {settled ? (
+              <span className={matches ? "ok-ink" : "bad-ink"}>
+                {matches
+                  ? `✓ Reconciliation: ledger ${fmt(cashAtPsp)} matches the PSP's report (${charged} charge${charged === 1 ? "" : "s"}).`
+                  : `✕ Reconciliation: the ledger says the PSP holds ${fmt(cashAtPsp)}, its report says ${fmt(charged * AMOUNT)}.`}
+              </span>
+            ) : (
+              <span className="muted">Reconciliation runs once the traffic settles.</span>
+            )}
+          </div>
+          <div>
+            <b>What happened, newest first</b>
+            <ol aria-label="What happened, newest first" style={{ margin: "4px 0 0", paddingLeft: 18, fontSize: 12.5, display: "grid", gap: 3 }} className="muted">
+              {s.log.length === 0 && <li>Nothing yet.</li>}
+              {s.log.map((l) => (
+                <li key={`${l.t}-${l.text}`}>{l.text}</li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </More>
     </WidgetFrame>
   );
 }

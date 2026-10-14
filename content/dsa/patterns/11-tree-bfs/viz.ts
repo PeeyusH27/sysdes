@@ -1,5 +1,6 @@
 import { arr, buildTree, defineTrace, NodeIds, note, queue, tree, type TNode } from "@/components/algo/trace";
 import type { Tone } from "@/components/algo/types";
+import { treeProblem } from "@/components/algo/checks";
 
 export const levelLoop = defineTrace({
   id: "bfs-level-max",
@@ -27,6 +28,7 @@ function levelMaxes(root) {
     { label: "Four levels", input: { values: [8, 3, 10, 1, 6, null, 14, null, null, 4, 7] as (number | null)[] } },
     { label: "Negative values", input: { values: [-4, -7, -2, -9, null, null, -5] as (number | null)[] } },
   ],
+  validate: ({ values }) => treeProblem(values),
   run(t, { values }) {
     const root = buildTree(values)!;
     const ids = new NodeIds();
@@ -106,6 +108,7 @@ function minDepth(root) {
     { label: "Shallow leaf on the right", input: { values: [1, 2, 3, 4, 5, null, null, 6, 7, 8] as (number | null)[] } },
     { label: "Root with one child", input: { values: [1, 2, null, 3, 4] as (number | null)[] } },
   ],
+  validate: ({ values }) => treeProblem(values),
   run(t, { values }) {
     const root = buildTree(values)!;
     const ids = new NodeIds();

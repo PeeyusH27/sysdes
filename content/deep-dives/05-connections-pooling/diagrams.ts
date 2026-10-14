@@ -4,7 +4,7 @@ export const connectionPooling: FlowSpec = {
   id: "connection-pooling",
   title: "Connection pools from the app to PostgreSQL",
   description:
-    "Each app instance keeps a pool of 10 open database connections and lends them to requests. PgBouncer sits in front of PostgreSQL and multiplexes many client connections onto a few server connections.",
+    "Each app instance keeps a pool of 10 open database connections and lends them to requests. PgBouncer, in front of PostgreSQL, multiplexes many client connections onto a few server connections.",
   nodes: [
     { id: "clients", label: "Clients", kind: "client", col: 0, row: 1 },
     { id: "lb", label: "Load balancer", kind: "lb", col: 1, row: 1 },
@@ -27,7 +27,7 @@ export const connectionPooling: FlowSpec = {
       name: "Borrow and return",
       steps: [
         { edge: "clients>lb", caption: "A request for /orders/42 arrives at the load balancer." },
-        { edge: "lb>appA", caption: "It is routed to instance A. Its pool holds 10 open connections, and 3 are in use right now." },
+        { edge: "lb>appA", caption: "Instance A gets it. Its pool holds 10 open connections; 3 are busy right now." },
         { edge: "appA>pgb", caption: "The handler borrows an idle connection. No TCP, TLS or authentication handshake: borrowing takes microseconds." },
         { edge: "pgb>db", caption: "The query runs on PostgreSQL in about 5 ms." },
         { edge: "pgb>db", reverse: true, tone: "ok", caption: "Rows come back.", mark: [{ node: "db", state: "ok" }] },

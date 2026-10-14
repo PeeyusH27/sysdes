@@ -1,12 +1,12 @@
 "use client";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
 import type { KeyboardEvent } from "react";
 import { m } from "motion/react";
 import { Bike, Car, Swords, Truck } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Seg, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ================================================================ the lot
 // Mirrors content/questions/parking-lot/snippets: FITS (models.js), a free set per spot type per floor
@@ -585,6 +585,51 @@ export function twoCarsOneSpot(s: Sim, stayHours: number): Sim {
 const COLOR: Record<VehicleType, string> = { bike: "var(--series-2)", car: "var(--series-1)", truck: "var(--series-3)" };
 const SPOT_COLOR: Record<SpotType, string> = { bike: "var(--series-2)", compact: "var(--series-1)", large: "var(--series-3)" };
 const tint = (c: string, p: number) => `color-mix(in srgb, ${c} ${p}%, var(--card))`;
+/** Below this content width the lot is drawn in portrait (floors stacked); above it, in landscape. */
+const NARROW_BELOW = 480;
+/** The landscape drawing never grows taller than this (px), so the widget fits the desktop visual pane. */
+const MAX_H = 272;
+/** On phones the portrait drawing stops growing at this height (px), so it and the main controls fit one screen. */
+const MAX_H_PORT = 404;
+
+/**
+ * How the scene is drawn. The simulation runs in portrait coordinates (floors stacked, ramp on the left, gates at the
+ * bottom), which is how phones show it. Wider screens reflect it into landscape: X = LA − y, Y = LB − x puts the
+ * floors side by side, the ramp road along the bottom and the gate lanes on the left, with the same paths and timing.
+ */
+interface View {
+  land: boolean;
+  vb: string;
+  VW: number;
+  VH: number;
+  P: (x: number, y: number) => readonly [number, number];
+  /** A heading (degrees, 0 = east) in this view. */
+  h: (deg: number) => number;
+}
+const LA = 600;
+const LB = 282;
+const LAND: View = { land: true, vb: "0 0 576 282", VW: 576, VH: 282, P: (x, y) => [LA - y, LB - x], h: (d) => -90 - d };
+const PORT: View = { land: false, vb: `0 24 ${W} ${H - 24}`, VW: W, VH: H - 24, P: (x, y) => [x, y], h: (d) => d };
+function box(v: View, x: number, y: number, w: number, h: number) {
+  const [x1, y1] = v.P(x, y);
+  const [x2, y2] = v.P(x + w, y + h);
+  return { x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
+}
+/** Landscape x of a floor's deck (its left edge). */
+const deckX = (f: number) => LA - floorTop(f) - 126;
+
+/** True while the element is narrower than `below` px (ResizeObserver; false on the server and in jsdom). */
+function useNarrow(ref: RefObject<HTMLElement | null>, below: number) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < below));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, below]);
+  return narrow;
+}
 
 function Wheels({ xs, y1, y2 }: { xs: number[]; y1: number; y2: number }) {
   return xs.flatMap((x) => [y1, y2].map((y) => <rect key={`${x},${y}`} x={x} y={y} width={6} height={2.5} rx={1} fill="var(--fg)" />));
@@ -627,8 +672,9 @@ function VehicleShape({ type }: { type: VehicleType }) {
   );
 }
 
-function VehicleView({ v, reduce, focused, onExit, setFocus }: { v: Vehicle; reduce: boolean; focused: boolean; onExit: (id: number) => void; setFocus: (id: number | null) => void }) {
+function VehicleView({ v, view, reduce, focused, onExit, setFocus }: { v: Vehicle; view: View; reduce: boolean; focused: boolean; onExit: (id: number) => void; setFocus: (id: number | null) => void }) {
   const parked = v.phase === "parked";
+  const [x, y] = view.P(v.x, v.y);
   const onKey = (e: KeyboardEvent<SVGGElement>) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -638,7 +684,7 @@ function VehicleView({ v, reduce, focused, onExit, setFocus }: { v: Vehicle; red
   return (
     <m.g
       initial={false}
-      animate={{ x: v.x, y: v.y, opacity: v.phase === "away" ? Math.max(0.15, v.wait / AWAY_TICKS) : 1 }}
+      animate={{ x, y, opacity: v.phase === "away" ? Math.max(0.15, v.wait / AWAY_TICKS) : 1 }}
       transition={reduce ? { duration: 0 } : { duration: 0.06, ease: "linear" }}
       role={parked ? "button" : undefined}
       tabIndex={parked ? 0 : undefined}
@@ -650,8 +696,8 @@ function VehicleView({ v, reduce, focused, onExit, setFocus }: { v: Vehicle; red
       onBlur={parked ? () => setFocus(null) : undefined}
       style={parked ? { cursor: "pointer", outline: "none" } : undefined}
     >
-      {parked && <rect x={-13} y={-22} width={26} height={44} fill="transparent" />}
-      <g transform={`rotate(${v.h.toFixed(1)})`}>
+      {parked && (view.land ? <rect x={-22} y={-13} width={44} height={26} fill="transparent" /> : <rect x={-13} y={-22} width={26} height={44} fill="transparent" />)}
+      <g transform={`rotate(${view.h(v.h).toFixed(1)})`}>
         <VehicleShape type={v.type} />
       </g>
       {v.type !== "bike" && (
@@ -676,10 +722,11 @@ function VehicleView({ v, reduce, focused, onExit, setFocus }: { v: Vehicle; red
   );
 }
 
-function Arm({ x, y, open, reduce }: { x: number; y: number; open: boolean; reduce: boolean }) {
+/** A barrier arm: a bar from the pivot, rotated by `deg` (the bar points along +y at 0°). */
+function Arm({ x, y, deg, reduce }: { x: number; y: number; deg: number; reduce: boolean }) {
   return (
     <g aria-hidden="true">
-      <g style={{ transformOrigin: `${x}px ${y}px`, transform: `rotate(${open ? -80 : 0}deg)`, transition: reduce ? "none" : "transform 0.3s ease" }}>
+      <g style={{ transformOrigin: `${x}px ${y}px`, transform: `rotate(${deg}deg)`, transition: reduce ? "none" : "transform 0.3s ease" }}>
         <rect x={x - 1.6} y={y} width={3.2} height={24} rx={1.5} fill="var(--critical)" />
         <line x1={x} y1={y + 3} x2={x} y2={y + 22} stroke="var(--card)" strokeWidth={1.4} strokeDasharray="3 3" />
       </g>
@@ -688,7 +735,8 @@ function Arm({ x, y, open, reduce }: { x: number; y: number; open: boolean; redu
   );
 }
 
-const STRUCTURE = (
+/** Portrait (phones): floors stacked, the ramp on the left, gate lanes along the bottom. */
+const PORTRAIT = (
   <g aria-hidden="true">
     <rect x={4} y={80} width={52} height={466} rx={6} fill="var(--border)" />
     <line x1={30} y1={86} x2={30} y2={516} stroke="var(--card)" strokeWidth={1.5} strokeDasharray="6 6" />
@@ -741,6 +789,59 @@ const STRUCTURE = (
   </g>
 );
 
+/** Landscape (desktop pane): the same lot reflected, floors 0, 1, 2 from left to right. */
+const LANDSCAPE = (
+  <g aria-hidden="true">
+    {/* ramp road under the floors: the inbound lane runs east, the outbound lane west */}
+    <rect {...box(LAND, 4, 80, 52, 466)} rx={6} fill="var(--border)" />
+    <line x1={LA - 516} x2={LA - 86} y1={LB - 30} y2={LB - 30} stroke="var(--card)" strokeWidth={1.5} strokeDasharray="6 6" />
+    {[166, 308, 442].map((x) => (
+      <g key={x}>
+        <text x={x} y={LB - UP_X + 3.5} textAnchor="middle" className="muted-text" style={{ fontSize: 10 }}>
+          ▶
+        </text>
+        <text x={x} y={LB - DOWN_X + 3.5} textAnchor="middle" className="muted-text" style={{ fontSize: 10 }}>
+          ◀
+        </text>
+      </g>
+    ))}
+    <text x={548} y={LB - 26} textAnchor="middle" className="muted-text" style={{ fontSize: 10 }}>
+      ramps
+    </text>
+    {Array.from({ length: FLOORS }, (_, f) => {
+      const T = floorTop(f);
+      return (
+        <g key={f}>
+          <rect {...box(LAND, 60, T, 196, 126)} rx={6} fill="var(--card-2)" stroke="var(--border-strong)" />
+          <rect {...box(LAND, 52, T + 54, 204, 32)} fill="var(--border)" />
+          <line x1={LA - T - 70} x2={LA - T - 70} y1={LB - 252} y2={LB - 62} stroke="var(--card)" strokeWidth={1.2} strokeDasharray="7 6" />
+        </g>
+      );
+    })}
+    {/* gate lanes: vehicles arrive from the top on A and B; the exit lane leads back up */}
+    <rect x={LA - 472} y={0} width={24} height={LB - 30} fill="var(--border)" />
+    <rect x={LA - 508} y={0} width={24} height={LB - 30} fill="var(--border)" />
+    <rect x={LA - 544} y={0} width={24} height={LB - 4} fill="var(--border)" />
+    {[LA - LANE_Y.A, LA - LANE_Y.B].map((x) => (
+      <text key={x} x={x} y={44} textAnchor="middle" className="muted-text" style={{ fontSize: 9.5 }}>
+        in ▼
+      </text>
+    ))}
+    <text x={LA - EXIT_Y} y={44} textAnchor="middle" className="muted-text" style={{ fontSize: 9.5 }}>
+      out ▲
+    </text>
+    <text x={LA - 448 + 13} y={LB - GATE_X + 4} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 700 }}>
+      A
+    </text>
+    <text x={LA - 484 + 7.5} y={LB - GATE_X + 4} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 700 }}>
+      B
+    </text>
+    <text x={LA - 544 - 4} y={LB - EXIT_GATE_X - 4} textAnchor="end" style={{ fontSize: 10.5, fontWeight: 700 }}>
+      Exit
+    </text>
+  </g>
+);
+
 function Board({ floor, counts, flash, tick }: { floor: number; counts: Record<SpotType, number>; flash: Sim["flash"]; tick: number }) {
   const T = floorTop(floor) + 14;
   return (
@@ -782,6 +883,53 @@ function Board({ floor, counts, flash, tick }: { floor: number; counts: Record<S
   );
 }
 
+/** The same board as a strip above its deck (landscape): "Floor 0 | B 3 | C 6 | L 3". */
+function BoardStrip({ floor, counts, flash, tick }: { floor: number; counts: Record<SpotType, number>; flash: Sim["flash"]; tick: number }) {
+  const X = deckX(floor) - 2;
+  return (
+    <g role="img" aria-label={`Floor ${floor} board: ${counts.bike} bike, ${counts.compact} compact, ${counts.large} large spots free`}>
+      <rect x={X} y={2} width={130} height={21} rx={6} fill="var(--card)" stroke="var(--border-strong)" />
+      <text x={X + 5} y={16.5} style={{ fontSize: 10.5, fontWeight: 750 }}>
+        Floor {floor}
+      </text>
+      {SPOT_TYPES.map((t, i) => {
+        const x = X + 45 + i * 28;
+        const f = flash[`${floor}-${t}`];
+        const hot = !!f && tick - f.tick < FLASH_TICKS;
+        const n = counts[t];
+        return (
+          <g key={t}>
+            <rect x={x} y={4.5} width={26} height={16} rx={4} style={{ fill: hot ? tint("var(--accent)", 26) : "var(--card-2)" }} stroke={hot ? "var(--accent)" : "none"} />
+            <rect x={x + 2.5} y={8} width={3} height={9} rx={1} fill={SPOT_COLOR[t]} />
+            <text x={x + 8} y={16} className="muted-text" style={{ fontSize: 9.5, fontWeight: 650 }}>
+              {LETTER[t]}
+            </text>
+            <text x={x + 24} y={16.5} textAnchor="end" style={{ fontSize: 11.5, fontWeight: 750, fill: n ? "var(--fg)" : "var(--critical-ink)" }}>
+              {n || "✕"}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/** A segmented choice with its label on the same line (it wraps under the label when the row is too narrow). */
+function InlineSeg<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string; title?: string }[]; onChange: (v: T) => void }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 6px", fontSize: 12.5, color: "var(--muted)" }}>
+      <span>{label}</span>
+      <div className="seg" role="group" aria-label={label}>
+        {options.map((o) => (
+          <button key={o.value} type="button" title={o.title} aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ================================================================ widget
 export function ParkingLotSim() {
   const [selector, setSelector] = useState<Selector>("lowestFloor");
@@ -791,6 +939,8 @@ export function ParkingLotSim() {
   const [stay, setStay] = useState(3);
   const [focusId, setFocusId] = useState<number | null>(null);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const narrow = useNarrow(ref, NARROW_BELOW);
+  const view = narrow ? PORT : LAND;
   const cfg = useMemo<Cfg>(() => ({ selector, mode, rush: rush && !reduce, rate, stay }), [selector, mode, rush, reduce, rate, stay]);
   const step = useCallback((s: Sim) => stepSim(s, cfg), [cfg]);
   const [sim, reset] = useFixedStep<Sim>(() => initSim(), step, inView && !reduce);
@@ -805,158 +955,189 @@ export function ParkingLotSim() {
   const sign = lotFull ? "✕ LOT FULL" : fullFor ? `✕ FULL for ${fullFor}` : "✓ SPACES";
   const exitVehicle = (id: number) => reset(requestExit(sim, id));
   const arrive = (type: VehicleType) => reset(addArrival(sim, type, stay));
+  const bad = !!(lotFull || fullFor);
+  const boothText = sim.booth ? (sim.booth.voided ? `${sim.booth.plate}: ticket void` : `${sim.booth.plate} pays ${sim.booth.quote}`) : "Pay booth";
 
   const conflictMark = sim.conflict && spotGeom(sim.conflict.spot);
+  const L = view.land;
   return (
-    <WidgetFrame
-      title="Parking lot simulator"
-      sub="Three floors, two entry gates, one pay booth, running the page's design: FITS, a free set per spot type on each floor, the selector you pick, and hourly pricing with a 10 min grace period and a daily cap."
-    >
-      <div className="controls">
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <button type="button" className="wbtn primary" onClick={() => arrive("bike")}>
-            <Bike size={14} aria-hidden /> Bike arrives
-          </button>
-          <button type="button" className="wbtn primary" onClick={() => arrive("car")}>
-            <Car size={14} aria-hidden /> Car arrives
-          </button>
-          <button type="button" className="wbtn primary" onClick={() => arrive("truck")}>
-            <Truck size={14} aria-hidden /> Truck arrives
-          </button>
-        </div>
-        <Seg<Selector>
-          label="Spot selector"
-          value={selector}
-          onChange={setSelector}
-          options={[
-            { value: "lowestFloor", label: "Lowest floor first" },
-            { value: "smallestType", label: "Smallest spot first (SQL)" },
-          ]}
-        />
-      </div>
-      <div className="controls">
-        <div className="control" style={{ flex: "none", minWidth: 0 }}>
-          <span>Rush hour (auto traffic)</span>
-          <SimButtons
-            running={rush && !reduce}
-            reduce={reduce}
-            onToggle={() => setRush((r) => !r)}
-            onStep={() => reset(stepToEvent(sim, cfg))}
-            stepHint="Jump to the next event (at most 1 simulated hour)"
-            onReset={() => {
-              setRush(false);
-              reset(initSim());
-            }}
-          />
-        </div>
-        <Slider label="Arrivals" value={rate} min={2} max={20} onChange={setRate} format={(v) => `${v} per hour`} />
-        <Slider label="Typical stay" value={stay} min={0.5} max={8} step={0.5} onChange={setStay} format={(v) => `${v} h`} />
-      </div>
-      <div className="controls">
-        <Seg<GateMode>
-          label="Gates share"
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: "atomic", label: "Atomic take()" },
-            { value: "race", label: "Check, then take (race)" },
-          ]}
-        />
-        <button
-          type="button"
-          className="wbtn"
-          onClick={() => {
-            setRush(false);
-            reset(twoCarsOneSpot(sim, stay));
-          }}
-        >
-          <Swords size={14} aria-hidden /> Two cars, one spot
-        </button>
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-start" }}>
-        <div ref={ref} style={{ flex: "3 1 300px", minWidth: 0 }}>
-          <svg
-            viewBox={`0 0 ${W} ${H}`}
-            className="sim-svg"
-            style={{ maxWidth: 460, margin: "0 auto" }}
-            role="group"
-            aria-label={`Parking lot seen from above: 3 floors joined by ramps, entry gates A and B, and an exit with a pay booth. ${TOTAL_SPOTS - freeIds.size} of ${TOTAL_SPOTS} spots taken, ${parked} vehicles parked. Parked vehicles are buttons that send them to the exit.`}
-          >
-            {STRUCTURE}
-            <g aria-hidden="true">
-              <text x={6} y={18} style={{ fontSize: 15, fontWeight: 750, fontVariantNumeric: "tabular-nums" }}>
-                {fmtClock(sim.now)}
-              </text>
-              <text x={W - 4} y={18} textAnchor="end" className="muted-text" style={{ fontSize: 11 }}>
-                1 s ≈ 10 min · {TOTAL_SPOTS - freeIds.size}/{TOTAL_SPOTS} taken
-              </text>
-              {ALL_SPOTS.map((id) => {
-                const g = spotGeom(id);
-                const held = !freeIds.has(id) && !inBay.has(id);
-                const bad = sim.conflict?.spot === id;
-                return (
-                  <g key={id}>
-                    <rect x={g.x} y={g.y} width={g.w} height={40} rx={2} style={{ fill: held ? tint("var(--accent)", 12) : "none" }} stroke={bad ? "var(--critical)" : held ? "var(--accent)" : "var(--border-strong)"} strokeWidth={bad ? 2.5 : held ? 1.4 : 1} strokeDasharray={held ? "4 3" : undefined} />
-                    <rect x={g.x + 2} y={g.top ? g.y + 1 : g.y + 36} width={g.w - 4} height={3} rx={1} fill={SPOT_COLOR[g.type]} />
-                    {!inBay.has(id) && (
-                      <text x={g.cx} y={g.y + 24} textAnchor="middle" className="muted-text" style={{ fontSize: 10 }}>
-                        {LETTER[g.type]}
-                        {g.n}
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
-            </g>
-            {Array.from({ length: FLOORS }, (_, f) => (
-              <Board key={f} floor={f} counts={counts[f]} flash={sim.flash} tick={sim.tick} />
-            ))}
-            <g role="img" aria-label={`Entrance sign: ${lotFull ? "lot full" : fullFor ? `full for ${fullFor}s` : "spaces free"}`}>
-              <rect x={172} y={428} width={98} height={18} rx={4} style={{ fill: lotFull || fullFor ? tint("var(--critical)", 18) : tint("var(--good)", 10) }} stroke={lotFull || fullFor ? "var(--critical)" : "var(--good)"} strokeWidth={1.4} />
-              <text x={221} y={441} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 750, fill: lotFull || fullFor ? "var(--critical-ink)" : "var(--good-ink)" }}>
-                {sign}
-              </text>
-            </g>
-            <Arm x={GATE_X} y={448} open={sim.tick < sim.gateOpen.A} reduce={reduce} />
-            <Arm x={GATE_X} y={484} open={sim.tick < sim.gateOpen.B} reduce={reduce} />
-            <Arm x={EXIT_GATE_X} y={520} open={sim.tick < sim.gateOpen.X} reduce={reduce} />
-            <g aria-hidden="true">
-              <rect x={86} y={549} width={110} height={22} rx={5} fill="var(--card)" stroke="var(--border-strong)" />
-              <text x={141} y={564} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: sim.booth ? 750 : 500 }} className={sim.booth ? undefined : "muted-text"}>
-                {sim.booth ? (sim.booth.voided ? `${sim.booth.plate}: ticket void` : `${sim.booth.plate} pays ${sim.booth.quote}`) : "Pay booth"}
-              </text>
-            </g>
-            {conflictMark && (
-              <g role="img" aria-label={`Double-assigned ${sim.conflict!.spot}`}>
-                <rect x={124} y={floorTop(conflictMark.floor) + 1} width={130} height={12} rx={6} style={{ fill: tint("var(--critical)", 16) }} stroke="var(--critical)" />
-                <text x={189} y={floorTop(conflictMark.floor) + 10.5} textAnchor="middle" style={{ fontSize: 9.5, fontWeight: 750, fill: "var(--critical-ink)" }}>
-                  ✕ double-assigned {sim.conflict!.spot}
-                </text>
-              </g>
+    <WidgetFrame title="Parking lot simulator" sub="Three floors, two gates, one pay booth. Click a parked vehicle to send it out.">
+      <div ref={ref}>
+        <div className="controls" style={{ gap: "8px 14px", margin: "2px 0 8px" }}>
+          <div role="group" aria-label="Add a vehicle" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+            {!narrow && (
+              <span className="muted" style={{ fontSize: 12.5 }}>
+                Add
+              </span>
             )}
-            {sim.vehicles.map((v) => (
-              <VehicleView key={v.id} v={v} reduce={reduce} focused={focusId === v.id} onExit={exitVehicle} setFocus={setFocusId} />
-            ))}
-          </svg>
-        </div>
-        <div style={{ flex: "2 1 220px", minWidth: 0, display: "grid", gap: 10, fontSize: 13.5 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
-            {[
-              ["Clock", fmtClock(sim.now)],
-              ["Free spots", `${freeIds.size} of ${TOTAL_SPOTS}`],
-              ["Revenue", String(sim.revenue)],
-              ["Turned away", String(sim.turnedAway)],
-            ].map(([k, val]) => (
-              <div key={k} style={{ background: "var(--card-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px" }}>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {k}
-                </div>
-                <b style={{ fontVariantNumeric: "tabular-nums" }}>{val}</b>
-              </div>
-            ))}
+            <button type="button" className="wbtn primary" onClick={() => arrive("bike")} aria-label="Bike arrives">
+              <Bike size={14} aria-hidden /> Bike
+            </button>
+            <button type="button" className="wbtn primary" onClick={() => arrive("car")} aria-label="Car arrives">
+              <Car size={14} aria-hidden /> Car
+            </button>
+            <button type="button" className="wbtn primary" onClick={() => arrive("truck")} aria-label="Truck arrives">
+              <Truck size={14} aria-hidden /> Truck
+            </button>
           </div>
-          <div>
+          <div role="group" aria-label="Rush hour (auto traffic)" title="Run: rush-hour traffic">
+            <SimButtons
+              running={rush && !reduce}
+              reduce={reduce}
+              onToggle={() => setRush((r) => !r)}
+              onStep={() => reset(stepToEvent(sim, cfg))}
+              stepHint="Jump to the next event (at most 1 simulated hour)"
+              onReset={() => {
+                setRush(false);
+                reset(initSim());
+              }}
+            />
+          </div>
+          <InlineSeg<GateMode>
+            label="Gates"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "atomic", label: "Atomic take()", title: "Each gate checks and takes in one step" },
+              { value: "race", label: "Check, then take", title: "Race: every gate checks, then every gate takes" },
+            ]}
+          />
+          <button
+            type="button"
+            className="wbtn"
+            onClick={() => {
+              setRush(false);
+              reset(twoCarsOneSpot(sim, stay));
+            }}
+          >
+            <Swords size={14} aria-hidden /> Two cars, one spot
+          </button>
+        </div>
+
+        <svg
+          viewBox={view.vb}
+          className="sim-svg"
+          style={{ maxWidth: Math.round(((L ? MAX_H : MAX_H_PORT) * view.VW) / view.VH), margin: "0 auto" }}
+          role="group"
+          aria-label={`Parking lot seen from above: 3 floors joined by ramps, entry gates A and B, and an exit with a pay booth. ${TOTAL_SPOTS - freeIds.size} of ${TOTAL_SPOTS} spots taken, ${parked} vehicles parked. Parked vehicles are buttons that send them to the exit.`}
+        >
+          {L ? LANDSCAPE : PORTRAIT}
+          <g aria-hidden="true">
+            {ALL_SPOTS.map((id) => {
+              const g = spotGeom(id);
+              const held = !freeIds.has(id) && !inBay.has(id);
+              const isBad = sim.conflict?.spot === id;
+              const [lx, ly] = view.P(g.cx, g.y + 20);
+              return (
+                <g key={id}>
+                  <rect {...box(view, g.x, g.y, g.w, 40)} rx={2} style={{ fill: held ? tint("var(--accent)", 12) : "none" }} stroke={isBad ? "var(--critical)" : held ? "var(--accent)" : "var(--border-strong)"} strokeWidth={isBad ? 2.5 : held ? 1.4 : 1} strokeDasharray={held ? "4 3" : undefined} />
+                  <rect {...box(view, g.x + 2, g.top ? g.y + 1 : g.y + 36, g.w - 4, 3)} rx={1} fill={SPOT_COLOR[g.type]} />
+                  {!inBay.has(id) && (
+                    <text x={lx} y={ly + 3.5} textAnchor="middle" className="muted-text" style={{ fontSize: 10 }}>
+                      {LETTER[g.type]}
+                      {g.n}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+          {Array.from({ length: FLOORS }, (_, f) => (L ? <BoardStrip key={f} floor={f} counts={counts[f]} flash={sim.flash} tick={sim.tick} /> : <Board key={f} floor={f} counts={counts[f]} flash={sim.flash} tick={sim.tick} />))}
+          {L ? (
+            <>
+              <Arm x={LA - 448} y={LB - GATE_X} deg={sim.tick < sim.gateOpen.A ? 170 : 90} reduce={reduce} />
+              <Arm x={LA - 484} y={LB - GATE_X} deg={sim.tick < sim.gateOpen.B ? 170 : 90} reduce={reduce} />
+              <Arm x={LA - 520} y={LB - EXIT_GATE_X} deg={sim.tick < sim.gateOpen.X ? 170 : 90} reduce={reduce} />
+            </>
+          ) : (
+            <>
+              <Arm x={GATE_X} y={448} deg={sim.tick < sim.gateOpen.A ? -80 : 0} reduce={reduce} />
+              <Arm x={GATE_X} y={484} deg={sim.tick < sim.gateOpen.B ? -80 : 0} reduce={reduce} />
+              <Arm x={EXIT_GATE_X} y={520} deg={sim.tick < sim.gateOpen.X ? -80 : 0} reduce={reduce} />
+            </>
+          )}
+          {conflictMark && (
+            <g role="img" aria-label={`Double-assigned ${sim.conflict!.spot}`}>
+              {L ? (
+                <>
+                  <rect x={deckX(conflictMark.floor) + 1} y={28} width={124} height={13} rx={6.5} style={{ fill: tint("var(--critical)", 16) }} stroke="var(--critical)" />
+                  <text x={deckX(conflictMark.floor) + 63} y={37.8} textAnchor="middle" style={{ fontSize: 9.5, fontWeight: 750, fill: "var(--critical-ink)" }}>
+                    ✕ double-assigned {sim.conflict!.spot}
+                  </text>
+                </>
+              ) : (
+                <>
+                  <rect x={124} y={floorTop(conflictMark.floor) + 1} width={130} height={12} rx={6} style={{ fill: tint("var(--critical)", 16) }} stroke="var(--critical)" />
+                  <text x={189} y={floorTop(conflictMark.floor) + 10.5} textAnchor="middle" style={{ fontSize: 9.5, fontWeight: 750, fill: "var(--critical-ink)" }}>
+                    ✕ double-assigned {sim.conflict!.spot}
+                  </text>
+                </>
+              )}
+            </g>
+          )}
+          {sim.vehicles.map((v) => (
+            <VehicleView key={v.id} v={v} view={view} reduce={reduce} focused={focusId === v.id} onExit={exitVehicle} setFocus={setFocusId} />
+          ))}
+          {/* the entrance sign and the booth display sit over the lanes, so vehicles pass under them */}
+          <g role="img" aria-label={`Entrance sign: ${lotFull ? "lot full" : fullFor ? `full for ${fullFor}s` : "spaces free"}`}>
+            <rect {...(L ? { x: 86, y: 3, width: 90, height: 18 } : { x: 172, y: 428, width: 98, height: 18 })} rx={4} style={{ fill: bad ? tint("var(--critical)", 18) : tint("var(--good)", 10) }} stroke={bad ? "var(--critical)" : "var(--good)"} strokeWidth={1.4} />
+            <text x={L ? 131 : 221} y={L ? 16 : 441} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 750, fill: bad ? "var(--critical-ink)" : "var(--good-ink)" }}>
+              {sign}
+            </text>
+          </g>
+          <g aria-hidden="true">
+            {L ? (
+              <>
+                <rect x={2} y={LB - EXIT_GATE_X + 10} width={50} height={40} rx={5} fill="var(--card)" stroke="var(--border-strong)" />
+                {(sim.booth ? [sim.booth.plate, sim.booth.voided ? "void" : `pays ${sim.booth.quote}`] : ["Pay", "booth"]).map((line, i) => (
+                  <text key={i} x={27} y={LB - EXIT_GATE_X + 26 + i * 14} textAnchor="middle" className={sim.booth ? undefined : "muted-text"} style={{ fontSize: 10.5, fontWeight: sim.booth ? 750 : 500 }}>
+                    {line}
+                  </text>
+                ))}
+              </>
+            ) : (
+              <>
+                <rect x={86} y={549} width={110} height={22} rx={5} fill="var(--card)" stroke="var(--border-strong)" />
+                <text x={141} y={564} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: sim.booth ? 750 : 500 }} className={sim.booth ? undefined : "muted-text"}>
+                  {boothText}
+                </text>
+              </>
+            )}
+          </g>
+        </svg>
+        <div className="muted" style={{ display: "flex", flexWrap: "wrap", gap: "2px 16px", fontSize: 12.5, marginTop: 6, fontVariantNumeric: "tabular-nums" }}>
+          <span>
+            Clock <b style={{ color: "var(--fg)" }}>{fmtClock(sim.now)}</b> (1 s ≈ 10 min)
+          </span>
+          <span>
+            Free <b style={{ color: "var(--fg)" }}>{freeIds.size}</b> of {TOTAL_SPOTS}
+          </span>
+          <span>
+            Revenue <b style={{ color: "var(--fg)" }}>{sim.revenue}</b>
+          </span>
+          <span>
+            Turned away <b style={{ color: "var(--fg)" }}>{sim.turnedAway}</b>
+          </span>
+        </div>
+        <p className="readout" aria-live="polite" style={{ minHeight: "3em" }}>
+          {said}
+          <ReducedNote reduce={reduce} what="Reduced motion: vehicles jump instead of driving; Step moves to the next event." />
+        </p>
+        <More label="More controls and event log">
+          <div className="controls" style={{ marginBottom: 4 }}>
+            <Seg<Selector>
+              label="Spot selector"
+              value={selector}
+              onChange={setSelector}
+              options={[
+                { value: "lowestFloor", label: "Lowest floor first" },
+                { value: "smallestType", label: "Smallest spot first (SQL)" },
+              ]}
+            />
+            <Slider label="Arrivals" value={rate} min={2} max={20} onChange={setRate} format={(v) => `${v} per hour`} />
+            <Slider label="Typical stay" value={stay} min={0.5} max={8} step={0.5} onChange={setStay} format={(v) => `${v} h`} />
+          </div>
+          <div style={{ fontSize: 13.5 }}>
             <div style={{ fontWeight: 650 }}>Event log</div>
             <ol style={{ listStyle: "none", padding: 0, margin: "4px 0 0", display: "grid", gap: 4 }} aria-label="Last six events">
               {sim.log.length === 0 && <li className="muted">Nothing yet: add a vehicle.</li>}
@@ -976,15 +1157,11 @@ export function ParkingLotSim() {
               ))}
             </ol>
           </div>
-          <p className="muted" style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5 }}>
+          <p className="muted" style={{ margin: "8px 0 0", fontSize: 12.5, lineHeight: 1.5 }}>
             Pricing: first {GRACE_MIN} min free, then every started hour (bike {RATES.bike}, car {RATES.car}, truck {RATES.truck}), at most {DAILY_CAP} a day. Bays: B bike, C compact, L large; a dashed bay is held by a ticket with no vehicle in it yet. Each vehicle stays about the typical stay; click or press Enter on a parked one to send it out early.
           </p>
-        </div>
+        </More>
       </div>
-      <p className="readout" aria-live="polite">
-        {said}
-        <ReducedNote reduce={reduce} what="Reduced motion: vehicles jump instead of driving; Step moves to the next event." />
-      </p>
     </WidgetFrame>
   );
 }

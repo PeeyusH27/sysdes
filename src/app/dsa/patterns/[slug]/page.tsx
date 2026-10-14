@@ -55,7 +55,6 @@ export default async function PatternPage({ params }: PageProps<"/dsa/patterns/[
       prev={prev && { href: `/dsa/patterns/${prev.slug}`, title: prev.title }}
       next={next && { href: `/dsa/patterns/${next.slug}`, title: next.title }}
       nextNote={p.next}
-      wide
     >
       <Body components={boundComponents(`dsa/patterns/${p.dir}`)} />
       <PatternProblems slug={p.slug} />

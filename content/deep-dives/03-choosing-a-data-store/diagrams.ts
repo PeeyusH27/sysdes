@@ -96,7 +96,7 @@ export const polyglotShop: FlowSpec = {
         { edge: "app>redis", reverse: true, tone: "ok", caption: "Session found.", mark: [{ node: "redis", state: "hit" }] },
         { edge: "app>mongo", caption: "The product document (title, description, attributes) comes from MongoDB in one read." },
         { edge: "app>postgres", caption: "Price and stock come from Postgres, the source of truth for anything that touches money." },
-        { edge: "client>app", reverse: true, caption: "The page is returned with image URLs that point at the CDN.", mark: [{ node: "redis", state: null }] },
+        { edge: "client>app", reverse: true, caption: "The page comes back with image URLs pointing at the CDN.", mark: [{ node: "redis", state: null }] },
         { edge: "client>cdn", caption: "The browser loads the images from the nearest CDN edge." },
         { edge: "cdn>s3", tone: "miss", caption: "On a CDN miss, the edge fetches the original from S3 once and caches it for everyone after.", mark: [{ node: "cdn", state: "miss" }] },
         { edge: "client>cdn", reverse: true, tone: "ok", caption: "Image delivered. Your servers never handled a single byte of it.", mark: [{ node: "cdn", state: null }] },
@@ -107,7 +107,7 @@ export const polyglotShop: FlowSpec = {
       name: "A price change propagates",
       steps: [
         { edge: "client>app", caption: "An admin lowers the price of SKU a1 from 499 to 449." },
-        { edge: "app>postgres", caption: "The app updates the price in Postgres, and only there. Postgres is the one source of truth for prices." },
+        { edge: "app>postgres", caption: "The app updates the price in Postgres, and only there: it is the one source of truth for prices." },
         {
           edge: "app>redis",
           caption: "It deletes the cached product key, so the next page view loads the new price.",

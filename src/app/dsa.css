@@ -16,69 +16,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
 
-/* ------------------------------------------------------------------ nav tracks */
-.nav-links { align-items: center; }
-.nav-track { display: flex; align-items: center; gap: 2px; }
-.nav-track + .nav-track { margin-left: 6px; }
-.nav-links .nav-track-link { font-weight: 650; color: var(--fg); border: 1px solid transparent; }
-.nav-track.is-active .nav-track-link { border-color: var(--border); background: var(--card); color: var(--accent); }
-.nav-track.is-active { padding-right: 4px; }
-@media (max-width: 1180px) { .brand-text { font-size: 15px; } }
-@media (max-width: 860px) {
-  .nav-track { flex-direction: column; align-items: stretch; }
-  .nav-track + .nav-track { margin: 6px 0 0; }
-  .nav-track a:not(.nav-track-link) { padding-left: 24px; }
-}
-@media (max-width: 420px) { .brand-text { display: none; } }
-
-/* ------------------------------------------------------------------ home */
-.home-hero { padding-bottom: 8px; }
-.home-hero h1 { max-width: 900px; }
-.home-hero p { max-width: 720px; }
-.track-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 18px; margin-top: 18px; }
-.track-card { display: grid; grid-template-rows: auto 1fr; background: var(--card); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; }
-.track-card[data-track=dsa] { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
-.track-card[data-track=sd] { border-color: color-mix(in srgb, var(--k-client) 40%, var(--border)); }
-.track-visual { padding: 14px; min-height: 210px; display: grid; align-items: center; border-bottom: 1px solid var(--border); background: radial-gradient(520px 220px at 50% 0, color-mix(in srgb, var(--accent) 14%, transparent), transparent); }
-.track-card[data-track=sd] .track-visual { background: radial-gradient(520px 220px at 50% 0, color-mix(in srgb, var(--k-client) 14%, transparent), transparent); }
-.track-body { padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 10px; }
-.track-body .eyebrow { display: inline-flex; align-items: center; gap: 6px; }
-.track-body h2 { margin: 0; font-size: 26px; letter-spacing: -.01em; }
-.track-body p { margin: 0; color: var(--muted); }
-.track-stats { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--muted); }
-.track-stats b { color: var(--fg); font-size: 18px; margin-right: 4px; }
-.track-steps { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; font-size: 15px; }
-.track-steps a { color: var(--fg); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
-.track-steps a:hover { color: var(--accent); text-decoration: underline; }
-.track-body .hero-cta { margin-top: auto; padding-top: 6px; }
-.track-progress { font-size: 14px; color: var(--muted) !important; margin: 0; }
-.track-progress strong { color: var(--fg); }
-
-/* ------------------------------------------------------------------ DSA landing */
-.dsa-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
-@media (max-width: 960px) { .dsa-hero { grid-template-columns: minmax(0, 1fr); } }
-.roadmap { list-style: none; padding: 0; margin: 18px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; counter-reset: none; }
-.roadmap .card { height: 100%; display: flex; flex-direction: column; gap: 6px; }
-.roadmap .icon { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
-.roadmap h3 { margin: 0; font-size: 19px; }
-.roadmap p { margin: 0; color: var(--muted); font-size: 14.5px; flex: 1; }
-.next-problem { display: flex; align-items: center; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
-.next-problem-title { font-weight: 650; font-size: 17px; display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-right: auto; }
-.path-group h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 22px 0 8px; }
-.path-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
-.path-list a { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--fg); background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
-.path-list a:hover { border-color: var(--accent); }
-.path-n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; border: 1px solid var(--border-strong); }
-.path-title { flex: 1; font-weight: 600; font-size: 15px; }
-.path-meta { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
-.path-meta .dsa-progress-bar { width: 60px; }
-
-/* patterns index */
-.pattern-card h3 { margin: 6px 0 6px; font-size: 18px; }
-.pattern-card p { margin: 0; color: var(--muted); font-size: 14.5px; }
-.pattern-card .tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
-.pattern-card-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13px; }
-.pattern-card-foot .dsa-progress-bar { flex: 1; }
+/* The header lives in nav.css; the DSA landing, roadmap, path list and pattern cards live in hubs.css. */
 
 /* ------------------------------------------------------------------ badges, refs, progress */
 .diff { display: inline-flex; align-items: center; font: 600 11.5px var(--font-sans); letter-spacing: .03em; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
@@ -234,38 +172,99 @@
 .solution > :first-child { margin-top: .6em; }
 
 /* ------------------------------------------------------------------ algorithm player */
-.algo { margin: 1.6em 0; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 14px 10px; }
-.algo-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 14px; margin-bottom: 10px; }
-.algo-head h3 { margin: 2px 0 0 !important; font-size: 16px; }
-.algo-head .eyebrow { font-size: 11px; }
-.algo-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 12px; align-items: start; }
-.lesson--wide { grid-template-columns: 230px minmax(0, 1fr); }
-@media (max-width: 1180px) { .lesson--wide { grid-template-columns: 210px minmax(0, 1fr); } }
-@media (max-width: 900px) { .lesson--wide { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 1100px) { .lesson-main .algo-body { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 760px) { .algo-body { grid-template-columns: minmax(0, 1fr); } }
+/* The player lays itself out from its own width (container queries), so the same walkthrough works in the
+   pinned visual pane (~560–780 px; target ≤ 620 px tall), at full width and on a phone. Narrow: one column, code
+   last and collapsed to three lines that follow the active one. Wide (800px+): the code beside the stage.
+   Inside the stage the picture (graph, tree, list, grid) takes the wide column and the small views (arrays, maps,
+   stacks, queues) sit beside it while they fit; notes run across the bottom. */
+.algo { container: algo / inline-size; margin: 1.6em 0; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px 8px; }
+.algo-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 8px; }
+.algo-head h3.algo-title { flex: 1 1 240px; min-width: 0; margin: 0 !important; font-size: 15.5px; line-height: 1.3; }
+.algo-picks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.algo-picks .scenario-tabs { padding: 2px; }
+.algo-picks .scenario-tabs button { padding: 4px 10px; }
+.algo-picks .wbtn { min-height: 30px; }
+.algo-picks .scenario-tabs button[data-mine] { color: var(--accent); }
+.algo-edit[aria-expanded=true] { border-color: var(--accent); color: var(--accent); }
+.algo-body { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "stage" "vars" "now" "code"; gap: 8px; align-items: start; }
 /* The stage is focusable (keyboard stepping), so it is also the one horizontal scroll container for wide views. */
-.algo-stage { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 10px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--border); min-height: 150px; overflow-x: auto; }
+.algo-stage { grid-area: stage; display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 10px 18px; min-width: 0; padding: 8px 10px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--border); min-height: 110px; overflow-x: auto; }
+.algo-stage > * { min-width: 0; max-width: 100%; }
+.algo-big { flex: 3 1 280px; }
+.algo-big[data-kind=grid] { flex: 0 1 auto; }
+.algo-side { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 18px; }
+.algo-side > .av { max-width: 100%; }
+.algo-stage[data-big] > .algo-side { flex: 1 1 auto; width: min-content; }
+.algo-stage > .av-note, .algo-side > .av-note { flex: 1 1 100%; }
+.algo-stage[data-big] > .algo-side[data-note] { min-width: min(100%, 190px); }
 .algo-stage .av-scroll { overflow: visible; }
+/* Tables (DP grids, interval timelines, bit rows) a little denser inside the player. */
+.algo-stage .av-gridwrap { gap: 2px; }
+.algo-stage .av-gcell { height: 28px; min-width: 30px; }
+.algo-stage .av-head { min-height: 18px; }
 .algo-stage:focus-visible { outline-offset: -2px; }
-.algo-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.algo-code { border: 1px solid var(--code-border); border-radius: 10px; background: var(--code-bg); overflow: hidden; }
-.algo-code pre { margin: 0; padding: 8px 0; max-height: 340px; overflow: auto; font: 12px/1.65 var(--font-mono); background: transparent !important; tab-size: 2; position: relative; }
+.algo-now { grid-area: now; min-width: 0; }
+.algo-now .step-controls { margin: 0 2px; }
+.algo-now .flow-caption { margin: 6px 4px 0; font-size: 14px; line-height: 1.45; }
+@container algo (min-width: 560px) {
+  /* Beside a graph or tree the small views are drawn a little smaller, so both fit side by side. */
+  .algo-stage[data-big] .algo-side :is(.av-track, .av-stackbox, .av-queuebox, .av-gridwrap) { zoom: .82; }
+  .algo-stage[data-big] .algo-side .av-chip { font-size: 12px; padding: 2px 7px; }
+}
+@container algo (max-width: 480px) {
+  .algo-now .flow-caption { font-size: 14px; margin-inline: 0; }
+  /* Phones: cell-based views shrink a little before the stage has to scroll sideways. */
+  :is(.av-track, .av-gridwrap, .av-stackbox, .av-queuebox) { zoom: .86; }
+}
+.algo-code { grid-area: code; position: relative; min-width: 0; border: 1px solid var(--code-border); border-radius: 10px; background: var(--code-bg); overflow: hidden; }
+.algo-code pre { margin: 0; padding: 6px 0; max-height: 360px; overflow: auto; font: 12px/1.65 var(--font-mono); background: transparent !important; tab-size: 2; position: relative; scrollbar-width: thin; }
+/* Collapsed (narrow only): three lines, scrolled so the active line stays in the middle. */
+.algo-code:not([data-open]) pre { max-height: calc(3 * 1.65 * 12px + 12px); }
 .algo-code code { counter-reset: ln; display: block; min-width: max-content; }
-.algo-code .line { display: inline-block; width: 100%; padding: 0 12px 0 0; transition: background .2s; }
-.algo-code .line::before { counter-increment: ln; content: counter(ln); display: inline-block; width: 2.4em; margin-right: 10px; text-align: right; color: var(--muted); opacity: .6; }
-.algo-code .line.is-active { background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.algo-code .line { display: inline-block; width: 100%; padding: 0 12px 0 0; transition: background .25s; }
+.algo-code .line::before { counter-increment: ln; content: counter(ln); display: inline-block; width: 2.4em; margin-right: 10px; text-align: right; color: var(--muted); opacity: .6; transition: color .25s, opacity .25s; }
+.algo-code .line.is-active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .algo-code .line.is-active::before { opacity: 1; color: var(--accent); font-weight: 700; }
-.algo-vars { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; font: 12px var(--font-mono); }
-.algo-vars > div { display: inline-flex; gap: 6px; border: 1px solid var(--border); background: var(--card-2); border-radius: 7px; padding: 2px 8px; transition: border-color .2s, background .2s; max-width: 100%; }
+/* The marker that slides between active lines. */
+.algo-hl { position: absolute; left: 0; top: 0; width: 3px; height: 1.65em; border-radius: 0 2px 2px 0; background: var(--accent); pointer-events: none; transition: transform .3s cubic-bezier(.4, 0, .2, 1), height .3s; }
+/* "All code" / "Less code": a small pill in the panel's bottom-right corner, so it costs no extra row. */
+.algo-code-toggle { position: absolute; bottom: 5px; right: 6px; z-index: 1; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border: 1px solid var(--code-border); border-radius: 999px; background: var(--card); color: var(--muted); font: 600 11.5px var(--font-sans); cursor: pointer; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.algo-code-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.algo-code-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.algo-vars { grid-area: vars; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; font: 12px var(--font-mono); min-width: 0; }
+.algo-vars > div { display: inline-flex; gap: 6px; border: 1px solid var(--border); background: var(--card-2); border-radius: 7px; padding: 1px 7px; transition: border-color .2s, background .2s; max-width: 100%; }
 .algo-vars > div[data-changed] { border-color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 14%, var(--card)); }
+.algo-vars > div[data-changed] dd { animation: av-pop .45s cubic-bezier(.2, .8, .3, 1); }
 .algo-vars dt { color: var(--muted); }
-.algo-vars dd { margin: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.algo figcaption { margin-top: 8px; }
+.algo-vars dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; display: inline-block; }
+.algo-foot { margin-top: 6px; }
+.algo-foot .text-desc summary { font-size: 13px; }
+@container algo (min-width: 800px) {
+  .algo-body { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: "stage code" "vars code" "now code"; grid-template-rows: auto auto 1fr; gap: 8px 14px; }
+  .algo-code:not([data-open]) pre, .algo-code pre { max-height: 380px; }
+  .algo-code-toggle { display: none; }
+}
+.algo-note { margin: 0 0 8px; padding: 3px 0 3px 10px; border-left: 3px solid var(--accent-2); font-size: 13px; color: var(--muted); }
 .algo--compact { margin: 0; background: transparent; border: 0; padding: 0; }
-.algo--compact .algo-body { grid-template-columns: minmax(0, 1fr); }
+.algo--compact .algo-body { grid-template-areas: "stage" "now"; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
 .algo--compact .algo-stage { background: transparent; border: 0; padding: 0; min-height: 0; overflow: hidden; }
 .algo--compact .flow-caption { font-size: 13.5px; color: var(--muted); min-height: 3.2em; }
+
+/* "Edit input" form */
+.algo-input { margin: 0 0 12px; padding: 12px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); border-radius: 12px; background: var(--card-2); }
+.algo-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px 12px; }
+.algo-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.algo-field--wide { grid-column: 1 / -1; }
+.algo-field--check { flex-direction: row; align-items: center; gap: 8px; align-self: end; min-height: 34px; }
+.algo-field--check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.algo-flabel { font: 600 12.5px var(--font-mono); color: var(--fg); }
+.algo-field input[type=text], .algo-field textarea { width: 100%; min-width: 0; font: 13.5px/1.5 var(--font-mono); color: var(--fg); background: var(--card); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 9px; }
+.algo-field textarea { resize: vertical; min-height: 3.4em; }
+.algo-field :is(input, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+.algo-field [aria-invalid=true] { border-color: var(--critical); box-shadow: 0 0 0 1px var(--critical); }
+.algo-fhelp { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.algo-input-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.algo-input-err { flex: 1 1 220px; margin: 0; font-size: 13px; line-height: 1.45; color: var(--critical-ink); }
 
 /* views */
 .av { min-width: 0; }
@@ -336,7 +335,7 @@
 .av-tedge { stroke: var(--border-strong); stroke-width: 1.6; }
 .av-gedge path { fill: none; stroke: var(--border-strong); stroke-width: 1.8; transition: stroke .25s; }
 .av svg .av-weight { font: 600 11px var(--font-mono); fill: var(--muted); paint-order: stroke; stroke: var(--card-2); stroke-width: 4px; stroke-linejoin: round; }
-.av-gbadge { fill: var(--card); stroke: var(--k-gateway); stroke-width: 1.2; }
+.av-gbadge, .av-gnode[data-tone] .av-gbadge { fill: var(--card); stroke: var(--k-gateway); stroke-width: 1.2; }
 .av svg .av-gbadge-text { font: 600 10.5px var(--font-mono); fill: var(--k-gateway); }
 :is(.av-lnode, .av-tnode, .av-gnode)[data-tone=active] :is(rect, circle) { stroke: var(--accent); stroke-width: 3; fill: color-mix(in srgb, var(--accent) 20%, var(--card)); }
 :is(.av-lnode, .av-tnode, .av-gnode)[data-tone=compare] :is(rect, circle) { stroke: var(--k-client); stroke-width: 2.4; fill: color-mix(in srgb, var(--k-client) 15%, var(--card)); }
@@ -359,4 +358,17 @@
 .av-note[data-tone=found] { border-left-color: var(--good); }
 .av-note[data-tone=bad] { border-left-color: var(--critical); }
 .av-note[data-tone=pivot] { border-left-color: var(--accent-2); }
-:root[data-motion=reduce] .av-cell, :root[data-motion=reduce] .av-chip, :root[data-motion=reduce] .algo-code .line { transition: none; }
+.av-chips { position: relative; }
+
+/* changes pop briefly so the eye catches them */
+@keyframes av-pop { 0% { transform: scale(1.35); color: var(--accent-2); } 100% { transform: none; } }
+@keyframes av-flash { 0% { opacity: .1; } 100% { opacity: 1; } }
+.av-pop { display: inline-block; animation: av-pop .45s cubic-bezier(.2, .8, .3, 1); }
+.av svg .av-flash { animation: av-flash .45s ease-out; }
+:root[data-motion=reduce] :is(.av-cell, .av-gcell, .av-chip, .av-sitem, .av-qitem, .algo-code .line, .algo-hl, .algo-vars > div) { transition: none; }
+:root[data-motion=reduce] .algo-code .line::before { transition: none; }
+:root[data-motion=reduce] :is(.av-pop, .av-flash, .algo-vars dd) { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.av-cell, .av-gcell, .av-chip, .av-sitem, .av-qitem, .algo-code .line, .algo-hl) { transition: none; }
+  :is(.av-pop, .av svg .av-flash, .algo-vars dd) { animation: none; }
+}

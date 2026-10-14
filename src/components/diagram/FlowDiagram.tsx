@@ -1,17 +1,19 @@
 "use client";
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { m, useInView, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/cn";
-import { useMediaQuery } from "@/lib/hooks";
 import { playgroundHref } from "@/components/playground/share";
 import { Hammer } from "lucide-react";
 import { KIND_META } from "./kinds";
-import { layoutFlow, NODE, type LaidOutEdge, type Pt } from "./layout";
+import { FLOOR_FLOW_SCALE, layoutFlow, NODE, pickOrientation, type LaidOutEdge, type Orientation, type Pt } from "./layout";
 import { ArrowMarker, Legend, Packet, StateBadge, StepControls } from "./parts";
 import type { FlowNode, FlowSpec, NodeState, ScenarioStep } from "./types";
 import { useStepper } from "./useStepper";
+import { useBoxWidth } from "./useBoxWidth";
 
 const NO_STEPS: ScenarioStep[] = [];
+/** The chrome-less hero (home, system-design hub) stays wide down to this scale, as it did on every desktop before. */
+const COMPACT_MIN_SCALE = 0.45;
 
 export function FlowDiagram({
   spec,
@@ -19,6 +21,7 @@ export function FlowDiagram({
   autoplay = false,
   loop = false,
   compact = false,
+  onOrientation,
 }: {
   spec: FlowSpec;
   scenario?: string;
@@ -26,10 +29,26 @@ export function FlowDiagram({
   loop?: boolean;
   /** Hide controls/caption chrome (used by the home hero). */
   compact?: boolean;
+  /** Told whenever the diagram switches between its wide and its transposed layout (DiagramQuiz places its drop slot). */
+  onOrientation?: (o: Orientation) => void;
 }) {
   const uid = useId().replace(/:/g, "");
-  const narrow = useMediaQuery("(max-width: 640px)");
-  const { pos, edges, width, height } = useMemo(() => layoutFlow(spec, narrow ? "vertical" : "horizontal"), [spec, narrow]);
+  // The layout follows the diagram's own width (a ~600 px pinned pane on desktop, a phone column), not the viewport.
+  // Until it is measured (and on the server) it is the wide desktop layout, so hydration matches.
+  const scrollBox = useRef<HTMLDivElement>(null);
+  const boxWidth = useBoxWidth(scrollBox);
+  const wide = useMemo(() => layoutFlow(spec, "horizontal"), [spec]);
+  const tall = useMemo(() => layoutFlow(spec, "vertical"), [spec]);
+  const [prevOrientation, setPrevOrientation] = useState<Orientation>("horizontal");
+  const orientation: Orientation = boxWidth === undefined ? "horizontal" : pickOrientation(wide, tall, boxWidth, prevOrientation, compact ? COMPACT_MIN_SCALE : undefined);
+  if (orientation !== prevOrientation) setPrevOrientation(orientation);
+  const narrow = orientation === "vertical";
+  const { pos, edges, width, height } = narrow ? tall : wide;
+  useEffect(() => {
+    onOrientation?.(orientation);
+  }, [orientation, onOrientation]);
+  // Measured: shrink to fit down to FLOOR_FLOW_SCALE, then scroll. Not yet measured: today's desktop minimum.
+  const minWidth = compact ? undefined : boxWidth === undefined ? Math.min(width, Math.max(500, width * 0.7)) : Math.min(width, Math.round(width * FLOOR_FLOW_SCALE));
 
   const [scenarioId, setScenarioId] = useState(initial ?? spec.scenarios?.[0]?.id);
   const scenario = spec.scenarios?.find((s) => s.id === scenarioId);
@@ -64,6 +83,7 @@ export function FlowDiagram({
   return (
     <figure ref={box} className={cn("flow", !inView && "is-paused", compact && "flow--compact")}>
       <div
+        ref={scrollBox}
         className="flow-scroll"
         tabIndex={scenario && !compact ? 0 : undefined}
         aria-keyshortcuts={scenario ? "Space ArrowLeft ArrowRight Home" : undefined}
@@ -73,7 +93,7 @@ export function FlowDiagram({
           viewBox={`0 0 ${width} ${height}`}
           role="img"
           aria-labelledby={`${uid}t ${uid}d`}
-          style={{ width: "100%", maxWidth: width, minWidth: compact ? undefined : narrow ? Math.min(width, 420) : Math.min(width, Math.max(500, width * 0.7)) }}
+          style={{ width: "100%", maxWidth: width, minWidth }}
         >
           <title id={`${uid}t`}>{spec.title}</title>
           <desc id={`${uid}d`}>{spec.description}</desc>

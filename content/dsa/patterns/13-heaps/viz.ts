@@ -78,6 +78,8 @@ function pop() {
     { label: "Push 5 values, pop 2", input: { pushes: [5, 3, 8, 1, 4], pops: 2 } },
     { label: "Pop until empty", input: { pushes: [6, 2, 9, 4], pops: 4 } },
   ],
+  fields: { pushes: { maxItems: 10 }, pops: { min: 0, max: 10, help: "How many times to pop after the pushes." } },
+  validate: ({ pushes, pops }) => pops > pushes.length && `Can't pop ${pops} times from a heap of ${pushes.length}.`,
   run(t, { pushes, pops }) {
     const a: number[] = [];
     const popped: number[] = [];
@@ -209,6 +211,8 @@ function kLargest(nums, k) {
     { label: "k = 3", input: { nums: [3, 1, 5, 12, 2, 11, 7], k: 3 } },
     { label: "Duplicates, k = 2", input: { nums: [4, 4, 1, 4, 2], k: 2 } },
   ],
+  fields: { k: { min: 1, max: 12 } },
+  validate: ({ nums, k }) => k > nums.length && `k = ${k} is more than the ${nums.length} values in nums.`,
   run(t, { nums, k }) {
     const heap: Item[] = [];
     const less = (x: Item, y: Item) => x.v < y.v;
@@ -287,6 +291,17 @@ function mergeSorted(arrays) {
     { label: "Three arrays", input: { arrays: [[1, 4, 9], [2, 3, 10], [5, 6]] } },
     { label: "An empty array and duplicates", input: { arrays: [[1, 1], [], [0, 1, 2]] } },
   ],
+  fields: { arrays: { maxItems: 5, maxRow: 5, help: "One array per line, numbers separated by spaces, - for an empty one (up to 5 arrays)." } },
+  validate: ({ arrays }) => {
+    const total = arrays.reduce((s, a) => s + a.length, 0);
+    if (total === 0) return "Give at least one array some values.";
+    return total > 12 && `That is ${total} values in total. Keep it to 12 so the output fits.`;
+  },
+  prepare: (input, say) => {
+    if (input.arrays.every((a) => a.every((x, i) => i === 0 || a[i - 1] <= x))) return input;
+    say("Sorted each array first: k-way merge only works on sorted arrays.");
+    return { ...input, arrays: input.arrays.map((a) => [...a].sort((x, y) => x - y)) };
+  },
   run(t, { arrays }) {
     const names = ["A", "B", "C", "D", "E"];
     const heap: Head[] = [];

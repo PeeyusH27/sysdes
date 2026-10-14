@@ -50,9 +50,14 @@ test("flow diagram steps through a scenario with buttons and keys", async ({ pag
 
 test("passing the quiz marks the lesson complete", async ({ page }) => {
   await page.goto("/learn/caching");
+  // On desktop the pinned pane shows the visuals of the section being read: read the last section first.
+  await page.locator('.sec-card[data-sec="interview-questions"]').evaluate((el) => el.scrollIntoView());
   const quiz = page.locator("section.quiz");
+  // One question at a time: answer, then Next.
   await quiz.getByLabel("6 ms").check();
+  await quiz.getByRole("button", { name: "Next", exact: true }).click();
   await quiz.getByLabel("Negative caching or a Bloom filter").check();
+  await quiz.getByRole("button", { name: "Next", exact: true }).click();
   await quiz.getByLabel("It stops many keys expiring at the same moment").check();
   await quiz.getByRole("button", { name: "Check answers" }).click();
   await expect(quiz.getByText("3 / 3 correct")).toBeVisible();
@@ -79,7 +84,7 @@ test("lesson sections are cards you can tick off and flip through", async ({ pag
   await first.getByRole("button", { name: "Got it" }).click();
   await expect(first.getByRole("button", { name: "Got it" })).toHaveAttribute("aria-pressed", "true");
   await expect(bar).toContainText("Where caches live");
-  await expect(page.locator(".section-map")).toContainText("1 of 12 ticked");
+  await expect(bar).toContainText("1 of 12 sections ticked");
 
   await bar.getByRole("button", { name: /Cards/ }).click();
   await expect(page.locator(".sec-card:visible")).toHaveCount(1);

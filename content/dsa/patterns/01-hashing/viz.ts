@@ -79,6 +79,10 @@ function canConstruct(note, magazine) {
     { label: "Enough letters", input: { note: "noon", magazine: "onion" } },
     { label: "Runs out", input: { note: "tooth", magazine: "photo" } },
   ],
+  fields: {
+    note: { chars: "a-z", maxLength: 10, help: "Lowercase letters, up to 10." },
+    magazine: { chars: "a-z", maxLength: 12, help: "Lowercase letters, up to 12." },
+  },
   run(t, { note: text, magazine }) {
     const mag = [...magazine];
     const nt = [...text];

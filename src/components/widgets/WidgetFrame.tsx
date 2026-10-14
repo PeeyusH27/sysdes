@@ -45,3 +45,16 @@ export function Seg<T extends string | number>({ label, value, options, onChange
     </div>
   );
 }
+
+/**
+ * Secondary controls, logs or tables tucked behind one click, so the widget's picture and main controls fit on one
+ * screen (the desktop visual pane is about 640 px tall; a phone screen about 720 px).
+ */
+export function More({ label = "More controls", children, open }: { label?: string; children: React.ReactNode; open?: boolean }) {
+  return (
+    <details className="widget-more" open={open}>
+      <summary>{label}</summary>
+      <div className="widget-more-body">{children}</div>
+    </details>
+  );
+}

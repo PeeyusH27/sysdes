@@ -36,27 +36,3 @@ export function PageActions() {
     </div>
   );
 }
-
-/** Sidebar list with completion ticks (read from localStorage after hydration). */
-export function SideList({ title, items }: { title: string; items: { href: string; label: string }[] }) {
-  const pathname = usePathname();
-  const hydrated = useHydrated();
-  const done = useProgress((s) => s.done);
-  return (
-    <nav className="lesson-side" aria-label={title}>
-      <h2>{title}</h2>
-      <ol>
-        {items.map((it, i) => (
-          <li key={it.href}>
-            <a href={it.href} aria-current={pathname === it.href ? "page" : undefined}>
-              <span className="dot-n" data-done={hydrated && !!done[it.href]}>
-                {i + 1}
-              </span>
-              {it.label}
-            </a>
-          </li>
-        ))}
-      </ol>
-    </nav>
-  );
-}

@@ -30,6 +30,8 @@ function maxWindowSum(nums, k) {
     { label: "Typical", input: { nums: [2, 1, 5, 1, 3, 2], k: 3 } },
     { label: "Negatives", input: { nums: [-1, 4, -2, 3, -5], k: 2 } },
   ],
+  fields: { k: { min: 1, max: 12, help: "Window size, from 1 to the length of nums." } },
+  validate: ({ nums, k }) => k > nums.length && `k = ${k} is longer than nums (${nums.length} values).`,
   run(t, { nums, k }) {
     const n = nums.length;
     let sum = 0;
@@ -99,6 +101,7 @@ function longestAtMostKDistinct(s, k) {
     { label: "k = 2", input: { s: "abcbbca", k: 2 } },
     { label: "k = 1", input: { s: "aabbb", k: 1 } },
   ],
+  fields: { s: { chars: "a-z", maxLength: 12, help: "Lowercase letters, up to 12." }, k: { min: 1, max: 6 } },
   run(t, { s, k }) {
     const chars = [...s];
     const n = chars.length;
@@ -172,6 +175,8 @@ function windowMax(nums, k) {
     { label: "Mixed", input: { nums: [5, 3, 4, 1, 6, 2, 2], k: 3 } },
     { label: "Decreasing", input: { nums: [9, 7, 5, 3, 1], k: 3 } },
   ],
+  fields: { k: { min: 1, max: 12, help: "Window size, from 1 to the length of nums." } },
+  validate: ({ nums, k }) => k > nums.length && `k = ${k} is longer than nums (${nums.length} values).`,
   run(t, { nums, k }) {
     const n = nums.length;
     const dq: number[] = [];

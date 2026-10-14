@@ -4,7 +4,7 @@ export const architecture: FlowSpec = {
   id: "ride-sharing-architecture",
   title: "Ride matching architecture (one region)",
   description:
-    "Driver apps stream a location fix every 4 s over WebSockets. The location service keeps only the latest fix, in a Redis geo index per city, and batches history to Kafka. The matcher searches that index, ranks candidates by ETA, and reserves a driver with a compare-and-set before offering the ride. Rides live in Postgres; riders follow their driver through a pub/sub channel per ride.",
+    "Driver apps stream a fix every 4 s into a per-city Redis geo index that keeps only the latest one; history is batched to Kafka. The matcher searches the index, ranks by ETA, and reserves a driver with a compare-and-set before offering. Rides live in Postgres; riders follow their driver on a per-ride pub/sub channel.",
   nodes: [
     { id: "driver", label: "Driver app", kind: "client", col: 0, row: 0, sub: "fix every 4 s" },
     { id: "rider", label: "Rider app", kind: "client", col: 0, row: 2, sub: "map + ride" },

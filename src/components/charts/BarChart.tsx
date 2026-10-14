@@ -1,11 +1,21 @@
 "use client";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type RefObject } from "react";
 import { stagger, useAnimate, useInView, useReducedMotion } from "motion/react";
 import { compact } from "@/lib/format";
+import { useBoxWidth } from "@/components/diagram/useBoxWidth";
 import { ChartTable, ChartTooltip } from "./ChartBits";
 import { logTicks, niceTicks } from "./scales";
 
 type Datum = { label: string; value: number; display?: string };
+
+/** A category label on one line, or two (split at the space nearest the middle) when the bar's band is too narrow. */
+function labelLines(label: string, band: number): string[] {
+  if (label.length * 6.6 <= band - 4 || !label.includes(" ")) return [label];
+  const mid = label.length / 2;
+  let best = -1;
+  for (let i = 0; i < label.length; i++) if (label[i] === " " && (best < 0 || Math.abs(i - mid) < Math.abs(best - mid))) best = i;
+  return [label.slice(0, best), label.slice(best + 1)];
+}
 
 /** 4px rounded data end, square at the baseline. */
 const barPath = (x: number, base: number, w: number, h: number) => {
@@ -36,8 +46,11 @@ export function BarChart({
     if (inView && !reduce) animate(".bar", { scaleY: [0, 1] }, { duration: 0.6, delay: stagger(0.08), ease: "easeOut" });
   }, [inView, reduce, animate]);
 
-  const W = 560;
-  const M = { t: 28, r: 12, b: 38, l: 54 };
+  // Laid out at the width it really gets (so text keeps its size on a phone); 560 on the server and until measured.
+  const boxW = useBoxWidth(scope as RefObject<HTMLElement | null>);
+  const W = boxW ? Math.max(240, boxW) : 560;
+  const narrow = W < 440;
+  const M = { t: 28, r: 12, b: narrow ? 46 : 38, l: narrow ? 44 : 54 };
   const plotH = height - M.t - M.b;
   const band = (W - M.l - M.r) / data.length;
   const barW = Math.min(24, band * 0.5);
@@ -89,8 +102,12 @@ export function BarChart({
                 <text x={cx} y={y(d.value) - 8} textAnchor="middle" className="value">
                   {d.display ?? compact(d.value)}
                 </text>
-                <text x={cx} y={base + 20} textAnchor="middle" className="tick">
-                  {d.label}
+                <text x={cx} y={base + 18} textAnchor="middle" className="tick">
+                  {labelLines(d.label, band).map((l, k) => (
+                    <tspan key={k} x={cx} dy={k ? 13 : 0}>
+                      {l}
+                    </tspan>
+                  ))}
                 </text>
               </g>
             );

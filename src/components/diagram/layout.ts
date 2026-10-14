@@ -28,6 +28,28 @@ export function layoutFlow(spec: FlowSpec, orientation: Orientation) {
   return { pos, edges, width, height };
 }
 
+/** Smallest scale the wide layout is preferred at (node labels ≈ 7.5 px); below it the transposed one is tried. */
+export const MIN_FLOW_SCALE = 0.62;
+/** Smallest scale any layout shrinks to before the diagram scrolls sideways. */
+export const FLOOR_FLOW_SCALE = 0.5;
+/** The transposed layout is only used while its drawing stays about this tall, so it fits a ~640 px pane. */
+const MAX_TALL_HEIGHT = 520;
+
+type Size = { width: number; height: number };
+
+/**
+ * Wide (horizontal) layout while the box can show it at MIN_FLOW_SCALE or more. Otherwise the transposed (vertical)
+ * one, if it is narrower and its drawing isn't taller than MAX_TALL_HEIGHT at the scale it would get; a very wide
+ * diagram in a desktop pane stays wide and shrinks (down to FLOOR_FLOW_SCALE) rather than turning into a tower.
+ * `prev` adds a little hysteresis so a scrollbar appearing can't make it flip back and forth.
+ */
+export function pickOrientation(wide: Size, tall: Size, box: number, prev?: Orientation, minScale = MIN_FLOW_SCALE): Orientation {
+  const need = wide.width * minScale + (prev === "vertical" ? 12 : 0);
+  if (box >= need || tall.width >= wide.width) return "horizontal";
+  const tallScale = Math.min(1, box / tall.width);
+  return tall.height * tallScale <= MAX_TALL_HEIGHT ? "vertical" : "horizontal";
+}
+
 /** Cubic Bézier between the facing sides of two node boxes; `mid` is the curve's exact midpoint. */
 export function edgePath(a: Pt, b: Pt, offset = 0) {
   const dx = b.x - a.x;

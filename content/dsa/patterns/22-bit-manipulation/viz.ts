@@ -39,6 +39,13 @@ function xorAll(nums) {
       },
     },
   ],
+  fields: { nums: { min: 0, max: 63, maxItems: 10 }, width: false, intro: false, outro: false },
+  prepare: (input) => ({
+    ...input,
+    width: Math.max(1, Math.max(...input.nums).toString(2).length),
+    intro: "Every value is XOR-ed into acc.",
+    outro: "Values seen an even number of times cancel out, so acc is the XOR of the rest",
+  }),
   run(t, { nums, width, intro, outro }) {
     let acc = 0;
     const seen = new Map<number, number>();
@@ -100,6 +107,8 @@ function popcount(n) {
     { label: "n = 44 (101100)", input: { n: 44, width: 6 } },
     { label: "Power of two: n = 32", input: { n: 32, width: 6 } },
   ],
+  fields: { n: { min: 1, max: 255 }, width: false },
+  prepare: (input) => ({ ...input, width: Math.max(4, input.n.toString(2).length) }),
   run(t, { n, width }) {
     const start = n;
     let count = 0;
@@ -164,6 +173,7 @@ function subsets(items) {
   return out;                                             //@done
 }`,
   presets: [{ label: "Three items", input: { items: ["a", "b", "c"] } }],
+  fields: { items: { maxItems: 4, maxLength: 3, chars: "a-z0-9" } },
   run(t, { items }) {
     const n = items.length;
     const total = 1 << n;

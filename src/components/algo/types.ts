@@ -119,6 +119,44 @@ export interface Frame {
 export interface TracePreset {
   label: string;
   frames: Frame[];
+  /** The preset's input as form text (field key → text), so "Edit input" can start from it. */
+  form?: Record<string, string>;
+}
+
+/**
+ * How one input field is edited in "Edit input".
+ * int / letter: one whole number (letter shows node 0 as A) · bool: a checkbox · text: a short string
+ * ints: comma-separated whole numbers · tree: level order with null gaps · words: comma-separated words
+ * rows: one tuple or list of numbers per line · lines: one string per line (grid rows) · json: anything else
+ */
+export type FieldKind = "int" | "letter" | "bool" | "text" | "ints" | "tree" | "words" | "rows" | "lines" | "json";
+/** One column of a `rows` field. */
+export type ColKind = "int" | "word" | "letter";
+
+export interface FieldSpec {
+  key: string;
+  kind: FieldKind;
+  /** Shown above the field (defaults to the key, which matches the variable in the code). */
+  label: string;
+  /** One short line under the field. */
+  help: string;
+  /** Smallest / largest number allowed (ints, rows, tree, int, letter). */
+  min?: number;
+  max?: number;
+  /** Fewest / most items or lines. */
+  minItems?: number;
+  maxItems?: number;
+  /** Shortest / longest string (text, words, lines, word columns). */
+  minLength?: number;
+  maxLength?: number;
+  /** rows: column kinds of a fixed-length tuple; omitted = a list of whole numbers per line. */
+  cols?: ColKind[];
+  /** rows: column names for the help text, e.g. ["from", "to"]. */
+  colNames?: string[];
+  /** rows without cols: most numbers on one line. */
+  maxRow?: number;
+  /** text / words / lines / word columns: allowed characters, as the body of a regex character class ("a-z", "01"). */
+  chars?: string;
 }
 
 export interface TraceSpec {
@@ -128,4 +166,6 @@ export interface TraceSpec {
   /** Displayed code (markers stripped). */
   code: string;
   presets: TracePreset[];
+  /** Editable input fields for "Edit input" (empty when the trace can't take reader input). */
+  fields?: FieldSpec[];
 }

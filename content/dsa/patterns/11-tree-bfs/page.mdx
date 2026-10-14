@@ -2,93 +2,86 @@ import { levelLoop, firstLeaf } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Breadth-first search visits a tree **level by level** with a first-in, first-out queue. The **level-size loop** (snapshot the queue length when a level starts, then process exactly that many nodes) tells you where each level ends, which turns level averages, side views and zigzags into one-line changes. Because BFS reaches shallow nodes first, it can **stop at the first match**, as in minimum depth. O(n) time and O(w) space, where w is the widest level.
+Breadth-first search reads a tree **level by level** with a first-in, first-out queue. **Snapshot the queue size** when a level starts and you know exactly where it ends; and because shallow nodes come first, BFS can **stop at the first match**. O(n) time, O(w) space for the widest level.
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- The answer is **per level** or **per row**: averages, maximums, counts, the values of each level.
-- You need what is visible **from one side**: the first or last node on every level.
-- The question asks for the **nearest** or **shallowest** something: minimum depth, the closest leaf, the first node with a property.
-- The output must be ordered **top to bottom, left to right**, as in level-order listings and tree serialization.
-- Nodes on the **same level** must be linked or compared with their neighbours.
+- The answer is **per level** or per row: averages, maximums, the values of each level.
+- What is visible **from one side**: the first or last node on every level.
+- The **nearest** or shallowest something: minimum depth, the closest leaf.
+- Output ordered **top to bottom, left to right**, or neighbours on the **same level** linked together.
 
 </Callout>
 
-| Variant | Per-level work | Classic problems |
-|---|---|---|
-| Level aggregate | sum, count or max while dequeuing | average of levels, largest value in each row |
-| Collect each level | push values into one array per level | level order, bottom-up level order |
-| First or last per level | keep the node at `i === 0` or `i === size - 1` | right side view, left side view |
-| Alternating direction | write at index `i` or `size - 1 - i` | zigzag level order |
-| Early exit | return at the first node that matches | minimum depth, nearest leaf |
-
 ## The core idea: a queue keeps the levels in order
 
-A queue hands nodes out in the order they went in. Start with the root; every time you take a node out, put its children in at the back. The children of a level-d node are on level d + 1, and they join the queue **behind** every level-d node still waiting. So nodes come out in order of depth, left to right within a level.
-
-That gives one invariant worth memorising:
+A queue hands nodes out in the order they went in. Take a node out, put its children in at the back: they join **behind** every node of the current level still waiting. So nodes come out in depth order, left to right within a level, and one invariant follows:
 
 > When a level starts, the queue holds exactly the nodes of that level, and nothing else.
 
-So read `size` at that moment and dequeue exactly `size` nodes. Everything they add meanwhile is the next level. Watch the shaded band (this level) and the new nodes (next level) in the queue:
+So read `size` then and dequeue exactly `size` nodes; everything they add is the next level. Watch the shaded band (this level) and the new arrivals (the next):
 
 <AlgoViz trace={levelLoop} />
+
+Try your own tree with Edit input.
+
+## Play with it
+
+Run the ripple and watch each level take its colour as the queue slides. Then switch to the live-length bug and see the levels run together. Click + to grow a node, or a node to prune it.
+
+<TreeBfsLab />
 
 ## Step by step
 
 <Steps>
   <Step title="Handle the empty tree">
-    Start the queue empty when `root` is `null` (or return early). Most problems want `[]` or `0` here, never `[[]]`.
+    Return `[]` or `0` when `root` is `null`, never `[[]]`.
   </Step>
   <Step title="Seed the queue">
-    Put the root in an array and keep a `head` index for the front. Reading `queue[head++]` is an O(1) dequeue; `shift()` is not.
+    Put the root in an array and keep a `head` index: `queue[head++]` is an O(1) dequeue, `shift()` is not.
   </Step>
   <Step title="Snapshot the level size">
-    At the top of the outer loop, `size = queue.length - head`. Those are exactly this level's nodes.
+    At the top of the outer loop, `size = queue.length - head`: exactly this level's nodes.
   </Step>
   <Step title="Process the level">
-    Dequeue `size` nodes. Do the per-level work (add to a sum, write into the level array, check `i === size - 1`) and enqueue each node's left child, then its right child.
+    Dequeue `size` nodes, do the per-level work, and enqueue each node's left child, then its right.
   </Step>
   <Step title="Record or stop">
-    After the inner loop, push the level's answer. For "nearest" questions, return as soon as a dequeued node matches: nothing later can be shallower.
+    Push the level's answer after the inner loop. For "nearest" questions, return at the first match: nothing later is shallower.
   </Step>
 </Steps>
 
 ## Template 1: the level-size loop
 
-One loop, and the per-level work is the only thing that changes between problems. `levelMaxes` uses a head index; `levelValues` shows the other common shape, which builds a `next` array while walking the current level and then swaps them.
+`levelMaxes` uses a head index; `levelValues` builds a `next` array while walking the current level, then swaps. Every level problem is a small edit of this loop:
 
 <CodeTabs files={['snippets/level-loop.js']} />
-
-Every level problem is a small edit of this loop:
 
 - <ProblemLink slug="average-of-levels" />: keep a running sum and push `sum / size`.
 - <ProblemLink slug="binary-tree-level-order-traversal" />: push each value into a `level` array.
 - <ProblemLink slug="binary-tree-right-side-view" />: keep only the node at `i === size - 1`.
-- <ProblemLink slug="binary-tree-zigzag-level-order-traversal" />: keep the enqueue order, but on every other level write each value at `size - 1 - i`.
+- <ProblemLink slug="binary-tree-zigzag-level-order-traversal" />: enqueue as usual, but on every other level write each value at `size - 1 - i`.
 
 ## Template 2: stop at the first match
 
-DFS dives down one branch before looking at the next, so to find the shallowest leaf it must explore the whole tree: a leaf at depth 2 on the right is only seen after the entire left side. BFS meets every node at depth d before any node at depth d + 1. So **the first matching node it dequeues is a shallowest one**, and the rest of the tree is never touched.
+DFS must explore the whole tree to be sure of the shallowest leaf: one at depth 2 on the right only shows up after the entire left side. BFS meets every node at depth d before any at depth d + 1, so **the first match it dequeues is a shallowest one**.
 
 <AlgoViz trace={firstLeaf} />
 
 <CodeTabs files={['snippets/first-match.js']} />
 
-<ProblemLink slug="minimum-depth-of-binary-tree" /> is exactly `shallowestDepth(root, isLeaf)`. Remember that a leaf has **no** children: a node with one child is not where a path ends.
+<ProblemLink slug="minimum-depth-of-binary-tree" /> is `shallowestDepth(root, isLeaf)`. A leaf has **no** children; a one-child node is not where a path ends.
 
 ## Template 3: a queue that never shifts
 
-`Array.prototype.shift()` removes the first element and moves every remaining element down one index. Engines optimise it for small arrays, but on large queues each call copies the whole queue, so a BFS that uses it can become O(n²). On Node, draining a 50,000-item array with `shift()` takes around 100 ms, and doubling the size roughly quadruples that; a head index drains it in a couple of milliseconds.
+`shift()` moves every remaining element down a slot, so on large queues BFS can turn O(n²). On Node, draining a 50,000-item array with `shift()` takes around 100 ms, and doubling the size roughly quadruples that; a head index takes a couple of milliseconds. Three fixes:
 
-Three ways to avoid it, from simplest to most general:
-
-- **Head index**: `queue[head++]`. The array keeps the dequeued slots, which is fine for one BFS over a tree (every node is enqueued once anyway).
-- **Swap arrays per level**: build `next` while walking `level`, then `level = next`. No dequeue at all.
-- **A small Queue class**: a head index that occasionally slices off the used prefix, for long-running queues.
+- **Head index**: `queue[head++]`. Fine for one BFS over a tree.
+- **Swap arrays per level**: build `next` while walking `level`.
+- **A small Queue class** that occasionally slices off the used prefix, for long-running queues.
 
 <CodeTabs files={['snippets/queue.js']} />
 
@@ -119,16 +112,11 @@ level[size - 1 - i] = node.val;         // fill from the back for a right-to-lef
 const avg = sum / size;                 // / is always floating-point division in JS
 ```
 
-The two traps are `queue.shift()` on large inputs, and a loop condition that reads the live `queue.length`, which keeps growing while you enqueue children and merges every level into one.
-
 <Callout kind="warning">
 
-- Looping `while (i < queue.length)` inside a level instead of using the size snapshot: the levels run together.
+- Looping on the live `queue.length` inside a level instead of the snapshot: it grows as children join, and the levels run together.
 - Enqueuing `null` children, then reading `.val` from them.
-- In minimum depth, stopping at a node with one child: it is not a leaf.
-- Calling `shift()` in a loop over tens of thousands of nodes.
-- Returning `[[]]` or `[0]` for an empty tree instead of `[]`.
-- For zigzag order, reversing the order children are **enqueued**, which scrambles the levels below.
+- For zigzag, reversing the order children are **enqueued**: that scrambles the levels below.
 
 </Callout>
 
@@ -136,16 +124,16 @@ The two traps are `queue.shift()` on large inputs, and a loop condition that rea
 
 <FollowUps>
   <FollowUp q="BFS or DFS for a level-based question?">
-    Both work: DFS can pass the depth down and write into `levels[depth]`. The difference is memory and early exit. BFS holds one level at a time, O(w), which is about n / 2 for a complete tree; DFS holds one path, O(h), which is n for a skewed tree. BFS also stops at the first match for "nearest" questions, which DFS cannot do. Mention both and pick by the tree's likely shape.
+    Both work (DFS passes the depth down into `levels[depth]`). BFS holds one level, about n / 2 for a complete tree, and can stop early; DFS holds one path, n for a skewed tree.
   </FollowUp>
   <FollowUp q="How do you return the levels bottom-up?">
-    Run the normal level-order BFS and reverse the list of levels once at the end, O(n). Calling `unshift` for every level also works but moves the whole result array each time.
+    Run the normal BFS and reverse the list of levels once at the end, O(n), rather than calling `unshift` per level.
   </FollowUp>
   <FollowUp q="How do you link every node to its right neighbour on the same level?">
-    With the level-size loop, link each dequeued node to the next one in the queue unless it is the last of its level. The O(1)-space follow-up walks each level using the next pointers already built on the level above, wiring up the children as it goes, so no queue is needed.
+    In the level-size loop, link each node to the next unless it is last in its level. For O(1) space, walk each level through the next pointers already built on the level above.
   </FollowUp>
   <FollowUp q="How would you find the maximum width of a level, counting the gaps between nodes?">
-    Number positions like a heap: the root is 0, a node at position p has children at 2p + 1 and 2p + 2. Each level's width is last position minus first position plus one. On deep, skewed trees the positions double every level and exceed 2^53, so subtract the level's first position from every position as you go (or use BigInt).
+    Number positions like a heap (children of p at 2p + 1 and 2p + 2): width is last minus first plus one. Positions pass 2^53 on deep skewed trees, so subtract each level's first position as you go.
   </FollowUp>
 </FollowUps>
 

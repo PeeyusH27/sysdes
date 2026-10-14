@@ -4,7 +4,7 @@ export const architecture: FlowSpec = {
   id: "movie-booking-architecture",
   title: "Movie ticket booking architecture",
   description:
-    "Reads of the seat map come from the CDN and an SSE stream; every hold and booking is one conditional UPDATE on the Postgres primary. Redis carries seat changes between API instances and runs the launch-day waiting room.",
+    "Seat-map reads come from the CDN and an SSE stream; every hold and booking is one conditional UPDATE on the Postgres primary. Redis carries seat changes between API instances and runs the launch-day waiting room.",
   nodes: [
     { id: "client", label: "Browser / app", kind: "client", col: 0, row: 1 },
     { id: "cdn", label: "CDN", kind: "cdn", col: 1, row: 1, sub: "seat map ~1 s", note: "Caches GET /shows/:id/seats for 1–2 s; passes writes and the SSE stream through." },

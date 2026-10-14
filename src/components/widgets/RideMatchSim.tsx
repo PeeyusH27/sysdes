@@ -1,11 +1,11 @@
 "use client";
-import { memo, useCallback, useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { m } from "motion/react";
 import { Grid3x3, MapPin, Shuffle, Users } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Seg, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, exported for tests)
 /** Blocks across and down. Streets run along every integer x in 0..NX and every integer y in 0..NY. */
@@ -446,13 +446,18 @@ const fromPx = (v: View, x: number, y: number): Pt => (v.T ? { x: (y - PAD) / S,
 /** A rectangle measured along the model's axes, in px → the screen rectangle. */
 const rectPx = (v: View, x: number, y: number, w: number, h: number) => (v.T ? { x: y, y: x, width: h, height: w } : { x, y, width: w, height: h });
 const screenRot = (v: View, rot: number) => (v.T ? 90 - rot : rot);
-const NARROW = "(max-width: 560px)";
-const onWidth = (cb: () => void) => {
-  const mq = window.matchMedia(NARROW);
-  mq.addEventListener?.("change", cb);
-  return () => mq.removeEventListener?.("change", cb);
-};
-const useNarrow = () => useSyncExternalStore(onWidth, () => window.matchMedia(NARROW).matches, () => false);
+/** The widget's width in px (0 until measured): below ~520 px the map turns portrait and the side panel drops under it. */
+function useWidth(ref: React.RefObject<HTMLElement | null>) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return w;
+}
 
 const STATE_COLOR: Record<DriverState, string> = { available: "var(--series-1)", offered: "var(--series-2)", onTrip: "var(--series-3)" };
 const Z: Record<DriverState, number> = { available: 0, onTrip: 1, offered: 2 }; // offer bubbles draw on top
@@ -473,16 +478,26 @@ const CSS = `
 .ride-map .rm-cell { font-family: var(--font-mono); font-size: 7.5px; font-weight: 600; fill: var(--k-gateway); }
 .ride-map .rm-lm { font-size: 8.5px; font-weight: 650; fill: var(--muted); }
 .ride-map .rm-bubble { font-size: 9.5px; font-weight: 700; }
-@media ${NARROW} {
-  .ride-map .rm-lbl { font-size: 13px; }
-  .ride-map .rm-cell { font-size: 9px; }
-  .ride-map .rm-lm { font-size: 10.5px; }
-  .ride-map .rm-bubble { font-size: 11.5px; }
-}
-.rm-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; padding: 0; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.ride-map[data-tall] .rm-lbl { font-size: 13px; }
+.ride-map[data-tall] .rm-cell { font-size: 9px; }
+.ride-map[data-tall] .rm-lm { font-size: 10.5px; }
+.ride-map[data-tall] .rm-bubble { font-size: 11.5px; }
+.rm-body { display: grid; grid-template-columns: minmax(0, 460px) 156px; gap: 12px; justify-content: center; align-items: start; }
+.rm-body[data-narrow] { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.rm-side { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.rm-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.rm-body[data-narrow] .rm-pick { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rm-pick .wbtn { height: 28px; padding: 0 6px; font-size: 12.5px; justify-content: center; min-width: 0; }
+.rm-pick .wbtn:first-of-type { grid-column: span 2; }
+.rm-pick-label { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.rm-stats { display: grid; gap: 4px; margin: 0; }
+.rm-body[data-narrow] .rm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; }
+.rm-stats > div { border-top: 1px solid var(--border); padding-top: 3px; min-width: 0; }
+.rm-stats dt { font-size: 11.5px; line-height: 1.3; color: var(--muted); }
+.rm-stats dd { margin: 0; font-size: 14px; line-height: 1.3; font-weight: 650; font-variant-numeric: tabular-nums; }
+.rm-stats dd span { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+.rm-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; padding: 0; margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .rm-legend li { display: flex; align-items: center; gap: 6px; }
-.rm-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-top: 10px; }
-.rm-stats .stat-value { font-size: 19px; }
 `;
 
 function CarShape({ color }: { color: string }) {
@@ -678,7 +693,9 @@ export function RideMatchSim() {
   const [mode, setMode] = useState<IndexMode>("cells");
   const [showCells, setShowCells] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const v = useNarrow() ? TALL : WIDE;
+  const width = useWidth(ref);
+  const narrow = width > 0 && width < 520;
+  const v = narrow ? TALL : WIDE;
   const at = (p: Pt) => toPx(v, p);
   const cfgStep = useCallback((st: Sim, dt: number) => stepSim(st, dt, { declineRate: declinePct / 100, ratePerMin, mode }), [declinePct, ratePerMin, mode]);
   const [s, reset] = useFixedStep<Sim>(() => initSim(SEED), cfgStep, running && inView && !reduce);
@@ -706,52 +723,19 @@ export function RideMatchSim() {
   const mapLabel = `City map: ${N_DRIVERS} cars, ${count("available")} ${STATE_WORD.available}, ${count("offered")} ${STATE_WORD.offered}, ${count("onTrip")} ${STATE_WORD.onTrip}; ${waiting} rider${waiting === 1 ? "" : "s"} waiting for a match.`;
 
   return (
-    <WidgetFrame
-      title="Ride matching on a city grid"
-      sub="Cars report their location every 2 s (the ripples). Tap the map or pick a pickup spot: the search grows ring by ring, the nearest free car gets an offer with a countdown, and a decline passes it to the next car."
-    >
-      <style>{CSS}</style>
+    <WidgetFrame title="Ride matching on a city grid" sub="Tap the map to call a ride, then watch the search ring grow.">
+      <style href="w-ride-match" precedence="widgets">
+        {CSS}
+      </style>
       <div className="controls">
         <SimButtons running={running && inView && !reduce} reduce={reduce} onToggle={() => setRunning((r) => !r)} onStep={() => reset(advance(s, cfgStep, 10))} stepHint="Advance 0.5 simulated seconds" onReset={() => reset(initSim(SEED))} />
-        <button type="button" className="wbtn primary" onClick={randomSpot}>
-          <Shuffle size={14} aria-hidden /> Request ride at random spot
-        </button>
-        <button type="button" className="wbtn" onClick={() => reset(twoRiders(s))}>
+        <button type="button" className="wbtn primary" onClick={() => reset(twoRiders(s))}>
           <Users size={14} aria-hidden /> Two riders, one driver
         </button>
-        <button type="button" className="wbtn" aria-pressed={showCells} onClick={() => setShowCells((v) => !v)}>
-          <Grid3x3 size={14} aria-hidden /> Show cells
-        </button>
-      </div>
-      <div className="controls">
-        <Slider label="Ride requests" value={ratePerMin} min={0} max={30} onChange={setRate} format={(v) => (v ? `${v}/min` : "off")} />
-        <Slider label="Decline rate" value={declinePct} min={0} max={90} step={10} onChange={setDecline} format={(v) => `${v}%`} />
-        <Seg<IndexMode>
-          label="Index"
-          value={mode}
-          onChange={(v) => {
-            setMode(v);
-            reset({ ...s, stats: ZERO, event: v === "scan" ? `No index: every match now examines all ${N_DRIVERS} cars. Stats reset.` : "Cell index: a match examines only the cars in the rings it searches. Stats reset." });
-          }}
-          options={[
-            { value: "cells", label: "cells" },
-            { value: "scan", label: "scan all drivers" },
-          ]}
-        />
-      </div>
-      <div className="controls" role="group" aria-label="Pickup presets" style={{ marginTop: -4, alignItems: "center", gap: 6 }}>
-        <span className="muted" style={{ fontSize: 13 }}>
-          <MapPin size={13} aria-hidden style={{ verticalAlign: -2 }} /> Pickup at:
-        </span>
-        {PRESETS.map((p) => (
-          <button key={p.label} type="button" className="wbtn" onClick={() => request(p.at)}>
-            {p.label}
-          </button>
-        ))}
       </div>
 
-      <div ref={ref}>
-        <svg viewBox={`0 0 ${v.W} ${v.H}`} className="sim-svg ride-map" style={{ maxWidth: v.T ? 440 : 680, margin: "0 auto", borderRadius: 12 }} role="img" aria-label={mapLabel} onClick={onMapClick}>
+      <div ref={ref} className="rm-body" data-narrow={narrow || undefined}>
+        <svg viewBox={`0 0 ${v.W} ${v.H}`} className="sim-svg ride-map" data-tall={v.T || undefined} style={{ maxWidth: v.T ? 440 : 460, margin: "0 auto", borderRadius: 12 }} role="img" aria-label={mapLabel} onClick={onMapClick}>
           <City v={v} />
           {showCells && <CellGrid v={v} />}
           {searching.map((r) => {
@@ -814,62 +798,55 @@ export function RideMatchSim() {
             <Car key={d.id} v={v} d={d} offer={offers.get(d.id) ?? null} duel={casFresh?.driver === d.id ? casFresh : null} candidate={candidates.has(d.id)} reduce={reduce} />
           ))}
         </svg>
-      </div>
 
-      <ul className="rm-legend" aria-label="Legend">
-        <li>
-          <LegendCar state="available" /> Available
-        </li>
-        <li>
-          <LegendCar state="offered" /> Offered (countdown)
-        </li>
-        <li>
-          <LegendCar state="onTrip" /> On a trip
-        </li>
-        <li>
-          <svg width={14} height={18} viewBox="-9 -27 18 28" aria-hidden="true">
-            <path d="M0 0 C -5 -6 -9 -11 -9 -17 A 9 9 0 1 1 9 -17 C 9 -11 5 -6 0 0 Z" fill="var(--k-gateway)" />
-          </svg>
-          Rider
-        </li>
-        <li>
-          <svg width={18} height={14} aria-hidden="true">
-            <rect x={1} y={1} width={16} height={12} rx={3} fill="none" stroke="var(--k-gateway)" strokeWidth={1.6} strokeDasharray="4 2" />
-          </svg>
-          Search ring (dashed circle: candidate)
-        </li>
-        <li>
-          <svg width={16} height={16} aria-hidden="true">
-            <circle cx={8} cy={8} r={6} fill="none" stroke="var(--series-1)" strokeWidth={2} />
-          </svg>
-          Location update
-        </li>
-      </ul>
-
-      <div className="stat-tiles rm-stats">
-        <div className="stat-tile">
-          <div className="stat-label">Avg pickup distance</div>
-          <div className="stat-value">{n ? `${avgPickup.toFixed(1)} blocks` : "–"}</div>
-          <div className="stat-sub">{n ? `ETA ≈ ${(avgPickup / SPEED).toFixed(1)} s` : "no matches yet"}</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-label">Avg time to match</div>
-          <div className="stat-value">{n ? `${(st.matchMs / n / 1000).toFixed(1)} s` : "–"}</div>
-          <div className="stat-sub">{n} matched · request → accept</div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-label">Location updates</div>
-          <div className="stat-value">{ups.toFixed(1)}/s</div>
-          <div className="stat-sub">
-            {N_DRIVERS} cars × 1 per {PING_MS / 1000} s
+        <div className="rm-side">
+          <div className="rm-pick" role="group" aria-label="Request a ride at">
+            <span className="rm-pick-label">
+              <MapPin size={13} aria-hidden /> Request a ride at:
+            </span>
+            <button type="button" className="wbtn" onClick={randomSpot} aria-label="Request ride at random spot">
+              <Shuffle size={13} aria-hidden /> Random spot
+            </button>
+            {PRESETS.map((p) => (
+              <button key={p.label} type="button" className="wbtn" onClick={() => request(p.at)}>
+                {p.label}
+              </button>
+            ))}
           </div>
-        </div>
-        <div className="stat-tile">
-          <div className="stat-label">Drivers examined per match</div>
-          <div className="stat-value">{n ? (st.examined / n).toFixed(1) : "–"}</div>
-          <div className="stat-sub">
-            of {N_DRIVERS} ({mode === "scan" ? "full scan" : "cell index"})
-          </div>
+          <dl className="rm-stats">
+            <div>
+              <dt>Avg pickup</dt>
+              <dd>
+                {n ? `${avgPickup.toFixed(1)} blocks` : "–"}
+                <span>{n ? `ETA ≈ ${(avgPickup / SPEED).toFixed(1)} s` : "no matches yet"}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Avg time to match</dt>
+              <dd>
+                {n ? `${(st.matchMs / n / 1000).toFixed(1)} s` : "–"}
+                <span>{n} matched, request → accept</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Location updates</dt>
+              <dd>
+                {ups.toFixed(1)}/s
+                <span>
+                  {N_DRIVERS} cars × 1 per {PING_MS / 1000} s
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt>Examined per match</dt>
+              <dd>
+                {n ? (st.examined / n).toFixed(1) : "–"}
+                <span>
+                  of {N_DRIVERS} ({mode === "scan" ? "full scan" : "cell index"})
+                </span>
+              </dd>
+            </div>
+          </dl>
         </div>
       </div>
 
@@ -877,6 +854,57 @@ export function RideMatchSim() {
         {said}
         <ReducedNote reduce={reduce} what="Animation paused (reduced motion): use Step to advance half a second at a time." />
       </p>
+
+      <More label="Settings and legend">
+        <div className="controls">
+          <Slider label="Ride requests" value={ratePerMin} min={0} max={30} onChange={setRate} format={(v) => (v ? `${v}/min` : "off")} />
+          <Slider label="Decline rate" value={declinePct} min={0} max={90} step={10} onChange={setDecline} format={(v) => `${v}%`} />
+          <Seg<IndexMode>
+            label="Index"
+            value={mode}
+            onChange={(v) => {
+              setMode(v);
+              reset({ ...s, stats: ZERO, event: v === "scan" ? `No index: every match now examines all ${N_DRIVERS} cars. Stats reset.` : "Cell index: a match examines only the cars in the rings it searches. Stats reset." });
+            }}
+            options={[
+              { value: "cells", label: "cells" },
+              { value: "scan", label: "scan all drivers" },
+            ]}
+          />
+          <button type="button" className="wbtn" aria-pressed={showCells} onClick={() => setShowCells((v) => !v)}>
+            <Grid3x3 size={14} aria-hidden /> Show cells
+          </button>
+        </div>
+        <ul className="rm-legend" aria-label="Legend">
+          <li>
+            <LegendCar state="available" /> Available
+          </li>
+          <li>
+            <LegendCar state="offered" /> Offered (countdown)
+          </li>
+          <li>
+            <LegendCar state="onTrip" /> On a trip
+          </li>
+          <li>
+            <svg width={14} height={18} viewBox="-9 -27 18 28" aria-hidden="true">
+              <path d="M0 0 C -5 -6 -9 -11 -9 -17 A 9 9 0 1 1 9 -17 C 9 -11 5 -6 0 0 Z" fill="var(--k-gateway)" />
+            </svg>
+            Rider
+          </li>
+          <li>
+            <svg width={18} height={14} aria-hidden="true">
+              <rect x={1} y={1} width={16} height={12} rx={3} fill="none" stroke="var(--k-gateway)" strokeWidth={1.6} strokeDasharray="4 2" />
+            </svg>
+            Search ring (dashed circle: candidate)
+          </li>
+          <li>
+            <svg width={16} height={16} aria-hidden="true">
+              <circle cx={8} cy={8} r={6} fill="none" stroke="var(--series-1)" strokeWidth={2} />
+            </svg>
+            Location update (every {PING_MS / 1000} s)
+          </li>
+        </ul>
+      </More>
     </WidgetFrame>
   );
 }

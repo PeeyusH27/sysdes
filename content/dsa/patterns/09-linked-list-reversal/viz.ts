@@ -28,6 +28,7 @@ function reverseList(head) {
     { label: "Five nodes", input: { values: [1, 2, 3, 4, 5] } },
     { label: "Two nodes", input: { values: [7, 9] } },
   ],
+  fields: { values: { maxItems: 8 } },
   run(t, { values }) {
     const nodes = buildList(values);
     let prev: LNode | null = null;
@@ -88,6 +89,12 @@ function reverseAfter(before, k) {
     { label: "Middle segment", input: { values: [1, 2, 3, 4, 5, 6], beforePos: 2, k: 3 } },
     { label: "From the head", input: { values: [1, 2, 3, 4], beforePos: 0, k: 3 } },
   ],
+  fields: {
+    values: { maxItems: 7 },
+    beforePos: { min: 0, max: 6, help: "Nodes before the segment (0 = start at the head)." },
+    k: { min: 1, max: 7, help: "How many nodes to reverse." },
+  },
+  validate: ({ values, beforePos, k }) => beforePos + k > values.length && `The segment runs past the end: beforePos + k = ${beforePos + k}, but the list has ${values.length} nodes.`,
   run(t, { values, beforePos, k }) {
     const nodes = buildList(["D", ...values]);
     const before = nodes[beforePos];
@@ -150,6 +157,9 @@ function weave(a, b) {
     { label: "Halves of 1…6", input: { front: [1, 2, 3], back: [6, 5, 4] } },
     { label: "Halves of 1…5", input: { front: [1, 2, 3], back: [5, 4] } },
   ],
+  fields: { front: { maxItems: 4 }, back: { maxItems: 4 } },
+  validate: ({ front, back }) =>
+    front.length !== back.length && front.length !== back.length + 1 && `front needs as many nodes as back, or one more (front has ${front.length}, back has ${back.length}).`,
   run(t, { front, back }) {
     const A = buildList(front);
     const B = buildList(back);

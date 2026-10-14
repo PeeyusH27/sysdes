@@ -1,5 +1,6 @@
 import { arr, defineTrace, grid, note } from "@/components/algo/trace";
 import type { Tone } from "@/components/algo/types";
+import { distinctProblem, intervalProblem } from "@/components/algo/checks";
 
 export const assignCookies = defineTrace({
   id: "assign-cookies",
@@ -19,6 +20,7 @@ function findContentChildren(greed, cookies) {
     { label: "Some children miss out", input: { greed: [3, 1, 6, 2, 4], cookies: [2, 1, 5, 3, 1] } },
     { label: "Small cookies wasted", input: { greed: [7, 4, 5], cookies: [3, 1, 6, 2] } },
   ],
+  fields: { greed: { min: 1, max: 20, maxItems: 8 }, cookies: { min: 1, max: 20, maxItems: 8 } },
   run(t, { greed, cookies }) {
     t.step("sort", "Each child has a greed factor (the smallest cookie that makes them happy), and each cookie can go to one child. First, sort both lists.", {
       views: [arr("greed", greed), arr("cookies", cookies)],
@@ -91,6 +93,8 @@ function maxNonOverlapping(intervals) {
   return kept;                              //@done
 }`,
   presets: [{ label: "Six activities", input: { intervals: [[5, 9], [1, 3], [6, 8], [2, 5], [8, 10], [4, 6]] as [number, number][] } }],
+  fields: { intervals: { maxItems: 7, min: 0, max: 30, colNames: ["start", "end"], help: "One activity per line: start end (up to 7)." } },
+  validate: ({ intervals }) => intervalProblem(intervals, { strict: true, maxSpan: 16 }),
   run(t, { intervals }) {
     const from = Math.min(...intervals.map((iv) => iv[0]));
     const to = Math.max(...intervals.map((iv) => iv[1]));
@@ -145,6 +149,8 @@ function greedyChange(coins, amount) {
     { label: "Coins 25, 10, 5, 1", input: { coins: [1, 5, 10, 25], amount: 68 } },
     { label: "Coins 4, 3, 1 (fails)", input: { coins: [1, 3, 4], amount: 6 } },
   ],
+  fields: { coins: { min: 1, max: 50, maxItems: 5 }, amount: { min: 1, max: 99 } },
+  validate: ({ coins }) => distinctProblem("coins", coins) ?? (!coins.includes(1) && "Include a 1 coin, so every amount can be made and greedy can be compared with the best answer."),
   run(t, { coins, amount }) {
     const start = amount;
     // the true optimum, by DP, for the final comparison

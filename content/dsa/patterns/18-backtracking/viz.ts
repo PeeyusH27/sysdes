@@ -1,5 +1,6 @@
 import { arr, defineTrace, graph, hashset, note, stack } from "@/components/algo/trace";
 import type { Tone, View } from "@/components/algo/types";
+import { distinctProblem } from "@/components/algo/checks";
 
 interface CallNode {
   id: string;
@@ -98,6 +99,13 @@ function combinations(n, k) {
     { label: "n = 4, k = 2", input: { n: 4, k: 2 } },
     { label: "n = 3, k = 3: dead ends", input: { n: 3, k: 3 } },
   ],
+  fields: { n: { min: 1, max: 6 }, k: { min: 1, max: 6 } },
+  validate: ({ n, k }) => {
+    if (k > n) return `k can't be bigger than n: there are no ways to pick ${k} of ${n} numbers.`;
+    let calls = 0;
+    for (let d = 0, c = 1; d <= k; d++, c = (c * (n - d + 1)) / d) calls += c;
+    return calls > 22 && `n = ${n}, k = ${k} makes ${calls} calls. Keep it to 22 so the tree fits: try a smaller n or k.`;
+  },
   run(t, { n, k }) {
     // Pass 1: record the whole recursion tree so nodes have fixed positions.
     const tree = new CallTree();
@@ -221,6 +229,13 @@ function arrangements(items, k) {
     { label: "a, b, c taken 2 at a time", input: { items: ["a", "b", "c"], k: 2 } },
     { label: "All permutations of x, y", input: { items: ["x", "y"], k: 2 } },
   ],
+  fields: { items: { minItems: 2, maxItems: 4, maxLength: 2, chars: "a-z0-9" }, k: { min: 1, max: 4 } },
+  validate: ({ items, k }) => {
+    if (k > items.length) return `k can't be bigger than the ${items.length} items.`;
+    let calls = 0;
+    for (let d = 0, p = 1; d <= k; d++, p *= items.length - d + 1) calls += p;
+    return distinctProblem("items", items) ?? (calls > 22 && `That makes ${calls} calls. Keep it to 22 so the tree fits: try fewer items or a smaller k.`);
+  },
   run(t, { items, k }) {
     const tree = new CallTree();
     tree.add("root", "[]", null);
@@ -330,6 +345,23 @@ function subsetsWithSum(nums, target) {
     { label: "nums = [4, 1, 3, 2], target 5", input: { nums: [4, 1, 3, 2], target: 5 } },
     { label: "No answer: target 5 from [6, 2, 4]", input: { nums: [6, 2, 4], target: 5 } },
   ],
+  fields: { nums: { min: 1, max: 20, maxItems: 6 }, target: { min: 1, max: 30 } },
+  validate: ({ nums, target }) => {
+    const dup = distinctProblem("nums", nums);
+    if (dup) return dup;
+    const sorted = [...nums].sort((a, b) => a - b);
+    let calls = 1;
+    const walk = (start: number, rem: number) => {
+      if (rem === 0) return;
+      for (let i = start; i < sorted.length; i++) {
+        calls++;
+        if (sorted[i] > rem) break;
+        walk(i + 1, rem - sorted[i]);
+      }
+    };
+    walk(0, target);
+    return calls > 24 && `That search makes ${calls} calls. Keep it to 24 so the tree fits: try a smaller target or fewer numbers.`;
+  },
   run(t, { nums, target }) {
     nums.sort((a, b) => a - b);
     const tree = new CallTree();

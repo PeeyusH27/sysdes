@@ -2,58 +2,62 @@ import { differenceArray, longestSumK, prefixBuildQuery } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-A prefix sum array stores **running totals**, so the sum of any range is the **difference of two of them**: O(n) to build, then O(1) per query instead of O(n). Pair running sums with a hash map to find subarrays with a given sum in one pass, even with negative numbers. Run the idea backwards, as a **difference array**, and many range updates cost O(1) each.
+A prefix sum array stores **running totals**, so any range sum is one subtraction: O(n) to build, O(1) per query. A hash map of prefixes finds subarrays with a given sum in one pass, and a **difference array** makes range updates O(1).
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- You need the **sum of a range**, many times, on data that doesn't change.
-- "**Subarray sums to k**", "divisible by k", "equal number of 0s and 1s": a property of a contiguous range that can be written as a sum.
-- The array has **negative numbers**, so a sliding window can't decide which edge to move.
-- Every element needs "everything **to its left**" and "everything **to its right**" (pivot index, product except self).
-- Many **range updates** ("add 5 to every seat from 3 to 9"), then one read of the result.
+- You need the **sum of a range** many times, on data that doesn't change.
+- "**Subarray sums to k**", "divisible by k", "equal 0s and 1s", often with negative numbers.
+- Each element needs "everything to its left" and "to its right", or many **range updates** come before one read.
 
 </Callout>
 
-| Variant | What you store | Answers | Classic problems |
-|---|---|---|---|
-| 1D prefix sums | `prefix[i]` = sum of the first i values | any range sum in O(1) | range sum query, pivot index |
-| Prefix sum + hash map | running sum → count, or → first index | subarrays with sum k: how many, or the longest | subarray sum equals k, contiguous array, subarrays divisible by k |
-| Prefix and suffix scans | running product or max from each side | "everything except me" | product of array except self, trapping rain water |
-| 2D prefix sums | `P[r][c]` = sum of the top-left rectangle | any rectangle sum in O(1) | range sum query 2D, count submatrices |
-| Difference array | where values change | many range updates, read once | car pooling, flight bookings, range addition |
+| Variant | What you store | Classic problems |
+|---|---|---|
+| 1D prefix sums | `prefix[i]` = sum of the first i values | range sum query, pivot index |
+| Prefix sum + hash map | running sum → count, or → first index | subarray sum equals k, contiguous array |
+| Prefix and suffix scans | running product or max from each side | product of array except self, trapping rain water |
+| 2D prefix sums | `P[r][c]` = sum of the top-left rectangle | range sum query 2D |
+| Difference array | where values change | car pooling, flight bookings |
 
 ## The core idea: a range is the difference of two prefixes
 
-Write `prefix[i]` for the sum of the first `i` values, with `prefix[0] = 0`. The range `left..right` is "everything up to `right`" minus "everything before `left`":
+Let `prefix[i]` be the sum of the first `i` values, with `prefix[0] = 0`. The range `left..right` is "everything up to `right`" minus "everything before `left`":
 
 `sum(nums[left..right]) = prefix[right + 1] - prefix[left]`
 
-Building `prefix` is one pass, and after that every range costs one subtraction, whatever its length. The extra leading 0 is what makes ranges starting at index 0 work without a special case.
+One pass builds `prefix`; after that, every range costs one subtraction, whatever its length. The leading 0 lets ranges start at index 0 with no special case.
 
 <AlgoViz trace={prefixBuildQuery} />
 
-This works for **any** values, negative ones included, because subtraction undoes addition exactly. (It does not work for maximum or minimum: you can't "subtract" a max. Those need a sparse table or a segment tree.)
+It works for **any** values, negatives included, because subtraction undoes addition exactly. It fails for max or min: you can't "subtract" a max, so those need a sparse table or a segment tree.
+
+## Play with it
+
+Drag across the staircase: the range sum is the height between two steps. Run fires random queries so the loop's work piles up. Then try **Subarrays = k**, where a map of seen steps catches every match.
+
+<PrefixSumLab />
 
 ## Step by step
 
 <Steps>
   <Step title="Write the quantity as a range sum">
-    "Sum of a subarray" is direct. Others need a re-labelling: equal 0s and 1s becomes "sum is 0" once each 0 counts as -1; "divisible by k" compares prefix sums modulo k.
+    Sometimes after a relabel: equal 0s and 1s is "sum 0" once each 0 counts as -1; "divisible by k" compares prefixes modulo k.
   </Step>
   <Step title="Choose the prefix convention">
-    Use n + 1 entries with `prefix[0] = 0`, so `sum(l..r) = prefix[r + 1] - prefix[l]`. Or keep just a running variable when you only need the current prefix.
+    n + 1 entries with `prefix[0] = 0`, or one running variable if you only need the current prefix.
   </Step>
   <Step title="Turn the condition into a lookup">
-    For subarray questions, `P(j) - P(i) = k` becomes `P(i) = P(j) - k`: "has an earlier prefix had this value?". That is a hash map lookup.
+    `P(j) - P(i) = k` becomes `P(i) = P(j) - k`: "did an earlier prefix have this value?", a hash map lookup.
   </Step>
   <Step title="Decide what the map stores">
-    Counting subarrays: how many times each prefix sum occurred. Longest subarray: the **first** index of each prefix sum. Seed the map with the empty prefix (0 → 1 for counts, 0 → -1 for indices).
+    Counting: how often each prefix sum occurred, seeded 0 → 1. Longest: the **first** index of each, seeded 0 → -1.
   </Step>
   <Step title="Look up, then record">
-    At each index, query the map for `sum - k` before inserting the current `sum`, so a prefix never pairs with itself (which would be an empty subarray).
+    Query `sum - k` before inserting `sum`, so a prefix never pairs with itself.
   </Step>
 </Steps>
 
@@ -61,23 +65,21 @@ This works for **any** values, negative ones included, because subtraction undoe
 
 <CodeTabs files={['snippets/prefix-sums.js']} />
 
-<ProblemLink slug="range-sum-query" /> wraps this in a class: build once in the constructor, subtract in each query. <ProblemLink slug="find-pivot-index" /> needs only one running variable: with the total known, the right side is `total - leftSum - nums[i]`.
-
-The same "left part times right part" shape works for products: <ProblemLink slug="product-of-array-except-self" /> multiplies a running product from the left with one from the right, never dividing.
+<ProblemLink slug="range-sum-query" /> builds once and subtracts per query. <ProblemLink slug="find-pivot-index" /> needs one running variable: the right side is `total - leftSum - nums[i]`. <ProblemLink slug="product-of-array-except-self" /> multiplies a running product from the left by one from the right, never dividing.
 
 ## Template 2: prefix sum + hash map
 
-A subarray ending at `j` sums to `k` exactly when some **earlier** prefix equals `sum - k`. That turns "find a subarray" into "find an earlier value", which is the complement lookup from [Hash Maps and Sets](/dsa/patterns/hashing) applied to running sums. Here the map keeps the **first** index of each prefix sum, so the matching subarray is as long as possible.
+A subarray ending at `j` sums to `k` exactly when an **earlier** prefix equals `sum - k`: the complement lookup from [Hash Maps and Sets](/dsa/patterns/hashing), on running sums. Keeping each prefix's **first** index makes the match as long as possible.
 
 <AlgoViz trace={longestSumK} />
 
 <CodeTabs files={['snippets/prefix-map.js']} />
 
-To **count** subarrays instead of finding the longest, store how many times each prefix sum has occurred (seeded with 0 → 1) and add the count for `sum - k` at every step: that is <ProblemLink slug="subarray-sum-equals-k" />. <ProblemLink slug="contiguous-array" /> is the longest version with `k = 0`, once every 0 counts as -1.
+To **count** instead, store how often each prefix sum occurred (seeded 0 → 1) and add the count for `sum - k` at every step: that is <ProblemLink slug="subarray-sum-equals-k" />. <ProblemLink slug="contiguous-array" /> is the longest version with `k = 0`, once every 0 counts as -1.
 
 ## Template 3: 2D prefix sums
 
-The same idea in two dimensions: `P[r][c]` is the sum of the rectangle from the top-left corner down to row `r - 1` and column `c - 1` (again with a padding row and column of zeros). Any rectangle is then four lookups, by **inclusion-exclusion**: take the big rectangle, cut off the strip above and the strip to the left, and add back the corner that was cut twice.
+`P[r][c]` sums the rectangle from the top-left corner to row `r - 1`, column `c - 1` (with a padding row and column of zeros). Any rectangle is four lookups by **inclusion-exclusion**: the big one, minus the strips above and to the left, plus the corner cut twice.
 
 <CodeTabs files={['snippets/prefix-2d.js']} />
 
@@ -90,13 +92,13 @@ Building is O(rows × cols); each rectangle query is O(1).
 
 ## Template 4: difference arrays for range updates
 
-Prefix sums turn values into running totals. A **difference array** goes the other way: it stores how much each value differs from the one before it. Adding `delta` to a whole range then changes only **two** differences: `+delta` where the range starts and `-delta` just after it ends. After all updates, one running sum turns the differences back into values.
+A **difference array** runs the idea backwards: it stores how much each value differs from the one before. Adding `delta` to a range changes two entries, `+delta` at its start and `-delta` just after its end; one final running sum rebuilds the values.
 
 <AlgoViz trace={differenceArray} />
 
 <CodeTabs files={['snippets/difference-array.js']} />
 
-<ProblemLink slug="car-pooling" /> is exactly this: each trip adds passengers on a stretch of road, and the running sum is the number of people in the car at each stop. Watch the boundary: when a range is half-open (people get out **at** `to`), the minus goes at `to`, not `to + 1`.
+<ProblemLink slug="car-pooling" /> is exactly this: the running sum is the car's load at each stop. People get out **at** `to` (a half-open range), so the minus goes at `to`, not `to + 1`.
 
 ## Try it
 
@@ -106,10 +108,10 @@ Prefix sums turn values into running totals. A **difference array** goes the oth
 
 | Variant | Time | Extra space |
 |---|---|---|
-| Build 1D prefix sums | O(n) once, then O(1) per range query | O(n), or O(1) with a single running sum |
-| Prefix sum + hash map | O(n): one pass with O(1) average map operations | O(n) distinct prefix sums |
-| 2D prefix sums | O(rows × cols) once, then O(1) per rectangle | O(rows × cols) |
-| Difference array | O(1) per update, O(n) for the final pass | O(n) |
+| Build 1D prefix sums | O(n) once, then O(1) per query | O(n), or O(1) with a running sum |
+| Prefix sum + hash map | O(n), one pass | O(n) distinct prefix sums |
+| 2D prefix sums | O(rows × cols), then O(1) per rectangle | O(rows × cols) |
+| Difference array | O(1) per update, O(n) final pass | O(n) |
 
 ## JavaScript you'll use
 
@@ -123,16 +125,13 @@ count += seen.get(sum - k) ?? 0;                  // ?? 0 for "never seen"
 const P = Array.from({ length: rows + 1 }, () => new Array(cols + 1).fill(0)); // 2D, rows not shared
 ```
 
-The JavaScript trap: reading past either end of an array doesn't throw, it returns `undefined`, and `5 - undefined` is `NaN`. An off-by-one in `prefix[left - 1]` turns into a silent `NaN` instead of an error. Also build 2D tables with `Array.from`: `new Array(rows).fill(new Array(cols))` makes every row the **same** array.
+The trap: reading past either end returns `undefined`, and `5 - undefined` is a silent `NaN`. Also, `new Array(rows).fill(new Array(cols))` makes every row the **same** array.
 
 <Callout kind="warning">
 
-- Mixing the two index conventions: with n + 1 entries it's `prefix[r + 1] - prefix[l]`, never `prefix[r] - prefix[l - 1]`.
-- Forgetting the seed of the map (0 → 1 for counts, 0 → -1 for first indices), which misses subarrays that start at index 0.
-- Inserting the current prefix before looking up `sum - k`, which counts empty subarrays when `k = 0`.
+- Mixing conventions: with n + 1 entries it's `prefix[r + 1] - prefix[l]`, never `prefix[r] - prefix[l - 1]`.
 - Overwriting the first index of a prefix sum when you want the **longest** subarray.
-- Putting the minus of a difference array at `right + 1` when the range end is exclusive, or at `right` when it's inclusive.
-- Using a sliding window on sums with negative numbers: that's exactly the case prefix sums exist for.
+- Putting a difference array's minus at `right + 1` when the range end is exclusive, or at `right` when it's inclusive.
 
 </Callout>
 
@@ -140,16 +139,16 @@ The JavaScript trap: reading past either end of an array doesn't throw, it retur
 
 <FollowUps>
   <FollowUp q="The array changes between queries. Does a prefix sum still work?">
-    One update at index i shifts every prefix after i, so an update costs O(n) while queries stay O(1). If updates are frequent, use a **Fenwick tree** (binary indexed tree) or a **segment tree**: O(log n) for both updates and range sums. A Fenwick tree is about 15 lines and is worth knowing.
+    An update shifts every later prefix: O(n). With frequent updates, use a **Fenwick tree** (about 15 lines) or a segment tree, O(log n) for both.
   </FollowUp>
   <FollowUp q="How do you count subarrays whose sum is divisible by k?">
-    Two prefixes give a sum divisible by k exactly when they have the same remainder mod k. So count prefix remainders in a map (seeded with remainder 0 → 1) and add the count of the current remainder at each step. In JavaScript, `%` keeps the sign of the dividend, so normalise with `((sum % k) + k) % k` or negative sums land in the wrong bucket.
+    Count prefix remainders mod k (seeded 0 → 1): two prefixes with the same remainder bound a divisible sum. Normalise with `((sum % k) + k) % k`, since JavaScript's `%` keeps the sign.
   </FollowUp>
   <FollowUp q="Sliding window or prefix sums: how do you choose?">
-    If every value is non-negative and the question is longest or shortest with a bound, a window is O(n) with O(1) space. If values can be negative, or you need an exact sum or a count of subarrays, the window has no safe move: use prefix sums with a hash map, O(n) time and O(n) space.
+    Non-negative values and a longest or shortest bound: a window, O(1) space. Negatives, an exact sum or a count: prefix sums plus a hash map, O(n) space. Both are O(n) time.
   </FollowUp>
   <FollowUp q="How would you apply a million range increments to a huge array, then answer point queries?">
-    With all updates known up front, a difference array handles them in O(1) each, then one O(n) pass. If the coordinates are huge but sparse (positions up to 10^9), store the differences in a sorted map or as sorted events and sweep, which is the sweep-line idea. If updates and queries interleave, a Fenwick tree over the difference array gives O(log n) for both.
+    Known up front: a difference array, O(1) each plus one O(n) pass. Sparse positions up to 10^9: sorted events and a sweep. Interleaved with queries: a Fenwick tree over the differences, O(log n) each.
   </FollowUp>
 </FollowUps>
 

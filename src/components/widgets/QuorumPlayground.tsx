@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { m } from "motion/react";
 import { BookOpen, PenLine, RefreshCw, RotateCcw } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
@@ -47,24 +47,62 @@ interface QState {
 }
 const fresh = (n: number): QState => ({ versions: Array(n).fill(1), latest: 1, writeSet: null, readSet: null, seen: null, action: null, seq: 0 });
 
-const C = { x: 210, y: 176 };
-const RING = 118;
-const pos = (i: number, n: number) => {
+/** Drawing geometry: a wide ellipse for the desktop pane, a near-circle for phones. */
+interface Geo {
+  w: number;
+  h: number;
+  c: { x: number; y: number };
+  rx: number;
+  ry: number;
+  font: number;
+}
+const WIDE: Geo = { w: 600, h: 270, c: { x: 300, y: 137 }, rx: 210, ry: 80, font: 13 };
+const NARROW: Geo = { w: 320, h: 300, c: { x: 160, y: 150 }, rx: 108, ry: 100, font: 15 };
+const pos = (g: Geo, i: number, n: number) => {
   const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-  return { x: C.x + Math.cos(a) * RING, y: C.y + Math.sin(a) * RING };
+  return { x: g.c.x + Math.cos(a) * g.rx, y: g.c.y + Math.sin(a) * g.ry };
 };
 
-function Packet({ to, back, delay, color, reduce }: { to: { x: number; y: number }; back?: boolean; delay: number; color: string; reduce: boolean }) {
+/** True while the widget is narrower than `px`, i.e. on a phone. */
+function useNarrow(px: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [px]);
+  return [ref, narrow] as const;
+}
+
+const CSS = `
+.qp { container: qp / inline-size; }
+.qp-sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 14px; margin: 4px 0 8px; }
+.qp-sliders .control { min-width: 0; }
+.qp-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+.qp-rule { margin: 0 !important; font-size: 13px; line-height: 1.45; }
+.qp .legend { font-size: 12px; gap: 2px 12px; }
+.qp .legend li > svg { flex: none; }
+@container qp (max-width: 479px) {
+  .qp-sliders { gap: 6px 10px; }
+  .qp-bar .wbtn { padding: 0 9px; }
+  .qp-bar .wbtn > svg { display: none; }
+}
+`;
+
+function Packet({ from, to, back, delay, color, reduce }: { from: { x: number; y: number }; to: { x: number; y: number }; back?: boolean; delay: number; color: string; reduce: boolean }) {
   if (reduce) return null;
-  const xs = back ? [C.x, to.x, C.x] : [C.x, to.x];
-  const ys = back ? [C.y, to.y, C.y] : [C.y, to.y];
+  const xs = back ? [from.x, to.x, from.x] : [from.x, to.x];
+  const ys = back ? [from.y, to.y, from.y] : [from.y, to.y];
   return (
     <m.circle
       r={6}
       fill={color}
       stroke="var(--card)"
       strokeWidth={2}
-      initial={{ cx: C.x, cy: C.y, opacity: 0 }}
+      initial={{ cx: from.x, cy: from.y, opacity: 0 }}
       animate={{ cx: xs, cy: ys, opacity: back ? [1, 1, 0] : [1, 0.2] }}
       transition={{ duration: back ? 1 : 0.55, delay, ease: "easeInOut" }}
     />
@@ -78,6 +116,9 @@ export function QuorumPlayground() {
   const [s, setS] = useState<QState>(() => fresh(3));
   const rand = useMemo(() => mulberry32(20_24), []);
   const { ref, reduce } = useSimGate<HTMLDivElement>();
+  const [boxRef, narrow] = useNarrow(480);
+  const g = narrow ? NARROW : WIDE;
+  const C = g.c;
 
   const info = quorumInfo(n, w, r);
   const pStale = staleReadProbability(n, w, r);
@@ -113,124 +154,127 @@ export function QuorumPlayground() {
   if (s.action === "sync") result = `Anti-entropy repair copied v${s.latest} to every replica, so any read is now fresh.`;
 
   const bad = !info.overlap;
+  const f = g.font;
   return (
-    <WidgetFrame title="Quorum playground" sub="N replicas, writes wait for W acknowledgements, reads ask R replicas and keep the newest version. When R + W > N the two sets must share at least one replica.">
-      <div className="controls">
-        <Slider label="Replicas N" value={n} min={3} max={7} onChange={changeN} />
-        <Slider label="Write quorum W" value={w} min={1} max={n} onChange={setW} />
-        <Slider label="Read quorum R" value={r} min={1} max={n} onChange={setR} />
-      </div>
-      <div className="controls" style={{ marginTop: 0 }}>
-        <button type="button" className="wbtn primary" onClick={write}>
-          <PenLine size={14} aria-hidden /> Write v{s.latest + 1}
-        </button>
-        <button type="button" className="wbtn" onClick={read}>
-          <BookOpen size={14} aria-hidden /> Read
-        </button>
-        <button type="button" className="wbtn" onClick={sync} disabled={holders.length === n}>
-          <RefreshCw size={14} aria-hidden /> Repair all
-        </button>
-        <button type="button" className="wbtn" onClick={() => setS(fresh(n))} aria-label="Reset" title="Reset">
-          <RotateCcw size={14} aria-hidden />
-        </button>
-      </div>
-      <p className="readout" style={{ marginTop: 0 }}>
-        <span className={`pill ${bad ? "warn-ink" : "ok-ink"}`}>
-          {bad ? "⚠ no guarantee" : "✓ guaranteed overlap"}
-        </span>{" "}
-        R + W = {r + w} {bad ? "≤" : ">"} N = {n}.{" "}
-        {bad ? (
-          <>
-            A read can miss the newest write: a random read is stale with probability <strong>{Math.round(pStale * 100)}%</strong>.
-          </>
-        ) : (
-          <>
-            Every read shares at least <strong>{info.minOverlap}</strong> replica{info.minOverlap === 1 ? "" : "s"} with every write, so it sees the newest version.
-          </>
-        )}{" "}
-        <span className="muted">
-          Writes survive {info.writeTolerates} replica{info.writeTolerates === 1 ? "" : "s"} down; reads survive {info.readTolerates}.
-        </span>
-      </p>
-      <div ref={ref}>
-        <svg viewBox="0 0 420 352" className="sim-svg" style={{ maxWidth: 460, margin: "0 auto" }} role="img" aria-label={`${n} replicas. Versions: ${s.versions.map((v, i) => `${NAMES[i]} v${v}`).join(", ")}`}>
-          {Array.from({ length: n }, (_, i) => {
-            const p = pos(i, n);
-            return <line key={i} x1={C.x} y1={C.y} x2={p.x} y2={p.y} stroke="var(--border)" strokeWidth={1} />;
-          })}
-          <rect x={C.x - 44} y={C.y - 20} width={88} height={40} rx={10} fill="var(--card-2)" stroke="var(--k-client)" strokeWidth={1.5} />
-          <text x={C.x} y={C.y + 4} textAnchor="middle" style={{ fontWeight: 650 }}>
-            Client
-          </text>
-          {s.versions.map((v, i) => {
-            const p = pos(i, n);
-            const inW = !!s.writeSet?.includes(i) && s.action !== "sync";
-            const inR = !!s.readSet?.includes(i);
-            const isNew = v === s.latest && s.latest > 1;
-            const tag = inW && inR ? "W ∩ R" : inW ? "W" : inR ? "R" : "";
-            return (
-              <g key={i} aria-label={`Replica ${NAMES[i]}: v${v}${tag ? `, ${tag}` : ""}`}>
-                <circle cx={p.x} cy={p.y} r={30} fill="var(--card-2)" stroke="var(--border-strong)" strokeWidth={1.5} />
-                <m.circle
-                  key={`${s.seq}-${isNew}`}
-                  cx={p.x}
-                  cy={p.y}
-                  r={30}
-                  fill="var(--series-1)"
-                  initial={{ opacity: inW && !reduce ? 0 : isNew ? 0.2 : 0 }}
-                  animate={{ opacity: isNew ? 0.2 : 0 }}
-                  transition={{ delay: reduce ? 0 : 0.5, duration: 0.3 }}
-                />
-                {inR && <circle cx={p.x} cy={p.y} r={36} fill="none" stroke="var(--series-3)" strokeWidth={3} strokeDasharray="5 4" />}
-                {inW && <circle cx={p.x} cy={p.y} r={inR ? 31.5 : 33} fill="none" stroke="var(--series-1)" strokeWidth={3} />}
-                <text x={p.x} y={p.y - 4} textAnchor="middle" style={{ fontWeight: 700, fontSize: 13 }}>
-                  {NAMES[i]}
-                </text>
-                <text x={p.x} y={p.y + 13} textAnchor="middle" style={{ fontWeight: 700, fontSize: 13, fill: isNew ? "var(--fg)" : "var(--muted)" }}>
-                  v{v}
-                </text>
-                {tag && (
-                  <text x={p.x} y={p.y + (p.y > C.y ? 52 : -42)} textAnchor="middle" style={{ fontWeight: 700, fontSize: 11.5, fill: inR && !inW ? "var(--series-3)" : "var(--fg)" }}>
-                    {tag}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-          <g key={s.seq}>
-            {s.action === "write" && s.writeSet?.map((i, k) => <Packet key={i} to={pos(i, n)} delay={k * 0.04} color="var(--series-1)" reduce={reduce} />)}
-            {s.action === "read" && s.readSet?.map((i, k) => <Packet key={i} to={pos(i, n)} back delay={k * 0.04} color="var(--series-3)" reduce={reduce} />)}
-          </g>
-        </svg>
-      </div>
-      <ul className="legend" aria-label="Legend">
-        <li>
-          <svg width={16} height={16} aria-hidden>
-            <circle cx={8} cy={8} r={6} fill="none" stroke="var(--series-1)" strokeWidth={3} />
-          </svg>
-          W: acknowledged the last write
-        </li>
-        <li>
-          <svg width={16} height={16} aria-hidden>
-            <circle cx={8} cy={8} r={6} fill="none" stroke="var(--series-3)" strokeWidth={3} strokeDasharray="4 3" />
-          </svg>
-          R: contacted by the last read
-        </li>
-        <li>
-          <svg width={16} height={16} aria-hidden>
-            <circle cx={8} cy={8} r={7} fill="var(--series-1)" opacity={0.25} />
-          </svg>
-          holds the newest version
-        </li>
-      </ul>
-      <p className="readout" aria-live="polite">
-        {s.action === "read" && (
-          <span className={`pill ${stale ? "bad-ink" : "ok-ink"}`} style={{ marginRight: 6 }}>
-            {stale ? "✕ stale" : "✓ fresh"}
+    <WidgetFrame title="Quorum playground" sub="Writes wait for W of N replicas; reads ask R and keep the newest version. When R + W > N the two sets always share a replica.">
+      <style href="w-quorum" precedence="widgets">
+        {CSS}
+      </style>
+      <div className="qp" ref={boxRef}>
+        <div className="qp-sliders">
+          <Slider label="Replicas N" value={n} min={3} max={7} onChange={changeN} />
+          <Slider label={narrow ? "Write W" : "Write quorum W"} value={w} min={1} max={n} onChange={setW} valueText={`Write quorum W ${w}`} />
+          <Slider label={narrow ? "Read R" : "Read quorum R"} value={r} min={1} max={n} onChange={setR} valueText={`Read quorum R ${r}`} />
+        </div>
+        <div className="qp-bar">
+          <button type="button" className="wbtn primary" onClick={write}>
+            <PenLine size={14} aria-hidden /> Write v{s.latest + 1}
+          </button>
+          <button type="button" className="wbtn" onClick={read}>
+            <BookOpen size={14} aria-hidden /> Read
+          </button>
+          <button type="button" className="wbtn" onClick={sync} disabled={holders.length === n} aria-label="Repair all">
+            <RefreshCw size={14} aria-hidden /> {narrow ? "Repair" : "Repair all"}
+          </button>
+          <button type="button" className="wbtn" onClick={() => setS(fresh(n))} aria-label="Reset" title="Reset">
+            <RotateCcw size={14} aria-hidden style={{ display: "block" }} />
+          </button>
+        </div>
+        <p className="qp-rule">
+          <span className={`pill ${bad ? "warn-ink" : "ok-ink"}`}>{bad ? "⚠ no guarantee" : "✓ guaranteed overlap"}</span> R + W = {r + w} {bad ? "≤" : ">"} N = {n}.{" "}
+          {bad ? (
+            <>
+              A random read is stale with probability <strong>{Math.round(pStale * 100)}%</strong>.
+            </>
+          ) : (
+            <>
+              Every read shares at least <strong>{info.minOverlap}</strong> replica{info.minOverlap === 1 ? "" : "s"} with every write.
+            </>
+          )}{" "}
+          <span className="muted">
+            Writes survive {info.writeTolerates} down; reads survive {info.readTolerates}.
           </span>
-        )}
-        {result}
-      </p>
+        </p>
+        <div ref={ref}>
+          <svg viewBox={`0 0 ${g.w} ${g.h}`} className="sim-svg" style={{ maxWidth: 620, margin: "0 auto" }} role="img" aria-label={`${n} replicas. Versions: ${s.versions.map((v, i) => `${NAMES[i]} v${v}`).join(", ")}`}>
+            {Array.from({ length: n }, (_, i) => {
+              const p = pos(g, i, n);
+              return <line key={i} x1={C.x} y1={C.y} x2={p.x} y2={p.y} stroke="var(--border)" strokeWidth={1} />;
+            })}
+            <rect x={C.x - 44} y={C.y - 20} width={88} height={40} rx={10} fill="var(--card-2)" stroke="var(--k-client)" strokeWidth={1.5} />
+            <text x={C.x} y={C.y + 5} textAnchor="middle" style={{ fontWeight: 650, fontSize: f }}>
+              Client
+            </text>
+            {s.versions.map((v, i) => {
+              const p = pos(g, i, n);
+              const inW = !!s.writeSet?.includes(i) && s.action !== "sync";
+              const inR = !!s.readSet?.includes(i);
+              const isNew = v === s.latest && s.latest > 1;
+              const tag = inW && inR ? "W ∩ R" : inW ? "W" : inR ? "R" : "";
+              return (
+                <g key={i} aria-label={`Replica ${NAMES[i]}: v${v}${tag ? `, ${tag}` : ""}`}>
+                  <circle cx={p.x} cy={p.y} r={29} fill="var(--card-2)" stroke="var(--border-strong)" strokeWidth={1.5} />
+                  <m.circle
+                    key={`${s.seq}-${isNew}`}
+                    cx={p.x}
+                    cy={p.y}
+                    r={29}
+                    fill="var(--series-1)"
+                    initial={{ opacity: inW && !reduce ? 0 : isNew ? 0.2 : 0 }}
+                    animate={{ opacity: isNew ? 0.2 : 0 }}
+                    transition={{ delay: reduce ? 0 : 0.5, duration: 0.3 }}
+                  />
+                  {inR && <circle cx={p.x} cy={p.y} r={35} fill="none" stroke="var(--series-3)" strokeWidth={3} strokeDasharray="5 4" />}
+                  {inW && <circle cx={p.x} cy={p.y} r={inR ? 30.5 : 32} fill="none" stroke="var(--series-1)" strokeWidth={3} />}
+                  <text x={p.x} y={p.y - 3} textAnchor="middle" style={{ fontWeight: 700, fontSize: f }}>
+                    {NAMES[i]}
+                  </text>
+                  <text x={p.x} y={p.y + f + 1} textAnchor="middle" style={{ fontWeight: 700, fontSize: f, fill: isNew ? "var(--fg)" : "var(--muted)" }}>
+                    v{v}
+                  </text>
+                  {tag && (
+                    <text x={p.x} y={p.y + (p.y > C.y ? 48 : -40)} textAnchor="middle" style={{ fontWeight: 700, fontSize: f - 1, fill: inR && !inW ? "var(--series-3)" : "var(--fg)" }}>
+                      {tag}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+            <g key={s.seq}>
+              {s.action === "write" && s.writeSet?.map((i, k) => <Packet key={i} from={C} to={pos(g, i, n)} delay={k * 0.04} color="var(--series-1)" reduce={reduce} />)}
+              {s.action === "read" && s.readSet?.map((i, k) => <Packet key={i} from={C} to={pos(g, i, n)} back delay={k * 0.04} color="var(--series-3)" reduce={reduce} />)}
+            </g>
+          </svg>
+        </div>
+        <ul className="legend" aria-label="Legend">
+          <li>
+            <svg width={14} height={14} aria-hidden>
+              <circle cx={7} cy={7} r={5} fill="none" stroke="var(--series-1)" strokeWidth={2.5} />
+            </svg>
+            W: acknowledged the last write
+          </li>
+          <li>
+            <svg width={14} height={14} aria-hidden>
+              <circle cx={7} cy={7} r={5} fill="none" stroke="var(--series-3)" strokeWidth={2.5} strokeDasharray="3 2" />
+            </svg>
+            R: asked by the last read
+          </li>
+          <li>
+            <svg width={14} height={14} aria-hidden>
+              <circle cx={7} cy={7} r={6} fill="var(--series-1)" opacity={0.25} />
+            </svg>
+            holds the newest version
+          </li>
+        </ul>
+        <p className="readout" aria-live="polite">
+          {s.action === "read" && (
+            <span className={`pill ${stale ? "bad-ink" : "ok-ink"}`} style={{ marginRight: 6 }}>
+              {stale ? "✕ stale" : "✓ fresh"}
+            </span>
+          )}
+          {result}
+        </p>
+      </div>
     </WidgetFrame>
   );
 }

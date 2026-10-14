@@ -4,7 +4,7 @@ export const classes: ClassSpec = {
   id: "elevator-classes",
   title: "Elevator system class diagram",
   description:
-    "ElevatorSystem owns the floors and cars and is the single owner of every hall call. Which car answers a call sits behind the DispatchStrategy interface (NearestCar or Collective); each ElevatorCar owns its door and panel and orders its own stops with LOOK. Displays observe the system's events.",
+    "ElevatorSystem owns the floors, the cars and every hall call. A DispatchStrategy (NearestCar or Collective) picks which car answers; each ElevatorCar owns its door and panel and orders its own stops with LOOK. Displays observe the system's events.",
   classes: [
     { id: "hall", name: "HallPanel", col: 0, row: 0, fields: ["floor: number", "up, down: lamp"], methods: ["press(dir)", "clear(dir)"] },
     { id: "hallcall", name: "HallCall", col: 1, row: 0, fields: ["floor: number", "dir: up | down", "key: '5▲'"] },
@@ -56,7 +56,7 @@ export const hallCallFlow: SequenceSpec = {
   id: "elevator-sequence",
   title: "A hall call, from button to doors",
   description:
-    "Someone on floor 5 presses ▲. The controller checks the key is new, asks the strategy for a car, and that car adds a stop. When it arrives going up it opens, the lamp clears, and the rider presses 12. Switch branches to see every car busy, or the chosen car failing.",
+    "Someone on floor 5 presses ▲. The controller checks the key is new and asks the strategy for a car, which adds a stop. Arriving on its way up, the car opens, the lamp clears, and the rider presses 12. Switch branches to see every car busy, or the chosen car failing.",
   actors: [
     { id: "hall", label: "Hall panel 5", kind: "client" },
     { id: "sys", label: "ElevatorSystem", kind: "service" },

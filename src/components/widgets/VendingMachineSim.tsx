@@ -1,11 +1,11 @@
 "use client";
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode, type RefObject } from "react";
 import { m } from "motion/react";
 import { Ban, Coins, PackagePlus, Undo2, Wrench } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Seg, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- the machine (pure)
 export type Coin = 100 | 25 | 10 | 5;
@@ -312,7 +312,7 @@ export const initWorld = (): World => ({
   flash: null,
   key: null,
   lcd: null,
-  msg: "Insert coins, then press a slot button, or press Run to watch customers. Try Select before paying, or the SOLD OUT slot A3.",
+  msg: "Insert coins, then click a product, or press Run to watch customers. Try a product before paying, or the SOLD OUT slot A3.",
   jamNext: false,
   auto: false,
   preset: "plenty",
@@ -433,13 +433,18 @@ export function stepWorld(w0: World, dt: number): World {
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
 const HEIGHT: Record<Shape, number> = { can: 34, bottle: 48, bag: 42, bar: 38 };
+/** The machine front: a short, wide cabinet (three shelves, pickup tray and change cup underneath). */
+const MW = 340;
+const MH = 332;
 const cellX = (i: number) => 56 + (i % 3) * 68;
-const shelfY = (i: number) => 112 + Math.floor(i / 3) * 90;
-const TRAY_Y = 366;
+const shelfY = (i: number) => 98 + Math.floor(i / 3) * 74;
+/** A product slot's clickable area (and its hover / focus outline). */
+const cellBox = (i: number) => ({ x: cellX(i) - 33, y: shelfY(i) - 55, width: 66, height: 74 });
+const TRAY_Y = 302;
 const trayX = (i: number) => 52 + (i % 3) * 58;
-const cupPos = (i: number) => ({ x: 258 + (i % 5) * 12.5, y: 377 - Math.floor(i / 5) * 9 });
-const CHUTE = { x: 282, y: 296 };
-const SLIT = { x: 282, y: 147 };
+const cupPos = (i: number) => ({ x: 258 + (i % 5) * 12.5, y: 309 - Math.floor(i / 5) * 9 });
+const CHUTE = { x: 282, y: 244 };
+const SLIT = { x: 282, y: 116 };
 const OUTLINE = { stroke: "var(--fg)", strokeOpacity: 0.3, strokeWidth: 1 };
 const ITEM = 1.15; // products drawn a little larger than their nominal size
 
@@ -505,7 +510,8 @@ function Coil({ x, y, phase }: { x: number; y: number; phase: number }) {
   );
 }
 
-export function MachineFront({ w, reduce }: { w: World; reduce: boolean }) {
+/** The machine as seen by a customer. `hover` outlines the slot under the pointer (or keyboard focus). */
+export function MachineFront({ w, reduce, hover = null }: { w: World; reduce: boolean; hover?: string | null }) {
   const { vm, t } = w;
   const exact = exactChangeOnly(vm.box);
   const lcdLive = w.lcd && (reduce || t - w.lcd.at < LCD_MS) ? w.lcd.text : null;
@@ -545,17 +551,17 @@ export function MachineFront({ w, reduce }: { w: World; reduce: boolean }) {
   }
 
   return (
-    <svg viewBox="0 0 340 432" className="sim-svg" role="img" aria-label={label} style={{ maxWidth: 420, margin: "0 auto" }}>
-      <rect x={6} y={6} width={328} height={412} rx={16} fill="var(--card-2)" stroke="var(--border-strong)" strokeWidth={2} />
-      <rect x={24} y={418} width={28} height={8} rx={2} fill="var(--border-strong)" />
-      <rect x={288} y={418} width={28} height={8} rx={2} fill="var(--border-strong)" />
-      <rect x={18} y={15} width={304} height={23} rx={6} fill="var(--accent)" />
-      <text x={170} y={31} textAnchor="middle" style={{ fill: "var(--accent-ink)", fontWeight: 750, fontSize: 12, letterSpacing: 2 }}>
+    <svg viewBox={`0 0 ${MW} ${MH}`} className="sim-svg" role="img" aria-label={label}>
+      <rect x={6} y={4} width={328} height={318} rx={16} fill="var(--card-2)" stroke="var(--border-strong)" strokeWidth={2} />
+      <rect x={24} y={322} width={28} height={8} rx={2} fill="var(--border-strong)" />
+      <rect x={288} y={322} width={28} height={8} rx={2} fill="var(--border-strong)" />
+      <rect x={18} y={11} width={304} height={18} rx={5} fill="var(--accent)" />
+      <text x={170} y={24} textAnchor="middle" style={{ fill: "var(--accent-ink)", fontWeight: 750, fontSize: 11, letterSpacing: 2 }}>
         SNACKS · DRINKS
       </text>
 
       {/* glass window with the 3 × 3 grid */}
-      <rect x={18} y={46} width={212} height={274} rx={8} fill="var(--card)" stroke="var(--border-strong)" strokeWidth={1.5} />
+      <rect x={18} y={34} width={212} height={236} rx={8} fill="var(--card)" stroke="var(--border-strong)" strokeWidth={1.5} />
       {vm.slots.map((s, i) => {
         const x = cellX(i);
         const y = shelfY(i);
@@ -586,29 +592,36 @@ export function MachineFront({ w, reduce }: { w: World; reduce: boolean }) {
                 </text>
               </g>
             )}
-            <text x={x - 31} y={y + 19.5} style={{ fontSize: 10.5, fontWeight: 700 }}>
+            <text x={x - 31} y={y + 17} style={{ fontSize: 10.5, fontWeight: 700 }}>
               {s.code} {s.price}¢
             </text>
-            <text x={x + 31} y={y + 19.5} textAnchor="end" className="muted-text" style={{ fontSize: 10.5 }}>
+            <text x={x + 31} y={y + 17} textAnchor="end" className="muted-text" style={{ fontSize: 10.5 }}>
               ×{s.count}
             </text>
           </g>
         );
       })}
-      <path d="M44,46 L84,46 L36,320 L18,320 L18,170 Z" fill="var(--fg)" opacity={0.04} aria-hidden />
+      <path d="M44,34 L84,34 L36,270 L18,270 L18,160 Z" fill="var(--fg)" opacity={0.04} aria-hidden />
+      {hover &&
+        vm.slots.map((s, i) =>
+          s.code === hover ? <rect key={s.code} {...cellBox(i)} rx={6} fill="color-mix(in srgb, var(--accent) 8%, transparent)" stroke="var(--accent)" strokeWidth={2} strokeDasharray="5 3" /> : null,
+        )}
       {vm.state === "outOfService" && (
         <g>
-          <rect x={30} y={164} width={188} height={36} rx={7} fill="var(--card)" stroke="var(--critical)" strokeWidth={2} />
-          <circle cx={58} cy={182} r={7} fill="none" stroke="var(--critical)" strokeWidth={2} />
-          <path d="M53,177 L63,187" stroke="var(--critical)" strokeWidth={2} />
-          <text x={134} y={187} textAnchor="middle" style={{ fontSize: 13, fontWeight: 800, fill: "var(--critical-ink)" }}>
+          <rect x={30} y={134} width={188} height={36} rx={7} fill="var(--card)" stroke="var(--critical)" strokeWidth={2} />
+          <circle cx={58} cy={152} r={7} fill="none" stroke="var(--critical)" strokeWidth={2} />
+          <path d="M53,147 L63,157" stroke="var(--critical)" strokeWidth={2} />
+          <text x={134} y={157} textAnchor="middle" style={{ fontSize: 13, fontWeight: 800, fill: "var(--critical-ink)" }}>
             OUT OF SERVICE
           </text>
         </g>
       )}
 
       {/* pickup tray and change cup */}
-      <rect x={18} y={332} width={212} height={56} rx={8} fill="var(--border)" stroke="var(--border-strong)" />
+      <rect x={18} y={276} width={212} height={42} rx={8} fill="var(--border)" stroke="var(--border-strong)" />
+      <text x={26} y={287} className="muted-text" style={{ fontSize: 8, fontWeight: 700, letterSpacing: 1.2 }}>
+        PUSH · PICKUP
+      </text>
       {w.tray.map((it, i) => {
         const s = vm.slots.find((x) => x.code === it.code)!;
         const h = HEIGHT[s.shape];
@@ -618,44 +631,44 @@ export function MachineFront({ w, reduce }: { w: World; reduce: boolean }) {
           </g>
         );
       })}
-      <text x={124} y={404} textAnchor="middle" className="muted-text" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5 }}>
-        PUSH · PICKUP
-      </text>
 
       {/* right-hand panel */}
-      <rect x={240} y={46} width={84} height={52} rx={6} fill="var(--card)" stroke="var(--border-strong)" />
-      <text x={282} y={73} textAnchor="middle" style={{ fontSize: 19, fontWeight: 800, fill: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>
+      <rect x={240} y={34} width={84} height={44} rx={6} fill="var(--card)" stroke="var(--border-strong)" />
+      <text x={282} y={57} textAnchor="middle" style={{ fontSize: 18, fontWeight: 800, fill: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>
         {w.shown}¢
       </text>
-      <text x={282} y={90} textAnchor="middle" style={{ fontSize: 8.5, fontWeight: 750, fill: lcdLive && w.flash && !w.flash.ok ? "var(--critical-ink)" : "var(--fg)" }}>
+      <text x={282} y={71} textAnchor="middle" style={{ fontSize: 8.5, fontWeight: 750, fill: lcdLive && w.flash && !w.flash.ok ? "var(--critical-ink)" : "var(--fg)" }}>
         {lcdLive ?? idleLcd}
       </text>
-      <circle cx={247} cy={112} r={5} fill={exact ? "var(--warning)" : "none"} stroke={exact ? "var(--warning-ink)" : "var(--border-strong)"} strokeWidth={1.4} />
-      <text x={255} y={115.5} style={{ fontSize: 8, fontWeight: exact ? 800 : 500, fill: exact ? "var(--warning-ink)" : "var(--muted)" }}>
+      <circle cx={247} cy={88} r={5} fill={exact ? "var(--warning)" : "none"} stroke={exact ? "var(--warning-ink)" : "var(--border-strong)"} strokeWidth={1.4} />
+      <text x={255} y={91.5} style={{ fontSize: 8, fontWeight: exact ? 800 : 500, fill: exact ? "var(--warning-ink)" : "var(--muted)" }}>
         {exact ? "EXACT CHANGE" : "change OK"}
       </text>
-      <rect x={258} y={124} width={48} height={52} rx={6} fill="var(--card)" stroke="var(--border-strong)" />
-      <rect x={280} y={133} width={4} height={28} rx={2} fill="var(--fg)" opacity={0.7} />
-      <text x={282} y={171} textAnchor="middle" className="muted-text" style={{ fontSize: 8, fontWeight: 700 }}>
+      <rect x={262} y={98} width={40} height={42} rx={6} fill="var(--card)" stroke="var(--border-strong)" />
+      <rect x={280} y={104} width={4} height={22} rx={2} fill="var(--fg)" opacity={0.7} />
+      <text x={282} y={135} textAnchor="middle" className="muted-text" style={{ fontSize: 8, fontWeight: 700 }}>
         COINS
       </text>
       {vm.slots.map((s, i) => {
-        const lit = w.key?.code === s.code && (reduce ? w.flash?.event === "select" : t - w.key.at < 500);
+        const lit = (w.key?.code === s.code && (reduce ? w.flash?.event === "select" : t - w.key.at < 500)) || s.code === hover;
         return (
-          <g key={s.code} transform={`translate(${250 + (i % 3) * 22} ${186 + Math.floor(i / 3) * 18})`}>
+          <g key={s.code} transform={`translate(${250 + (i % 3) * 22} ${147 + Math.floor(i / 3) * 17})`}>
             <rect width={18} height={14} rx={3} fill={lit ? "var(--accent)" : "var(--card)"} stroke="var(--border-strong)" />
-            <text x={9} y={10} textAnchor="middle" style={{ fontSize: 7, fontWeight: 700, fill: lit ? "var(--accent-ink)" : "var(--fg)" }}>
+            <text x={9} y={10.3} textAnchor="middle" style={{ fontSize: 8, fontWeight: 700, fill: lit ? "var(--accent-ink)" : "var(--fg)" }}>
               {s.code}
             </text>
           </g>
         );
       })}
-      <circle cx={282} cy={253} r={9} fill={w.flash?.event === "cancel" && w.flash.ok && (reduce || t - w.flash.at < 500) ? "var(--critical)" : "var(--card)"} stroke="var(--critical)" strokeWidth={1.5} />
-      <text x={282} y={274} textAnchor="middle" className="muted-text" style={{ fontSize: 8, fontWeight: 700 }}>
+      <circle cx={282} cy={211} r={8} fill={w.flash?.event === "cancel" && w.flash.ok && (reduce || t - w.flash.at < 500) ? "var(--critical)" : "var(--card)"} stroke="var(--critical)" strokeWidth={1.5} />
+      <text x={282} y={230} textAnchor="middle" className="muted-text" style={{ fontSize: 8, fontWeight: 700 }}>
         REFUND
       </text>
-      <rect x={270} y={290} width={24} height={6} rx={3} fill="var(--border-strong)" />
-      <rect x={246} y={332} width={72} height={56} rx={8} fill="var(--border)" stroke="var(--border-strong)" />
+      <rect x={270} y={241} width={24} height={6} rx={3} fill="var(--border-strong)" />
+      <rect x={246} y={276} width={72} height={42} rx={8} fill="var(--border)" stroke="var(--border-strong)" />
+      <text x={282} y={287} textAnchor="middle" className="muted-text" style={{ fontSize: 8, fontWeight: 700, letterSpacing: 1.2 }}>
+        CHANGE
+      </text>
       {w.cup.map((c, i) => {
         const p = cupPos(i);
         return (
@@ -664,9 +677,6 @@ export function MachineFront({ w, reduce }: { w: World; reduce: boolean }) {
           </g>
         );
       })}
-      <text x={282} y={404} textAnchor="middle" className="muted-text" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5 }}>
-        CHANGE
-      </text>
 
       {moving}
       {/* coins sliding into the slot */}
@@ -840,9 +850,31 @@ const COIN_BUTTONS: { coin: number; label: string; fake?: boolean }[] = [
   { coin: 100, label: "$1" },
   { coin: 25, label: "Fake 25¢", fake: true },
 ];
+/** Below this content width the state diagram moves under the controls. */
+const NARROW_BELOW = 480;
+/** The machine and the diagram never grow taller than this (px), so the widget fits the desktop visual pane. */
+const MAX_H = 296;
+const DIAGRAM_W = 340;
+const DIAGRAM_H = 312;
+const pct = (v: number, of: number) => `${((v / of) * 100).toFixed(3)}%`;
+
+/** True while the element is narrower than `below` px (ResizeObserver; false on the server and in jsdom). */
+function useNarrow(ref: RefObject<HTMLElement | null>, below: number) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < below));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, below]);
+  return narrow;
+}
 
 export function VendingMachineSim() {
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const narrow = useNarrow(ref, NARROW_BELOW);
+  const [hover, setHover] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [w, reset] = useFixedStep<World>(initWorld, stepWorld, live && inView && !reduce);
   const want = w.auto || busy(w);
@@ -853,84 +885,122 @@ export function VendingMachineSim() {
   const vm = w.vm;
   const L = vm.ledger;
   const ok = balanced(vm);
+  const unhover = (code: string) => setHover((h) => (h === code ? null : h));
+
+  // The products are the select buttons: one transparent button over each slot in the drawing.
+  const machine = (
+    <div style={{ position: "relative", width: "100%", maxWidth: Math.round((MAX_H * MW) / MH), margin: "0 auto" }}>
+      <MachineFront w={w} reduce={reduce} hover={hover} />
+      <div role="group" aria-label="Select a product">
+        {vm.slots.map((s, i) => {
+          const b = cellBox(i);
+          return (
+            <button
+              key={s.code}
+              type="button"
+              onClick={() => send({ type: "select", code: s.code })}
+              onPointerEnter={() => setHover(s.code)}
+              onPointerLeave={() => unhover(s.code)}
+              onFocus={() => setHover(s.code)}
+              onBlur={() => unhover(s.code)}
+              aria-label={`Select ${s.code}: ${s.name}, ${s.price}¢, ${s.count === 0 ? "sold out" : `${s.count} left`}`}
+              title={`${s.code} ${s.name} · ${s.price}¢`}
+              style={{ position: "absolute", left: pct(b.x, MW), top: pct(b.y, MH), width: pct(b.width, MW), height: pct(b.height, MH), padding: 0, border: 0, borderRadius: 8, background: "transparent", cursor: "pointer" }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+  const diagram = (
+    <div style={{ width: "100%", maxWidth: Math.round((MAX_H * DIAGRAM_W) / DIAGRAM_H), margin: "0 auto" }}>
+      <StateDiagram w={w} reduce={reduce} />
+    </div>
+  );
 
   return (
-    <WidgetFrame title="Vending machine state machine" sub="Coins sit in escrow until the drop sensor confirms the item fell. Every event has exactly one outcome in each state; SOLD OUT belongs to a slot, not to the machine.">
-      <div ref={ref} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 12, alignItems: "start" }}>
-        <MachineFront w={w} reduce={reduce} />
-        <StateDiagram w={w} reduce={reduce} />
-      </div>
-      <p className="muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
-        Coin box: {boxText(vm.box)} ({cents(boxTotal(vm.box))}) · sales {L.sales} ({cents(L.revenue)}).{" "}
-        <span className={ok ? "ok-ink" : "bad-ink"}>
-          {ok ? "✓ Money balanced" : "✕ Money lost"}: escrow {cents(sum(vm.escrow))} + box {cents(boxTotal(vm.box))} + paid out {cents(L.paidOut)} = float {cents(L.opening)} + inserted {cents(L.inserted)}
-          {L.adjusted ? ` ${L.adjusted > 0 ? "+" : "−"} refills ${cents(Math.abs(L.adjusted))}` : ""}.
-        </span>
-      </p>
-      <div className="controls" style={{ marginTop: 10 }}>
-        <div className="control" style={{ flex: "none", minWidth: 0 }}>
-          <span>Insert a coin</span>
-          <div role="group" aria-label="Insert a coin" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+    <WidgetFrame title="Vending machine state machine" sub="Coins wait in escrow until the item drops. Insert coins, then click a product.">
+      <div ref={ref}>
+        {narrow ? (
+          machine
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 12, alignItems: "start" }}>
+            {machine}
+            {diagram}
+          </div>
+        )}
+        <div className="controls" style={{ gap: "8px 14px", margin: "8px 0" }}>
+          <div role="group" aria-label="Insert a coin" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+            <span className="muted" aria-hidden style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5 }}>
+              <Coins size={14} /> Insert
+            </span>
             {COIN_BUTTONS.map((c) => (
-              <button key={c.label} type="button" className={`wbtn${c.fake ? " danger" : ""}`} onClick={() => send({ type: "coin", coin: c.coin, fake: c.fake })}>
-                {!c.fake && <Coins size={14} aria-hidden />}
+              <button key={c.label} type="button" className={`wbtn${c.fake ? " danger" : ""}`} style={{ padding: "0 10px" }} onClick={() => send({ type: "coin", coin: c.coin, fake: c.fake })}>
                 <span className="sr-only">Insert </span>
                 {c.label}
               </button>
             ))}
           </div>
+          <button type="button" className="wbtn danger" aria-label="Cancel / refund" title="Cancel and get the coins back" onClick={() => send({ type: "cancel" })}>
+            <Undo2 size={14} aria-hidden /> Refund
+          </button>
+          <SimButtons
+            running={w.auto && !reduce}
+            reduce={reduce}
+            onToggle={() => reset({ ...w, auto: !w.auto, nextAt: w.t + 200 })}
+            onStep={() => reset(reduce ? settle(autoAct(w)) : autoAct(settle(w)))}
+            stepLabel="Next"
+            stepHint="Play the next customer action"
+            onReset={() => reset(initWorld())}
+          />
+          <span style={{ fontSize: 12.5 }}>
+            <b className={ok ? "ok-ink" : "bad-ink"} style={{ fontWeight: 650 }}>
+              {ok ? "✓ Money balanced" : "✕ Money lost"}
+            </b>
+            <span className="muted">
+              {" "}
+              · {L.sales} {L.sales === 1 ? "sale" : "sales"} ({cents(L.revenue)})
+            </span>
+          </span>
         </div>
-        <button type="button" className="wbtn danger" onClick={() => send({ type: "cancel" })}>
-          <Undo2 size={14} aria-hidden /> Cancel / refund
-        </button>
-      </div>
-      <div className="control" style={{ minWidth: 0 }}>
-        <span>Select a product</span>
-        <div role="group" aria-label="Select a product" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6, maxWidth: 380 }}>
-          {vm.slots.map((s) => (
-            <button key={s.code} type="button" className="wbtn" style={{ justifyContent: "center", padding: "0 6px" }} onClick={() => send({ type: "select", code: s.code })}>
-              <span className="sr-only">Select </span>
-              {s.code} · {s.price}¢<span className="sr-only">: {s.name}, {s.count === 0 ? "sold out" : `${s.count} left`}</span>
+        <p className="readout" aria-live="polite" style={{ minHeight: "3em", marginTop: 0 }}>
+          <span className="pill" style={{ marginRight: 6 }}>
+            {STATE_NAME[vm.state]} · {cents(sum(vm.escrow))}
+          </span>
+          {said}
+          <ReducedNote reduce={reduce} what="No animation (reduced motion): every event completes at once; Next plays one customer action." />
+        </p>
+        {narrow && <div style={{ marginTop: 8 }}>{diagram}</div>}
+        <More label="Service, restock, jam, coin box">
+          <div className="controls" style={{ marginBottom: 4 }}>
+            <Seg<Preset>
+              label="Coin box"
+              value={w.preset}
+              onChange={(v) => send({ type: "refill", preset: v })}
+              options={[
+                { value: "plenty", label: "Plenty" },
+                { value: "low", label: "Low (exact change only)" },
+              ]}
+            />
+            <button type="button" className="wbtn" onClick={() => send({ type: "restock" })}>
+              <PackagePlus size={14} aria-hidden /> Restock
             </button>
-          ))}
-        </div>
+            <button type="button" className="wbtn" aria-pressed={vm.state === "outOfService"} onClick={() => send({ type: "service" })}>
+              <Wrench size={14} aria-hidden /> Toggle service mode
+            </button>
+            <button type="button" className="wbtn" aria-pressed={w.jamNext} onClick={() => reset({ ...w, jamNext: !w.jamNext, msg: w.jamNext ? "The next item will drop normally." : "The next item will jam in the spiral: watch the drop sensor time out and the refund." })}>
+              <Ban size={14} aria-hidden /> Jam the next item
+            </button>
+          </div>
+          <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+            Coin box: {boxText(vm.box)} ({cents(boxTotal(vm.box))}) · sales {L.sales} ({cents(L.revenue)}).{" "}
+            <span className={ok ? "ok-ink" : "bad-ink"}>
+              {ok ? "✓ Money balanced" : "✕ Money lost"}: escrow {cents(sum(vm.escrow))} + box {cents(boxTotal(vm.box))} + paid out {cents(L.paidOut)} = float {cents(L.opening)} + inserted {cents(L.inserted)}
+              {L.adjusted ? ` ${L.adjusted > 0 ? "+" : "−"} refills ${cents(Math.abs(L.adjusted))}` : ""}.
+            </span>
+          </p>
+        </More>
       </div>
-      <div className="controls" style={{ marginTop: 12 }}>
-        <Seg<Preset>
-          label="Coin box"
-          value={w.preset}
-          onChange={(v) => send({ type: "refill", preset: v })}
-          options={[
-            { value: "plenty", label: "Plenty" },
-            { value: "low", label: "Low (exact change only)" },
-          ]}
-        />
-        <button type="button" className="wbtn" onClick={() => send({ type: "restock" })}>
-          <PackagePlus size={14} aria-hidden /> Restock
-        </button>
-        <button type="button" className="wbtn" aria-pressed={vm.state === "outOfService"} onClick={() => send({ type: "service" })}>
-          <Wrench size={14} aria-hidden /> Toggle service mode
-        </button>
-        <button type="button" className="wbtn" aria-pressed={w.jamNext} onClick={() => reset({ ...w, jamNext: !w.jamNext, msg: w.jamNext ? "The next item will drop normally." : "The next item will jam in the spiral: watch the drop sensor time out and the refund." })}>
-          <Ban size={14} aria-hidden /> Jam the next item
-        </button>
-        <SimButtons
-          running={w.auto && !reduce}
-          reduce={reduce}
-          onToggle={() => reset({ ...w, auto: !w.auto, nextAt: w.t + 200 })}
-          onStep={() => reset(reduce ? settle(autoAct(w)) : autoAct(settle(w)))}
-          stepLabel="Next"
-          stepHint="Play the next customer action"
-          onReset={() => reset(initWorld())}
-        />
-      </div>
-      <p className="readout" aria-live="polite">
-        <span className="pill" style={{ marginRight: 6 }}>
-          {STATE_NAME[vm.state]} · {cents(sum(vm.escrow))}
-        </span>
-        {said}
-        <ReducedNote reduce={reduce} what="No animation (reduced motion): every event completes at once; Next plays one customer action." />
-      </p>
     </WidgetFrame>
   );
 }

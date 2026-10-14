@@ -2,25 +2,20 @@ import { connectionPooling } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Opening a connection costs handshakes, authentication and server memory, so **reuse** connections: pool database connections and keep HTTP connections alive. Size pools from the database's limit (the **total** across instances must stay under `max_connections`), add PgBouncer when instances multiply, give every outgoing call a **timeout**, bound concurrency, and shut down gracefully.
+Every new connection costs handshakes, auth and server memory, so **reuse** them: pool database connections, keep HTTP alive. Keep the pool **total** under `max_connections` (PgBouncer when instances multiply), put a **timeout** on every call, bound concurrency, shut down gracefully.
 </TLDR>
 
 ## Why it matters
 
-A connection is not free. Before the first byte of a query or request, you pay for:
+A connection isn't free: at a 50 ms round trip, DNS, TCP and TLS 1.3 burn **150 ms** before you've asked anything, PostgreSQL's SCRAM login adds more, and the server caps you (`max_connections` defaults to 100 in PostgreSQL).
 
-- **The network:** a DNS lookup, a TCP handshake (1 round trip), and a TLS handshake (1 more with TLS 1.3, 2 with TLS 1.2). At a 50 ms round trip, that's 150 ms before you have even asked anything.
-- **Authentication:** PostgreSQL's SCRAM login adds round trips and CPU on both sides.
-- **Server memory:** every PostgreSQL connection is a separate server process using a few MB. MySQL uses a thread per connection.
-- **Hard limits:** `max_connections` (100 by default in PostgreSQL), file descriptors, and ephemeral ports.
-
-That's why most load-related outages look the same: a pool runs dry, a call without a timeout hangs, or an unbounded `Promise.all` floods a dependency. The diagram shows a pool doing its job, running dry, and PgBouncer multiplexing many app connections onto a few database ones.
+Most load-related outages look alike: a pool runs dry, a call with no timeout hangs, or an unbounded `Promise.all` floods a dependency. The diagram plays a healthy pool, a pool running dry, and PgBouncer squeezing many app connections onto a few database ones.
 
 <FlowDiagram spec={connectionPooling} />
 
 ## What each connection costs
 
-| Connection | Setup before the first byte | What the server holds | Reuse it with |
+| Connection | Setup | Server holds | Reuse with |
 |---|---|---|---|
 | TCP | 1 round trip | A socket and a file descriptor | Keep-alive |
 | TLS 1.3 / 1.2 | +1 / +2 round trips, plus crypto | Session keys | Keep-alive, session resumption |
@@ -32,34 +27,34 @@ That's why most load-related outages look the same: a pool runs dry, a call with
 
 ## Try it: pool size vs throughput
 
-Set the pool size, request rate, query time and database cores. When requests arrive faster than the pool can serve them, they queue and eventually time out. Now make the pool much bigger than the database's cores: queries don't finish sooner, they get **slower**, because the database spends its time switching between them and fighting over locks.
+Set the pool size, request rate, query time and database cores. Requests arriving faster than the pool serves them queue, then time out. Now make the pool far bigger than the cores: queries get **slower**, as the database burns time context-switching and fighting over locks.
 
 <PoolSim />
 
 ## Try it: the handshake tax
 
-Drag the round-trip time. A cold HTTPS request pays DNS + TCP + TLS 1.3 + the request, about **4 round trips**; on a kept-alive connection it's **1**. Switch to TLS 1.2 to add a round trip, or to HTTP/3, where the transport and TLS handshakes are combined.
+Drag the round-trip time. A cold HTTPS request pays DNS + TCP + TLS 1.3 + the request, about **4 round trips**; a kept-alive one pays **1**. Switch to TLS 1.2 to add a round trip, or HTTP/3 to combine the transport and TLS handshakes.
 
 <HandshakeTimeline />
 
 ## Pool sizing
 
-Every instance opens its own pool, so the rule is about the **total**:
+Each instance opens its own pool, so the rule is about the **total**:
 
-> instances × pool size ≤ `max_connections` − headroom (for admin tools, migrations and cron jobs)
+> instances × pool size ≤ `max_connections` − headroom (admin tools, migrations, cron jobs)
 
 <StatTiles items={[{ label: "max_connections", value: "200" }, { label: "Reserved", value: "20", sub: "admin, migrations" }, { label: "App instances", value: "12" }, { label: "Pool per instance", value: "15", sub: "(200 − 20) ÷ 12" }]} />
 
-Two more checks keep the pool honest:
+Two more checks:
 
-- **Is it big enough?** Little's law: connections busy on average = queries per second × time each query holds a connection. 1,000 queries/s × 5 ms = **5** busy connections, so a pool of 15 has plenty of room for bursts.
-- **Is it too big?** The PostgreSQL wiki heuristic for connections doing useful work at once is `(cores × 2) + effective spindles`: about **17** for an 8-core server. Beyond that, extra connections add context switching and lock contention, not throughput. Many small pools that add up to far more than this are a sign you need PgBouncer.
+- **Big enough?** Little's law: busy connections = queries per second × time each holds a connection. 1,000 queries/s × 5 ms = **5**, so a pool of 15 has room for bursts.
+- **Too big?** The PostgreSQL wiki heuristic for useful concurrent connections is `(cores × 2) + effective spindles`: about **17** on 8 cores. Past that you add context switching and lock contention, not throughput; many pools summing far beyond it call for PgBouncer.
 
-Set three timeouts on every pool: how long to wait for a free connection (`connectionTimeoutMillis`, about 2 s, then fail fast), how long an idle connection lives (`idleTimeoutMillis`), and a server-side `statement_timeout` so one runaway query can't hold a connection forever.
+Give every pool three timeouts: `connectionTimeoutMillis` (about 2 s, then fail fast), `idleTimeoutMillis`, and a server-side `statement_timeout` so a runaway query can't hold a connection forever.
 
 ## PgBouncer
 
-PgBouncer is a lightweight proxy that speaks the PostgreSQL protocol. Apps open hundreds of cheap connections to it, and it runs their work over a small number of real server connections.
+A lightweight proxy speaking the PostgreSQL protocol: apps open hundreds of cheap connections to it, and it runs their work over a few real server connections.
 
 | Mode | A server connection is held for | Good for | Breaks |
 |---|---|---|---|
@@ -67,36 +62,36 @@ PgBouncer is a lightweight proxy that speaks the PostgreSQL protocol. Apps open 
 | Transaction | One transaction | Most web apps | Session state between transactions |
 | Statement | One statement | Autocommit-only workloads | Multi-statement transactions |
 
-Transaction mode is the usual choice. The caveats: anything tied to a session (`SET`, session advisory locks, `LISTEN`, temporary tables) doesn't survive into the next transaction, so use `SET LOCAL` inside the transaction instead. Named prepared statements need explicit support: set `max_prepared_statements` (PgBouncer 1.21 and later).
+Transaction mode is the usual pick. The catch: session-bound things (`SET`, session advisory locks, `LISTEN`, temporary tables) don't survive into the next transaction, so use `SET LOCAL` inside it. Named prepared statements need `max_prepared_statements` (PgBouncer 1.21 and later).
 
 ## Keep-alive
 
-Reusing a TCP + TLS connection turns a 4-round-trip request into a 1-round-trip one. Node's `fetch` (built on undici) keeps connections alive by default, and since Node 19 so does the default HTTP agent. Two problems still bite:
+Node's `fetch` (undici) keeps connections alive by default, and so does the default HTTP agent since Node 19. Two problems still bite:
 
-- **Ephemeral ports.** Without keep-alive, every closed outgoing connection sits in `TIME_WAIT` for 60 s on Linux. The default ephemeral range has 28,232 ports, so you can open only about **470 new connections per second** to one destination before `connect` starts failing.
-- **The idle-timeout race.** If a server closes idle sockets sooner than the load balancer in front of it, the LB sometimes sends a request down a socket that is just closing, and the user gets a 502. Keep the server's keep-alive timeout **longer** than the LB's (Node's default is 5 s; AWS ALB's is 60 s).
+- **Ephemeral ports.** Without keep-alive, each closed outgoing connection sits in `TIME_WAIT` for 60 s on Linux. With 28,232 default ports, that's only about **470 new connections per second** to one destination before `connect` fails.
+- **The idle-timeout race.** If the server closes idle sockets before the load balancer does, the LB sometimes sends a request down a closing socket: a 502. Keep the server's keep-alive timeout **longer** than the LB's (Node's default is 5 s; AWS ALB's is 60 s).
 
 ## Timeouts and deadlines
 
-Every outgoing call needs a timeout, or one slow dependency ties up all your sockets, pool slots and memory, and its outage becomes yours.
+Without a timeout, one slow dependency ties up your sockets, pool slots and memory, and its outage becomes yours.
 
 | Timeout | What it bounds | Typical setting |
 |---|---|---|
 | Connect | Opening TCP + TLS | 1–3 s |
-| Pool acquire | Waiting for a free pooled connection | 1–2 s, then fail fast |
+| Pool acquire | Waiting for a pooled connection | 1–2 s, then fail fast |
 | Request or statement | One call or query | A few times its p99 |
-| Idle | How long an unused connection stays open | Shorter than the server's or LB's |
-| Deadline | The whole user request, across every hop | From the SLO, for example 2 s |
+| Idle | An unused connection's lifetime | Shorter than the server's or LB's |
+| Deadline | The whole request, across every hop | From the SLO, e.g. 2 s |
 
-Fixed per-call timeouts don't add up correctly across a chain of services. With **deadline propagation**, the edge sets one budget for the request and every hop passes the time remaining downstream (gRPC does this for you), so nobody keeps working on a request whose caller has already given up.
+Fixed per-call timeouts don't add up across a chain. With **deadline propagation**, the edge sets one budget and every hop passes the remainder downstream (gRPC does this for you), so nobody works on a request whose caller already gave up.
 
 ## Concurrency limits
 
-`Promise.all(ids.map(fetchUser))` over 10,000 ids opens 10,000 requests at once: it exhausts your pool, trips the downstream rate limit, or knocks the dependency over. Process work with a fixed number of workers (`mapLimit` below, or the `p-limit` package), and keep queues **bounded**, so overload turns into fast rejections instead of unbounded memory and latency.
+`Promise.all(ids.map(fetchUser))` over 10,000 ids fires 10,000 requests at once: it drains your pool, trips the downstream rate limit, or flattens the dependency. Use a fixed number of workers (the `mapLimit` snippet, or `p-limit`) and **bounded** queues, so overload becomes fast rejections, not unbounded memory and latency.
 
 ## File descriptors and ulimit
 
-Every socket, file and pipe is a file descriptor, and a busy server needs one for each inbound connection, each pooled outbound connection and each open file. The default soft limit is often 1,024, after which `accept` and `connect` fail with `EMFILE: too many open files`.
+Every socket, file and pipe is a file descriptor: one per inbound connection, pooled outbound connection and open file. The default soft limit is often 1,024; past it, `accept` and `connect` fail with `EMFILE: too many open files`.
 
 ```bash
 ulimit -n                                  # the current soft limit, often 1024
@@ -106,88 +101,80 @@ ls /proc/$(pgrep -n node)/fd | wc -l       # descriptors in use right now
 
 ## Graceful shutdown
 
-Deploys restart every instance, so shutdown happens many times a day. Done badly, each deploy drops in-flight requests and WebSockets.
+Deploys restart every instance, many times a day; done badly, each drops in-flight requests and WebSockets.
 
 <Steps>
   <Step title="Fail readiness">
-    On `SIGTERM`, start answering the readiness probe with 503 so the load balancer stops sending new requests. In Kubernetes, a short `preStop` sleep gives the endpoint change time to spread.
+    On `SIGTERM`, answer the readiness probe with 503 so the load balancer stops sending requests. In Kubernetes, a short `preStop` sleep lets the endpoint change spread.
   </Step>
   <Step title="Stop accepting and close idle sockets">
-    `server.close()` stops accepting new connections; `server.closeIdleConnections()` drops idle keep-alive sockets right away. WebSocket clients get close code 1001 and reconnect elsewhere, with jitter.
+    `server.close()` stops new connections; `server.closeIdleConnections()` drops idle keep-alive sockets at once. WebSocket clients get close code 1001 and reconnect elsewhere, with jitter.
   </Step>
   <Step title="Finish in-flight work">
     Let running requests complete, then close database pools and flush logs and metrics.
   </Step>
   <Step title="Exit before the kill">
-    Set a hard deadline a little shorter than the orchestrator's grace period (30 s by default in Kubernetes), then exit.
+    Set a hard deadline a little under the orchestrator's grace period (30 s by default in Kubernetes), then exit.
   </Step>
 </Steps>
 
 ## HTTP/2 multiplexing and HTTP/3
 
-HTTP/1.1 runs one request at a time per connection, which is why browsers open about 6 connections per origin. **HTTP/2** runs many concurrent streams over one connection with compressed headers, but one lost TCP packet stalls every stream (head-of-line blocking). **HTTP/3** runs over QUIC on UDP: streams are independent, the transport and TLS handshakes are combined (0-RTT on resumption), and a connection survives a switch from Wi-Fi to mobile data.
+HTTP/1.1 runs one request at a time per connection, so browsers open about 6 per origin. **HTTP/2** multiplexes streams over one connection with compressed headers, but one lost TCP packet stalls them all (head-of-line blocking). **HTTP/3** runs over QUIC on UDP: independent streams, combined transport and TLS handshakes (0-RTT on resumption), and it survives a switch from Wi-Fi to mobile data.
 
-One trap between services: gRPC uses a single long-lived HTTP/2 connection, so behind a layer-4 load balancer all of a client's traffic lands on one backend. Use a layer-7 (HTTP/2-aware) balancer or client-side load balancing.
+The service-to-service trap: gRPC holds one long-lived HTTP/2 connection, so behind a layer-4 load balancer a client's traffic all hits one backend. Use a layer-7 (HTTP/2-aware) or client-side balancer.
 
 ## Code
 
 ### Database connection pooling
 
-Opening a connection costs tens of milliseconds and databases cap them. A pool reuses a few; size it from the database limit divided by the instance count, and always release a client you checked out.
-
 <CodeTabs files={['snippets/pool.js', 'snippets/pool-size.js']} />
 
 ### HTTP keep-alive
 
-Reusing TCP and TLS connections avoids repeated handshakes to downstream services. Tune undici's pool for heavy service-to-service traffic, and keep the server's idle timeout above the load balancer's.
+Tunes undici's pool for heavy service-to-service traffic.
 
 <CodeBlock src="snippets/keep-alive.js" />
 
 ### Timeouts and deadlines
 
-`fetch(url, { signal: AbortSignal.timeout(2000) })` is the minimum. Better: give the whole request one budget and pass what's left downstream, so every hop can give up early.
+`fetch(url, { signal: AbortSignal.timeout(2000) })` is the minimum; the snippet passes one shrinking budget downstream instead.
 
 <CodeBlock src="snippets/deadline.js" />
 
 ### Limiting concurrency
 
-Unbounded `Promise.all` can flood a database or an API. A fixed number of workers share one cursor, so at most `limit` calls are in flight and results stay in input order.
+A fixed number of workers share one cursor, so at most `limit` calls are in flight and results stay in input order.
 
 <CodeBlock src="snippets/map-limit.js" />
 
 ### Graceful shutdown
 
-One Node process can hold tens of thousands of sockets, so drain them deliberately on deploy: fail readiness, close WebSockets with 1001, drop idle keep-alive sockets, finish in-flight requests, close the pool, and exit before the hard kill.
+One Node process can hold tens of thousands of sockets; this drains them in step order.
 
 <CodeBlock src="snippets/shutdown.js" />
 
 <Callout kind="warning" title="Common mistakes">
-- Sizing each instance's pool on its own and forgetting that autoscaling multiplies it.
-- "Fixing" slow queries with a bigger pool.
-- Checking out a client for a transaction and not releasing it on errors.
-- Outgoing calls with no timeout, or timeouts longer than the caller's.
-- `Promise.all` over an unbounded list.
-- A server keep-alive timeout shorter than the load balancer's idle timeout.
-- Exiting immediately on `SIGTERM`.
+- Not releasing a checked-out client when a query throws: the pool leaks until it runs dry.
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
   <FollowUp q="We scaled from 10 to 30 app instances and Postgres started refusing connections. Why?">
-    Each instance opens its own pool, so 30 × 20 = 600 connections, far above `max_connections`. Fix it with smaller per-instance pools sized from the total (`(max_connections − headroom) ÷ instances`) and PgBouncer in transaction mode, so app connections are cheap and the database sees only a few dozen.
+    Each instance opens its own pool: 30 × 20 = 600 connections, far past `max_connections`. Size pools as `(max_connections − headroom) ÷ instances` and add PgBouncer in transaction mode.
   </FollowUp>
   <FollowUp q="Why can a bigger pool make things slower?">
-    Beyond the database's ability to run queries in parallel (roughly its cores), extra connections only add context switching and lock contention, so throughput drops and latency rises. A small pool with a short queue in front of it serves more requests per second than a huge pool all fighting for the CPU.
+    Past roughly the database's core count, extra connections only add context switching and lock contention; a small pool with a short queue serves more.
   </FollowUp>
   <FollowUp q="How do you deploy WebSocket servers without dropping users?">
-    Fail readiness so no new sockets arrive, send close frames (1001, going away), let clients reconnect with jitter to other nodes and resume from their last message id, and finish draining within the termination grace period.
+    Fail readiness, send close 1001 (going away), and let clients reconnect elsewhere with jitter and resume from their last message id.
   </FollowUp>
   <FollowUp q="How would you size the connection pool?">
-    From the top down and the bottom up. Top down: the total across all instances must fit under `max_connections` minus headroom, including at maximum autoscale. Bottom up: Little's law (queries per second × query time) gives how many are busy on average; add room for bursts. Then load test, and watch pool wait time and timeouts.
+    Top down: the total at maximum autoscale fits under `max_connections` minus headroom. Bottom up: Little's law plus burst room, then a load test.
   </FollowUp>
   <FollowUp q="A downstream service got slow, and now our service is down too. What happened?">
-    Calls to it had no (or too long) timeouts, so requests piled up holding sockets, pool slots and memory until nothing was left for healthy traffic. Fix: per-call timeouts within a propagated deadline, a circuit breaker that fails fast once the dependency is clearly down, a separate pool (bulkhead) per dependency, and a fallback.
+    Calls without timeouts held sockets and pool slots until healthy traffic starved. Add timeouts inside a propagated deadline, a circuit breaker, a bulkhead pool per dependency and a fallback.
   </FollowUp>
 </FollowUps>
 

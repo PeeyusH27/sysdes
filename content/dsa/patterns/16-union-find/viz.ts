@@ -1,5 +1,6 @@
-import { arr, circleLayout, defineTrace, graph, note } from "@/components/algo/trace";
+import { arr, circleLayout, defineTrace, forestLayout, graph, note } from "@/components/algo/trace";
 import type { Tone } from "@/components/algo/types";
+import { edgeProblem } from "@/components/algo/checks";
 
 type Edge = [number, number];
 
@@ -31,6 +32,11 @@ function countComponents(n, edges) {
     { label: "Two groups and a cycle", input: { n: 7, edges: [[0, 1], [2, 3], [1, 3], [4, 5], [3, 0], [5, 6]] as Edge[] } },
     { label: "An isolated node", input: { n: 5, edges: [[3, 4], [0, 1], [4, 0]] as Edge[] } },
   ],
+  fields: {
+    n: { min: 2, max: 10, help: "Nodes are numbered 0 to n - 1 (up to 10)." },
+    edges: { minItems: 0, maxItems: 10, min: 0, max: 9, colNames: ["a", "b"], help: "One edge per line, in the order they arrive: a b (up to 10)." },
+  },
+  validate: ({ n, edges }) => edgeProblem(n, edges, { repeats: true }),
   run(t, { n, edges }) {
     const parent = Array.from({ length: n }, (_, i) => i);
     const rank = new Array<number>(n).fill(0);
@@ -164,6 +170,27 @@ function find(parent, x) {
       input: { parent: [0, 0, 1, 2, 2, 0, 5], queries: [3, 4], pos: [[50, 6], [28, 30], [38, 60], [14, 90], [50, 90], [74, 30], [86, 60]] as [number, number][] },
     },
   ],
+  fields: {
+    parent: { maxItems: 8, min: 0, max: 7, help: "parent[i] for each node. A root points at itself (up to 8)." },
+    queries: { maxItems: 3, min: 0, max: 7, help: "Nodes to call find on, in order (up to 3)." },
+    pos: false,
+  },
+  validate: ({ parent, queries }) => {
+    const n = parent.length;
+    const bad = parent.findIndex((p) => p >= n);
+    if (bad !== -1) return `parent[${bad}] = ${parent[bad]}, but the nodes are 0 to ${n - 1}.`;
+    if (!parent.some((p, i) => p === i)) return "There is no root: at least one node must point at itself.";
+    for (let i = 0; i < n; i++) {
+      let x = i;
+      for (let hops = 0; parent[x] !== x; hops++) {
+        if (hops > n) return `Following parent pointers from ${i} goes round in a loop. Every chain must end at a root that points at itself.`;
+        x = parent[x];
+      }
+    }
+    const q = queries.find((x) => x >= n);
+    return q !== undefined && `find(${q}) asks for a node that doesn't exist (the nodes are 0 to ${n - 1}).`;
+  },
+  prepare: (input) => ({ ...input, pos: forestLayout(input.parent) }),
   run(t, { parent, queries, pos }) {
     const nodes = parent.map((_, i) => ({ id: i, x: pos[i][0], y: pos[i][1] }));
     const views = (o: { x?: number; root?: number; path?: number[]; fresh?: number }, extra: ReturnType<typeof note>[] = []) => {

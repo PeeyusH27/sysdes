@@ -26,6 +26,7 @@ function isBalanced(s) {
     { label: "Crossed pairs", input: { s: "([)]" } },
     { label: "Left open", input: { s: "(()" } },
   ],
+  fields: { s: { chars: "()\\[\\]{}", maxLength: 12, help: "Brackets only: ( ) [ ] { }, up to 12." } },
   run(t, { s }) {
     const chars = [...s];
     const st: string[] = [];
@@ -104,6 +105,7 @@ function nextGreaterIndex(nums) {
     { label: "Mixed values", input: { nums: [5, 2, 3, 1, 6, 4] } },
     { label: "Equal values", input: { nums: [3, 3, 1, 4] } },
   ],
+  fields: { nums: { maxItems: 10 } },
   run(t, { nums }) {
     const answer: number[] = nums.map(() => -1);
     const st: number[] = [];
@@ -174,6 +176,7 @@ function smallerNeighbours(nums) {
     { label: "Distinct values", input: { nums: [4, 6, 5, 2, 7, 3] } },
     { label: "Ties", input: { nums: [3, 1, 3, 3, 0] } },
   ],
+  fields: { nums: { maxItems: 10 } },
   run(t, { nums }) {
     const n = nums.length;
     const left: number[] = nums.map(() => -1);

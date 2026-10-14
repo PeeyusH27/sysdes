@@ -2,6 +2,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useInView, useReducedMotion } from "motion/react";
 import { compact } from "@/lib/format";
+import { useBoxWidth } from "@/components/diagram/useBoxWidth";
 import { ChartTable, ChartTooltip } from "./ChartBits";
 import { nearestIndex, niceTicks } from "./scales";
 
@@ -14,6 +15,36 @@ export interface LineSeries {
 type XFormat = "percent" | "number" | "raw";
 const fmtX = (v: number, f: XFormat) => (f === "percent" ? `${Math.round(v * 100)}%` : f === "number" ? compact(v) : String(v));
 const fmtY = (v: number, unit: string) => `${v >= 100 ? Math.round(v).toLocaleString("en") : +v.toFixed(2)}${unit ? ` ${unit}` : ""}`;
+
+/** End-label text: at most two lines of about `max` characters, split at spaces. */
+export function wrapLabel(name: string, max = 13): string[] {
+  if (name.length <= max) return [name];
+  const words = name.split(" ");
+  let a = "";
+  let i = 0;
+  while (i < words.length && (a ? a.length + 1 + words[i].length : words[i].length) <= max) a = a ? `${a} ${words[i++]}` : words[i++];
+  if (!a) return [name];
+  return [a, words.slice(i).join(" ")].filter(Boolean);
+}
+
+const LABEL_LINE = 13;
+
+/**
+ * Vertical positions for end labels so none overlap: each wants to sit at its line's last point (`want`, the centre
+ * of its block) and takes `lines` × LABEL_LINE of height. Labels keep their order, are pushed apart just enough, and
+ * stay between `lo` and `hi`.
+ */
+export function spreadLabels(items: { want: number; lines: number }[], lo: number, hi: number, gap = 3): number[] {
+  const order = items.map((it, i) => ({ ...it, i })).sort((a, b) => a.want - b.want || a.i - b.i);
+  const h = (k: number) => order[k].lines * LABEL_LINE;
+  const top = order.map((it) => it.want - (it.lines * LABEL_LINE) / 2);
+  for (let k = 0; k < order.length; k++) top[k] = Math.max(top[k], k ? top[k - 1] + h(k - 1) + gap : lo);
+  for (let k = order.length - 1; k >= 0; k--) top[k] = Math.min(top[k], k < order.length - 1 ? top[k + 1] - h(k) - gap : hi - h(k));
+  for (let k = 0; k < order.length; k++) top[k] = Math.max(top[k], k ? top[k - 1] + h(k - 1) + gap : lo);
+  const out: number[] = [];
+  order.forEach((it, k) => (out[it.i] = top[k] + h(k) / 2));
+  return out;
+}
 
 /**
  * Up to 3 series on one y-axis (never two scales). Crosshair snaps to the nearest x and lists every series.
@@ -44,8 +75,17 @@ export function LineChart({
   yMax?: number;
 }) {
   const uid = useId().replace(/:/g, "");
-  const W = 560;
-  const M = { t: 22, r: series.length > 1 ? 96 : 24, b: 40, l: 54 };
+  // Laid out at the width it really gets (so text keeps its size on a phone); 560 on the server and until measured.
+  const frame = useRef<HTMLDivElement>(null);
+  const boxW = useBoxWidth(frame);
+  const W = boxW ? Math.max(260, boxW) : 560;
+  const narrow = W < 440;
+  // Multi-series charts label each line at its right end (the legend names them too, so narrow charts skip that):
+  // leave room for the longest (wrapped) name.
+  const endLabels = series.length > 1 && !narrow;
+  const labels = series.map((s) => wrapLabel(s.name));
+  const longest = Math.max(0, ...labels.flat().map((l) => l.length));
+  const M = { t: 22, r: endLabels ? Math.min(130, Math.max(60, Math.round(longest * 6.4 + 18))) : narrow ? 14 : 24, b: 40, l: narrow ? 44 : 54 };
   const plotW = W - M.l - M.r;
   const plotH = height - M.t - M.b;
   const ticks = niceTicks(yMax ?? Math.max(...series.flatMap((s) => s.values), 1));
@@ -83,7 +123,13 @@ export function LineChart({
     if (e.key === "ArrowLeft") setHot((h) => Math.max((h ?? 1) - 1, 0));
   };
   const color = (i: number) => `var(--series-${i + 1})`;
-  const xTicks = x.length <= 8 ? x : [0, 0.25, 0.5, 0.75, 1].map((f) => x[Math.round(f * (x.length - 1))]);
+  const endY = series.map((s) => sy(s.values.at(-1)!));
+  const labelY = spreadLabels(
+    series.map((_, i) => ({ want: endY[i], lines: labels[i].length })),
+    M.t - 10,
+    M.t + plotH + 12,
+  );
+  const xTicks = x.length <= (narrow ? 5 : 8) ? x : [0, 0.25, 0.5, 0.75, 1].map((f) => x[Math.round(f * (x.length - 1))]);
 
   return (
     <figure className="chart">
@@ -100,7 +146,7 @@ export function LineChart({
           ))}
         </ul>
       )}
-      <div className="chart-frame">
+      <div className="chart-frame" ref={frame}>
         <svg ref={svgRef} viewBox={`0 0 ${W} ${height}`} role="img" aria-labelledby={`${uid}t`} tabIndex={0} onKeyDown={onKey} onBlur={() => setHot(null)}>
           {ticks.map((t) => (
             <g key={t}>
@@ -132,10 +178,17 @@ export function LineChart({
                 )}
                 <path d={`M${pts.join(" L")}`} className="line" style={{ stroke: color(i) }} />
                 <circle cx={sx(x1)} cy={sy(s.values.at(-1)!)} r={4.5} className="dot" style={{ fill: color(i) }} />
-                {series.length > 1 && (
-                  <text x={sx(x1) + 9} y={sy(s.values.at(-1)!) + 4} className="end-label">
-                    {s.name}
-                  </text>
+                {endLabels && (
+                  <>
+                    {Math.abs(labelY[i] - endY[i]) > 6 && <path d={`M${sx(x1) + 5},${endY[i]} L${sx(x1) + 9},${labelY[i]}`} className="end-leader" style={{ stroke: color(i) }} />}
+                    <text x={sx(x1) + 11} y={labelY[i] - ((labels[i].length - 1) * LABEL_LINE) / 2 + 4} className="end-label">
+                      {labels[i].map((l, k) => (
+                        <tspan key={k} x={sx(x1) + 11} dy={k ? LABEL_LINE : 0}>
+                          {l}
+                        </tspan>
+                      ))}
+                    </text>
+                  </>
                 )}
               </g>
             );

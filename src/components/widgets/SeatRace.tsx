@@ -1,11 +1,11 @@
 "use client";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { m } from "motion/react";
 import { MousePointerClick } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Seg, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 export type Who = "Alice" | "Bob";
 export type Mode = "conditional" | "naive";
@@ -111,43 +111,95 @@ export const holderAt = (o: RaceOutcome | null, t: number): Who | null => (o ? (
 const SLOW = 8; // real ms per simulated ms
 const ROWS = ["A", "B", "C"];
 const TAKEN = new Set(["A2", "A3", "B5", "B6", "C1", "C8", "C4"]);
-const CLIENT: Record<Who, { x: number; y: number }> = { Alice: { x: 128, y: 48 }, Bob: { x: 128, y: 160 } };
-const DB = { x: 400, y: 104 };
 
-function SeatMap({ holder }: { holder: Who | null }) {
+/**
+ * Two drawings of the same scene: landscape (clients on the left, the database with its seat map on the right) for
+ * the desktop pane, and a stacked one (clients on top, database below) for a phone.
+ */
+interface Layout {
+  W: number;
+  H: number;
+  client: Record<Who, { x: number; y: number; w: number; h: number }>;
+  /** Where a client's wire leaves its box, and where every wire meets the database. */
+  port: Record<Who, { x: number; y: number }>;
+  dbPort: { x: number; y: number };
+  db: { x: number; y: number; w: number; h: number };
+  seats: { x: number; y: number; size: number; gap: number };
+  /** Lines of text inside the database box. */
+  dbText: { title: number; status: number; sub: number };
+  clock: { x: number; y: number };
+}
+const WIDE: Layout = {
+  W: 600,
+  H: 178,
+  client: { Alice: { x: 8, y: 8, w: 168, h: 52 }, Bob: { x: 8, y: 112, w: 168, h: 52 } },
+  port: { Alice: { x: 176, y: 34 }, Bob: { x: 176, y: 138 } },
+  dbPort: { x: 384, y: 86 },
+  db: { x: 384, y: 6, w: 208, h: 160 },
+  seats: { x: 412, y: 38, size: 17, gap: 3 },
+  dbText: { title: 27, status: 122, sub: 142 },
+  clock: { x: 280, y: 172 },
+};
+const TALL: Layout = {
+  W: 320,
+  H: 252,
+  client: { Alice: { x: 4, y: 6, w: 150, h: 52 }, Bob: { x: 166, y: 6, w: 150, h: 52 } },
+  port: { Alice: { x: 79, y: 58 }, Bob: { x: 241, y: 58 } },
+  dbPort: { x: 160, y: 124 },
+  db: { x: 44, y: 124, w: 232, h: 124 },
+  seats: { x: 78, y: 152, size: 17, gap: 3 },
+  dbText: { title: 143, status: 225, sub: 241 },
+  clock: { x: 160, y: 100 },
+};
+
+/** The widget's width in px (0 until measured), so the drawing can switch to its stacked phone layout. */
+function useWidth(ref: React.RefObject<HTMLElement | null>) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return w;
+}
+
+function SeatMap({ L, holder }: { L: Layout; holder: Who | null }) {
+  const { x: x0, y: y0, size, gap } = L.seats;
   return (
-    <svg viewBox="0 0 300 116" className="sim-svg" style={{ maxWidth: 340 }} role="img" aria-label={`Seat map. Seat ${SEAT} is ${holder ? `held by ${holder}` : "available"}.`}>
-      {ROWS.map((r, ri) =>
-        Array.from({ length: 8 }, (_, ci) => {
-          const id = `${r}${ci + 1}`;
-          const x = 34 + ci * 32;
-          const y = 8 + ri * 34;
-          const taken = TAKEN.has(id);
-          const target = id === SEAT;
-          return (
-            <g key={id}>
-              <rect x={x} y={y} width={26} height={26} rx={6} fill={target && holder ? "var(--series-1)" : taken ? "var(--border)" : "var(--card-2)"} stroke={target ? "var(--accent-2)" : "var(--border-strong)"} strokeWidth={target ? 2.5 : 1.2} />
-              <text x={x + 13} y={y + 17} textAnchor="middle" style={{ fontSize: 10, fontWeight: target ? 700 : 500, fill: target && holder ? "var(--accent-ink)" : taken ? "var(--muted)" : "var(--fg)" }}>
-                {target && holder ? holder[0] : taken ? "✕" : ci + 1}
-              </text>
-            </g>
-          );
-        }),
-      )}
+    <g>
       {ROWS.map((r, ri) => (
-        <text key={r} x={14} y={25 + ri * 34} className="muted-text" style={{ fontWeight: 650 }}>
-          {r}
-        </text>
+        <g key={r}>
+          <text x={x0 - 8} y={y0 + ri * (size + gap) + size - 4} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5, fontWeight: 650 }}>
+            {r}
+          </text>
+          {Array.from({ length: 8 }, (_, ci) => {
+            const id = `${r}${ci + 1}`;
+            const x = x0 + ci * (size + gap);
+            const y = y0 + ri * (size + gap);
+            const taken = TAKEN.has(id);
+            const target = id === SEAT;
+            return (
+              <g key={id}>
+                <rect x={x} y={y} width={size} height={size} rx={4} fill={target && holder ? "var(--series-1)" : taken ? "var(--border)" : "var(--card)"} stroke={target ? "var(--accent-2)" : "var(--border-strong)"} strokeWidth={target ? 2.2 : 1} />
+                <text x={x + size / 2} y={y + size - 5} textAnchor="middle" style={{ fontSize: 9.5, fontWeight: target ? 750 : 500, fill: target && holder ? "var(--accent-ink)" : taken ? "var(--muted)" : "var(--fg)" }}>
+                  {target && holder ? holder[0] : taken ? "✕" : ci + 1}
+                </text>
+              </g>
+            );
+          })}
+        </g>
       ))}
-    </svg>
+    </g>
   );
 }
 
-function Packet({ msg, t, reduce }: { msg: Msg; t: number; reduce: boolean }) {
+function Packet({ L, msg, t, reduce }: { L: Layout; msg: Msg; t: number; reduce: boolean }) {
   if (reduce || t < msg.start || t >= msg.end) return null;
   const p = (t - msg.start) / Math.max(1, msg.end - msg.start);
-  const a = msg.out ? CLIENT[msg.who] : DB;
-  const b = msg.out ? DB : CLIENT[msg.who];
+  const a = msg.out ? L.port[msg.who] : L.dbPort;
+  const b = msg.out ? L.dbPort : L.port[msg.who];
   const cx = a.x + (b.x - a.x) * p;
   const cy = a.y + (b.y - a.y) * p;
   const color = msg.who === "Alice" ? "var(--series-1)" : "var(--series-3)";
@@ -173,16 +225,22 @@ export function SeatRace() {
   const [playing, setPlaying] = useState(false);
   const rand = useMemo(() => mulberry32(5), []);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const width = useWidth(ref);
+  const L = width && width < 520 ? TALL : WIDE;
 
   const end = outcome?.end ?? 0;
   const step = useCallback((s: Play, dt: number): Play => (s.t >= end ? s : { t: Math.min(end, s.t + dt / SLOW) }), [end]);
   const [play, reset] = useFixedStep<Play>({ t: 0 }, step, playing && inView && !reduce);
   const t = outcome ? play.t : 0;
 
-  const race = () => {
+  const newRace = () => {
     // A sub-millisecond jitter breaks exact ties the way real networks do.
     const o = seatRace(mode, { Alice: aliceMs + +(rand() * 0.9).toFixed(1), Bob: bobMs + +(rand() * 0.9).toFixed(1) });
     setOutcome(o);
+    return o;
+  };
+  const race = () => {
+    const o = newRace();
     reset({ t: reduce ? o.end : 0 });
     setPlaying(!reduce);
   };
@@ -212,11 +270,14 @@ export function SeatRace() {
           ? `${outcome.winner}'s UPDATE reached the database first and matched 1 row. ${loser}'s identical UPDATE ran next, matched 0 rows because status was no longer 'available', and got "Seat taken". Exactly one winner, whatever the timing.`
           : `${loser}'s SELECT ran after ${outcome.winner}'s UPDATE had committed, so it saw 'held'. The gap between check and write was wide enough this time; shrink the difference in delays and both will book.`;
     }
-  } else if (outcome) sentence = `Racing… t = ${t.toFixed(0)} ms.`;
+  } else if (outcome) {
+    const last = visible.at(-1);
+    sentence = `Racing… t = ${t.toFixed(0)} ms.${last ? ` ${last.who}: ${last.result}.` : ""}`;
+  }
   const said = useThrottled(sentence, 600);
 
   return (
-    <WidgetFrame title="Seat race" sub={`Two people click ${SEAT} at the same moment. A conditional UPDATE lets the database pick exactly one winner; checking first and writing later does not.`}>
+    <WidgetFrame title="Seat race" sub={`Both click ${SEAT} at once. Which query lets only one of them win?`}>
       <div className="controls">
         <Seg<Mode>
           label="Booking query"
@@ -231,103 +292,77 @@ export function SeatRace() {
             { value: "naive", label: "SELECT, then UPDATE" },
           ]}
         />
-        <Slider label="Alice's network delay" value={aliceMs} min={10} max={200} step={5} onChange={setAliceMs} format={(v) => `${v} ms`} />
-        <Slider label="Bob's network delay" value={bobMs} min={10} max={200} step={5} onChange={setBobMs} format={(v) => `${v} ms`} />
       </div>
       <div className="controls" style={{ marginTop: 0 }}>
         <button type="button" className="wbtn primary" onClick={race}>
-          <MousePointerClick size={14} aria-hidden /> Alice and Bob click {SEAT} together
+          <MousePointerClick size={14} aria-hidden /> Alice and Bob click {SEAT}
         </button>
-        {outcome && (
-          <SimButtons
-            running={playing && !finished && !reduce}
-            reduce={reduce}
-            onToggle={
-              finished
+        <SimButtons
+          running={playing && !finished && !reduce}
+          reduce={reduce}
+          onToggle={
+            !outcome
+              ? undefined
+              : finished
                 ? () => {
                     reset({ t: 0 });
                     setPlaying(true);
                   }
                 : () => setPlaying((p) => !p)
-            }
-            onStep={() => reset({ t: finished ? 0 : nextT })}
-            stepHint={finished ? "Replay from the start" : "Jump to the next event"}
-            onReset={() => {
-              setOutcome(null);
+          }
+          onStep={() => {
+            if (!outcome) {
+              // Step before any race: start one, paused at its first event.
+              const o = newRace();
               setPlaying(false);
-              reset({ t: 0 });
-            }}
-          />
-        )}
+              reset({ t: Math.min(...o.log.map((l) => l.at)) });
+            } else reset({ t: finished ? 0 : nextT });
+          }}
+          stepHint={!outcome ? "Start a race, paused at the first event" : finished ? "Replay from the start" : "Jump to the next event"}
+          onReset={() => {
+            setOutcome(null);
+            setPlaying(false);
+            reset({ t: 0 });
+          }}
+        />
       </div>
-      <div ref={ref} style={{ display: "grid", gap: 10 }}>
-        <SeatMap holder={holder} />
-        <svg viewBox="0 0 560 208" className="sim-svg" role="img" aria-label={`Alice: ${status("Alice")}. Bob: ${status("Bob")}. Seat ${SEAT}: ${holder ? `held by ${holder}` : "available"}.`}>
-          {(["Alice", "Bob"] as Who[]).map((w) => (
-            <g key={w}>
-              <line x1={CLIENT[w].x} y1={CLIENT[w].y} x2={DB.x} y2={DB.y} stroke="var(--border)" strokeWidth={1.5} />
-              <rect x={10} y={CLIENT[w].y - 26} width={CLIENT[w].x - 10} height={52} rx={10} fill="var(--card-2)" stroke={w === "Alice" ? "var(--series-1)" : "var(--series-3)"} strokeWidth={1.8} />
-              <text x={(10 + CLIENT[w].x) / 2} y={CLIENT[w].y - 5} textAnchor="middle" style={{ fontWeight: 700, fontSize: 13 }}>
-                {w} · {w === "Alice" ? aliceMs : bobMs} ms
-              </text>
-              <text x={(10 + CLIENT[w].x) / 2} y={CLIENT[w].y + 13} textAnchor="middle" style={{ fontSize: 11.5, fontWeight: 650, fill: statusInk(w) }}>
-                {status(w).replace(" (but so is the other!)", "")}
-              </text>
-            </g>
-          ))}
-          <rect x={DB.x} y={DB.y - 40} width={150} height={80} rx={12} fill="var(--card-2)" stroke="var(--k-database)" strokeWidth={1.8} />
-          <text x={DB.x + 75} y={DB.y - 16} textAnchor="middle" style={{ fontWeight: 700, fontSize: 13 }}>
+      <div ref={ref}>
+        <svg viewBox={`0 0 ${L.W} ${L.H}`} className="sim-svg" style={{ maxWidth: L === WIDE ? 640 : 400, margin: "0 auto" }} role="img" aria-label={`Alice: ${status("Alice")}. Bob: ${status("Bob")}. Seat ${SEAT}: ${holder ? `held by ${holder}` : "available"}.`}>
+          {(["Alice", "Bob"] as Who[]).map((w) => {
+            const c = L.client[w];
+            return (
+              <g key={w}>
+                <line x1={L.port[w].x} y1={L.port[w].y} x2={L.dbPort.x} y2={L.dbPort.y} stroke="var(--border-strong)" strokeWidth={1.5} />
+                <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={10} fill="var(--card-2)" stroke={w === "Alice" ? "var(--series-1)" : "var(--series-3)"} strokeWidth={1.8} />
+                <text x={c.x + c.w / 2} y={c.y + 21} textAnchor="middle" style={{ fontWeight: 700, fontSize: 13 }}>
+                  {w} · {w === "Alice" ? aliceMs : bobMs} ms
+                </text>
+                <text x={c.x + c.w / 2} y={c.y + 39} textAnchor="middle" style={{ fontSize: 11.5, fontWeight: 650, fill: statusInk(w) }}>
+                  {status(w).replace(" (but so is the other!)", "")}
+                </text>
+              </g>
+            );
+          })}
+          <rect x={L.db.x} y={L.db.y} width={L.db.w} height={L.db.h} rx={12} fill="var(--card-2)" stroke="var(--k-database)" strokeWidth={1.8} />
+          <text x={L.db.x + L.db.w / 2} y={L.dbText.title} textAnchor="middle" style={{ fontWeight: 700, fontSize: 13 }}>
             Database
           </text>
-          <text x={DB.x + 75} y={DB.y + 3} textAnchor="middle" className="muted-text">
+          <SeatMap L={L} holder={holder} />
+          <text x={L.db.x + L.db.w / 2} y={L.dbText.status} textAnchor="middle" style={{ fontWeight: 650 }}>
             seat {SEAT}: {holder ? `held (${holder.toLowerCase()})` : "available"}
           </text>
-          <text x={DB.x + 75} y={DB.y + 21} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
+          <text x={L.db.x + L.db.w / 2} y={L.dbText.sub} textAnchor="middle" className="muted-text" style={{ fontSize: 10.5 }}>
             {mode === "conditional" ? "one statement at a time per row" : "check and write are separate"}
           </text>
           {outcome?.msgs.map((msg, i) => (
-            <Packet key={i} msg={msg} t={t} reduce={reduce} />
+            <Packet key={i} L={L} msg={msg} t={t} reduce={reduce} />
           ))}
           {outcome && (
-            <text x={280} y={200} textAnchor="middle" className="muted-text">
+            <text x={L.clock.x} y={L.clock.y} textAnchor="middle" className="muted-text">
               t = {t.toFixed(0)} ms (slowed {SLOW}×)
             </text>
           )}
         </svg>
-      </div>
-      <div className="table-wrap" style={{ marginBottom: 0 }}>
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">t</th>
-              <th scope="col">Who</th>
-              <th scope="col">Statement</th>
-              <th scope="col">Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.length === 0 && (
-              <tr>
-                <td colSpan={4} className="muted">
-                  No statements yet.
-                </td>
-              </tr>
-            )}
-            {visible.map((l, i) => (
-              <tr key={i}>
-                <td>{l.at.toFixed(1)} ms</td>
-                <th scope="row">{l.who}</th>
-                <td>
-                  <code style={{ fontSize: 12, whiteSpace: "normal" }}>{l.sql}</code>
-                </td>
-                <td className={l.tone === "ok" ? "ok-ink" : l.tone === "bad" ? "bad-ink" : l.tone === "wait" ? "warn-ink" : undefined}>
-                  {l.tone === "ok" ? "✓ " : l.tone === "bad" ? "✕ " : l.tone === "wait" ? "⏳ " : ""}
-                  {l.result}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
       <p className="readout" aria-live="polite">
         {outcome && finished && (
@@ -336,8 +371,30 @@ export function SeatRace() {
           </span>
         )}
         {said}
-        <ReducedNote reduce={reduce} what="No packets (reduced motion): the log shows every statement; Step replays it event by event." />
+        <ReducedNote reduce={reduce} what="No packets (reduced motion): the SQL log shows every statement; Step replays it event by event." />
       </p>
+      <More label="Network delays">
+        <div className="controls">
+          <Slider label="Alice's network delay" value={aliceMs} min={10} max={200} step={5} onChange={setAliceMs} format={(v) => `${v} ms`} />
+          <Slider label="Bob's network delay" value={bobMs} min={10} max={200} step={5} onChange={setBobMs} format={(v) => `${v} ms`} />
+        </div>
+      </More>
+      <More label={`SQL log${visible.length ? ` (${visible.length})` : ""}`}>
+        {visible.length === 0 && <p className="muted" style={{ fontSize: 13, margin: 0 }}>No statements yet.</p>}
+        <ol aria-label="SQL statements in the order the database ran them" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6, fontSize: 13, lineHeight: 1.45 }}>
+          {visible.map((l, i) => (
+            <li key={i}>
+              <span className="muted" style={{ fontVariantNumeric: "tabular-nums" }}>{l.at.toFixed(1)} ms</span> <b>{l.who}</b>:{" "}
+              <span className={l.tone === "ok" ? "ok-ink" : l.tone === "bad" ? "bad-ink" : l.tone === "wait" ? "warn-ink" : undefined}>
+                {l.tone === "ok" ? "✓ " : l.tone === "bad" ? "✕ " : l.tone === "wait" ? "⏳ " : ""}
+                {l.result}
+              </span>
+              <br />
+              <code style={{ fontSize: 12, overflowWrap: "anywhere" }}>{l.sql}</code>
+            </li>
+          ))}
+        </ol>
+      </More>
     </WidgetFrame>
   );
 }

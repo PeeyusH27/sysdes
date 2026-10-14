@@ -4,7 +4,7 @@ export const shardRouter: FlowSpec = {
   id: "shard-router",
   title: "Routing requests to shards",
   description:
-    "The app hands every query to a shard router, which picks one of three shards from the shard key. Each shard is a primary with its own replica. Shard 3 only takes part in resharding.",
+    "The app hands every query to a shard router, which picks one of three shards by shard key. Each shard is a primary with its own replica; shard 3 joins only for resharding.",
   nodes: [
     { id: "app", label: "App", kind: "service", col: 0, row: 1.5 },
     { id: "router", label: "Shard router", kind: "gateway", col: 1, row: 1.5, sub: "key → shard", note: "A client library, or a proxy such as Vitess vtgate or MongoDB mongos." },
@@ -32,13 +32,13 @@ export const shardRouter: FlowSpec = {
       id: "hash-route",
       name: "Route by hash",
       steps: [
-        { edge: "app>router", caption: "The app saves an order for userId 42 and passes it to the shard router." },
+        { edge: "app>router", caption: "The app saves an order for userId 42 through the shard router." },
         {
           edge: "router>shard2",
-          caption: "The router computes hash(42) mod 3 = 2, so the row goes to shard 2. Any query that includes the user id touches exactly one shard.",
+          caption: "hash(42) mod 3 = 2, so the row goes to shard 2. Any query with the user id touches exactly one shard.",
           mark: [{ node: "shard2", state: "ok" }],
         },
-        { edge: "shard2>replica2", caption: "Shard 2 replicates the write to its own replica. Every shard is a small primary/replica cluster." },
+        { edge: "shard2>replica2", caption: "Shard 2 replicates to its own replica: every shard is a small primary/replica cluster." },
         { edge: "router>shard2", reverse: true, tone: "ok", caption: "Shard 2 confirms the commit." },
         {
           edge: "app>router",
@@ -65,14 +65,14 @@ export const shardRouter: FlowSpec = {
         {
           edge: "shard2>replica2",
           tone: "error",
-          caption: "Shard 2's disk and its replica fall behind, while shards 0 and 1 sit almost idle with old data.",
+          caption: "Shard 2's disk and replica fall behind while shards 0 and 1 sit nearly idle on old data.",
           mark: [{ node: "replica2", state: "busy" }],
         },
         { edge: "router>shard1", caption: "The upside of ranges: 'all orders from March 2024' is a scan on shard 1 alone." },
         {
           edge: "router>shard0",
           tone: "ok",
-          caption: "The fix: shard by a hashed key such as user_id and keep time as a sort key inside each shard, so new writes spread evenly.",
+          caption: "The fix: hash by user_id and keep time as the sort key inside each shard, so new writes spread evenly.",
           with: [{ edge: "router>shard1", tone: "ok", caption: "" }, { edge: "router>shard2", tone: "ok", caption: "" }],
           mark: [{ node: "shard2", state: null }, { node: "replica2", state: null }],
         },
@@ -90,7 +90,7 @@ export const shardRouter: FlowSpec = {
         },
         {
           edge: "shard2>shard3",
-          caption: "Step 2, backfill: a background job copies the existing rows in batches with idempotent upserts. Dual-writes keep new changes flowing meanwhile.",
+          caption: "Step 2, backfill: a background job copies existing rows in batches with idempotent upserts, while dual-writes carry new changes.",
           ms: 1500,
         },
         {
@@ -132,7 +132,7 @@ export const shardRouter: FlowSpec = {
         {
           edge: "app>router",
           reverse: true,
-          caption: "The router merges 30 rows, re-sorts them and keeps 10. Fine for admin pages; on a hot path, keep a precomputed table instead.",
+          caption: "The router merges 30 rows, re-sorts and keeps 10. Fine for admin pages; a hot path needs a precomputed table.",
         },
       ],
     },

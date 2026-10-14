@@ -1,12 +1,12 @@
 "use client";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Zap } from "lucide-react";
 import { LineChart } from "@/components/charts/LineChart";
 import { StatTiles } from "@/components/charts/ChartBits";
 import { int } from "@/lib/format";
 import { useFixedStep } from "@/lib/sim-loop";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
 export interface QueueParams {
   /** Jobs per second the producer emits. */
@@ -63,17 +63,64 @@ export const spike = (s: QueueState): QueueState => ({ ...s, spikeUntil: Math.ma
 // ---------------------------------------------------------------- picture
 const SHOWN = 24;
 
-function Flow({ x1, x2, y, live, perSec }: { x1: number; x2: number; y: number; live: boolean; perSec: number }) {
+/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
+function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => {
+      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, px]);
+  return narrow;
+}
+
+function Flow({ x1, y1, x2, y2, live, perSec }: { x1: number; y1: number; x2: number; y2: number; live: boolean; perSec: number }) {
   const dur = Math.max(0.25, Math.min(3, 12 / Math.max(perSec, 0.1)));
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  const head = (da: number) => `${x2 - 7 * Math.cos(a + da)} ${y2 - 7 * Math.sin(a + da)}`;
   return (
     <g>
-      <line x1={x1} x2={x2} y1={y} y2={y} stroke="var(--border-strong)" strokeWidth={2} strokeDasharray="5 7">
+      <line x1={x1} x2={x2} y1={y1} y2={y2} stroke="var(--border-strong)" strokeWidth={2} strokeDasharray="5 7">
         {live && perSec > 0.05 && <animate attributeName="stroke-dashoffset" from="0" to="-12" dur={`${dur}s`} repeatCount="indefinite" />}
       </line>
-      <path d={`M${x2 - 7} ${y - 5} L${x2} ${y} L${x2 - 7} ${y + 5}`} fill="none" stroke="var(--border-strong)" strokeWidth={2} />
+      <path d={`M${head(-0.6)} L${x2} ${y2} L${head(0.6)}`} fill="none" stroke="var(--border-strong)" strokeWidth={2} />
     </g>
   );
 }
+
+/** Backlog over the last 60 s as a small area chart inside the picture. */
+function Spark({ history, x, y, w, h }: { history: QueueState["history"]; x: number; y: number; w: number; h: number }) {
+  const max = Math.max(10, ...history.map((p) => p.depth));
+  const step = w / (HISTORY - 1);
+  const x0 = x + w - (history.length - 1) * step;
+  const pts = history.map((p, i) => `${(x0 + i * step).toFixed(1)},${(y + h - (p.depth / max) * h).toFixed(1)}`);
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={4} fill="var(--card-2)" stroke="var(--border)" />
+      {pts.length > 1 && <path d={`M${x0} ${y + h} L${pts.join(" L")} L${x + w} ${y + h} Z`} fill="var(--series-1)" opacity={0.18} />}
+      {pts.length > 1 && <path d={`M${pts.join(" L")}`} fill="none" stroke="var(--series-1)" strokeWidth={1.6} />}
+      <text x={x + 5} y={y + 11} className="muted-text" style={{ fontSize: 10 }}>
+        top {int(max)}
+      </text>
+    </g>
+  );
+}
+
+const CSS = `
+.w-queue { container-type: inline-size; }
+.w-queue .controls { margin-bottom: 4px; }
+.w-queue .control { min-width: 120px; }
+.w-queue .stat-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 4px; }
+.w-queue .stat-tile { padding: 5px 9px; border-radius: 10px; }
+.w-queue .stat-label, .w-queue .stat-sub { font-size: 11.5px; line-height: 1.35; }
+.w-queue .stat-value { font-size: 17px; line-height: 1.3; }
+.w-queue .chart { margin: 4px 0 0; padding: 10px 12px 6px; }
+@container (max-width: 520px) { .w-queue .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+`;
 
 export function QueueSim() {
   const [rate, setRate] = useState(30);
@@ -81,6 +128,8 @@ export function QueueSim() {
   const [msPerJob, setMsPerJob] = useState(100);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
+  const box = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(box);
 
   const params = useMemo(() => ({ rate, workers, msPerJob }), [rate, workers, msPerJob]);
   const step = useCallback((s: QueueState, dt: number) => queueStep(s, dt, params), [params]);
@@ -105,7 +154,7 @@ export function QueueSim() {
         xLabel="Time (s)"
         yUnit="jobs"
         area
-        height={200}
+        height={180}
       />
     ),
     [s.history],
@@ -119,70 +168,124 @@ export function QueueSim() {
         : `Queue empty: ${workers} workers finish up to ${int(cap)} jobs/s and ${int(s.inRate || rate)} arrive, so utilisation is ${Math.round(util * 100)}% and jobs barely wait.`;
   const said = useThrottled(sentence, 1500);
 
-  const qx = 150;
-  const qw = 250;
+  // Landscape: producer → queue → workers in a row, backlog sparkline under the queue. Phone: the same, top to bottom.
+  const W = narrow ? 300 : 600;
+  const qx = narrow ? 10 : 150;
+  const qw = narrow ? 280 : 250;
+  const qy = narrow ? 70 : 42;
+  const qh = narrow ? 32 : 36;
   const cell = qw / SHOWN;
   const shown = Math.min(SHOWN, Math.ceil(s.depth - 1e-9));
-  const wx = 440;
+  const perRow = narrow ? 10 : 5;
+  const rows = Math.ceil(workers / perRow);
+  const workerAt = (i: number) => {
+    const r = Math.floor(i / perRow);
+    const inRow = Math.min(perRow, workers - r * perRow);
+    return narrow
+      ? { cx: W / 2 + ((i % perRow) - (inRow - 1) / 2) * 22, cy: 136 + r * 22 }
+      : { cx: 456 + (i % perRow) * 22, cy: 60 + (r - (rows - 1) / 2) * 22 };
+  };
+  const busyLabelY = narrow ? 136 + rows * 22 + 2 : 113;
+  const spark = narrow ? { x: 10, y: busyLabelY + 22, w: 280, h: 36 } : { x: 150, y: 120, w: 442, h: 28 };
+  const H = spark.y + spark.h + 2;
+  const trendText = `${trend === "growing" ? `▲ growing ${int(growth)}/s` : trend === "draining" ? `▼ draining ${int(-growth)}/s` : "● empty"}`;
 
   return (
-    <WidgetFrame title="Queue simulator" sub="When producers outpace consumers the backlog grows without limit. Add workers or make jobs faster, then hit the spike and watch it drain.">
-      <div className="controls">
-        <Slider label="Producer rate" value={rate} min={1} max={200} onChange={setRate} format={(v) => `${v} jobs/s`} />
-        <Slider label="Workers" value={workers} min={1} max={20} onChange={setWorkers} />
-        <Slider label="Time per job" value={msPerJob} min={20} max={1000} step={10} onChange={setMsPerJob} format={(v) => `${v} ms`} />
+    <WidgetFrame title="Queue simulator" sub="When producers outpace consumers the backlog grows without limit. Add workers or make jobs faster, then hit the spike.">
+      <style href="w-queue-sim" precedence="widgets">
+        {CSS}
+      </style>
+      <div className="w-queue" ref={box}>
+        <div className="controls">
+          <Slider label="Producer rate" value={rate} min={1} max={200} onChange={setRate} format={(v) => `${v} jobs/s`} />
+          <Slider label="Workers" value={workers} min={1} max={20} onChange={setWorkers} />
+          <Slider label="Time per job" value={msPerJob} min={20} max={1000} step={10} onChange={setMsPerJob} format={(v) => `${v} ms`} />
+        </div>
+        <div className="controls" style={{ marginTop: 0 }}>
+          <button type="button" className="wbtn primary" onClick={() => reset(spike(s))}>
+            <Zap size={14} aria-hidden /> Spike ×{SPIKE_FACTOR} {spiking ? `(${((s.spikeUntil - s.t) / 1000).toFixed(1)} s left)` : `for ${SPIKE_MS / 1000} s`}
+          </button>
+          <SimButtons running={live} reduce={reduce} onToggle={() => setRunning((r) => !r)} onStep={() => reset(advance(s, step, 20))} stepHint="Advance 1 second" onReset={() => reset(initQueue())} />
+        </div>
+        <div ref={ref}>
+          <svg viewBox={`0 0 ${W} ${H}`} className="sim-svg" role="img" aria-label={`Producer, queue holding ${int(s.depth)} jobs, and ${workers} workers of which ${busy} are busy`}>
+            {narrow ? (
+              <>
+                <rect x={W / 2 - 60} y={2} width={120} height={42} rx={10} fill="var(--card-2)" stroke="var(--k-service)" strokeWidth={1.5} />
+                <text x={W / 2} y={19} textAnchor="middle" style={{ fontWeight: 650 }}>
+                  Producer
+                </text>
+                <text x={W / 2} y={36} textAnchor="middle" className="muted-text">
+                  {int(s.inRate || rate)}/s{spiking ? " ×5" : ""}
+                </text>
+                <Flow x1={W / 2} y1={46} x2={W / 2} y2={qy - 4} live={live} perSec={s.inRate} />
+                <text x={qx} y={qy - 8} style={{ fontWeight: 700, fontSize: 14 }}>
+                  {int(s.depth)} waiting
+                </text>
+                <text x={qx + qw} y={qy - 8} textAnchor="end" className="muted-text">
+                  {trendText}
+                </text>
+                <Flow x1={W / 2} y1={qy + qh + 3} x2={W / 2} y2={121} live={live} perSec={s.outRate} />
+              </>
+            ) : (
+              <>
+                <rect x={8} y={34} width={100} height={52} rx={10} fill="var(--card-2)" stroke="var(--k-service)" strokeWidth={1.5} />
+                <text x={58} y={57} textAnchor="middle" style={{ fontWeight: 650 }}>
+                  Producer
+                </text>
+                <text x={58} y={74} textAnchor="middle" className="muted-text">
+                  {int(s.inRate || rate)}/s{spiking ? " ×5" : ""}
+                </text>
+                <Flow x1={110} y1={60} x2={qx - 6} y2={60} live={live} perSec={s.inRate} />
+                <text x={qx + qw / 2} y={30} textAnchor="middle" style={{ fontWeight: 700, fontSize: 15 }}>
+                  {int(s.depth)} waiting
+                </text>
+                <text x={qx + qw / 2} y={96} textAnchor="middle" className="muted-text">
+                  {s.depth > SHOWN ? `showing ${SHOWN} of ${int(s.depth)} · ` : ""}
+                  {trendText}
+                </text>
+                <Flow x1={qx + qw + 2} y1={60} x2={440} y2={60} live={live} perSec={s.outRate} />
+                <text x={8} y={spark.y + 12} className="muted-text" style={{ fontSize: 10.5 }}>
+                  backlog,
+                </text>
+                <text x={8} y={spark.y + 25} className="muted-text" style={{ fontSize: 10.5 }}>
+                  last 60 s
+                </text>
+              </>
+            )}
+            <rect x={qx} y={qy} width={qw} height={qh} rx={8} fill="var(--card-2)" stroke="var(--k-queue)" strokeWidth={1.5} />
+            {Array.from({ length: shown }, (_, i) => (
+              <rect key={i} x={qx + qw - (i + 1) * cell + 1.5} y={qy + 5} width={cell - 3} height={qh - 10} rx={2.5} fill={trend === "growing" ? "var(--series-2)" : "var(--series-1)"} />
+            ))}
+            {Array.from({ length: workers }, (_, i) => {
+              const { cx, cy } = workerAt(i);
+              return <circle key={i} cx={cx} cy={cy} r={8.5} fill={i < busy ? "var(--series-1)" : "var(--card-2)"} stroke={i < busy ? "var(--series-1)" : "var(--border-strong)"} strokeWidth={1.5} />;
+            })}
+            <text x={narrow ? W / 2 : 500} y={busyLabelY} textAnchor="middle" className="muted-text">
+              {busy}/{workers} workers busy
+            </text>
+            {narrow && (
+              <text x={spark.x} y={spark.y - 4} className="muted-text" style={{ fontSize: 10.5 }}>
+                backlog, last 60 s
+              </text>
+            )}
+            <Spark history={s.history} {...spark} />
+          </svg>
+        </div>
+        <StatTiles
+          items={[
+            { label: "Backlog", value: `${int(s.depth)} jobs`, sub: trend === "growing" ? `+${int(growth)}/s` : trend === "draining" ? `${int(growth)}/s` : "steady" },
+            { label: "Arrivals / capacity", value: `${int(s.inRate || rate)} / ${int(cap)}`, sub: `jobs/s · ${workers} × 1000 ÷ ${msPerJob}` },
+            { label: "Utilisation", value: `${Math.round(util * 100)}%`, sub: `${busy} of ${workers} workers` },
+            { label: "Wait (Little's law)", value: fmtWait(wait), sub: "backlog ÷ throughput" },
+          ]}
+        />
+        <p className="readout" aria-live="polite">
+          {said}
+          <ReducedNote reduce={reduce} what="Paused (reduced motion): Step advances 1 s." />
+        </p>
+        <More label="Chart: queue depth over time">{chart}</More>
       </div>
-      <div className="controls" style={{ marginTop: 0 }}>
-        <button type="button" className="wbtn primary" onClick={() => reset(spike(s))}>
-          <Zap size={14} aria-hidden /> Spike ×{SPIKE_FACTOR} {spiking ? `(${((s.spikeUntil - s.t) / 1000).toFixed(1)} s left)` : `for ${SPIKE_MS / 1000} s`}
-        </button>
-        <SimButtons running={live} reduce={reduce} onToggle={() => setRunning((r) => !r)} onStep={() => reset(advance(s, step, 20))} stepHint="Advance 1 second" onReset={() => reset(initQueue())} />
-      </div>
-      <div ref={ref}>
-        <svg viewBox="0 0 560 170" className="sim-svg" role="img" aria-label={`Producer, queue holding ${int(s.depth)} jobs, and ${workers} workers of which ${busy} are busy`}>
-          <rect x={8} y={58} width={96} height={54} rx={10} fill="var(--card-2)" stroke="var(--k-service)" strokeWidth={1.5} />
-          <text x={56} y={82} textAnchor="middle" style={{ fontWeight: 650 }}>
-            Producer
-          </text>
-          <text x={56} y={99} textAnchor="middle" className="muted-text">
-            {int(s.inRate || rate)}/s{spiking ? " ×5" : ""}
-          </text>
-          <Flow x1={106} x2={qx - 6} y={85} live={live} perSec={s.inRate} />
-          <rect x={qx} y={66} width={qw} height={38} rx={8} fill="var(--card-2)" stroke="var(--k-queue)" strokeWidth={1.5} />
-          {Array.from({ length: shown }, (_, i) => (
-            <rect key={i} x={qx + qw - (i + 1) * cell + 1.5} y={72} width={cell - 3} height={26} rx={2.5} fill={trend === "growing" ? "var(--series-2)" : "var(--series-1)"} />
-          ))}
-          <text x={qx + qw / 2} y={52} textAnchor="middle" style={{ fontWeight: 700, fontSize: 15 }}>
-            {int(s.depth)} waiting
-          </text>
-          <text x={qx + qw / 2} y={124} textAnchor="middle" className="muted-text">
-            {s.depth > SHOWN ? `showing ${SHOWN} of ${int(s.depth)} · ` : ""}
-            {trend === "growing" ? `▲ growing ${int(growth)}/s` : trend === "draining" ? `▼ draining ${int(-growth)}/s` : "● empty"}
-          </text>
-          <Flow x1={qx + qw + 2} x2={wx - 6} y={85} live={live} perSec={s.outRate} />
-          {Array.from({ length: workers }, (_, i) => {
-            const cx = wx + 10 + (i % 5) * 22;
-            const cy = 85 + (Math.floor(i / 5) - (Math.ceil(workers / 5) - 1) / 2) * 22;
-            return <circle key={i} cx={cx} cy={cy} r={8.5} fill={i < busy ? "var(--series-1)" : "var(--card-2)"} stroke={i < busy ? "var(--series-1)" : "var(--border-strong)"} strokeWidth={1.5} />;
-          })}
-          <text x={wx + 54} y={152} textAnchor="middle" className="muted-text">
-            {busy}/{workers} workers busy
-          </text>
-        </svg>
-      </div>
-      <StatTiles
-        items={[
-          { label: "Backlog", value: `${int(s.depth)} jobs`, sub: trend === "growing" ? `+${int(growth)}/s` : trend === "draining" ? `${int(growth)}/s` : "steady" },
-          { label: "Arrivals vs capacity", value: `${int(s.inRate || rate)} / ${int(cap)}`, sub: `jobs/s · ${workers} × 1000 ÷ ${msPerJob} ms` },
-          { label: "Utilisation", value: `${Math.round(util * 100)}%`, sub: `${busy} of ${workers} workers` },
-          { label: "Wait (Little's law)", value: fmtWait(wait), sub: "backlog ÷ throughput" },
-        ]}
-      />
-      {chart}
-      <p className="readout" aria-live="polite">
-        {said}
-        <ReducedNote reduce={reduce} what="Paused (reduced motion): Step advances 1 s." />
-      </p>
     </WidgetFrame>
   );
 }

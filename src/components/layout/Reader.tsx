@@ -38,7 +38,7 @@ export const useReader = () => useContext(ReaderContext);
 /** Elements whose own arrow-key handling must win (diagrams, players, editors, form controls). */
 const KEY_OWNERS = "input, textarea, select, [contenteditable=true], .cm-editor, figure, .widget, [role=tablist], [role=radiogroup], [role=slider], [role=listbox]";
 
-const motionOk = () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches && document.documentElement.dataset.motion !== "reduce";
+export const motionOk = () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches && document.documentElement.dataset.motion !== "reduce";
 
 export function Reader({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -73,14 +73,11 @@ export function Reader({ children }: { children: React.ReactNode }) {
   const isGot = useCallback((id: string) => hydrated && !!ticks[`${pathname}#${id}`], [hydrated, ticks, pathname]);
   const gotCount = sections.filter((s) => isGot(s.id)).length;
 
-  /** Scroll so a card's top sits just under the sticky nav and reader bar. */
-  const reveal = useCallback(
-    (el: HTMLElement | undefined, smooth = true) => {
-      if (!el) return;
-      el.scrollIntoView({ behavior: smooth && motionOk() ? "smooth" : "auto", block: "start" });
-    },
-    [],
-  );
+  /** Scroll so a card's top sits just under the sticky nav and reader bar (its scroll-margin-top). */
+  const reveal = useCallback((el: HTMLElement | undefined, smooth = true) => {
+    if (!el) return;
+    el.scrollIntoView({ behavior: smooth && motionOk() ? "smooth" : "auto", block: "start" });
+  }, []);
 
   const go = useCallback(
     (id: string) => {
@@ -157,9 +154,12 @@ export function Reader({ children }: { children: React.ReactNode }) {
     };
   }, [mode, sections, cards]);
 
-  // Cards mode: show only the active card (the CSS hides the rest).
+  // Cards mode shows only the active card (the CSS hides the rest); in both modes the active card is marked current.
   useEffect(() => {
-    for (const el of cards()) el.toggleAttribute("data-active", mode === "cards" && el.dataset.sec === active);
+    for (const el of cards()) {
+      el.toggleAttribute("data-active", mode === "cards" && el.dataset.sec === active);
+      el.toggleAttribute("data-current", el.dataset.sec === active);
+    }
   }, [mode, active, sections, cards]);
 
   // Cards mode: ←/→ move between cards unless something focused wants the arrows.
@@ -176,7 +176,7 @@ export function Reader({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, step]);
 
-  // Links to #anchors (the "On this page" list, search results) open the card that holds the anchor.
+  // Links to #anchors (in the text, search results) open the card that holds the anchor.
   useEffect(() => {
     const onHash = () => {
       const id = decodeURIComponent(window.location.hash.slice(1));
@@ -216,28 +216,74 @@ export function ProgressRing({ value, total, size = 34 }: { value: number; total
   );
 }
 
-/** Sticky bar above the lesson: progress, the current section (opens a jump list) and the mode switch. */
-export function ReaderBar() {
+type Heading = { depth: 2 | 3; text: string; id: string };
+
+/** Scroll to a heading that isn't a section card (e.g. the "Practice problems" list after a pattern). */
+function jumpTo(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  history.replaceState(history.state, "", `#${id}`);
+  el.scrollIntoView({ behavior: motionOk() ? "smooth" : "auto", block: "start" });
+}
+
+/**
+ * Sticky bar above the lesson: `lead` (the page-list button), ticked progress, "3 / 14 · Section title ▾" (opens the
+ * list of sections and smooth-scrolls to the one you pick), a strip with one segment per section (desktop), and the
+ * Scroll / Cards switch. `headings` lets the list render before the cards are found, and adds headings that aren't cards.
+ */
+export function ReaderBar({ lead, headings = [] }: { lead?: React.ReactNode; headings?: Heading[] }) {
   const r = useReader();
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLOListElement>(null);
+
   useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !boxRef.current?.contains(e.target as Node)) setOpen(false);
+      if (e instanceof KeyboardEvent) {
+        if (e.key !== "Escape") return;
+        setOpen(false);
+        toggleRef.current?.focus();
+      } else if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", close);
+    // Start on the section you're reading, so ↑/↓ and Enter work straight away.
+    menuRef.current?.querySelector<HTMLElement>("[aria-current=step]")?.scrollIntoView({ block: "nearest" });
     return () => {
       document.removeEventListener("pointerdown", close);
       document.removeEventListener("keydown", close);
     };
   }, [open]);
+
   if (!r) return null;
   const { sections, activeIndex, mode, gotCount } = r;
   const current = sections[activeIndex];
+  const known = new Set(sections.map((s) => s.id));
+  const h2s = headings.filter((h) => h.depth === 2);
+  // Before the cards are found (server render, first paint) the headings stand in for them.
+  const list: SectionRef[] = sections.length ? sections : h2s.map((h) => ({ id: h.id, title: h.text }));
+  const extras = sections.length ? h2s.filter((h) => !known.has(h.id)) : [];
+  const total = list.length;
+
+  const pick = (id: string) => {
+    setOpen(false);
+    if (known.has(id)) r.go(id);
+    else jumpTo(id);
+  };
+  const onMenuKey = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+    const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const to = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : Math.min(items.length - 1, Math.max(0, at + (e.key === "ArrowDown" ? 1 : -1)));
+    e.preventDefault();
+    items[to]?.focus();
+  };
+
   return (
     <div className={cn("reader-bar no-print", r.celebrating && "is-celebrating")}>
+      {lead}
       <div className="rb-progress" title={`${gotCount} of ${sections.length} sections ticked`}>
         <ProgressRing value={gotCount} total={sections.length} />
         <span className="sr-only">
@@ -245,35 +291,92 @@ export function ReaderBar() {
         </span>
       </div>
       <div className="rb-where" ref={boxRef}>
-        <button type="button" className="rb-current" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)} disabled={!sections.length}>
-          <small>{current ? `Section ${activeIndex + 1} of ${sections.length}` : "Sections"}</small>
-          <span key={current?.id} className="rb-title">
-            {r.celebrating ? "Lesson complete. Nice work." : (current?.title ?? "Overview")}
+        <button
+          ref={toggleRef}
+          type="button"
+          className="rb-current"
+          aria-expanded={open}
+          aria-haspopup="true"
+          aria-controls={open ? "rb-menu" : undefined}
+          onClick={() => setOpen((o) => !o)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown" && !open) {
+              e.preventDefault();
+              setOpen(true);
+            }
+          }}
+          disabled={!sections.length}
+        >
+          <span className="rb-count">
+            {current ? (
+              <>
+                <span className="sr-only">Section </span>
+                {activeIndex + 1}
+                <span className="rb-of">
+                  <span aria-hidden>/</span>
+                  <span className="sr-only"> of </span>
+                  {total}
+                </span>
+              </>
+            ) : (
+              <span className="rb-of">{total || ""}</span>
+            )}
           </span>
-          <ChevronDown size={15} aria-hidden className="rb-chev" />
+          <span key={current?.id} className="rb-title">
+            {r.celebrating ? "Lesson complete. Nice work." : (current?.title ?? "Sections")}
+          </span>
+          <ChevronDown size={16} aria-hidden className="rb-chev" />
         </button>
         {open && (
-          <ol className="rb-menu">
-            {sections.map((s, i) => (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  aria-current={i === activeIndex ? "step" : undefined}
-                  onClick={() => {
-                    setOpen(false);
-                    r.go(s.id);
-                  }}
-                >
-                  <span className="rb-menu-n" data-got={r.isGot(s.id)}>
-                    {r.isGot(s.id) ? <Check size={12} aria-label="Ticked" /> : i + 1}
-                  </span>
-                  {s.title}
-                </button>
-              </li>
-            ))}
-          </ol>
+          <div className="rb-menu">
+            <p className="rb-menu-head">
+              <span>On this page</span>
+              <span>
+                {gotCount} of {sections.length} ticked
+              </span>
+            </p>
+            <ol id="rb-menu" ref={menuRef} onKeyDown={onMenuKey}>
+              {list.map((s, i) => (
+                <li key={s.id}>
+                  <button type="button" aria-current={i === activeIndex ? "step" : undefined} onClick={() => pick(s.id)} autoFocus={i === Math.max(0, activeIndex)}>
+                    <span className="rb-menu-n" data-got={r.isGot(s.id)}>
+                      {r.isGot(s.id) ? <Check size={12} aria-label="Ticked" /> : i + 1}
+                    </span>
+                    {s.title}
+                  </button>
+                </li>
+              ))}
+              {extras.map((h) => (
+                <li key={h.id} className="rb-menu-extra">
+                  <button type="button" onClick={() => pick(h.id)}>
+                    <span className="rb-menu-n" aria-hidden>
+                      <ArrowRight size={12} />
+                    </span>
+                    {h.text}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </div>
         )}
       </div>
+      {sections.length > 1 && (
+        // Pointer shortcut only: the same jumps are in the section list above, which is the keyboard and screen reader path.
+        <div className="rb-track" aria-hidden="true">
+          {sections.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              tabIndex={-1}
+              title={`${i + 1}. ${s.title}`}
+              data-current={i === activeIndex || undefined}
+              data-got={r.isGot(s.id) || undefined}
+              data-past={i < activeIndex || undefined}
+              onClick={() => r.go(s.id)}
+            />
+          ))}
+        </div>
+      )}
       {r.celebrating && <PartyPopper size={18} aria-hidden className="rb-party" />}
       {mode === "cards" && (
         <div className="rb-step">
@@ -331,54 +434,6 @@ export function DeckNav() {
         <kbd>←</kbd> <kbd>→</kbd> to flip cards
       </p>
     </nav>
-  );
-}
-
-/** "On this page" with live position and ticks. Server-rendered links work without JS. */
-export function SectionMap({ headings, hidden }: { headings: { depth: 2 | 3; text: string; id: string }[]; hidden?: boolean }) {
-  const r = useReader();
-  const list = headings.filter((h) => h.depth === 2);
-  const inReader = new Set(r?.sections.map((s) => s.id));
-  const ticked = r ? list.filter((h) => inReader.has(h.id) && r.isGot(h.id)).length : 0;
-  const total = r?.sections.length ?? 0;
-  return (
-    <aside className="toc section-map" aria-label="On this page" hidden={hidden}>
-      {list.length > 0 && (
-        <>
-          <h2>On this page</h2>
-          {total > 0 && (
-            <p className="sm-progress">
-              <ProgressRing value={ticked} total={total} size={28} /> <span>{ticked === total ? "All sections ticked" : `${ticked} of ${total} ticked`}</span>
-            </p>
-          )}
-          <ul>
-            {list.map((h) => {
-              const isActive = r?.active === h.id;
-              const got = !!r?.isGot(h.id);
-              return (
-                <li key={h.id} data-active={isActive || undefined} data-got={got || undefined}>
-                  <a
-                    href={`#${h.id}`}
-                    aria-current={isActive ? "location" : undefined}
-                    onClick={(e) => {
-                      if (r && inReader.has(h.id)) {
-                        e.preventDefault();
-                        r.go(h.id);
-                      }
-                    }}
-                  >
-                    <span className="sm-dot" aria-hidden>
-                      {got && <Check size={10} strokeWidth={3} />}
-                    </span>
-                    {h.text}
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
-    </aside>
   );
 }
 

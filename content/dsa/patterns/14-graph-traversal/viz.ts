@@ -1,5 +1,6 @@
-import { defineTrace, graph, grid, hashmap, note, queue, stack } from "@/components/algo/trace";
+import { autoLayout, defineTrace, graph, grid, hashmap, note, queue, stack } from "@/components/algo/trace";
 import type { Tone } from "@/components/algo/types";
+import { edgeProblem, gridProblem } from "@/components/algo/checks";
 
 const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const cell = (r: number, c: number) => `(${r},${c})`;
@@ -36,6 +37,8 @@ function numIslands(grid) {
     { label: "Three islands", input: { rows: ["11001", "10011", "00100", "01100"] } },
     { label: "One winding island", input: { rows: ["1110", "0010", "1110", "1000"] } },
   ],
+  fields: { rows: { kind: "lines", chars: "01", maxItems: 6, maxLength: 8, help: "One row per line: 1 = land, 0 = water (up to 6 rows of 8)." } },
+  validate: ({ rows }) => gridProblem(rows),
   run(t, { rows }) {
     const g = rows.map((row) => [...row]);
     const R = g.length;
@@ -170,6 +173,15 @@ function bfs(n, edges, start) {
       } as GraphInput,
     },
   ],
+  fields: {
+    n: { min: 1, max: 10, help: "Nodes are numbered 0 to n - 1 (up to 10)." },
+    edges: { minItems: 0, maxItems: 14, min: 0, max: 9, colNames: ["a", "b"], help: "One undirected edge per line: a b (up to 14)." },
+    start: { min: 0, max: 9 },
+    pos: false,
+  },
+  validate: ({ n, edges, start }) => edgeProblem(n, edges) ?? (start >= n && `start must be a node from 0 to ${n - 1}.`),
+  // Lay the reader's graph out in BFS layers, so distance from start reads left to right.
+  prepare: (input) => ({ ...input, pos: autoLayout(input.n, input.edges, { start: input.start }) }),
   run(t, { n, edges, start, pos }) {
     const adj: number[][] = Array.from({ length: n }, () => []);
     for (const [a, b] of edges) {
@@ -284,6 +296,8 @@ function nearestExit(grid) {
     { label: "Two exits", input: { rows: ["E..#.", ".#...", ".#.#E", "....."] } },
     { label: "A walled-off corner", input: { rows: ["E..#.", ".#.#.", "..E#."] } },
   ],
+  fields: { rows: { kind: "lines", chars: "E.#", maxItems: 6, maxLength: 8, help: "One row per line: E = exit, . = open, # = wall (up to 6 rows of 8)." } },
+  validate: ({ rows }) => gridProblem(rows) ?? (!rows.some((r) => r.includes("E")) && "Add at least one exit (E)."),
   run(t, { rows }) {
     const R = rows.length;
     const C = rows[0].length;
