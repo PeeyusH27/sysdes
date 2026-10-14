@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useEffect, useState, type RefObject } from "react";
+import { useCallback, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { Search, Undo2 } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -76,32 +77,6 @@ const WIDE = { W: 620, trayW: 404, trayX: 108, rackDx: 50, mapX: 446, pitch: 17.
 const NARROW = { W: 320, trayW: 312, trayX: 92, rackDx: 36, mapX: 30, pitch: 28.6, cell: 26, wide: false };
 type Lay = typeof WIDE;
 
-/** A segmented control whose name is announced but not shown (its options say enough), so the toolbar stays one row. */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 function Coin({ value, color, r = 15 }: { value: number; color: string; r?: number }) {
   return (
     <g>
@@ -125,7 +100,7 @@ export function GreedyLab() {
   const [running, setRunning] = useState(false);
   const [noTrap, setNoTrap] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const L: Lay = useNarrow(ref) ? NARROW : WIDE;
+  const L: Lay = useNarrow(ref, 480) ? NARROW : WIDE;
 
   const parsed = parseCoins(text);
   const coins = parsed.length ? parsed : [1];
@@ -209,7 +184,7 @@ export function GreedyLab() {
   return (
     <WidgetFrame title="Greedy change: does the biggest coin win?" sub="Greedy grabs the largest coin that fits and never looks back. Race it against DP, or pay yourself, and hunt for the amounts where greedy loses.">
       <div className="controls">
-        <Pick<"race" | "you">
+        <Seg<"race" | "you"> labelMode="hidden"
           label="Mode"
           value={mode}
           onChange={(x) => {

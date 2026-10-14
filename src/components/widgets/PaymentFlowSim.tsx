@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { m } from "motion/react";
 import { CloudLightning, CreditCard, Repeat, TimerOff, Webhook } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useBoxWidth } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- rules (pure, tested)
 
@@ -617,19 +618,6 @@ const TALL: PayLayout = {
   coin: [{ x: 40, y: 52 }, { x: 179, y: -40 }, { x: 318, y: 52 }],
 };
 
-/** The widget's width in px (0 until measured), to pick the landscape or the portrait drawing. */
-function useWidth(ref: React.RefObject<HTMLElement | null>) {
-  const [w, setW] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return w;
-}
-
 function along(pts: Pt[], f: number): Pt & { seg: number } {
   const lens = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
   let left = Math.max(0, Math.min(1, f)) * lens.reduce((a, b) => a + b, 0);
@@ -750,22 +738,6 @@ function screenOf(s: Sim): { text: string; ink: string } {
   return { text: "Paying…", ink: "var(--muted)" };
 }
 
-/** A segmented control with its label inline, so a toolbar row stays one button tall. */
-function InlineSeg<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="pay-seg">
-      <span aria-hidden>{label}</span>
-      <div className="seg" role="group" aria-label={label}>
-        {options.map((o) => (
-          <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const CSS = `
 .pay-seg { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); min-width: 0; max-width: 100%; }
 .pay-seg .seg { min-width: 0; flex: 0 1 auto; }
@@ -780,7 +752,7 @@ export function PaymentFlowSim() {
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
   const [running, setRunning] = useState(true);
   const [s, reset] = useFixedStep<Sim>(() => initSim(), step, running && inView && !reduce);
-  const width = useWidth(ref);
+  const width = useBoxWidth(ref) ?? 0;
   const L = width && width < 520 ? TALL : WIDE;
   const t = s.t;
   const go = (a: Action, run = false) => {
@@ -837,8 +809,8 @@ export function PaymentFlowSim() {
         />
       </div>
       <div className="controls" style={{ marginTop: 0, alignItems: "center" }}>
-        <InlineSeg<"on" | "off"> label="Idempotency keys" value={s.keysOn ? "on" : "off"} onChange={(v) => go({ keys: v === "on" })} options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
-        <InlineSeg<"on" | "off"> label="Webhook dedupe" value={s.dedupeOn ? "on" : "off"} onChange={(v) => go({ dedupe: v === "on" })} options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
+        <Seg<"on" | "off"> labelMode="inline" className="pay-seg" label="Idempotency keys" value={s.keysOn ? "on" : "off"} onChange={(v) => go({ keys: v === "on" })} options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
+        <Seg<"on" | "off"> labelMode="inline" className="pay-seg" label="Webhook dedupe" value={s.dedupeOn ? "on" : "off"} onChange={(v) => go({ dedupe: v === "on" })} options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
       </div>
 
       <div ref={ref}>

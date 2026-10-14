@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useState, type KeyboardEvent, type RefObject } from "react";
+import { useCallback, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 export type Keep = "largest" | "smallest";
@@ -184,39 +185,6 @@ const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 =
 const fmt = (n: number) => n.toLocaleString("en-US");
 const ease = (reduce: boolean) => ({ duration: reduce ? 0 : 0.32, ease: [0.4, 0, 0.2, 1] as const });
 
-/** A segmented control with its name inline (or announced only), so the toolbar stays one row. */
-function Pick<T extends string>({ label, show = false, value, options, onChange }: { label: string; show?: boolean; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      {show && (
-        <span className="muted" style={{ fontSize: 12.5 }} aria-hidden>
-          {label}
-        </span>
-      )}
-      <div className="seg" role="group" aria-label={label}>
-        {options.map((o) => (
-          <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 function Chip({ v, r, tone, mark }: { v: number; r: number; tone: "plain" | "active" | "compare" | "out" | "bad" | "root"; mark?: string }) {
   const stroke = { plain: "var(--border-strong)", active: "var(--accent)", compare: "var(--k-client)", out: "var(--critical)", bad: "var(--critical)", root: "var(--accent-2)" }[tone];
   const fill = tone === "plain" ? "var(--card)" : `color-mix(in srgb, ${stroke} ${tone === "out" ? 12 : 18}%, var(--card))`;
@@ -269,7 +237,7 @@ export function HeapLab() {
   const [running, setRunning] = useState(false);
   const [text, setText] = useState("");
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const L = useNarrow(ref) ? NARROW : WIDE;
+  const L = useNarrow(ref, 480) ? NARROW : WIDE;
   const every = SPEED_MS[speed - 1];
   const tick = useCallback(
     (s: HeapState, dt: number) => {
@@ -298,7 +266,7 @@ export function HeapLab() {
   const kept = board(s);
   const treeBottom = slot(L, k).y + R + 16;
   const ARR_Y = L.wide ? 126 : treeBottom + 46;
-  const H = L.wide ? Math.max(176, treeBottom + 4) : ARR_Y + 40;
+  const H = L.wide ? Math.max(ARR_Y + 66, treeBottom + 4) : ARR_Y + 40;
   const cellX = (i: number) => L.ax + i * L.adx;
   const heapName = keep === "largest" ? "min-heap" : "max-heap";
 
@@ -329,9 +297,8 @@ export function HeapLab() {
           stepLabel={auto ? "Step" : "Show me"}
           onReset={() => restart()}
         />
-        <Pick<"auto" | "you">
+        <Seg<"auto" | "you"> labelMode="inline"
           label="Who sifts"
-          show
           value={mode}
           onChange={(v) => {
             setMode(v);
@@ -342,7 +309,7 @@ export function HeapLab() {
             { value: "you", label: "You" },
           ]}
         />
-        <Pick<Keep>
+        <Seg<Keep> labelMode="hidden"
           label="Keep the"
           value={keep}
           onChange={(v) => {

@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useState, type RefObject } from "react";
+import { useState } from "react";
 import { m } from "motion/react";
 import { Eraser, Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, WidgetFrame } from "./WidgetFrame";
 
@@ -152,22 +153,6 @@ const VH = 256;
 const colX = (n: number, c: number) => (VW - (n + 2) * COL) / 2 + (c + 2) * COL + COL / 2;
 const tint = (v: string, p: number) => ({ fill: `color-mix(in srgb, ${v} ${p}%, var(--card))` });
 
-/** True when the element is narrower than `px` (phones), so the drawing can switch to bigger type. */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 460) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 function Arc({ x1, x2, depth, win, label, reduce, k }: { x1: number; x2: number; depth: number; win: boolean | null; label: string; reduce: boolean; k: number }) {
   const color = win === false ? "var(--muted)" : win === null ? "var(--k-client)" : "var(--accent)";
   const mid = (x1 + x2) / 2;
@@ -284,7 +269,7 @@ export function Dp1dLab() {
   const [seed, setSeed] = useState(1);
   const [running, setRunning] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const narrow = useNarrow(ref);
+  const narrow = useNarrow(ref, 460);
   const [s, reset] = useFixedStep<Lab>(() => initLab(DEFAULT_LOOT), tickLab, running && inView && !reduce);
   const parsed = parseLoot(text);
   const n = s.loot.length;

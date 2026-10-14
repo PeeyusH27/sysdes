@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { m } from "motion/react";
 import { MousePointerClick } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useBoxWidth } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -152,19 +153,6 @@ const TALL: Layout = {
   clock: { x: 160, y: 100 },
 };
 
-/** The widget's width in px (0 until measured), so the drawing can switch to its stacked phone layout. */
-function useWidth(ref: React.RefObject<HTMLElement | null>) {
-  const [w, setW] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return w;
-}
-
 function SeatMap({ L, holder }: { L: Layout; holder: Who | null }) {
   const { x: x0, y: y0, size, gap } = L.seats;
   return (
@@ -225,7 +213,7 @@ export function SeatRace() {
   const [playing, setPlaying] = useState(false);
   const rand = useMemo(() => mulberry32(5), []);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const width = useWidth(ref);
+  const width = useBoxWidth(ref) ?? 0;
   const L = width && width < 520 ? TALL : WIDE;
 
   const end = outcome?.end ?? 0;

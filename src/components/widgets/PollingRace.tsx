@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -128,21 +129,6 @@ interface Play {
 }
 const play = (s: Play, dt: number): Play => (s.t >= D ? s : { t: Math.min(D, s.t + dt * SPEED) });
 
-/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
-function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 const laneName = (lane: LaneResult) => (lane.id === "short" ? "Short polling" : lane.name);
 const laneStats = (lane: LaneResult) => `${lane.requestCount} req${lane.emptyCount ? `, ${lane.emptyCount} empty` : ""} · avg ${fmtDelay(lane.avgDelay)}`;
 
@@ -202,7 +188,7 @@ export function PollingRace() {
   const [playing, setPlaying] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
   const box = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow(box);
+  const narrow = useNarrow(box, 480);
   const [state, reset] = useFixedStep<Play>({ t: D }, play, playing && inView && !reduce);
   const at = state.t;
 

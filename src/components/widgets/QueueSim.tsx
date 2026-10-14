@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Zap } from "lucide-react";
 import { LineChart } from "@/components/charts/LineChart";
 import { StatTiles } from "@/components/charts/ChartBits";
 import { int } from "@/lib/format";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -63,21 +64,6 @@ export const spike = (s: QueueState): QueueState => ({ ...s, spikeUntil: Math.ma
 // ---------------------------------------------------------------- picture
 const SHOWN = 24;
 
-/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
-function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 function Flow({ x1, y1, x2, y2, live, perSec }: { x1: number; y1: number; x2: number; y2: number; live: boolean; perSec: number }) {
   const dur = Math.max(0.25, Math.min(3, 12 / Math.max(perSec, 0.1)));
   const a = Math.atan2(y2 - y1, x2 - x1);
@@ -129,7 +115,7 @@ export function QueueSim() {
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
   const box = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow(box);
+  const narrow = useNarrow(box, 480);
 
   const params = useMemo(() => ({ rate, workers, msPerJob }), [rate, workers, msPerJob]);
   const step = useCallback((s: QueueState, dt: number) => queueStep(s, dt, params), [params]);

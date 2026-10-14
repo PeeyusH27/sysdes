@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { m } from "motion/react";
 import { Bike, Car, Swords, Truck } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -618,19 +619,6 @@ function box(v: View, x: number, y: number, w: number, h: number) {
 /** Landscape x of a floor's deck (its left edge). */
 const deckX = (f: number) => LA - floorTop(f) - 126;
 
-/** True while the element is narrower than `below` px (ResizeObserver; false on the server and in jsdom). */
-function useNarrow(ref: RefObject<HTMLElement | null>, below: number) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < below));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, below]);
-  return narrow;
-}
-
 function Wheels({ xs, y1, y2 }: { xs: number[]; y1: number; y2: number }) {
   return xs.flatMap((x) => [y1, y2].map((y) => <rect key={`${x},${y}`} x={x} y={y} width={6} height={2.5} rx={1} fill="var(--fg)" />));
 }
@@ -914,22 +902,6 @@ function BoardStrip({ floor, counts, flash, tick }: { floor: number; counts: Rec
   );
 }
 
-/** A segmented choice with its label on the same line (it wraps under the label when the row is too narrow). */
-function InlineSeg<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string; title?: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 6px", fontSize: 12.5, color: "var(--muted)" }}>
-      <span>{label}</span>
-      <div className="seg" role="group" aria-label={label}>
-        {options.map((o) => (
-          <button key={o.value} type="button" title={o.title} aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ================================================================ widget
 export function ParkingLotSim() {
   const [selector, setSelector] = useState<Selector>("lowestFloor");
@@ -993,7 +965,7 @@ export function ParkingLotSim() {
               }}
             />
           </div>
-          <InlineSeg<GateMode>
+          <Seg<GateMode> labelMode="inline" wrap
             label="Gates"
             value={mode}
             onChange={setMode}

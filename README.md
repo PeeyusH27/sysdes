@@ -5,7 +5,7 @@ A Next.js site for interview preparation with two tracks:
 - **DSA** (`/dsa`): a JavaScript-for-DSA cheat sheet with runnable snippets, 22 patterns explained step by step with animations synced to the code (type your own input with **Edit input**), a playable lab per pattern (guess-the-number binary search, a maze flood for BFS/DFS, N-Queens, a top-k heap arena…), and practice problems solved in an in-browser editor. Tests run in a Web Worker, solved problems are tracked, and a step-by-step solution unlocks after the first wrong submission.
 - **System design** (`/system-design`): a 10-step HLD path, 6 deep dives and 12 interview questions (including LLD classics: parking lot, elevator, vending machine) with detailed answers in JavaScript (the LLD questions also in Java and Python, behind a site-wide language switch). Diagrams are animated SVG you can play, pause and step through; widgets simulate load balancers, caches, queues, a parking lot with cars driving to their spots, a bank of elevators, and more; and a drag-and-drop playground lints, simulates and grades your designs.
 
-Every lesson is a stack of section cards you can tick off, or flip through one at a time in Cards mode. On desktop each card is split: the diagram, simulator or code stays pinned on the left while you read the text on the right. **Shorts** (`/shorts`) cover both tracks as one-minute bullet-point cards: on a phone you swipe sideways for the next one and scroll down to read more; on desktop you use the arrows or ←/→.
+Every lesson is a stack of section cards you can tick off, or flip through one at a time in Cards mode. On desktop, the diagram, simulator or code for whatever you're reading stays pinned on the left, sized to fit the screen, while the text scrolls on the right. **Shorts** (`/shorts`) cover both tracks as one-minute bullet-point cards: on a phone you swipe sideways for the next one and scroll down to read more; on desktop you use the arrows or ←/→.
 
 The implementation plans are in [`docs/plan/`](docs/plan/README.md) (the DSA track is [`07-dsa-track.md`](docs/plan/07-dsa-track.md)). Content conventions are in [`docs/AUTHORING.md`](docs/AUTHORING.md) and [`docs/AUTHORING-DSA.md`](docs/AUTHORING-DSA.md).
 
@@ -46,7 +46,7 @@ npx playwright test          # end-to-end (builds must exist: run `npm run build
 | `content/dsa/problems/<slug>/` | Problems: `problem.json` (tests), `statement.md`, `solution.md`, `solution.js` |
 | `content/shorts/` | One-minute shorts for `/shorts` (schema in `types.ts`, validated by `tests/shorts.test.ts`) |
 | `src/lib/mdx/rehype-section-cards.mjs` | Wraps every `##` section of an MDX page in a `LessonSection` card and splits it into text and visuals |
-| `src/components/layout/StickyStage.tsx`, `PageDrawer.tsx` | The pinned visual column of split sections; the page-list drawer |
+| `src/components/layout/StagePane.tsx`, `PageDrawer.tsx` | The pinned visual pane that follows the text being read; the page-list drawer |
 | `src/components/algo/registry.ts` | Lazy loaders that let walkthroughs re-run on reader input (every trace must be listed) |
 | `src/lib/code-lang.ts` | The remembered JavaScript / Java / Python choice for multi-language code tabs |
 | `src/components/layout/Reader.tsx` | Lesson reader: section progress, Scroll / Cards modes, the live "On this page" map |

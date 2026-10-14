@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { StatTiles } from "@/components/charts/ChartBits";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -108,21 +109,6 @@ const FILL: Record<Outcome, string> = { success: "var(--good)", error: "var(--cr
 const NODE_LABEL: Record<BreakerState, string> = { closed: "Closed", open: "Open", "half-open": "Half-open" };
 const NODE_COLOR: Record<BreakerState, string> = { closed: "var(--good)", open: "var(--critical)", "half-open": "var(--warning)" };
 
-/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
-function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 /**
  * Landscape: the three states in a row, the "trial succeeds" arc under them, recent requests along the bottom.
  * Phone: Closed and Open on top, Half-open under Open, so the drawing stays readable at 300 px.
@@ -200,7 +186,7 @@ export function CircuitBreakerSim() {
   const rand = useMemo(() => mulberry32(31), []);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
   const box = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow(box);
+  const narrow = useNarrow(box, 480);
 
   const params = useMemo<CBParams>(() => ({ errorRate, threshold, cooldownMs: cooldown * 1000, rps: 5, probeMs: 400 }), [errorRate, threshold, cooldown]);
   const step = useCallback((s: CBState, dt: number) => cbStep(s, dt, params, rand), [params, rand]);

@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useId, useState, type RefObject } from "react";
+import { useCallback, useId, useState } from "react";
 import { m } from "motion/react";
 import { hash32, mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 export const FLOORS = 8; // G, 1 … 7
@@ -618,19 +619,6 @@ const pct = (v: number, of: number) => `${((v / of) * 100).toFixed(2)}%`;
 const stateText = (c: Car) => STATE_WORD[carState(c)];
 const tint = (c: string, p: number) => `color-mix(in srgb, ${c} ${p}%, var(--card))`;
 
-/** True while the element is narrower than `below` px (ResizeObserver; false on the server and in jsdom). */
-function useNarrow(ref: RefObject<HTMLElement | null>, below: number) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < below));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, below]);
-  return narrow;
-}
-
 /** A person, standing on y = 0. `k` scales the body; the destination tag sits beside the head at full size. */
 function Figure({ color, tag, k, fs }: { color: string; tag?: string; k: number; fs: number }) {
   return (
@@ -812,22 +800,6 @@ const roundBtn = (lit: boolean, w: number, h: number) =>
     transition: "background-color .2s, box-shadow .2s",
   }) as const;
 
-/** A segmented choice with its label on the same line (it wraps under the label when the row is too narrow). */
-function InlineSeg<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string; title?: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 6px", fontSize: 12.5, color: "var(--muted)" }}>
-      <span>{label}</span>
-      <div className="seg" role="group" aria-label={label}>
-        {options.map((o) => (
-          <button key={o.value} type="button" title={o.title} aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function ElevatorSim() {
   const [strategy, setStrategy] = useState<Strategy>("collective");
   const [traffic, setTraffic] = useState<Traffic>("random");
@@ -936,7 +908,7 @@ export function ElevatorSim() {
       <div ref={ref}>
         <div className="controls" style={{ gap: "8px 14px", margin: "2px 0 8px" }}>
           <SimButtons running={running && !reduce} reduce={reduce} onToggle={() => setRunning((r) => !r)} onStep={() => reset(stepSim(s, 500))} onReset={() => restart({})} stepHint="Advance half a second" />
-          <InlineSeg<Strategy>
+          <Seg<Strategy> labelMode="inline" wrap
             label="Strategy"
             value={strategy}
             onChange={(v) => {
@@ -949,7 +921,7 @@ export function ElevatorSim() {
               { value: "collective", label: "Collective", title: "Collective control (LOOK)" },
             ]}
           />
-          <InlineSeg<Traffic>
+          <Seg<Traffic> labelMode="inline" wrap
             label="Traffic"
             value={traffic}
             onChange={(v) => {

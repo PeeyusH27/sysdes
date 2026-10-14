@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Zap } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { WidgetFrame } from "./WidgetFrame";
 
@@ -90,20 +91,6 @@ const WIDE: Geo = { w: 600, h: 256, l: 104, r: 588, narrow: false, k: 1, tickEve
 const NARROW: Geo = { w: 340, h: 262, l: 8, r: 332, narrow: true, k: 1.2, tickEvery: 2000 };
 const xOf = (g: Geo, t: number) => g.l + ((t - T0) / (T1 - T0)) * (g.r - g.l);
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .fvs { container: fvs / inline-size; }
 .fvs-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 6px; }
@@ -191,7 +178,8 @@ export function FixedVsSliding() {
   const [which, setWhich] = useState<Burst>("both");
   const [playing, setPlaying] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const g = narrow ? NARROW : WIDE;
   const x = (t: number) => xOf(g, t);
   const [state, reset] = useFixedStep<PlayState>({ t: T1 }, advancePlayhead, playing && inView && !reduce);

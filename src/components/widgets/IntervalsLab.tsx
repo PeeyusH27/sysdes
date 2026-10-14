@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { m } from "motion/react";
 import { ChevronLeft, ChevronRight, Dices, Minus, Plus, Trash2 } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
@@ -105,21 +106,6 @@ interface Sim {
 }
 const stepSim = (s: Sim, dt: number): Sim => (s.pos >= SLOTS ? s : { pos: Math.min(SLOTS, s.pos + dt / MS_PER_SLOT) });
 
-function useNarrow(ref: React.RefObject<HTMLElement | null>, below = 470) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < below);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, below]);
-  return narrow;
-}
-
 function describe(ms: Meeting[], pos: number) {
   if (!ms.length) return "No meetings: zero rooms, nothing to merge. Press Add.";
   const busy = mergeBusy(ms);
@@ -142,7 +128,7 @@ export function IntervalsLab() {
   /** With reduced motion nothing sweeps on its own, so show the finished day until the reader steps. */
   const [touched, setTouched] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const narrow = useNarrow(ref);
+  const narrow = useNarrow(ref, 470);
   const [sim, reset] = useFixedStep<Sim>({ pos: 0 }, stepSim, running && inView && !reduce);
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<{ id: string; resize: boolean; x0: number; start: number; end: number } | null>(null);

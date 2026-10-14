@@ -1,11 +1,12 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { RotateCcw, Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 export interface Road {
@@ -189,39 +190,6 @@ const ROWS = 8;
 const fmtD = (d: number) => (d === Infinity ? "∞" : String(d));
 const pathText = (p: number[]) => p.map((v) => NAMES[v]).join(" → ");
 
-/** A segmented control with its name inline (or announced only), so the toolbar stays one row. */
-function Pick<T extends string | number>({ label, show = false, value, options, onChange }: { label: string; show?: boolean; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      {show && (
-        <span className="muted" style={{ fontSize: 12.5 }} aria-hidden>
-          {label}
-        </span>
-      )}
-      <div className="seg" role="group" aria-label={label}>
-        {options.map((o) => (
-          <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 function describe(s: DState, goal: number, pick: boolean, routes: number) {
   const route = routeTo(s, goal);
   const goalLine = s.settled[goal] && route ? ` ${NAMES[goal]} is settled, so its cost is final: ${pathText(route)} = ${s.dist[goal]}.` : "";
@@ -249,7 +217,7 @@ export function ShortestPathLab() {
   const [running, setRunning] = useState(false);
   const [miss, setMiss] = useState<{ u: number; n: number } | null>(null);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const L = useNarrow(ref) ? NARROW : WIDE;
+  const L = useNarrow(ref, 480) ? NARROW : WIDE;
   const k = L.k;
   const more = useRef<HTMLDivElement>(null);
 
@@ -309,7 +277,7 @@ export function ShortestPathLab() {
   return (
     <WidgetFrame title="Dijkstra's road trip" sub="Six towns, ten two-way roads. Watch Dijkstra settle the closest town first, or be the heap yourself. Change a road and the route reroutes.">
       <div className="controls">
-        <Pick<"watch" | "pick">
+        <Seg<"watch" | "pick"> labelMode="hidden"
           label="Mode"
           value={mode}
           onChange={(v) => {
@@ -339,7 +307,7 @@ export function ShortestPathLab() {
             <RotateCcw size={14} aria-hidden /> Start over
           </button>
         )}
-        <Pick<number> label="Goal" show value={goal} onChange={setGoal} options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: NAMES[v] }))} />
+        <Seg<number> labelMode="inline" label="Goal" value={goal} onChange={setGoal} options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: NAMES[v] }))} />
       </div>
 
       {mode === "pick" && !done ? (

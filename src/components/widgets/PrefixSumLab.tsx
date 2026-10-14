@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { m } from "motion/react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 export const MAX_NUMS = 10;
@@ -103,35 +104,6 @@ const DEFAULT = "3 -1 4 1 -5 9 2 -6";
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const fmt = (v: number) => (v < 0 ? `−${-v}` : String(v));
 
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
-/** A segmented control sized like a .wbtn, captioned by its aria-label (the toolbar has no room for a caption row). */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label} style={{ lineHeight: "14px", flex: "none" }}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function rangeSentence(P: number[], s: RangeState) {
   const { l, r } = s;
   if (P.length < 2) return "Type some numbers to start.";
@@ -158,7 +130,7 @@ export function PrefixSumLab() {
   const [k, setK] = useState(5);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const wide = !useNarrow(ref);
+  const wide = !useNarrow(ref, 480);
   const { W, STAIR_H, RX } = wide ? WIDE : NARROW;
   const CELL_Y = TOP + STAIR_H + 22;
 
@@ -232,7 +204,7 @@ export function PrefixSumLab() {
   return (
     <WidgetFrame title="Prefix staircase" sub="A range sum is the gap between two running totals. Drag the handles.">
       <div className="controls" style={{ alignItems: "center" }}>
-        <Pick<PsMode> label="Question" value={mode} onChange={(v) => { setMode(v); setRunning(v === "sumk"); setIdx(0); }}
+        <Seg<PsMode> labelMode="hidden" compact label="Question" value={mode} onChange={(v) => { setMode(v); setRunning(v === "sumk"); setIdx(0); }}
           options={[{ value: "range", label: "Range sum" }, { value: "sumk", label: "Subarrays = k" }]} />
         {mode === "range" ? (
           <SimButtons running={playing} reduce={reduce} stepLabel="Random query" stepHint="Ask for a random range" onStep={tickQuery}
@@ -320,10 +292,11 @@ export function PrefixSumLab() {
               {f.seen.map(([p, c], j) => {
                 const asked = p === f.need;
                 const per = wide ? 3 : 7;
+                const cw2 = wide ? 44 : 42;
                 return (
-                  <m.g key={`seen-${p}`} initial={reduce ? false : { opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1, x: (j % per) * 50, y: Math.floor(j / per) * 26 }} transition={{ duration: dur }}>
-                    <rect width={44} height={21} rx={10} fill={asked ? "color-mix(in srgb, var(--good) 20%, var(--card))" : "var(--card-2)"} stroke={asked ? "var(--good)" : "var(--border-strong)"} strokeWidth={asked ? 2 : 1} />
-                    <text x={22} y={14.5} textAnchor="middle" style={{ fontSize: 11, fontWeight: 700 }}>{fmt(p)}×{c}</text>
+                  <m.g key={`seen-${p}`} initial={reduce ? false : { opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1, x: (j % per) * (cw2 + (wide ? 6 : 4)), y: Math.floor(j / per) * 26 }} transition={{ duration: dur }}>
+                    <rect width={cw2} height={21} rx={10} fill={asked ? "color-mix(in srgb, var(--good) 20%, var(--card))" : "var(--card-2)"} stroke={asked ? "var(--good)" : "var(--border-strong)"} strokeWidth={asked ? 2 : 1} />
+                    <text x={cw2 / 2} y={14.5} textAnchor="middle" style={{ fontSize: wide ? 11 : 10.5, fontWeight: 700 }}>{fmt(p)}×{c}</text>
                   </m.g>
                 );
               })}

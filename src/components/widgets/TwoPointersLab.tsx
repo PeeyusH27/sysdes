@@ -1,11 +1,12 @@
 "use client";
-import { useCallback, useEffect, useId, useMemo, useState, type RefObject } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { m } from "motion/react";
 import { ArrowLeft, ArrowRight, RotateCcw, Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 export const MAX_NUMS = 10;
@@ -109,35 +110,6 @@ const FRAME_MS = 1300;
 const DEFAULT = { text: "1 3 4 6 8 11 13 15", target: 17 };
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
-/** A segmented control sized like a .wbtn, captioned by its aria-label (the toolbar has no room for a caption row). */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label} style={{ lineHeight: "14px", flex: "none" }}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function sentence(nums: number[], target: number, p: Ptr, mode: "watch" | "play") {
   const n = nums.length;
   if (n < 2) return "Type at least two numbers.";
@@ -172,7 +144,7 @@ export function TwoPointersLab() {
   const [seed, setSeed] = useState(1);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const G = useNarrow(ref) ? NARROW : WIDE;
+  const G = useNarrow(ref, 480) ? NARROW : WIDE;
 
   const nums = useMemo(() => parseSorted(text), [text]);
   const target = targetText.trim() !== "" && Number.isFinite(Number(targetText)) ? Math.max(-198, Math.min(198, Math.round(Number(targetText)))) : 0;
@@ -213,7 +185,7 @@ export function TwoPointersLab() {
   return (
     <WidgetFrame title="Squeeze the pair" sub="Sorted cards, one pointer at each end. Drop only cards that can't pair up.">
       <div className="controls" style={{ alignItems: "center" }}>
-        <Pick<"watch" | "play"> label="Mode" value={mode} onChange={(v) => { setMode(v); restart(); setRunning(v === "watch"); }}
+        <Seg<"watch" | "play"> labelMode="hidden" compact label="Mode" value={mode} onChange={(v) => { setMode(v); restart(); setRunning(v === "watch"); }}
           options={[{ value: "watch", label: "Watch" }, { value: "play", label: "You play" }]} />
         {mode === "watch" ? (
           <SimButtons running={playing} reduce={reduce} stepHint="Move one pointer" onStep={tick}

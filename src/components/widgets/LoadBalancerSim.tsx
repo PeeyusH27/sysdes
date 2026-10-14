@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useInView, useReducedMotion } from "motion/react";
 import { Pause, Play, RotateCcw, StepForward } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { Slider, WidgetFrame } from "./WidgetFrame";
 
 type Algo = "rr" | "least" | "p2c" | "hash";
@@ -63,20 +64,6 @@ interface Geo {
 const WIDE: Geo = { w: 560, h: 190, boxY: 12, boxW: 100, boxH: 130, barW: 40, k: 1, narrow: false };
 const NARROW: Geo = { w: 320, h: 196, boxY: 8, boxW: 64, boxH: 120, barW: 26, k: 1.2, narrow: true };
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .lb { container: lb / inline-size; }
 .lb-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 6px; }
@@ -96,7 +83,8 @@ export function LoadBalancerSim() {
   const [rate, setRate] = useState(18); // requests per second
   const [running, setRunning] = useState(true);
   const box = useRef<HTMLDivElement>(null);
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const inView = useInView(box);
   const reduce = useReducedMotion();
   const rand = useMemo(() => mulberry32(42), []);

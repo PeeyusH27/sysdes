@@ -1,9 +1,10 @@
 "use client";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { KeyRound, Megaphone, Rocket } from "lucide-react";
 import { LineChart } from "@/components/charts/LineChart";
 import { compact, int } from "@/lib/format";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
@@ -193,20 +194,6 @@ interface Geo {
 const WIDE: Geo = { w: 560, narrow: false, x0: 150, x1: 430, workerX: 448, workerGap: 20, k: 1 };
 const NARROW: Geo = { w: 320, narrow: true, x0: 8, x1: 226, workerX: 240, workerGap: 16, k: 1.2 };
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .pl { container: pl / inline-size; }
 .pl-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 6px; }
@@ -291,7 +278,8 @@ export function PriorityLanes() {
   const [speed, setSpeed] = useState(10);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const g = narrow ? NARROW : WIDE;
   const step = useCallback((s: PLState, dt: number) => sample(stepPL(s, dt * speed), speed * 250), [speed]);
   const [s, reset] = useFixedStep<PLState>(() => initPL(), step, running && inView && !reduce);

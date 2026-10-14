@@ -220,9 +220,10 @@ export function AlgoPlayer({
               </div>
             )}
             {canEdit && (
-              <button ref={editBtn} type="button" className="wbtn algo-edit" aria-expanded={editing} onClick={() => (editing ? closeEditor() : setEditing(true))}>
+              <button ref={editBtn} type="button" className="wbtn algo-edit" aria-expanded={editing} title={editing ? "Close" : "Edit input"} onClick={() => (editing ? closeEditor() : setEditing(true))}>
                 <SlidersHorizontal size={14} aria-hidden />
-                {editing ? "Close" : "Edit input"}
+                {/* On a narrow player only the icon shows; the words stay as the button's name. */}
+                <span className="algo-edit-label">{editing ? "Close" : "Edit input"}</span>
               </button>
             )}
           </div>

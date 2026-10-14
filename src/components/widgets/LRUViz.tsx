@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { Dices, RotateCcw } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
+import { useNarrow } from "@/lib/hooks";
 import { useSimGate } from "./lib/sim-kit";
 import { Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -113,20 +114,6 @@ const NARROW = geo(300, 4, 236, 1.15, true);
 const slotX = (g: Geo, i: number) => PAD + (i % g.cols) * (g.box + GAP);
 const slotDy = (g: Geo, i: number) => Math.floor(i / g.cols) * (g.box + g.rowGap);
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .lru { container: lru / inline-size; }
 .lru-opts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-end; margin: 4px 0 8px; }
@@ -165,7 +152,8 @@ export function LRUViz() {
   const [note, setNote] = useState<string | null>(null);
   const rand = useMemo(() => mulberry32(99), []);
   const { ref, reduce } = useSimGate<HTMLDivElement>();
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const g = narrow ? NARROW : WIDE;
   const BOX = g.box;
   const Y = g.y;

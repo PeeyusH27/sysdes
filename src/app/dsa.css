@@ -213,6 +213,8 @@
 }
 @container algo (max-width: 480px) {
   .algo-now .flow-caption { font-size: 14px; margin-inline: 0; }
+  .algo-edit { padding-inline: 9px; }
+  .algo-edit[aria-expanded=false] .algo-edit-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   /* Phones: cell-based views shrink a little before the stage has to scroll sideways. */
   :is(.av-track, .av-gridwrap, .av-stackbox, .av-queuebox) { zoom: .86; }
 }

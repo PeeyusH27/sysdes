@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { Delete, Dices } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- brackets (pure, tested)
 const PAIR: Record<string, string> = { ")": "(", "]": "[", "}": "{" };
@@ -147,34 +148,6 @@ const stepSim = (s: Sim, dt: number): Sim => {
   return acc >= STEP_MS ? { ...s, pos: s.pos + 1, acc: 0 } : { ...s, acc };
 };
 
-function useNarrow(ref: React.RefObject<HTMLElement | null>, below = 470) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < below);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, below]);
-  return narrow;
-}
-
-/** A segmented control sized like a .wbtn, captioned by its aria-label (the toolbar has no room for a caption row). */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label} style={{ lineHeight: "14px", flex: "none" }}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function describeBrackets(s: string, f: BracketFrame) {
   const e = f.event;
   if (!s) return "Empty string: nothing to match, so it is balanced. Tap some brackets.";
@@ -214,7 +187,7 @@ export function StackLab() {
   const [seed, setSeed] = useState(1);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const narrow = useNarrow(ref);
+  const narrow = useNarrow(ref, 470);
 
   const nums = useMemo(() => parseNums(numText), [numText]);
   const bFrames = useMemo(() => bracketFrames(text), [text]);
@@ -314,7 +287,7 @@ export function StackLab() {
   return (
     <WidgetFrame title="Stack lab" sub="Plates go on and come off the top. Match brackets or find the next greater.">
       <div className="controls" style={{ alignItems: "center" }}>
-        <Pick<Mode>
+        <Seg<Mode> labelMode="hidden" compact
           label="Mode"
           value={mode}
           onChange={changeMode}

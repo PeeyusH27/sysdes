@@ -31,17 +31,55 @@ export function Slider({ label, value, min, max, step = 1, onChange, format = (v
   );
 }
 
-export function Seg<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+/**
+ * Segmented control. The group is always named by `label` (aria-label); `labelMode` says where the label shows:
+ * - "above" (default): a caption over the buttons, like the other controls.
+ * - "inline": on the same line, so a toolbar row stays one button tall. With `wrap` the buttons drop under the label
+ *   when the row is too narrow (otherwise they shrink beside it); `className` swaps the default layout for a widget's
+ *   own class (e.g. one with a container query).
+ * - "hidden": not shown, for a toolbar with no room for a caption whose options say enough.
+ * `compact` sizes the buttons like a .wbtn (32 px tall) and keeps the group from shrinking, to sit in a row of buttons.
+ */
+export function Seg<T extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
+  labelMode = "above",
+  wrap = false,
+  compact = false,
+  className,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string; title?: string }[];
+  onChange: (v: T) => void;
+  labelMode?: "above" | "inline" | "hidden";
+  wrap?: boolean;
+  compact?: boolean;
+  className?: string;
+}) {
+  const group = (
+    <div className="seg" role="group" aria-label={label} style={compact ? { lineHeight: "14px", flex: "none" } : undefined}>
+      {options.map((o) => (
+        <button key={String(o.value)} type="button" title={o.title} aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+  if (labelMode === "hidden") return group;
+  if (labelMode === "inline")
+    return (
+      <div className={className} style={className ? undefined : { display: "flex", alignItems: "center", gap: wrap ? "2px 6px" : 6, flexWrap: wrap ? "wrap" : undefined, fontSize: 12.5, color: "var(--muted)" }}>
+        <span aria-hidden>{label}</span>
+        {group}
+      </div>
+    );
   return (
     <div className="control" style={{ minWidth: 0, flex: "none" }}>
       <span>{label}</span>
-      <div className="seg" role="group" aria-label={label}>
-        {options.map((o) => (
-          <button key={String(o.value)} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
+      {group}
     </div>
   );
 }

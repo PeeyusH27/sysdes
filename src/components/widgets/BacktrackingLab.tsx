@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { Lightbulb, RotateCcw, SkipForward } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 export type QEvent =
@@ -91,32 +92,6 @@ const fmt = (x: number) => x.toLocaleString("en-US");
 const SUP = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
 const CROWN = "M-11 7 L-13 -6 L-6 0 L0 -10 L6 0 L13 -6 L11 7 Z";
 
-/** A segmented control whose name is announced but not shown (its options say enough), so the toolbar stays one row. */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 function Queen({ cell, tone }: { cell: number; tone: "ok" | "bad" | "win" }) {
   const k = cell / 38;
   const fill = tone === "bad" ? "var(--critical)" : tone === "win" ? "var(--good)" : "var(--accent)";
@@ -168,7 +143,7 @@ export function BacktrackingLab() {
   const [focus, setFocus] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const L: Lay = useNarrow(ref) ? NARROW : WIDE;
+  const L: Lay = useNarrow(ref, 480) ? NARROW : WIDE;
 
   const step = useCallback((s: QState) => stepQueens(s), []);
   const [st, reset] = useFixedStep<QState>(() => initQueens(6), step, running && inView && !reduce && mode === "watch", 1000 / speed);
@@ -241,7 +216,7 @@ export function BacktrackingLab() {
   return (
     <WidgetFrame title="N-Queens: choose, explore, un-choose" sub="Place N queens so that none attack each other. Watch backtracking prune its way to every solution, or try it yourself.">
       <div className="controls">
-        <Pick<"watch" | "play">
+        <Seg<"watch" | "play"> labelMode="hidden"
           label="Mode"
           value={mode}
           onChange={(v) => {

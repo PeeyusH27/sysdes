@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { m } from "motion/react";
 import { CircleCheck, Pause, Play, RotateCcw, SkipBack, SkipForward, TriangleAlert } from "lucide-react";
+import { useBoxWidth } from "@/lib/hooks";
 import { useSimGate } from "./lib/sim-kit";
 import { WidgetFrame } from "./WidgetFrame";
 
@@ -185,24 +186,6 @@ const LANE_COLOR: Record<Lane, string> = { app: "var(--k-service)", cache: "var(
 const HEAD = 56;
 const ROW = 23;
 
-/**
- * Width of the picture's box, so the sequence diagram can be drawn at 1:1 (text stays 11 px) whatever the pane width.
- * Phones get a 330-unit drawing scaled down a little. Until measured (and on the server) it assumes a desktop pane.
- */
-function useBoxWidth(ref: React.RefObject<HTMLElement | null>, fallback = 470) {
-  const [w, setW] = useState(fallback);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setW(Math.round(e.contentRect.width));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return w;
-}
-
 const CSS = `
 .w-pc { container-type: inline-size; }
 .w-pc .pc-steps { justify-content: flex-start; margin: 0 0 6px; flex-wrap: wrap; }
@@ -227,7 +210,7 @@ export function PatternComparator() {
   const [playing, setPlaying] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
   const started = useRef(false);
-  const boxW = useBoxWidth(ref);
+  const boxW = useBoxWidth(ref) ?? 470;
 
   // Autoplay once, when first scrolled into view.
   useEffect(() => {

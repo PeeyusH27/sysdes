@@ -1,11 +1,12 @@
 "use client";
-import { useCallback, useEffect, useId, useMemo, useState, type RefObject } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- trees as heap slots (pure, tested, shared with TreeBfsLab)
 /** Slot i has children 2i + 1 and 2i + 2; four levels (15 slots) fit a phone. */
@@ -210,32 +211,6 @@ interface Guess {
 }
 const pct = (v: number, of: number) => `${(v / of) * 100}%`;
 
-/** True once the element is narrower than `px` (false on the server and until measured). Shared with TreeBfsLab. */
-export function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
-/** A segmented control whose name is announced but not shown (its options say enough), so the toolbar stays one row. */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function TreeDfsLab() {
   const [text, setText] = useState(DEFAULT);
   const [mode, setMode] = useState<Mode>("pre");
@@ -244,7 +219,7 @@ export function TreeDfsLab() {
   const [seed, setSeed] = useState(7);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const narrow = useNarrow(ref);
+  const narrow = useNarrow(ref, 480);
   /** Phones draw the tree at about 0.6×, so nodes and their type grow by a quarter to stay readable. */
   const k = narrow ? 1.25 : 1;
   const uid = useId().replace(/[^a-zA-Z0-9-]/g, "");
@@ -305,7 +280,7 @@ export function TreeDfsLab() {
             onReset={() => restart(false)}
           />
         )}
-        <Pick<Mode>
+        <Seg<Mode> labelMode="hidden"
           label="Order"
           value={mode}
           onChange={(v) => {
@@ -320,7 +295,7 @@ export function TreeDfsLab() {
           ]}
         />
         {mode !== "sum" ? (
-          <Pick<"watch" | "predict">
+          <Seg<"watch" | "predict"> labelMode="hidden"
             label="You"
             value={play}
             onChange={(v) => {

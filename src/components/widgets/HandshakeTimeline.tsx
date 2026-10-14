@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { m, useInView } from "motion/react";
 import { RotateCcw } from "lucide-react";
 import { StatTiles } from "@/components/charts/ChartBits";
+import { useNarrow } from "@/lib/hooks";
 import { useSimGate } from "./lib/sim-kit";
 import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -73,21 +74,6 @@ const COLOR: Record<Phase["id"], string> = {
 };
 const SHORT_LABEL: Record<Proto, string> = { tls12: "TLS 1.2", tls13: "TLS 1.3", h3: "HTTP/3" };
 
-/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
-function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 const CSS = `
 .w-hs { container-type: inline-size; }
 .w-hs .controls { margin-bottom: 4px; }
@@ -107,7 +93,7 @@ export function HandshakeTimeline() {
   const { ref, reduce } = useSimGate<HTMLDivElement>();
   const seen = useInView(ref, { once: true, amount: 0.4 });
   const box = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow(box);
+  const narrow = useNarrow(box, 480);
 
   const h = handshake(proto, rtt, dnsCached);
   const worst = handshake("tls12", rtt, false).coldMs; // fixed axis, so protocols compare at a glance

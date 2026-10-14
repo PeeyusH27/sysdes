@@ -1,11 +1,12 @@
 "use client";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { CircleCheck, Flame, Hourglass, TriangleAlert } from "lucide-react";
 import { LineChart } from "@/components/charts/LineChart";
 import { niceTicks } from "@/components/charts/scales";
 import { StatTiles } from "@/components/charts/ChartBits";
 import { int } from "@/lib/format";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { draw } from "./lib/draw-rng";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Slider, WidgetFrame } from "./WidgetFrame";
@@ -194,21 +195,6 @@ export function liveStats(s: LiveState) {
 
 const ms = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`);
 
-/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
-function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 const CSS = `
 .w-pool { container-type: inline-size; }
 .w-pool .controls { margin-bottom: 6px; }
@@ -229,7 +215,7 @@ export function PoolSim() {
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
   const box = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow(box);
+  const narrow = useNarrow(box, 480);
 
   const inputs = useMemo(() => ({ pool, rate, queryMs, cores }), [pool, rate, queryMs, cores]);
   const step = useCallback((s: LiveState, dt: number) => stepLive(s, dt, inputs), [inputs]);

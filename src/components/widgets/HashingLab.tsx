@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useId, useMemo, useState, type RefObject } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { m } from "motion/react";
 import { Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -109,22 +110,6 @@ const FRAME_MS = 1100;
 const DEFAULT = { text: "3 8 11 4 15 7 2", target: 9 };
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 function describe(f: HashFrame, nums: number[], target: number, B: number, brute: number) {
   const x = nums[f.i];
   const chained = f.probes ? `compared ${plural(f.probes, "entry", "entries")}` : "the bucket is empty";
@@ -154,7 +139,7 @@ export function HashingLab() {
   const [seed, setSeed] = useState(1);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const wide = !useNarrow(ref);
+  const wide = !useNarrow(ref, 480);
 
   const nums = useMemo(() => parseNums(text), [text]);
   const target = Number.isFinite(Number(targetText)) && targetText.trim() !== "" ? Math.max(-198, Math.min(198, Math.round(Number(targetText)))) : 0;

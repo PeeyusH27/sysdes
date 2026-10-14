@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { Send } from "lucide-react";
 import { hash32, mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -94,20 +95,6 @@ const WIDE: Geo = { w: 600, top: 28, logX: 140, slotW: 36, slots: 7, conX: 470, 
 const NARROW: Geo = { w: 340, top: 58, logX: 30, slotW: 40, slots: 4, conX: 222, k: 1.2, narrow: true };
 const logR = (g: Geo) => g.logX + g.slots * g.slotW + 8;
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .kp { container: kp / inline-size; }
 .kp-sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; margin: 4px 0 8px; }
@@ -127,7 +114,8 @@ export function KafkaPartitions() {
   const [mode, setMode] = useState<ProduceMode>("keyed");
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const g = narrow ? NARROW : WIDE;
   const { w: W, logX: LOG_X, slotW: SLOT_W, slots: SLOTS, conX: CON_X, k } = g;
   const LOG_R = logR(g);

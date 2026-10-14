@@ -4,9 +4,10 @@ import { AnimatePresence, m } from "motion/react";
 import { Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, WidgetFrame } from "./WidgetFrame";
-import { SLOTS, TREE_W, depthOf, has, isLeaf, left, nodesOf, parseTree, randomTree, right, useNarrow, type Slots } from "./TreeDfsLab";
+import { More, Seg, WidgetFrame } from "./WidgetFrame";
+import { SLOTS, TREE_W, depthOf, has, isLeaf, left, nodesOf, parseTree, randomTree, right, type Slots } from "./TreeDfsLab";
 
 // ---------------------------------------------------------------- BFS frames (pure, tested)
 export type BfsMode = "levels" | "right" | "min";
@@ -107,19 +108,6 @@ const xy = (L: Lay, i: number) => {
   return { x: ((i - (2 ** d - 1) + 0.5) * L.W) / 2 ** d, y: L.top + d * L.gap };
 };
 
-/** A segmented control whose name is announced but not shown (its options say enough), so the toolbar stays one row. */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function describe(t: Slots, mode: BfsMode, snapshot: boolean, f: BFrame, n: number): string {
   const v = (i: number | null) => (i === null ? "" : String(t[i]));
   const list = (ids: number[]) => ids.map((i) => t[i]).join(", ");
@@ -156,7 +144,7 @@ export function TreeBfsLab() {
   const [seed, setSeed] = useState(11);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const L = useNarrow(ref) ? NARROW : WIDE;
+  const L = useNarrow(ref, 480) ? NARROW : WIDE;
   const { k } = L;
   const H = L.qy + 40 * k + 4;
   const chip = 34 * k;
@@ -201,7 +189,7 @@ export function TreeBfsLab() {
           stepHint="One level start or one dequeue"
           onReset={() => restart(false)}
         />
-        <Pick<BfsMode>
+        <Seg<BfsMode> labelMode="hidden"
           label="Show"
           value={mode}
           onChange={(v) => {

@@ -20,7 +20,11 @@ test("question filters are kept in the URL", async ({ page }) => {
 
 test("search palette finds lessons", async ({ page }) => {
   await page.goto("/");
-  await page.keyboard.press("Control+k");
+  // The shortcut works once the nav has hydrated; retry instead of racing it.
+  await expect(async () => {
+    await page.keyboard.press("Control+k");
+    await expect(page.getByPlaceholder(/Search lessons/)).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15000 });
   await page.getByPlaceholder(/Search lessons/).fill("stampede");
   await expect(page.getByRole("option").first()).toBeVisible();
   await page.keyboard.press("Enter");

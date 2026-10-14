@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useId, useState, type KeyboardEvent, type RefObject } from "react";
+import { useCallback, useEffect, useId, useState, type KeyboardEvent } from "react";
 import { m } from "motion/react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 export const N = 10;
@@ -135,39 +136,6 @@ function layout(parent: number[], FW: number) {
   return { pos: slot.map((sl, v) => ({ x: x0 + sl * step, y: TOP + d[v] * level })), maxDepth, level };
 }
 
-/** A segmented control with its name inline (or announced only), so a toolbar row stays one row. */
-function Pick<T extends string>({ label, show = false, value, options, onChange }: { label: string; show?: boolean; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      {show && (
-        <span className="muted" style={{ fontSize: 12.5 }} aria-hidden>
-          {label}
-        </span>
-      )}
-      <div className="seg" role="group" aria-label={label}>
-        {options.map((o) => (
-          <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 const climbed = (x: number, path: number[]) => (path.length === 1 ? `${x} is a root` : `find(${x}) climbs ${path.join(" → ")}`);
 function describe(s: UFState, opts: Opts) {
   const e = s.last;
@@ -193,7 +161,7 @@ export function UnionFindLab() {
   const [sel, setSel] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const L: Lay = useNarrow(ref) ? NARROW : WIDE;
+  const L: Lay = useNarrow(ref, 480) ? NARROW : WIDE;
   const tick = useCallback(
     (s: UFState, dt: number) => {
       const acc = s.acc + dt;
@@ -243,7 +211,7 @@ export function UnionFindLab() {
     { value: "on" as const, label: "On" },
     { value: "off" as const, label: "Off" },
   ];
-  const byRank = <Pick<"on" | "off"> label="Union by rank" show value={opts.byRank ? "on" : "off"} onChange={setOpt("byRank")} options={onOff} />;
+  const byRank = <Seg<"on" | "off"> labelMode="inline" label="Union by rank" value={opts.byRank ? "on" : "off"} onChange={setOpt("byRank")} options={onOff} />;
 
   return (
     <WidgetFrame title="Friend circles: union-find" sub="Each arrow points at a parent; a root names its group. Merge groups, climb to roots, and watch path compression flatten the trees.">
@@ -260,7 +228,7 @@ export function UnionFindLab() {
             reset(initUF());
           }}
         />
-        <Pick<"union" | "find">
+        <Seg<"union" | "find"> labelMode="hidden"
           label="Click people to"
           value={click}
           onChange={(v) => {
@@ -286,7 +254,7 @@ export function UnionFindLab() {
         >
           Worst case: a chain
         </button>
-        <Pick<"on" | "off"> label="Path compression" show value={opts.compress ? "on" : "off"} onChange={setOpt("compress")} options={onOff} />
+        <Seg<"on" | "off"> labelMode="inline" label="Path compression" value={opts.compress ? "on" : "off"} onChange={setOpt("compress")} options={onOff} />
         {L.wide && byRank}
       </div>
 

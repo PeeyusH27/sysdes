@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { m } from "motion/react";
 import { BookOpen, Circle, CircleCheck, PenLine, TriangleAlert } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { draw } from "./lib/draw-rng";
 import { advance, ReducedNote, SimButtons, useSimGate } from "./lib/sim-kit";
 import { More, Slider, WidgetFrame } from "./WidgetFrame";
@@ -161,20 +162,6 @@ const edge = (a: Pt, b: Pt): Pt => {
   return { x: a.x + dx * t, y: a.y + dy * t };
 };
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .rl { container: rl / inline-size; }
 .rl-opts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-end; margin: 4px 0 6px; }
@@ -223,7 +210,8 @@ export function ReplicationLag() {
   const [ryw, setRyw] = useState(false);
   const [message, setMessage] = useState("The primary and both replicas hold price v1. Write v2, then read before the replicas catch up.");
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const g = narrow ? NARROW : WIDE;
   const P = g;
   // The clock only runs while there is something to wait for (a change in flight or the read-your-writes window).

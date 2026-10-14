@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState, type RefObject } from "react";
+import { useState } from "react";
 import { m } from "motion/react";
 import { Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { WidgetFrame } from "./WidgetFrame";
+import { Seg, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- bit logic (pure, tested)
 export const BITS = 8;
@@ -144,17 +145,6 @@ export interface Xor {
 export const tickXor = (s: Xor, dt: number): Xor => (s.k >= s.list.length ? s : s.acc + dt >= 1000 ? { ...s, k: s.k + 1, acc: 0 } : { ...s, acc: s.acc + dt });
 
 // ---------------------------------------------------------------- drawing
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 460) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
 
 const tint = (v: string, p: number) => ({ fill: `color-mix(in srgb, ${v} ${p}%, var(--card))` });
 const VW = 560;
@@ -338,26 +328,13 @@ function Stats({ items }: { items: { label: string; value: string }[] }) {
   );
 }
 
-/** A segmented control whose name is announced but not shown (its options say enough), so the toolbar stays one row. */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 const SHORT: Record<Op, string> = { and: "AND", or: "OR", xor: "XOR", shl: "<< 1", shr: ">> 1", drop: "A & (A−1)" };
 
 function Flipper({ modeSwitch }: { modeSwitch: React.ReactNode }) {
   const [running, setRunning] = useState(true);
   const [seed, setSeed] = useState(3);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const narrow = useNarrow(ref);
+  const narrow = useNarrow(ref, 460);
   const [s, reset] = useFixedStep<Flip>({ a: 0b00100101, b: 0b01101100, op: "xor", col: 0, acc: 0 }, tickFlip, running && inView && !reduce);
   // reduced motion: show the whole result at once; Reset then Step walks it column by column
   const set = (p: Partial<Flip>) => reset({ ...s, ...p, col: reduce ? BITS : 0, acc: 0 });
@@ -369,7 +346,7 @@ function Flipper({ modeSwitch }: { modeSwitch: React.ReactNode }) {
     <>
       <div className="controls">
         {modeSwitch}
-        <Pick<Op> label="Operator" value={s.op} onChange={(op) => set({ op })} options={(["and", "or", "xor", "shl", "shr", "drop"] as Op[]).map((o) => ({ value: o, label: SHORT[o] }))} />
+        <Seg<Op> labelMode="hidden" label="Operator" value={s.op} onChange={(op) => set({ op })} options={(["and", "or", "xor", "shl", "shr", "drop"] as Op[]).map((o) => ({ value: o, label: SHORT[o] }))} />
       </div>
       <div className="controls" style={{ marginTop: 0 }}>
         <SimButtons running={running && s.col < BITS && !reduce} reduce={reduce} onToggle={() => (s.col >= BITS ? (reset({ ...s, col: 0, acc: 0 }), setRunning(true)) : setRunning(!running))} onStep={() => reset({ ...s, col: Math.min(BITS, s.col + 1), acc: 0 })} onReset={() => reset({ ...s, col: 0, acc: 0 })} stepHint="Work out the next result bit" />
@@ -415,7 +392,7 @@ function SingleNumber({ modeSwitch }: { modeSwitch: React.ReactNode }) {
   const [text, setText] = useState(DEFAULT_LIST.join(" "));
   const [running, setRunning] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const narrow = useNarrow(ref);
+  const narrow = useNarrow(ref, 460);
   const [s, reset] = useFixedStep<Xor>({ list: DEFAULT_LIST, k: 0, acc: 0 }, tickXor, running && inView && !reduce);
   const parsed = parseList(text);
   const n = s.list.length;
@@ -485,7 +462,7 @@ function SingleNumber({ modeSwitch }: { modeSwitch: React.ReactNode }) {
 export function BitLab() {
   const [mode, setMode] = useState<"flip" | "single">("flip");
   const modeSwitch = (
-    <Pick
+    <Seg labelMode="hidden"
       label="Mode"
       value={mode}
       onChange={setMode}

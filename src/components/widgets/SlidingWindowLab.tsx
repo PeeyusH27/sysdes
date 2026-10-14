@@ -1,11 +1,12 @@
 "use client";
-import { useCallback, useEffect, useId, useMemo, useState, type RefObject } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { Shuffle } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 export const MAX_LETTERS = 12;
@@ -158,35 +159,6 @@ const NARROW = { W: 360, TILE_Y: 46, MAX_STEP: 34, BOT_Y: 166, H: 200 };
 const FRAME_MS = 1000;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
-/** A segmented control sized like a .wbtn, captioned by its aria-label (the toolbar has no room for a caption row). */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label} style={{ lineHeight: "14px", flex: "none" }}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function describe(f: WinFrame, mode: WinMode, s: string, nums: number[], k: number, prev: WinFrame | undefined) {
   const n = mode === "unique" ? s.length : nums.length;
   if (!n) return mode === "unique" ? "Type some letters to start." : "Type some numbers to start.";
@@ -216,7 +188,7 @@ export function SlidingWindowLab() {
   const [seed, setSeed] = useState(1);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const wide = !useNarrow(ref);
+  const wide = !useNarrow(ref, 480);
   const { W, TILE_Y, BOT_Y, H } = wide ? WIDE : NARROW;
 
   const s = cleanLetters(letters);
@@ -267,7 +239,7 @@ export function SlidingWindowLab() {
   return (
     <WidgetFrame title="The sliding window" sub="Grow right, snap left to keep letters unique. Or slide a fixed window of k.">
       <div className="controls" style={{ alignItems: "center" }}>
-        <Pick<WinMode> label="Rule" value={mode} onChange={(v) => { setMode(v); restart(); setRunning(true); }}
+        <Seg<WinMode> labelMode="hidden" compact label="Rule" value={mode} onChange={(v) => { setMode(v); restart(); setRunning(true); }}
           options={[{ value: "unique", label: "No repeats" }, { value: "fixed", label: "Max sum of k" }]} />
         <SimButtons running={playing} reduce={reduce} stepHint="Move one edge of the window" onStep={tick}
           onToggle={() => { if (!playing && idx >= last) restart(); setRunning(!playing); }}

@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { m } from "motion/react";
 import { Send, Zap } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -101,20 +102,6 @@ interface Geo {
 const WIDE: Geo = { w: 560, h: 240, lane: 210, gate: 280, clientX: 92, apiX: 470, k: 1, narrow: false };
 const NARROW: Geo = { w: 340, h: 244, lane: 212, gate: 170, clientX: 74, apiX: 266, k: 1.25, narrow: true };
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .tb { container: tb / inline-size; }
 .tb-sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; margin: 4px 0 8px; }
@@ -177,7 +164,8 @@ export function TokenBucketViz() {
   const [capacity, setCapacity] = useState(10);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const g = narrow ? NARROW : WIDE;
   const k = g.k;
 

@@ -1,7 +1,8 @@
 "use client";
-import { useCallback, useEffect, useId, useState, type KeyboardEvent, type RefObject } from "react";
+import { useCallback, useId, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
@@ -181,32 +182,6 @@ const label = (v: number) => COURSES[v].label;
 const list = (vs: number[]) => (vs.length <= 1 ? vs.map(label).join("") : `${vs.slice(0, -1).map(label).join(", ")} and ${label(vs.at(-1)!)}`);
 const chipAt = (L: Lay, i: number, y: number) => ({ x: L.px + (i % L.cols) * (CW + 4), y: y + Math.floor(i / L.cols) * 26 });
 
-/** A segmented control whose name is announced but not shown (its options say enough), so the toolbar stays one row. */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** True once the element is narrower than `px` (false on the server and until measured). */
-function useNarrow(ref: RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 /** Forward arrows run right; same-column arrows bow sideways; backward arrows (the ones that can close a cycle) arc over or under. */
 function edgePath([a, b]: Edge) {
   const p = COURSES[a];
@@ -246,7 +221,7 @@ export function TopoSortLab() {
   const [from, setFrom] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const L = useNarrow(ref) ? NARROW : WIDE;
+  const L = useNarrow(ref, 480) ? NARROW : WIDE;
   const tick = useCallback(
     (s: TopoState, dt: number) => {
       const acc = s.acc + dt;
@@ -314,7 +289,7 @@ export function TopoSortLab() {
           stepHint={mode === "one" ? "Take the course at the front of the queue" : "Take every ready course as one semester"}
           onReset={() => setEdges(s.edges, null)}
         />
-        <Pick<Mode>
+        <Seg<Mode> labelMode="hidden"
           label="Kahn's: take"
           value={mode}
           onChange={(v) => {

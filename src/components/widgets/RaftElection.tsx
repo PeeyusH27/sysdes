@@ -1,7 +1,8 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { HeartPulse, Scissors, Skull, Unplug } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { draw } from "./lib/draw-rng";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Seg, WidgetFrame } from "./WidgetFrame";
@@ -231,20 +232,6 @@ const pos = (g: Geo, i: number) => {
 };
 const MSG_COLOR: Record<MsgKind, string> = { "vote-req": "var(--series-2)", vote: "var(--series-1)", beat: "var(--series-3)", nack: "var(--muted)" };
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .raft { container: raft / inline-size; }
 .raft-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; margin: 4px 0 6px; }
@@ -262,7 +249,8 @@ export function RaftElection() {
   const [speed, setSpeed] = useState(1);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const g = narrow ? NARROW : WIDE;
   const step = useCallback((s: RaftState, dt: number) => stepRaft(s, dt * speed), [speed]);
   const [s, reset] = useFixedStep<RaftState>(() => initRaft(), step, running && inView && !reduce);

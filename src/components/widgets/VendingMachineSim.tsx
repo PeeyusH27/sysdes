@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useId, useState, type ReactNode, type RefObject } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { m } from "motion/react";
 import { Ban, Coins, PackagePlus, Undo2, Wrench } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Seg, WidgetFrame } from "./WidgetFrame";
 
@@ -857,19 +858,6 @@ const MAX_H = 296;
 const DIAGRAM_W = 340;
 const DIAGRAM_H = 312;
 const pct = (v: number, of: number) => `${((v / of) * 100).toFixed(3)}%`;
-
-/** True while the element is narrower than `below` px (ResizeObserver; false on the server and in jsdom). */
-function useNarrow(ref: RefObject<HTMLElement | null>, below: number) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < below));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, below]);
-  return narrow;
-}
 
 export function VendingMachineSim() {
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();

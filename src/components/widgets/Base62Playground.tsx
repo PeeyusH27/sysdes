@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { m } from "motion/react";
 import { Minus, Plus, Server, Shuffle, Skull, Zap } from "lucide-react";
 import { int } from "@/lib/format";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { draw } from "./lib/draw-rng";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { Seg, Slider, WidgetFrame } from "./WidgetFrame";
@@ -250,21 +251,6 @@ function Encoder() {
   );
 }
 
-/** True when the widget is phone-narrow; false on the server and until measured, so the first render matches desktop. */
-function useNarrow(ref: React.RefObject<HTMLElement | null>, px = 480) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px); // 0 = hidden: keep the last layout
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 /** Where each piece goes: one row of servers under Redis (landscape), or rows of three on a phone. */
 function allocLayout(n: number, narrow: boolean) {
   const W = narrow ? 300 : 600;
@@ -287,7 +273,7 @@ function Allocator() {
   const [running, setRunning] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
   const box = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow(box);
+  const narrow = useNarrow(box, 480);
   // auto traffic: ~6 links/s on random servers
   const step = useCallback((s: AllocState) => {
     const [r, seed] = draw(s.seed);

@@ -39,11 +39,12 @@ Every `##` section is wrapped in a numbered card automatically (`src/lib/mdx/reh
 - Never write `<LessonSection>` yourself; the plugin adds it.
 - Content before the first `##` (the `<TLDR>`) stays outside the cards.
 
-**Split layout.** The same plugin splits each section into text (paragraphs, lists, tables, `TLDR`, `Callout`, `Requirements`, `Steps`, `FollowUps`…) and visuals (every other component, plus top-level fenced code). From 1080 px wide, visuals sit in a sticky column on the left (about 515–690 px wide) and the text on the right; narrower screens stack them, text first. When `###` subsections each have their own visual, each gets its own row. So:
+**Pinned visual pane.** The same plugin splits each section into text (paragraphs, lists, tables, `TLDR`, `Callout`, `Requirements`, `Steps`, `FollowUps`…) and visuals (every other component, plus top-level fenced code). From 1080 px wide, one pane on the left is pinned at the viewport's height and shows the visuals for the text being read (a section, or a `###` subsection with its own visual); all text scrolls on the right. The pane scales a visual down to fit, but not below 0.8, then scrolls inside. Narrower screens stack each section's visuals under its text. So:
 
 - Never refer to a visual by position ("below", "on the left"). Say "the diagram", "the simulator".
 - Put the sentence that says what to try in the same section as its widget or diagram.
-- Keep tables to 4 columns or fewer: they sit in the narrower text column.
+- Keep tables to 4 columns or fewer: they sit in the text column.
+- **Every visual must fit a laptop screen:** at most about 620 px tall at 600–700 px wide, and on a 360 px phone the picture plus its main controls within about 720 px. Use one toolbar row, landscape drawings, container queries (or `useNarrow` from `src/lib/hooks.ts`), and `<More>` from `WidgetFrame` for secondary controls, logs and tables.
 
 ## Writing style
 

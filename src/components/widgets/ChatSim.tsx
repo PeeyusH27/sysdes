@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check, CheckCheck, CircleAlert, CircleCheck, Clock, Info, Send, Server, TriangleAlert, Wifi, WifiOff, X } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useBoxWidth } from "@/lib/hooks";
 import { draw } from "./lib/draw-rng";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Slider, WidgetFrame } from "./WidgetFrame";
@@ -339,19 +340,6 @@ const CSS = `
 @container (max-width: 420px) { .chat-list { height: 150px; } .chat-bubble { font-size: 12px; } }
 `;
 
-/** The widget's width in px (0 until measured): the wire is drawn in real pixels so its labels never shrink. */
-function useWidth(ref: React.RefObject<HTMLElement | null>) {
-  const [w, setW] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return w;
-}
-
 const WIRE_H = 60;
 
 function packetLabel(p: Packet) {
@@ -427,7 +415,7 @@ export function ChatSim() {
   const [s, reset] = useFixedStep<ChatState>(() => initChat(), tickStep, busyFlag && inView && !reduce);
   const busy = nextEventAt(s) !== null;
   if (busy !== busyFlag) setBusyFlag(busy); // the clock only runs while something is in flight
-  const W = Math.max(260, useWidth(ref) || 600);
+  const W = Math.max(260, useBoxWidth(ref) || 600);
   const X_OF: Record<NodeId, number> = { alice: 22, server: W / 2, bob: W - 22 };
 
   const act = (a: ChatAction) => reset(chatReducer(s, a));

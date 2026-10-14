@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { m, useInView } from "motion/react";
 import { CircleCheck, RotateCcw, TriangleAlert } from "lucide-react";
+import { useNarrow } from "@/lib/hooks";
 import { useSimGate } from "./lib/sim-kit";
 import { WidgetFrame } from "./WidgetFrame";
 
@@ -105,20 +106,6 @@ const TOP = 30;
 const STATUS_WORD: Partial<Record<SpanStatus, string>> = { hit: "hit", miss: "miss", slow: "slow", timeout: "timeout", fallback: "fallback", async: "async" };
 const STATUS_INK: Partial<Record<SpanStatus, string>> = { hit: "var(--good-ink)", miss: "var(--warning-ink)", slow: "var(--critical-ink)", timeout: "var(--critical-ink)", fallback: "var(--warning-ink)", async: "var(--muted)" };
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .tw { container: tw / inline-size; }
 .tw-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
@@ -141,7 +128,8 @@ export function TraceWaterfall() {
   const [o, setO] = useState<TraceOpts>({ cdnHit: false, cacheHit: true, slowDb: false, depTimeout: false });
   const [run, setRun] = useState(0);
   const { ref, reduce } = useSimGate<HTMLDivElement>();
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const g = narrow ? NARROW : WIDE;
   const seen = useInView(ref, { once: true, amount: 0.3 });
   const set = (k: keyof TraceOpts) => (v: boolean) => {

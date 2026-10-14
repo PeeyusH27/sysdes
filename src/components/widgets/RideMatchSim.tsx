@@ -1,9 +1,10 @@
 "use client";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { m } from "motion/react";
 import { Grid3x3, MapPin, Shuffle, Users } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useBoxWidth } from "@/lib/hooks";
 import { advance, ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
 import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -446,18 +447,6 @@ const fromPx = (v: View, x: number, y: number): Pt => (v.T ? { x: (y - PAD) / S,
 /** A rectangle measured along the model's axes, in px → the screen rectangle. */
 const rectPx = (v: View, x: number, y: number, w: number, h: number) => (v.T ? { x: y, y: x, width: h, height: w } : { x, y, width: w, height: h });
 const screenRot = (v: View, rot: number) => (v.T ? 90 - rot : rot);
-/** The widget's width in px (0 until measured): below ~520 px the map turns portrait and the side panel drops under it. */
-function useWidth(ref: React.RefObject<HTMLElement | null>) {
-  const [w, setW] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return w;
-}
 
 const STATE_COLOR: Record<DriverState, string> = { available: "var(--series-1)", offered: "var(--series-2)", onTrip: "var(--series-3)" };
 const Z: Record<DriverState, number> = { available: 0, onTrip: 1, offered: 2 }; // offer bubbles draw on top
@@ -693,7 +682,7 @@ export function RideMatchSim() {
   const [mode, setMode] = useState<IndexMode>("cells");
   const [showCells, setShowCells] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const width = useWidth(ref);
+  const width = useBoxWidth(ref) ?? 0;
   const narrow = width > 0 && width < 520;
   const v = narrow ? TALL : WIDE;
   const at = (p: Pt) => toPx(v, p);

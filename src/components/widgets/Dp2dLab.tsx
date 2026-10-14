@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useState, type RefObject } from "react";
+import { useCallback, useState } from "react";
 import { m } from "motion/react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useBoxWidth } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- LCS and edit distance tables (pure, tested)
 export type Mode = "lcs" | "edit";
@@ -227,18 +228,6 @@ export function describe(s: Lab): string {
 }
 
 // ---------------------------------------------------------------- drawing
-/** Rendered width of an element (0 until measured, and on the server). */
-function useWidth(ref: RefObject<HTMLElement | null>) {
-  const [w, setW] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return w;
-}
 
 const CW = 46;
 const CH = 38;
@@ -333,19 +322,6 @@ function Grid({ s, reduce, narrow }: { s: Lab; reduce: boolean; narrow: boolean 
   );
 }
 
-/** A segmented control whose name is announced but not shown (its options say enough), so the toolbar stays one row. */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /** The table never draws taller than this (px), so long words shrink it instead of pushing the controls off screen. */
 const MAX_TABLE_PX = 300;
 const MAX_TABLE_PX_PHONE = 196;
@@ -357,7 +333,7 @@ export function Dp2dLab() {
   const [speed, setSpeed] = useState(1);
   const [running, setRunning] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const width = useWidth(ref);
+  const width = useBoxWidth(ref) ?? 0;
   const step = useCallback((st: Lab, dt: number) => tickLab(st, dt * speed), [speed]);
   const [s, reset] = useFixedStep<Lab>(() => initLab(PRESETS.lcs[0], PRESETS.lcs[1], "lcs"), step, running && inView && !reduce, 50);
   const done = s.phase === "done";
@@ -387,7 +363,7 @@ export function Dp2dLab() {
   return (
     <WidgetFrame title="DP table lab" sub="Two words, one table. Each cell reads its diagonal, up and left neighbours. Pick the right one, or press Run, then watch the walk back spell the answer.">
       <div className="controls" style={{ alignItems: "center", columnGap: 10 }}>
-        <Pick<Mode>
+        <Seg<Mode> labelMode="hidden"
           label="Problem"
           value={mode}
           onChange={(md) => {

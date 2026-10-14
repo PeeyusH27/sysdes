@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { m } from "motion/react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Slider, WidgetFrame } from "./WidgetFrame";
+import { Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 /** Nodes 0 … tail+loop−1. The first `tail` nodes lead into a loop of `loop` nodes; loop 0 means the list ends in null. */
@@ -103,21 +104,6 @@ const stepSim = (s: Sim, dt: number): Sim => {
   return acc >= TICK_MS ? { run: tick(s.run), acc: 0 } : { ...s, acc };
 };
 
-function useNarrow(ref: React.RefObject<HTMLElement | null>, below = 470) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < below);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, below]);
-  return narrow;
-}
-
 /**
  * Tail in a row, loop as a circle that starts at its leftmost point and runs clockwise. A wide (landscape) stage
  * scales the list up a little, but never lets the loop grow taller than `maxLoop`, so the picture stays short.
@@ -180,19 +166,6 @@ function Hare() {
   );
 }
 
-/** A segmented control sized like a .wbtn, captioned by its aria-label (the toolbar has no room for a caption row). */
-function Pick({ label, value, options, onChange }: { label: string; value: number; options: { value: number; label: string }[]; onChange: (v: number) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label} style={{ lineHeight: "14px", flex: "none" }}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function describe(r: Run) {
   const n = sizeOf(r);
   if (r.outcome === "empty") return "Empty list: fast is null at once. No loop, no middle.";
@@ -223,7 +196,7 @@ export function FastSlowLab() {
   const [speed, setSpeed] = useState(2);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const narrow = useNarrow(ref);
+  const narrow = useNarrow(ref, 470);
   const id = useId().replace(/:/g, "");
   const [sim, reset] = useFixedStep<Sim>({ run: startRun({ tail: 3, loop: 6 }), acc: 0 }, stepSim, running && inView && !reduce);
   const run = sim.run;
@@ -282,7 +255,7 @@ export function FastSlowLab() {
           stepHint="Move both pointers one step"
           onReset={() => restart({ tail, loop })}
         />
-        <Pick
+        <Seg labelMode="hidden" compact
           label="Fast hops per step"
           value={speed}
           onChange={(v) => {

@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { Undo2 } from "lucide-react";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- pointer machine (pure, tested)
 export type Var = "dummy" | "before" | "first" | "prev" | "curr" | "next";
@@ -204,34 +205,6 @@ function geometry(compact: boolean) {
   return { compact, L, T, PITCH, V0, GL, U0, P, rect, path, ptrV, U: (slot: number) => U0 + slot * PITCH };
 }
 
-/** A segmented control sized like a .wbtn, captioned by its aria-label (the toolbar has no room for a caption row). */
-function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label} style={{ lineHeight: "14px", flex: "none" }}>
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function useNarrow(ref: React.RefObject<HTMLElement | null>, px: number) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < px);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return narrow;
-}
-
 interface S {
   mc: Machine;
   past: Machine[];
@@ -366,7 +339,7 @@ export function ListReversalLab() {
         <button type="button" className="wbtn" disabled={!s.past.length} onClick={() => s.past.length && reset({ ...s, mc: s.past[s.past.length - 1], past: s.past.slice(0, -1), acc: 0, msg: "Undone: back one move." })}>
           <Undo2 size={14} aria-hidden /> Undo
         </button>
-        <Pick<Part>
+        <Seg<Part> labelMode="hidden" compact
           label="Reverse"
           value={part}
           onChange={(v) => {

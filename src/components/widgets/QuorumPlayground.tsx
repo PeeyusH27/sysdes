@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { m } from "motion/react";
 import { BookOpen, PenLine, RefreshCw, RotateCcw } from "lucide-react";
 import { mulberry32 } from "@/lib/rng";
+import { useNarrow } from "@/lib/hooks";
 import { useSimGate } from "./lib/sim-kit";
 import { Slider, WidgetFrame } from "./WidgetFrame";
 
@@ -63,20 +64,6 @@ const pos = (g: Geo, i: number, n: number) => {
   return { x: g.c.x + Math.cos(a) * g.rx, y: g.c.y + Math.sin(a) * g.ry };
 };
 
-/** True while the widget is narrower than `px`, i.e. on a phone. */
-function useNarrow(px: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < px));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [px]);
-  return [ref, narrow] as const;
-}
-
 const CSS = `
 .qp { container: qp / inline-size; }
 .qp-sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 14px; margin: 4px 0 8px; }
@@ -116,7 +103,8 @@ export function QuorumPlayground() {
   const [s, setS] = useState<QState>(() => fresh(3));
   const rand = useMemo(() => mulberry32(20_24), []);
   const { ref, reduce } = useSimGate<HTMLDivElement>();
-  const [boxRef, narrow] = useNarrow(480);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(boxRef, 480);
   const g = narrow ? NARROW : WIDE;
   const C = g.c;
 

@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { m } from "motion/react";
 import { mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useNarrow } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { Slider, WidgetFrame } from "./WidgetFrame";
+import { Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- model (pure, tested)
 /** "guess": exact match over 1..n (too low / too high / hit). "bad": first true over builds 1..n. */
@@ -97,35 +98,6 @@ export function pointerRows(xs: number[], gap = 28) {
   return rows;
 }
 
-/** Phone-sized widget → a narrower viewBox, so SVG text stays readable. */
-function useNarrow(ref: React.RefObject<HTMLElement | null>, below = 470) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // A hidden stage reports width 0: keep the last layout instead of flashing the phone one.
-    const ro = new ResizeObserver(([e]) => {
-      if (e.contentRect.width > 0) setNarrow(e.contentRect.width < below);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, below]);
-  return narrow;
-}
-
-/** A segmented control sized like a .wbtn, captioned by its aria-label (the toolbar has no room for a caption row). */
-function Pick<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="seg" role="group" aria-label={label} style={{ lineHeight: "14px", flex: "none" }}>
-      {options.map((o) => (
-        <button key={String(o.value)} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 interface Sim {
   g: Game;
   acc: number;
@@ -188,7 +160,7 @@ export function BinarySearchLab() {
   const [typed, setTyped] = useState("");
   const [running, setRunning] = useState(false);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const narrow = useNarrow(ref);
+  const narrow = useNarrow(ref, 470);
   const fresh = (md: Mode, n: number, r: number): Sim => ({ g: newGame(md, n, 11 + r * 7919 + (md === "bad" ? 3 : 0)), acc: 0 });
   const [sim, reset] = useFixedStep<Sim>(() => fresh("guess", 100, 0), stepSim, running && inView && !reduce);
   const g = sim.g;
@@ -239,7 +211,7 @@ export function BinarySearchLab() {
   return (
     <WidgetFrame title="Halving lab" sub="Can you beat halving? Each middle check throws away half of what is left.">
       <div className="controls" style={{ alignItems: "center" }}>
-        <Pick<Mode>
+        <Seg<Mode> labelMode="hidden" compact
           label="Game"
           value={mode}
           onChange={(md) => {
@@ -252,7 +224,7 @@ export function BinarySearchLab() {
           ]}
         />
         {mode === "guess" ? (
-          <Pick<number>
+          <Seg<number> labelMode="hidden" compact
             label="Range"
             value={size.guess}
             onChange={(v) => {

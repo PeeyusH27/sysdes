@@ -1,11 +1,12 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { CalendarClock } from "lucide-react";
 import { hash32, mulberry32 } from "@/lib/rng";
 import { useFixedStep } from "@/lib/sim-loop";
+import { useBoxWidth } from "@/lib/hooks";
 import { ReducedNote, SimButtons, useSimGate, useThrottled } from "./lib/sim-kit";
-import { More, Slider, WidgetFrame } from "./WidgetFrame";
+import { More, Seg, Slider, WidgetFrame } from "./WidgetFrame";
 
 // ---------------------------------------------------------------- ranking (pure, tested)
 export type TieRule = "shared" | "dense" | "first";
@@ -272,19 +273,6 @@ const WIDE = { W: 640, col: { w: 312, barX: 122, barW: 118 } as Col, radius: 2 }
 const TALL = { W: 360, col: { w: 360, barX: 122, barW: 150 } as Col, radius: 1 };
 type Layout = typeof WIDE;
 
-/** The widget's width in px (0 until measured), to pick the landscape or the stacked board. */
-function useWidth(ref: React.RefObject<HTMLElement | null>) {
-  const [w, setW] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return w;
-}
-
 function BarRow({ col, row, y, max, shards, flash, float, t, reduce }: { col: Col; row: Row; y: number; max: number; shards: number; flash?: Flash; float?: FloatTag; t: number; reduce: boolean }) {
   const isMe = row.id === ME;
   const w = Math.max(3, (row.score / max) * col.barW);
@@ -436,22 +424,6 @@ function ShardPanel({ L, board, rows, shards, rule, reduce, note }: { L: Layout;
   );
 }
 
-/** A segmented control with its label inline, so a toolbar row stays one button tall. */
-function InlineSeg<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="lb-seg">
-      <span aria-hidden>{label}</span>
-      <div className="seg" role="group" aria-label={label}>
-        {options.map((o) => (
-          <button key={String(o.value)} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const CSS = `
 .lb-seg { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); min-width: 0; max-width: 100%; }
 .lb-seg .seg { min-width: 0; flex: 0 1 auto; }
@@ -524,7 +496,7 @@ export function LeaderboardRace() {
   const [eps, setEps] = useState(3);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const width = useWidth(ref);
+  const width = useBoxWidth(ref) ?? 0;
   const L: Layout = width && width < 500 ? TALL : WIDE;
   const wide = L === WIDE;
 
@@ -591,7 +563,7 @@ export function LeaderboardRace() {
         <button type="button" className="wbtn primary" onClick={() => reset(applyEvent(state, { pid: ME, points: 100 }, rule))}>
           +100 to me
         </button>
-        <InlineSeg<number>
+        <Seg<number> labelMode="inline" className="lb-seg"
           label="Shards"
           value={shards}
           onChange={setShards}
@@ -607,7 +579,7 @@ export function LeaderboardRace() {
         )}
       </div>
       <div className="controls" style={{ marginTop: 0, alignItems: "center" }}>
-        <InlineSeg<TieRule>
+        <Seg<TieRule> labelMode="inline" className="lb-seg"
           label="Ties"
           value={rule}
           onChange={setRule}
@@ -617,7 +589,7 @@ export function LeaderboardRace() {
             { value: "first", label: "First to reach" },
           ]}
         />
-        <InlineSeg<BoardId>
+        <Seg<BoardId> labelMode="inline" className="lb-seg"
           label="Board"
           value={view}
           onChange={setView}
