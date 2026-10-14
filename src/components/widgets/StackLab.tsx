@@ -287,7 +287,9 @@ export function StackLab() {
   return (
     <WidgetFrame title="Stack lab" sub="Plates go on and come off the top. Match brackets or find the next greater.">
       <div className="controls" style={{ alignItems: "center" }}>
-        <Seg<Mode> labelMode="hidden" compact
+        <Seg<Mode>
+          labelMode="hidden"
+          compact
           label="Mode"
           value={mode}
           onChange={changeMode}

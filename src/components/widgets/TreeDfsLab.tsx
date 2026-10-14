@@ -280,7 +280,8 @@ export function TreeDfsLab() {
             onReset={() => restart(false)}
           />
         )}
-        <Seg<Mode> labelMode="hidden"
+        <Seg<Mode>
+          labelMode="hidden"
           label="Order"
           value={mode}
           onChange={(v) => {
@@ -295,7 +296,8 @@ export function TreeDfsLab() {
           ]}
         />
         {mode !== "sum" ? (
-          <Seg<"watch" | "predict"> labelMode="hidden"
+          <Seg<"watch" | "predict">
+            labelMode="hidden"
             label="You"
             value={play}
             onChange={(v) => {

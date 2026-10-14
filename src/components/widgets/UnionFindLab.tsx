@@ -228,7 +228,8 @@ export function UnionFindLab() {
             reset(initUF());
           }}
         />
-        <Seg<"union" | "find"> labelMode="hidden"
+        <Seg<"union" | "find">
+          labelMode="hidden"
           label="Click people to"
           value={click}
           onChange={(v) => {

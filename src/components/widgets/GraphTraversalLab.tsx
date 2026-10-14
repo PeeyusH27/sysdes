@@ -240,7 +240,8 @@ export function GraphTraversalLab() {
           stepHint="Take one cell out and push its neighbours"
           onReset={() => restart(maze)}
         />
-        <Seg<Algo> labelMode="hidden"
+        <Seg<Algo>
+          labelMode="hidden"
           label="Search: BFS uses a queue, DFS a stack"
           value={algo}
           onChange={(a) => {
@@ -252,7 +253,8 @@ export function GraphTraversalLab() {
             { value: "dfs", label: "DFS" },
           ]}
         />
-        <Seg<Tool> labelMode="inline"
+        <Seg<Tool>
+          labelMode="inline"
           label="Click places"
           value={tool}
           onChange={setTool}

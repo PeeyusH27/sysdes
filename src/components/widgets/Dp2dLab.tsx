@@ -363,7 +363,8 @@ export function Dp2dLab() {
   return (
     <WidgetFrame title="DP table lab" sub="Two words, one table. Each cell reads its diagonal, up and left neighbours. Pick the right one, or press Run, then watch the walk back spell the answer.">
       <div className="controls" style={{ alignItems: "center", columnGap: 10 }}>
-        <Seg<Mode> labelMode="hidden"
+        <Seg<Mode>
+          labelMode="hidden"
           label="Problem"
           value={mode}
           onChange={(md) => {

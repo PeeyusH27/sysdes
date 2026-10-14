@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { m, useInView, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/cn";
+import { useBoxWidth } from "@/lib/hooks";
 import { playgroundHref } from "@/components/playground/share";
 import { Hammer } from "lucide-react";
 import { KIND_META } from "./kinds";
@@ -9,7 +10,6 @@ import { FLOOR_FLOW_SCALE, layoutFlow, NODE, pickOrientation, type LaidOutEdge, 
 import { ArrowMarker, Legend, Packet, StateBadge, StepControls } from "./parts";
 import type { FlowNode, FlowSpec, NodeState, ScenarioStep } from "./types";
 import { useStepper } from "./useStepper";
-import { useBoxWidth } from "./useBoxWidth";
 
 const NO_STEPS: ScenarioStep[] = [];
 /** The chrome-less hero (home, system-design hub) stays wide down to this scale, as it did on every desktop before. */

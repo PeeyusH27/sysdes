@@ -289,7 +289,8 @@ export function TopoSortLab() {
           stepHint={mode === "one" ? "Take the course at the front of the queue" : "Take every ready course as one semester"}
           onReset={() => setEdges(s.edges, null)}
         />
-        <Seg<Mode> labelMode="hidden"
+        <Seg<Mode>
+          labelMode="hidden"
           label="Kahn's: take"
           value={mode}
           onChange={(v) => {

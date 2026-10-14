@@ -2,10 +2,10 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { m, useInView, useReducedMotionConfig } from "motion/react";
 import { cn } from "@/lib/cn";
+import { useBoxWidth } from "@/lib/hooks";
 import { KIND_META } from "./kinds";
 import { ArrowMarker, Legend, Packet, StepControls } from "./parts";
 import type { SeqAlt, SeqItem, SeqMessage, SeqNote, SequenceSpec } from "./types";
-import { useBoxWidth } from "./useBoxWidth";
 import { useStepper } from "./useStepper";
 
 type Row =

@@ -496,7 +496,7 @@ export function LeaderboardRace() {
   const [eps, setEps] = useState(3);
   const [running, setRunning] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const width = useBoxWidth(ref) ?? 0;
+  const width = useBoxWidth(ref);
   const L: Layout = width && width < 500 ? TALL : WIDE;
   const wide = L === WIDE;
 
@@ -563,7 +563,9 @@ export function LeaderboardRace() {
         <button type="button" className="wbtn primary" onClick={() => reset(applyEvent(state, { pid: ME, points: 100 }, rule))}>
           +100 to me
         </button>
-        <Seg<number> labelMode="inline" className="lb-seg"
+        <Seg<number>
+          labelMode="inline"
+          className="lb-seg"
           label="Shards"
           value={shards}
           onChange={setShards}
@@ -579,7 +581,9 @@ export function LeaderboardRace() {
         )}
       </div>
       <div className="controls" style={{ marginTop: 0, alignItems: "center" }}>
-        <Seg<TieRule> labelMode="inline" className="lb-seg"
+        <Seg<TieRule>
+          labelMode="inline"
+          className="lb-seg"
           label="Ties"
           value={rule}
           onChange={setRule}
@@ -589,7 +593,9 @@ export function LeaderboardRace() {
             { value: "first", label: "First to reach" },
           ]}
         />
-        <Seg<BoardId> labelMode="inline" className="lb-seg"
+        <Seg<BoardId>
+          labelMode="inline"
+          className="lb-seg"
           label="Board"
           value={view}
           onChange={setView}

@@ -277,7 +277,8 @@ export function ShortestPathLab() {
   return (
     <WidgetFrame title="Dijkstra's road trip" sub="Six towns, ten two-way roads. Watch Dijkstra settle the closest town first, or be the heap yourself. Change a road and the route reroutes.">
       <div className="controls">
-        <Seg<"watch" | "pick"> labelMode="hidden"
+        <Seg<"watch" | "pick">
+          labelMode="hidden"
           label="Mode"
           value={mode}
           onChange={(v) => {

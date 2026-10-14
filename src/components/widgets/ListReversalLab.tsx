@@ -339,7 +339,9 @@ export function ListReversalLab() {
         <button type="button" className="wbtn" disabled={!s.past.length} onClick={() => s.past.length && reset({ ...s, mc: s.past[s.past.length - 1], past: s.past.slice(0, -1), acc: 0, msg: "Undone: back one move." })}>
           <Undo2 size={14} aria-hidden /> Undo
         </button>
-        <Seg<Part> labelMode="hidden" compact
+        <Seg<Part>
+          labelMode="hidden"
+          compact
           label="Reverse"
           value={part}
           onChange={(v) => {

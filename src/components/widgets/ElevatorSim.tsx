@@ -908,7 +908,9 @@ export function ElevatorSim() {
       <div ref={ref}>
         <div className="controls" style={{ gap: "8px 14px", margin: "2px 0 8px" }}>
           <SimButtons running={running && !reduce} reduce={reduce} onToggle={() => setRunning((r) => !r)} onStep={() => reset(stepSim(s, 500))} onReset={() => restart({})} stepHint="Advance half a second" />
-          <Seg<Strategy> labelMode="inline" wrap
+          <Seg<Strategy>
+            labelMode="inline"
+            wrap
             label="Strategy"
             value={strategy}
             onChange={(v) => {
@@ -921,7 +923,9 @@ export function ElevatorSim() {
               { value: "collective", label: "Collective", title: "Collective control (LOOK)" },
             ]}
           />
-          <Seg<Traffic> labelMode="inline" wrap
+          <Seg<Traffic>
+            labelMode="inline"
+            wrap
             label="Traffic"
             value={traffic}
             onChange={(v) => {

@@ -216,7 +216,8 @@ export function BacktrackingLab() {
   return (
     <WidgetFrame title="N-Queens: choose, explore, un-choose" sub="Place N queens so that none attack each other. Watch backtracking prune its way to every solution, or try it yourself.">
       <div className="controls">
-        <Seg<"watch" | "play"> labelMode="hidden"
+        <Seg<"watch" | "play">
+          labelMode="hidden"
           label="Mode"
           value={mode}
           onChange={(v) => {

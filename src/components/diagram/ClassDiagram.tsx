@@ -1,8 +1,8 @@
 "use client";
 import { useId, useMemo, useRef, useState } from "react";
 import { m, useReducedMotion } from "motion/react";
+import { useBoxWidth } from "@/lib/hooks";
 import type { ClassSpec } from "./types";
-import { useBoxWidth } from "./useBoxWidth";
 
 type Cls = ClassSpec["classes"][number];
 type Rel = ClassSpec["relations"][number];

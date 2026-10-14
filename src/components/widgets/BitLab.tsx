@@ -462,7 +462,8 @@ function SingleNumber({ modeSwitch }: { modeSwitch: React.ReactNode }) {
 export function BitLab() {
   const [mode, setMode] = useState<"flip" | "single">("flip");
   const modeSwitch = (
-    <Seg labelMode="hidden"
+    <Seg
+      labelMode="hidden"
       label="Mode"
       value={mode}
       onChange={setMode}

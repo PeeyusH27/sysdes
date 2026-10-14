@@ -255,7 +255,9 @@ export function FastSlowLab() {
           stepHint="Move both pointers one step"
           onReset={() => restart({ tail, loop })}
         />
-        <Seg labelMode="hidden" compact
+        <Seg
+          labelMode="hidden"
+          compact
           label="Fast hops per step"
           value={speed}
           onChange={(v) => {

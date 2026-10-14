@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useId, useState, type RefObject } from "react";
+import { useEffect, useId, useState } from "react";
 import { stagger, useAnimate, useInView, useReducedMotion } from "motion/react";
 import { compact } from "@/lib/format";
-import { useBoxWidth } from "@/components/diagram/useBoxWidth";
+import { useBoxWidth } from "@/lib/hooks";
 import { ChartTable, ChartTooltip } from "./ChartBits";
 import { logTicks, niceTicks } from "./scales";
 
@@ -47,7 +47,7 @@ export function BarChart({
   }, [inView, reduce, animate]);
 
   // Laid out at the width it really gets (so text keeps its size on a phone); 560 on the server and until measured.
-  const boxW = useBoxWidth(scope as RefObject<HTMLElement | null>);
+  const boxW = useBoxWidth(scope);
   const W = boxW ? Math.max(240, boxW) : 560;
   const narrow = W < 440;
   const M = { t: 28, r: 12, b: narrow ? 46 : 38, l: narrow ? 44 : 54 };

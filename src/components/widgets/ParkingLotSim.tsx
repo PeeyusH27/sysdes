@@ -965,7 +965,9 @@ export function ParkingLotSim() {
               }}
             />
           </div>
-          <Seg<GateMode> labelMode="inline" wrap
+          <Seg<GateMode>
+            labelMode="inline"
+            wrap
             label="Gates"
             value={mode}
             onChange={setMode}

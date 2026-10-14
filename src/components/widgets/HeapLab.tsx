@@ -297,7 +297,8 @@ export function HeapLab() {
           stepLabel={auto ? "Step" : "Show me"}
           onReset={() => restart()}
         />
-        <Seg<"auto" | "you"> labelMode="inline"
+        <Seg<"auto" | "you">
+          labelMode="inline"
           label="Who sifts"
           value={mode}
           onChange={(v) => {
@@ -309,7 +310,8 @@ export function HeapLab() {
             { value: "you", label: "You" },
           ]}
         />
-        <Seg<Keep> labelMode="hidden"
+        <Seg<Keep>
+          labelMode="hidden"
           label="Keep the"
           value={keep}
           onChange={(v) => {

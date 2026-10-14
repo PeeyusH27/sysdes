@@ -682,8 +682,8 @@ export function RideMatchSim() {
   const [mode, setMode] = useState<IndexMode>("cells");
   const [showCells, setShowCells] = useState(true);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const width = useBoxWidth(ref) ?? 0;
-  const narrow = width > 0 && width < 520;
+  const width = useBoxWidth(ref);
+  const narrow = width !== undefined && width < 520;
   const v = narrow ? TALL : WIDE;
   const at = (p: Pt) => toPx(v, p);
   const cfgStep = useCallback((st: Sim, dt: number) => stepSim(st, dt, { declineRate: declinePct / 100, ratePerMin, mode }), [declinePct, ratePerMin, mode]);

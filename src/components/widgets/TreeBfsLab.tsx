@@ -189,7 +189,8 @@ export function TreeBfsLab() {
           stepHint="One level start or one dequeue"
           onReset={() => restart(false)}
         />
-        <Seg<BfsMode> labelMode="hidden"
+        <Seg<BfsMode>
+          labelMode="hidden"
           label="Show"
           value={mode}
           onChange={(v) => {

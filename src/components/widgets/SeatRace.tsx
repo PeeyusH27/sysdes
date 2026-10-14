@@ -213,7 +213,7 @@ export function SeatRace() {
   const [playing, setPlaying] = useState(false);
   const rand = useMemo(() => mulberry32(5), []);
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
-  const width = useBoxWidth(ref) ?? 0;
+  const width = useBoxWidth(ref);
   const L = width && width < 520 ? TALL : WIDE;
 
   const end = outcome?.end ?? 0;

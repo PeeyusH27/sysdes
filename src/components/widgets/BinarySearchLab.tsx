@@ -211,7 +211,9 @@ export function BinarySearchLab() {
   return (
     <WidgetFrame title="Halving lab" sub="Can you beat halving? Each middle check throws away half of what is left.">
       <div className="controls" style={{ alignItems: "center" }}>
-        <Seg<Mode> labelMode="hidden" compact
+        <Seg<Mode>
+          labelMode="hidden"
+          compact
           label="Game"
           value={mode}
           onChange={(md) => {
@@ -224,7 +226,9 @@ export function BinarySearchLab() {
           ]}
         />
         {mode === "guess" ? (
-          <Seg<number> labelMode="hidden" compact
+          <Seg<number>
+            labelMode="hidden"
+            compact
             label="Range"
             value={size.guess}
             onChange={(v) => {

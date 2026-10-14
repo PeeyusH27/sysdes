@@ -1,6 +1,7 @@
 "use client";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, m, useReducedMotionConfig } from "motion/react";
+import { useBoxWidth } from "@/lib/hooks";
 import type { ArrayView, GraphView, GridView, Json, ListView, MapView, NoteView, Prim, QueueView, SetView, StackView, Tone, TreeView, View } from "./types";
 
 const ease = { duration: 0.35, ease: [0.4, 0, 0.2, 1] as const };
@@ -561,23 +562,11 @@ const GR = 18;
 const GPAD = 30;
 
 /** Width of an element, tracked with ResizeObserver (undefined until measured, so the server render is stable). */
-function useWidth<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
-  const [width, setWidth] = useState<number>();
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.round(e.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [ref, width] as const;
-}
-
 function GraphPanel({ v }: { v: GraphView }) {
   const uid = useId().replace(/:/g, "");
   // A squarer canvas on narrow stages keeps nodes and labels readable instead of shrinking a wide drawing.
-  const [box, width] = useWidth<HTMLDivElement>();
+  const box = useRef<HTMLDivElement>(null);
+  const width = useBoxWidth(box);
   const narrow = width !== undefined && width < 460;
   const GW = narrow ? 380 : 520;
   const GH = narrow ? 280 : 270;

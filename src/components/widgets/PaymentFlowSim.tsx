@@ -752,7 +752,7 @@ export function PaymentFlowSim() {
   const { ref, inView, reduce } = useSimGate<HTMLDivElement>();
   const [running, setRunning] = useState(true);
   const [s, reset] = useFixedStep<Sim>(() => initSim(), step, running && inView && !reduce);
-  const width = useBoxWidth(ref) ?? 0;
+  const width = useBoxWidth(ref);
   const L = width && width < 520 ? TALL : WIDE;
   const t = s.t;
   const go = (a: Action, run = false) => {

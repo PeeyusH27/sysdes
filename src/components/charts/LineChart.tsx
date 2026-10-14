@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useInView, useReducedMotion } from "motion/react";
 import { compact } from "@/lib/format";
-import { useBoxWidth } from "@/components/diagram/useBoxWidth";
+import { useBoxWidth } from "@/lib/hooks";
 import { ChartTable, ChartTooltip } from "./ChartBits";
 import { nearestIndex, niceTicks } from "./scales";
 

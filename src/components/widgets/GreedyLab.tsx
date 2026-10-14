@@ -184,7 +184,8 @@ export function GreedyLab() {
   return (
     <WidgetFrame title="Greedy change: does the biggest coin win?" sub="Greedy grabs the largest coin that fits and never looks back. Race it against DP, or pay yourself, and hunt for the amounts where greedy loses.">
       <div className="controls">
-        <Seg<"race" | "you"> labelMode="hidden"
+        <Seg<"race" | "you">
+          labelMode="hidden"
           label="Mode"
           value={mode}
           onChange={(x) => {
