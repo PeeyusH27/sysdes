@@ -85,7 +85,7 @@ The same six steps as 1D, with one more index to get wrong.
 
 Walls get 0 ways; the start gets 1. The one-row version works because, before `row[c]` updates, it still holds the value from above, and `row[c - 1]` already holds this row's: exactly "above + left".
 
-<CodeTabs files={['snippets/grid-paths.js']} />
+<CodeTabs files={['snippets/grid-paths.js']} java={['snippets/java/GridPaths.java']} python={['snippets/python/grid_paths.py']} />
 
 <ProblemLink slug="unique-paths" /> has no walls. <ProblemLink slug="minimum-path-sum" /> replaces `+` with `Math.min(above, left) + grid[r][c]`, treating the first row and column (one way in) separately.
 
@@ -93,7 +93,7 @@ Walls get 0 ways; the start gets 1. The one-row version works because, before `r
 
 The walkthrough's table, plus the walk back that turns lengths into letters:
 
-<CodeTabs files={['snippets/two-strings.js']} />
+<CodeTabs files={['snippets/two-strings.js']} java={['snippets/java/TwoStrings.java']} python={['snippets/python/two_strings.py']} />
 
 <ProblemLink slug="longest-common-subsequence" /> only asks for the length, so stop after the fill. <ProblemLink slug="edit-distance" /> reuses the grid with row 0 and column 0 set to `j` and `i`. Matching last letters copy the diagonal for free; otherwise take 1 plus the smallest of three neighbours:
 
@@ -118,7 +118,7 @@ Same items, same code, opposite loops. Try your own items with Edit input:
 
 <AlgoViz trace={knapsackRow} />
 
-<CodeTabs files={['snippets/knapsack.js']} />
+<CodeTabs files={['snippets/knapsack.js']} java={['snippets/java/Knapsack.java']} python={['snippets/python/knapsack.py']} />
 
 <ProblemLink slug="partition-equal-subset-sum" /> is 0/1 with booleans: can a subset reach exactly half the total? <ProblemLink slug="coin-change-ii" /> is unbounded and counts, `ways[c] += ways[c - coin]`, with **coins outside, amounts inside** so each combination counts once. Amounts outside counts `1 + 2` and `2 + 1` separately (Combination Sum IV).
 
@@ -134,7 +134,7 @@ The walk is O(m + n) but needs the **full** table, since one row has lost the hi
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

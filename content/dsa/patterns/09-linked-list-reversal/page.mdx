@@ -62,7 +62,7 @@ Press the four assignments in order to reverse the train. Then flip before you s
 
 ## Template 1: reverse a whole list
 
-<CodeTabs files={['snippets/reverse.js']} />
+<CodeTabs files={['snippets/reverse.js']} java={['snippets/java/Reverse.java']} python={['snippets/python/reverse.py']} />
 
 This is <ProblemLink slug="reverse-linked-list" />, and the inner loop of every template that follows.
 
@@ -70,7 +70,7 @@ This is <ProblemLink slug="reverse-linked-list" />, and the inner loop of every 
 
 Removing the head changes what you return, and a new list has nothing to append to. A **dummy** in front removes both special cases: stop one node **before** the one you care about, and return `dummy.next`.
 
-<CodeTabs files={['snippets/dummy-head.js']} />
+<CodeTabs files={['snippets/dummy-head.js']} java={['snippets/java/DummyHead.java']} python={['snippets/python/dummy_head.py']} />
 
 `mergeSorted` solves <ProblemLink slug="merge-two-sorted-lists" />: `tail` always sits on the last merged node. <ProblemLink slug="remove-nth-node-from-end" /> adds a fixed gap: from the dummy, move `fast` n + 1 steps ahead, then move both until `fast` is null. `slow` lands right before the node to remove, even the head.
 
@@ -80,7 +80,7 @@ Stand on `before`, the node in front of the part, and reverse k nodes with the t
 
 <AlgoViz trace={reverseSegment} />
 
-<CodeTabs files={['snippets/splice.js']} />
+<CodeTabs files={['snippets/splice.js']} java={['snippets/java/Splice.java']} python={['snippets/python/splice.py']} />
 
 `reverseAfter` returns `first`, which is the next segment's `before`, so repeated reversal is a loop:
 
@@ -99,13 +99,13 @@ The weave rewrites two links per step, so save both successors first, then link 
 
 <AlgoViz trace={weaveHalves} />
 
-<CodeTabs files={['snippets/weave.js']} />
+<CodeTabs files={['snippets/weave.js']} java={['snippets/java/Weave.java']} python={['snippets/python/weave.py']} />
 
 `fold` is <ProblemLink slug="reorder-list" />; compare instead of weaving and you check a <ProblemLink slug="palindrome-linked-list" /> in O(1) space.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

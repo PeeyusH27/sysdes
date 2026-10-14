@@ -71,7 +71,7 @@ Place N queens so none attack. **Step** through the search: queens drop row by r
 
 When order doesn't matter, give each call a `start`: it chooses from `start` on, and its child starts after the chosen item. Every combination is built in exactly one order, increasing.
 
-<CodeTabs files={['snippets/combinations.js']} />
+<CodeTabs files={['snippets/combinations.js']} java={['snippets/java/Combinations.java']} python={['snippets/python/combinations.py']} />
 
 Two tweaks, two problems. Record `[...path]` at the **top of every call** and you list every subset: <ProblemLink slug="subsets" />. Recurse with `i` instead of `i + 1` and items can repeat: <ProblemLink slug="combination-sum" />.
 
@@ -81,7 +81,7 @@ Now order matters: `[a, b]` and `[b, a]` are different answers, so a start index
 
 <AlgoViz trace={arrangementsTree} />
 
-<CodeTabs files={['snippets/arrangements.js']} />
+<CodeTabs files={['snippets/arrangements.js']} java={['snippets/java/Arrangements.java']} python={['snippets/python/arrangements.py']} />
 
 Un-choosing has two parts, `path.pop()` and `used[i] = false`; forgetting the second is the classic bug. Practice: <ProblemLink slug="permutations" />.
 
@@ -91,7 +91,7 @@ A branch is worth exploring only if it can still succeed, so check **before** re
 
 <AlgoViz trace={pruningTree} />
 
-<CodeTabs files={['snippets/subset-sum.js']} />
+<CodeTabs files={['snippets/subset-sum.js']} java={['snippets/java/SubsetSum.java']} python={['snippets/python/subset_sum.py']} />
 
 Pruning by **validity** works the same way. <ProblemLink slug="generate-parentheses" /> only adds `")"` while a `"("` is open. <ProblemLink slug="n-queens" /> tracks taken columns and diagonals and never places a queen on an attacked square.
 
@@ -99,13 +99,13 @@ Pruning by **validity** works the same way. <ProblemLink slug="generate-parenthe
 
 On a grid the choices are the four neighbours, and "used" means "on the current path". Let the grid be the visited set: overwrite the cell with a marker, explore, then write the original back, so a cell on a failed path is free for the next one.
 
-<CodeTabs files={['snippets/grid-paths.js']} />
+<CodeTabs files={['snippets/grid-paths.js']} java={['snippets/java/GridPaths.java']} python={['snippets/python/grid_paths.py']} />
 
 Practice: <ProblemLink slug="word-search" />, with a marker like `"#"` that matches no letter.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

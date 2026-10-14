@@ -27,6 +27,7 @@ export default async function ProblemPage({ params }: PageProps<"/dsa/problems/[
     <ProblemWorkspace
       problem={runnable(p)}
       starter={p.starter}
+      starterPy={p.starterPy}
       patterns={p.meta.patterns.flatMap((s) => {
         const pat = getPattern(s);
         return pat ? [{ slug: s, title: pat.title }] : [];

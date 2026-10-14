@@ -2,7 +2,7 @@
 //   node scripts/check-content.mjs [path-filter]
 // - compiles every MDX file (syntax errors, unescaped < or { in prose…)
 // - every <Component> used must be registered in src/mdx-components.tsx
-// - every CodeTabs (files, java, python)/CodeBlock/RunCode file and every relative import must exist
+// - every CodeTabs (files, java, python)/CodeBlock/RunCode (src, python, java) file and every relative import must exist
 // - DSA: <JsRef to> ids and <ProblemLink slug> values must exist
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import path from "node:path";
@@ -64,6 +64,15 @@ for (const file of files) {
   }
   for (const m of noFences.matchAll(/<(CodeBlock|RunCode)[^>]*\ssrc=["']([^"']+)["']/g)) {
     if (!existsSync(path.join(dir, m[2]))) fail(file, `${m[1]} src not found: ${m[2]}`);
+  }
+  // <RunCode src="….js" python="….py" java="….java" />: the other languages are plain path strings that must exist.
+  for (const tag of noFences.matchAll(/<RunCode\b[^>]*>/g)) {
+    for (const [, prop, rel] of tag[0].matchAll(/\s(python|java)=["']([^"']+)["']/g)) {
+      const ext = prop === "java" ? ".java" : ".py";
+      if (!rel.endsWith(ext)) fail(file, `RunCode ${prop}="${rel}" must be a ${ext} file`);
+      else if (!existsSync(path.join(dir, rel))) fail(file, `RunCode ${prop} file not found: ${rel}`);
+    }
+    if (/\s(python|java)=\{/.test(tag[0])) fail(file, `RunCode python/java take a path string, e.g. python="snippets/python/try_it.py"`);
   }
   for (const m of noFences.matchAll(/<JsRef\s+to=(?:"([^"]+)"|\{\[([^\]]*)\]\})/g)) {
     const ids = m[1] ? [m[1]] : (m[2].match(/['"]([^'"]+)['"]/g) ?? []).map((x) => x.slice(1, -1));

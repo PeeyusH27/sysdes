@@ -63,7 +63,7 @@ Can you beat halving? Guess the secret number from too-high and too-low hints, t
 
 You want one specific value and can stop the moment you see it. The range is **inclusive**, so the loop runs while it holds at least one element (`lo <= hi`), and both updates skip the already-checked `mid`.
 
-<CodeTabs files={['snippets/classic.js']} />
+<CodeTabs files={['snippets/classic.js']} java={['snippets/java/Classic.java']} python={['snippets/python/classic.py']} />
 
 This is <ProblemLink slug="binary-search" /> line for line. When the target is missing, the loop ends with `lo` exactly where it would be inserted: a hint of the next template.
 
@@ -82,7 +82,7 @@ nums[i] >= 3?   F  T  T  T  T  T  T
 
 <AlgoViz trace={lowerBound} />
 
-<CodeTabs files={['snippets/lower-bound.js']} />
+<CodeTabs files={['snippets/lower-bound.js']} java={['snippets/java/LowerBound.java']} python={['snippets/python/lower_bound.py']} />
 
 `lowerBound` answers <ProblemLink slug="search-insert-position" />. Add an upper bound for <ProblemLink slug="find-first-and-last-position" />: the first copy is at `lowerBound(x)`, the last at `upperBound(x) - 1`.
 
@@ -101,7 +101,7 @@ Rotate `[1, 2, 4, 5, 7, 9]` into `[5, 7, 9, 1, 2, 4]` and "smaller middle means 
 
 To find the minimum, compare `nums[mid]` with `nums[hi]`: if `nums[mid] > nums[hi]`, the drop is right of `mid`. That's first true in disguise.
 
-<CodeTabs files={['snippets/rotated.js']} />
+<CodeTabs files={['snippets/rotated.js']} java={['snippets/java/Rotated.java']} python={['snippets/python/rotated.py']} />
 
 <ProblemLink slug="search-in-rotated-sorted-array" /> uses the sorted-half test in one pass.
 
@@ -113,13 +113,13 @@ If a candidate works, every bigger one does too. So "does `x` work?" goes no, no
 
 <AlgoViz trace={searchOnAnswer} />
 
-<CodeTabs files={['snippets/answer-space.js']} />
+<CodeTabs files={['snippets/answer-space.js']} java={['snippets/java/AnswerSpace.java']} python={['snippets/python/answer_space.py']} />
 
 The **lowest** candidate is the smallest that could work (the heaviest package), the **highest** one that surely does (the total). "Minimize the maximum" is the giveaway. To maximize, as in `maxMinDistance`, find the first failure and step back one. Practise with <ProblemLink slug="koko-eating-bananas" /> and <ProblemLink slug="split-array-largest-sum" />.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

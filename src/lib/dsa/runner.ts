@@ -5,6 +5,8 @@ export interface ErrorInfo {
   name: string;
   message: string;
   line: number | null;
+  /** Python only: the traceback through the learner's own code. */
+  traceback?: string | null;
 }
 export interface LogLine {
   level: "log" | "warn" | "error";

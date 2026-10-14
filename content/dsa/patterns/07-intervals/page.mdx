@@ -61,7 +61,7 @@ Drag meetings around the day, or stretch one by its right edge, and watch them r
 
 Sort a copy by start, keep the last merged interval open, and stretch it or start a new one.
 
-<CodeTabs files={['snippets/merge.js', 'snippets/overlap.js']} />
+<CodeTabs files={['snippets/merge.js', 'snippets/overlap.js']} java={['snippets/java/Merge.java', 'snippets/java/Overlap.java']} python={['snippets/python/merge.py', 'snippets/python/overlap.py']} />
 
 This is <ProblemLink slug="merge-intervals" />. With nothing to merge it answers <ProblemLink slug="meeting-rooms" />: after sorting, a clash shows up between neighbours, so return `false` the first time `start < previousEnd`. In <ProblemLink slug="insert-interval" /> the list is already sorted and disjoint, so skip the sort and walk it in three phases (before, overlapping, after): O(n).
 
@@ -71,7 +71,7 @@ This is <ProblemLink slug="merge-intervals" />. With nothing to merge it answers
 
 <AlgoViz trace={sweepCount} />
 
-<CodeTabs files={['snippets/sweep-line.js']} />
+<CodeTabs files={['snippets/sweep-line.js']} java={['snippets/java/SweepLine.java']} python={['snippets/python/sweep_line.py']} />
 
 The reference solution for <ProblemLink slug="meeting-rooms-ii" /> walks sorted starts and sorted ends with two pointers: which end belongs to which start never matters for counting.
 
@@ -79,7 +79,7 @@ To know **which** room each meeting gets, take meetings in start order with a **
 
 <AlgoViz trace={roomsHeap} />
 
-<CodeTabs files={['snippets/rooms-heap.js']} />
+<CodeTabs files={['snippets/rooms-heap.js']} java={['snippets/java/RoomsHeap.java']} python={['snippets/python/rooms_heap.py']} />
 
 ## Template 3: keep the most, remove the fewest
 
@@ -102,7 +102,7 @@ Both inputs sorted and disjoint? Walk them with one pointer each. Record each pa
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

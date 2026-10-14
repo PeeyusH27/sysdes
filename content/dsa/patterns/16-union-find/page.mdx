@@ -68,7 +68,7 @@ Click two people to make them friends and watch whole trees glide under a new ro
 
 The version to memorise. `find` loops twice (climb, then re-point the path at the root); `union` returns whether it merged.
 
-<CodeTabs files={['snippets/union-find.js']} />
+<CodeTabs files={['snippets/union-find.js']} java={['snippets/java/UnionFind.java']} python={['snippets/python/union_find.py']} />
 
 Here path compression flattens a chain, and a second find reuses the first one's work:
 
@@ -80,7 +80,7 @@ The recursive one-liner `if (parent[x] !== x) parent[x] = find(parent[x]); retur
 
 Start with `n` groups; every successful union removes exactly one, so what's left is the number of components. Isolated items need no special case.
 
-<CodeTabs files={['snippets/count-groups.js']} />
+<CodeTabs files={['snippets/count-groups.js']} java={['snippets/java/CountGroups.java']} python={['snippets/python/count_groups.py']} />
 
 This solves <ProblemLink slug="number-of-provinces" /> (union every 1 in the matrix) and <ProblemLink slug="number-of-connected-components" />. To list the groups, bucket each item under `find(i)`.
 
@@ -88,7 +88,7 @@ This solves <ProblemLink slug="number-of-provinces" /> (union every 1 in the mat
 
 In an undirected graph, an edge whose ends already share a root closes a cycle. The first such edge is the last edge of the first cycle to form.
 
-<CodeTabs files={['snippets/cycle-edge.js']} />
+<CodeTabs files={['snippets/cycle-edge.js']} java={['snippets/java/CycleEdge.java']} python={['snippets/python/cycle_edge.py']} />
 
 That is all of <ProblemLink slug="redundant-connection" />. <ProblemLink slug="graph-valid-tree" /> adds a counting fact: n nodes form a tree exactly when there are n - 1 edges and none closes a cycle. Directed cycles need [Topological Sort](/dsa/patterns/topological-sort) or a DFS with colours.
 
@@ -96,13 +96,13 @@ That is all of <ProblemLink slug="redundant-connection" />. <ProblemLink slug="g
 
 For emails, words or coordinates, keep `parent` in a `Map` and add each key on first sight. This version uses **union by size**: the smaller group joins the larger, which keeps trees just as shallow and gives every group's size for free.
 
-<CodeTabs files={['snippets/keyed-union-find.js']} />
+<CodeTabs files={['snippets/keyed-union-find.js']} java={['snippets/java/KeyedUnionFind.java']} python={['snippets/python/keyed_union_find.py']} />
 
 For <ProblemLink slug="accounts-merge" />, union emails directly with this class, or union **account indices** with a `Map` from email to the first account that listed it.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

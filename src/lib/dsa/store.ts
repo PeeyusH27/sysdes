@@ -37,25 +37,53 @@ export const useDsa = create<DsaProgress>()(
   ),
 );
 
-/** Drafts are kept apart from progress so typing never re-renders lists that read `solved`. */
+/** The languages the practice editor runs. */
+export type DraftLang = "js" | "python";
+
+/**
+ * Drafts are kept apart from progress so typing never re-renders lists that read `solved`. Each language has its own
+ * draft per problem; `code` holds JavaScript (the name predates Python, so existing saves keep working).
+ */
 type Drafts = {
   code: Record<string, string>;
-  save: (slug: string, code: string) => void;
-  clear: (slug: string) => void;
+  python: Record<string, string>;
+  /** The language the editor uses when the site-wide choice is Java (which can't run in the browser here). */
+  javaFallback: DraftLang;
+  save: (slug: string, code: string, lang?: DraftLang) => void;
+  clear: (slug: string, lang?: DraftLang) => void;
+  setJavaFallback: (lang: DraftLang) => void;
 };
+
+const field = (lang: DraftLang) => (lang === "python" ? "python" : "code");
 
 export const useDrafts = create<Drafts>()(
   persist(
     (set) => ({
       code: {},
-      save: (slug, code) => set((s) => ({ code: { ...s.code, [slug]: code } })),
-      clear: (slug) =>
+      python: {},
+      javaFallback: "js",
+      save: (slug, code, lang = "js") => set((s) => ({ [field(lang)]: { ...s[field(lang)], [slug]: code } })),
+      clear: (slug, lang = "js") =>
         set((s) => {
-          const code = { ...s.code };
-          delete code[slug];
-          return { code };
+          const next = { ...s[field(lang)] };
+          delete next[slug];
+          return { [field(lang)]: next };
         }),
+      setJavaFallback: (javaFallback) => set({ javaFallback }),
     }),
-    { name: "sds-dsa-drafts", version: 1 },
+    {
+      name: "sds-dsa-drafts",
+      version: 1,
+      // Saves from before Python have only `code`: keep it and start the rest empty.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<Drafts>;
+        return {
+          ...current,
+          code: p.code && typeof p.code === "object" ? p.code : {},
+          python: p.python && typeof p.python === "object" ? p.python : {},
+          javaFallback: p.javaFallback === "python" ? "python" : "js",
+        };
+      },
+    },
   ),
 );

@@ -31,8 +31,13 @@ export function ConsoleOutput({ outcome, onClear }: { outcome: ScriptOutcome; on
         {outcome.error && (
           <div className="log-line" data-level="error">
             <span className="log-level">error</span>
-            {outcome.error.name}: {outcome.error.message}
-            {outcome.error.line ? ` (line ${outcome.error.line})` : ""}
+            {/* Python errors carry a traceback through the reader's code, which names the line itself. */}
+            {outcome.error.traceback ?? (
+              <>
+                {outcome.error.name}: {outcome.error.message}
+                {outcome.error.line ? ` (line ${outcome.error.line})` : ""}
+              </>
+            )}
           </div>
         )}
       </div>

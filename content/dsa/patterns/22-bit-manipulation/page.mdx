@@ -70,13 +70,13 @@ Bit bugs are silent, so work in this order.
 
 `1 << i` has only bit `i` set: AND with it to test, OR to set, AND with its complement to clear, XOR to toggle. Reading bits one by one (`n & 1`, then `n >>>= 1`) also reverses them.
 
-<CodeTabs files={['snippets/bit-masks.js']} />
+<CodeTabs files={['snippets/bit-masks.js']} java={['snippets/java/BitMasks.java']} python={['snippets/python/bit_masks.py']} />
 
 `reverseBits` is <ProblemLink slug="reverse-bits" />. <ProblemLink slug="sum-of-two-integers" /> thinks in columns too: `a ^ b` adds without carries, `(a & b) << 1` moves the carries one column left, and you repeat until no carry is left.
 
 ## Template 2: XOR cancellation
 
-<CodeTabs files={['snippets/xor-tricks.js']} />
+<CodeTabs files={['snippets/xor-tricks.js']} java={['snippets/java/XorTricks.java']} python={['snippets/python/xor_tricks.py']} />
 
 `xorAll` is all of <ProblemLink slug="single-number" />. <ProblemLink slug="missing-number" /> becomes the same problem once you also XOR in 0 to n, so every present number appears twice. `twoSingles` splits the list on a bit where its two unpaired values differ.
 
@@ -86,7 +86,7 @@ Subtracting 1 turns the lowest 1 into 0 and the 0s under it into 1s, leaving hig
 
 <AlgoViz trace={popcountKernighan} />
 
-<CodeTabs files={['snippets/lowest-bit.js']} />
+<CodeTabs files={['snippets/lowest-bit.js']} java={['snippets/java/LowestBit.java']} python={['snippets/python/lowest_bit.py']} />
 
 `popcount` solves <ProblemLink slug="number-of-1-bits" />. <ProblemLink slug="counting-bits" /> reuses smaller answers: `i >> 1` is `i` without its last bit, so `bits[i] = bits[i >> 1] + (i & 1)`.
 
@@ -96,13 +96,13 @@ The numbers 0 to 2^n - 1 are all the n-bit patterns, and each says which of n it
 
 <AlgoViz trace={subsetMasks} />
 
-<CodeTabs files={['snippets/subsets-bitmask.js']} />
+<CodeTabs files={['snippets/subsets-bitmask.js']} java={['snippets/java/SubsetsBitmask.java']} python={['snippets/python/subsets_bitmask.py']} />
 
 Masks also make compact DP states ("which cities have I visited?" as one number) with O(1) set operations. Keep n at 30 or less with plain numbers; [Backtracking](/dsa/patterns/backtracking) handles subsets with conditions better.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

@@ -63,7 +63,7 @@ Tap brackets: each opener lands on the stack as a plate, each closer takes the t
 
 Push what opens; when something closes, pop and check it against the top. `simplifyPath` uses the same loop to cancel the newest directory on `..`.
 
-<CodeTabs files={['snippets/matching.js']} />
+<CodeTabs files={['snippets/matching.js']} java={['snippets/java/Matching.java']} python={['snippets/python/matching.py']} />
 
 This solves <ProblemLink slug="valid-parentheses" /> as written. With a stack of numbers it becomes <ProblemLink slug="evaluate-reverse-polish-notation" />: push operands and let each operator pop two. Mind the order: the first pop is the **right** operand.
 
@@ -75,7 +75,7 @@ Each push first pops everything smaller, so values on the stack never rise from 
 
 <AlgoViz trace={nextGreater} />
 
-<CodeTabs files={['snippets/monotonic.js']} />
+<CodeTabs files={['snippets/monotonic.js']} java={['snippets/java/Monotonic.java']} python={['snippets/python/monotonic.py']} />
 
 Store indices, not values. <ProblemLink slug="next-greater-element" /> records `nums[i]` at pop time; <ProblemLink slug="daily-temperatures" /> records the distance `i - j`.
 
@@ -94,7 +94,7 @@ Strictness decides **ties**. With `<`, equal values wait together and the same l
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

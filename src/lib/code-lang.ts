@@ -48,3 +48,8 @@ export function useCodeLang(): CodeLang {
 }
 
 export const setCodeLang = (lang: CodeLang) => useCodeLangStore.getState().setLang(lang);
+
+/** The languages that run in the browser (the practice editor, runnable snippets). Java is shown, not run. */
+export const RUNNABLE_LANGS = ["js", "python"] as const;
+export type RunnableLang = (typeof RUNNABLE_LANGS)[number];
+export const isRunnableLang = (v: unknown): v is RunnableLang => (RUNNABLE_LANGS as readonly unknown[]).includes(v);

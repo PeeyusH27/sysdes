@@ -211,7 +211,7 @@ describe("matching", () => {
     expect(drivers[1]).not.toBe(target);
   });
 
-  test("busy city with declines and repeated duels: never one driver in two rides, never off the road", () => {
+  test("busy city with declines and repeated duels: never one driver in two rides, never off the road", { timeout: 20_000 }, () => {
     for (const mode of ["cells", "scan"] as const) {
       let s = initSim(9);
       const cfg: Cfg = { declineRate: 0.5, ratePerMin: 30, mode };

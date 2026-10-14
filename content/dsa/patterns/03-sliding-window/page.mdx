@@ -65,7 +65,7 @@ Open **Type your own letters** and type a word: the window stretches right and s
 
 Build the first window of size `k`, then slide: add `nums[right]`, subtract `nums[right - k]`.
 
-<CodeTabs files={['snippets/fixed-window.js']} />
+<CodeTabs files={['snippets/fixed-window.js']} java={['snippets/java/FixedWindow.java']} python={['snippets/python/fixed_window.py']} />
 
 <ProblemLink slug="maximum-average-subarray" /> is this template divided by `k`. <ProblemLink slug="permutation-in-string" /> slides a window of `s1.length` with letter counts instead of a sum.
 
@@ -75,7 +75,7 @@ Grow `right` every step; if the new element breaks the rule, move `left` until i
 
 <AlgoViz trace={longestWindow} />
 
-<CodeTabs files={['snippets/longest-window.js']} />
+<CodeTabs files={['snippets/longest-window.js']} java={['snippets/java/LongestWindow.java']} python={['snippets/python/longest_window.py']} />
 
 <ProblemLink slug="longest-substring-without-repeating-characters" /> uses "no character twice". <ProblemLink slug="longest-repeating-character-replacement" /> uses "window length minus the top letter count is at most k".
 
@@ -83,7 +83,7 @@ Grow `right` every step; if the new element breaks the rule, move `left` until i
 
 Grow `right` until the window is valid. Then squeeze: **while** it stays valid, record its length and move `left`.
 
-<CodeTabs files={['snippets/shortest-window.js']} />
+<CodeTabs files={['snippets/shortest-window.js']} java={['snippets/java/ShortestWindow.java']} python={['snippets/python/shortest_window.py']} />
 
 <ProblemLink slug="minimum-size-subarray-sum" /> is this template. <ProblemLink slug="minimum-window-substring" /> tracks validity with a `need` map and one `missing` counter, so "does the window contain all of t?" stays O(1).
 
@@ -96,13 +96,13 @@ A sum survives an element leaving; a **maximum** doesn't, because you don't know
 
 <AlgoViz trace={windowMaxDeque} />
 
-<CodeTabs files={['snippets/window-max.js']} />
+<CodeTabs files={['snippets/window-max.js']} java={['snippets/java/WindowMax.java']} python={['snippets/python/window_max.py']} />
 
 Each index is pushed and popped at most once: O(n). Flip the comparison for a minimum. Over prefix sums, the same deque finds the shortest subarray with sum at least k, negatives included.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

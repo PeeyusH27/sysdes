@@ -65,7 +65,7 @@ Now a choice you do regret: greedy change-making. Race greedy against DP on coin
 
 Pairing items with slots (cookies with children, people with boats, tasks with workers)? Sort both and walk them together. A cookie too small for the least greedy child is too small for everyone left, so throw it away; one that fits goes to that child.
 
-<CodeTabs files={['snippets/sort-then-greedy.js']} />
+<CodeTabs files={['snippets/sort-then-greedy.js']} java={['snippets/java/SortThenGreedy.java']} python={['snippets/python/sort_then_greedy.py']} />
 
 The same shape answers "boats to save people" (pair the heaviest with the lightest if they fit) and "assign tasks to workers", each justified by an exchange argument.
 
@@ -75,7 +75,7 @@ To keep the most non-overlapping activities, always keep the one that **ends fir
 
 <AlgoViz trace={activitySelection} />
 
-<CodeTabs files={['snippets/interval-scheduling.js']} />
+<CodeTabs files={['snippets/interval-scheduling.js']} java={['snippets/java/IntervalScheduling.java']} python={['snippets/python/interval_scheduling.py']} />
 
 It is the core of <ProblemLink slug="non-overlapping-intervals" /> (removals = total − kept) and "minimum arrows to burst balloons". More in [Intervals](/dsa/patterns/intervals).
 
@@ -108,13 +108,13 @@ Need both directions? **Two passes**: in <ProblemLink slug="candy" />, left to r
 
 The fix is to stop committing. Dynamic programming finds the best answer for **every** smaller amount, trying each coin as the last one, so no early choice can trap it.
 
-<CodeTabs files={['snippets/coins.js']} />
+<CodeTabs files={['snippets/coins.js']} java={['snippets/java/Coins.java']} python={['snippets/python/coins.py']} />
 
 The split shows up elsewhere. Fractional knapsack is greedy by value per kilo; 0/1 knapsack needs DP. Shortest paths with non-negative weights are greedy (Dijkstra); with negative weights they are not.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

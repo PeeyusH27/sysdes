@@ -79,7 +79,7 @@ Six questions, in order, turn a brute force into a DP.
 
 Same answers, four costs. Write the plain recursion first: it *is* the recurrence, and the memo, the table and the rolling variables are mechanical rewrites.
 
-<CodeTabs files={['snippets/stairs-recursive.js', 'snippets/stairs-memo.js', 'snippets/stairs-table.js', 'snippets/stairs-rolling.js']} titles={['1. recursion', '2. memo', '3. table', '4. rolling']} />
+<CodeTabs files={['snippets/stairs-recursive.js', 'snippets/stairs-memo.js', 'snippets/stairs-table.js', 'snippets/stairs-rolling.js']} titles={['1. recursion', '2. memo', '3. table', '4. rolling']} java={['snippets/java/StairsRecursive.java', 'snippets/java/StairsMemo.java', 'snippets/java/StairsTable.java', 'snippets/java/StairsRolling.java']} python={['snippets/python/stairs_recursive.py', 'snippets/python/stairs_memo.py', 'snippets/python/stairs_table.py', 'snippets/python/stairs_rolling.py']} />
 
 Bottom-up fills `dp` from the base cases upward, so the two cells each step reads are always ready. The walkthrough then reads the path back:
 
@@ -93,7 +93,7 @@ A **target number** and reusable pieces? Index the table by amount. `dp[a]` trie
 
 <AlgoViz trace={overAmount} />
 
-<CodeTabs files={['snippets/over-amount.js']} />
+<CodeTabs files={['snippets/over-amount.js']} java={['snippets/java/OverAmount.java']} python={['snippets/python/over_amount.py']} />
 
 Swap squares for coins and you have <ProblemLink slug="coin-change" /> (`-1` when `dp[amount]` is still `Infinity`). Swap `min` for `+` with `dp[0] = 1` and you count **ordered** ways (Combination Sum IV); unordered combinations need the loop order from [2D DP](/dsa/patterns/dp-2d).
 
@@ -101,13 +101,13 @@ Swap squares for coins and you have <ProblemLink slug="coin-change" /> (`-1` whe
 
 For "best subsequence" problems, let `dp[i]` be the best answer **whose last element is `nums[i]`**: scan every earlier `j` that may come before `i` and extend the best. That's O(n²), and the answer is the best cell, because the winner can end anywhere.
 
-<CodeTabs files={['snippets/ending-at.js']} />
+<CodeTabs files={['snippets/ending-at.js']} java={['snippets/java/EndingAt.java']} python={['snippets/python/ending_at.py']} />
 
 Add 1 instead of `nums[i]` for <ProblemLink slug="longest-increasing-subsequence" />. <ProblemLink slug="maximum-subarray" /> is contiguous, so only `i - 1` can come before `i`: `dp[i] = Math.max(nums[i], dp[i - 1] + nums[i])` in one variable (Kadane's algorithm). <ProblemLink slug="word-break" /> uses a prefix state: `dp[i]` is true when some cut `j` has `dp[j]` true and `s.slice(j, i)` is a word.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

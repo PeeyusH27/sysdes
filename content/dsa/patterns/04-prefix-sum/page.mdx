@@ -63,7 +63,7 @@ Drag across the staircase: the range sum is the height between two steps. Run fi
 
 ## Template 1: running sums for range queries
 
-<CodeTabs files={['snippets/prefix-sums.js']} />
+<CodeTabs files={['snippets/prefix-sums.js']} java={['snippets/java/PrefixSums.java']} python={['snippets/python/prefix_sums.py']} />
 
 <ProblemLink slug="range-sum-query" /> builds once and subtracts per query. <ProblemLink slug="find-pivot-index" /> needs one running variable: the right side is `total - leftSum - nums[i]`. <ProblemLink slug="product-of-array-except-self" /> multiplies a running product from the left by one from the right, never dividing.
 
@@ -73,7 +73,7 @@ A subarray ending at `j` sums to `k` exactly when an **earlier** prefix equals `
 
 <AlgoViz trace={longestSumK} />
 
-<CodeTabs files={['snippets/prefix-map.js']} />
+<CodeTabs files={['snippets/prefix-map.js']} java={['snippets/java/PrefixMap.java']} python={['snippets/python/prefix_map.py']} />
 
 To **count** instead, store how often each prefix sum occurred (seeded 0 → 1) and add the count for `sum - k` at every step: that is <ProblemLink slug="subarray-sum-equals-k" />. <ProblemLink slug="contiguous-array" /> is the longest version with `k = 0`, once every 0 counts as -1.
 
@@ -81,7 +81,7 @@ To **count** instead, store how often each prefix sum occurred (seeded 0 → 1) 
 
 `P[r][c]` sums the rectangle from the top-left corner to row `r - 1`, column `c - 1` (with a padding row and column of zeros). Any rectangle is four lookups by **inclusion-exclusion**: the big one, minus the strips above and to the left, plus the corner cut twice.
 
-<CodeTabs files={['snippets/prefix-2d.js']} />
+<CodeTabs files={['snippets/prefix-2d.js']} java={['snippets/java/Prefix2d.java']} python={['snippets/python/prefix_2d.py']} />
 
 | Step | Formula |
 |---|---|
@@ -96,13 +96,13 @@ A **difference array** runs the idea backwards: it stores how much each value di
 
 <AlgoViz trace={differenceArray} />
 
-<CodeTabs files={['snippets/difference-array.js']} />
+<CodeTabs files={['snippets/difference-array.js']} java={['snippets/java/DifferenceArray.java']} python={['snippets/python/difference_array.py']} />
 
 <ProblemLink slug="car-pooling" /> is exactly this: the running sum is the car's load at each stop. People get out **at** `to` (a half-open range), so the minus goes at `to`, not `to + 1`.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

@@ -3,9 +3,10 @@ import { useEffect, useRef } from "react";
 import { EditorState, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { Decoration, type DecorationSet, drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, HighlightStyle, indentOnInput, indentUnit, syntaxHighlighting } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { javascript } from "@codemirror/lang-javascript";
+import { python } from "@codemirror/lang-python";
 import { tags as t } from "@lezer/highlight";
 
 // Colours come from CSS variables (src/app/dsa.css), so the editor follows the light/dark toggle without re-creating.
@@ -16,7 +17,8 @@ const highlight = HighlightStyle.define([
   { tag: [t.lineComment, t.blockComment, t.docComment], color: "var(--cm-comment)", fontStyle: "italic" },
   { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "var(--cm-fn)" },
   { tag: [t.definition(t.variableName), t.definition(t.propertyName)], color: "var(--cm-def)" },
-  { tag: [t.className, t.typeName], color: "var(--cm-type)" },
+  { tag: [t.className, t.typeName, t.definition(t.className)], color: "var(--cm-type)" },
+  { tag: [t.self, t.special(t.variableName)], color: "var(--cm-keyword)" },
   { tag: [t.propertyName], color: "var(--cm-prop)" },
   { tag: [t.operator, t.punctuation, t.bracket], color: "var(--cm-punct)" },
 ]);
@@ -59,6 +61,7 @@ export function CodeEditor({
   label = "Code editor",
   readOnly = false,
   minHeight,
+  lang = "js",
 }: {
   initial: string;
   onChange?: (code: string) => void;
@@ -68,6 +71,8 @@ export function CodeEditor({
   label?: string;
   readOnly?: boolean;
   minHeight?: number;
+  /** The editor's language; remount (change `key`) to switch. Python indents by 4 spaces. */
+  lang?: "js" | "python";
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -91,8 +96,9 @@ export function CodeEditor({
       closeBrackets(),
       highlightActiveLine(),
       syntaxHighlighting(highlight),
-      javascript(),
-      EditorState.tabSize.of(2),
+      lang === "python" ? python() : javascript(),
+      EditorState.tabSize.of(lang === "python" ? 4 : 2),
+      indentUnit.of(lang === "python" ? "    " : "  "),
       keymap.of([
         { key: "Mod-Enter", run: submit, preventDefault: true },
         { key: "Mod-'", run, preventDefault: true },

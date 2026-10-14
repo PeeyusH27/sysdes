@@ -69,7 +69,7 @@ The two loop conditions differ only on even lengths:
 
 <AlgoViz trace={findMiddle} />
 
-<CodeTabs files={['snippets/middle.js']} />
+<CodeTabs files={['snippets/middle.js']} java={['snippets/java/Middle.java']} python={['snippets/python/middle.py']} />
 
 <ProblemLink slug="middle-of-the-linked-list" /> is this template as written; <ProblemLink slug="palindrome-linked-list" /> starts with it.
 
@@ -77,7 +77,7 @@ The two loop conditions differ only on even lengths:
 
 Phase 1 moves the pointers at speeds 1 and 2 until they meet or `fast` runs out. Phase 2 restarts one at the head and steps both by one until they meet at the entry.
 
-<CodeTabs files={['snippets/cycle.js']} />
+<CodeTabs files={['snippets/cycle.js']} java={['snippets/java/Cycle.java']} python={['snippets/python/cycle.py']} />
 
 <ProblemLink slug="linked-list-cycle" /> needs phase 1; <ProblemLink slug="linked-list-cycle-ii" /> needs both.
 
@@ -87,14 +87,14 @@ Floyd's algorithm only needs "the next one". Any function `f` over a finite set 
 
 <AlgoViz trace={implicitCycle} />
 
-<CodeTabs files={['snippets/sequence.js']} />
+<CodeTabs files={['snippets/sequence.js']} java={['snippets/java/Sequence.java']} python={['snippets/python/sequence.py']} />
 
 - <ProblemLink slug="happy-number" />: `f(x)` is the digit-square sum, and `n` is happy exactly when the loop is `1 → 1`.
 - <ProblemLink slug="find-the-duplicate-number" />: `f(i) = nums[i]` from index 0. Values are in `1..n`, so nothing points back to 0, and the loop's entry (two incoming arrows) is the duplicate.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

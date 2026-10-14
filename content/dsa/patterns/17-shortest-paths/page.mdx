@@ -73,7 +73,7 @@ Six towns, one rule: settle the closest. **Step** through the heap, or pick **Yo
 
 When every edge costs 1, a plain queue already serves nodes in distance order. Mark a node when you **push** it, and walk a `head` index instead of calling `shift()`.
 
-<CodeTabs files={['snippets/bfs-distances.js']} />
+<CodeTabs files={['snippets/bfs-distances.js']} java={['snippets/java/BfsDistances.java']} python={['snippets/python/bfs_distances.py']} />
 
 On a grid, neighbours come from a directions array (8 entries with diagonals, as in <ProblemLink slug="shortest-path-in-binary-matrix" />). More in [Graph BFS and DFS](/dsa/patterns/graph-traversal).
 
@@ -81,7 +81,7 @@ On a grid, neighbours come from a directions array (8 entries with diagonals, as
 
 Write the heap once (about 40 lines) and reuse it. Entries are `[distance, node]`, so the default comparator sorts by distance.
 
-<CodeTabs files={['snippets/dijkstra.js', 'snippets/min-heap.js']} />
+<CodeTabs files={['snippets/dijkstra.js', 'snippets/min-heap.js']} java={['snippets/java/Dijkstra.java', 'snippets/java/MinHeap.java']} python={['snippets/python/dijkstra.py', 'snippets/python/min_heap.py']} />
 
 - <ProblemLink slug="network-delay-time" />: the template as is; answer the largest `dist`.
 - <ProblemLink slug="path-with-minimum-effort" />: relax with `Math.max(effort, step)`.
@@ -95,13 +95,13 @@ No clever order here: each round relaxes **every** edge. Read last round's dista
 
 <AlgoViz trace={bellmanFordRounds} />
 
-<CodeTabs files={['snippets/bellman-ford.js']} />
+<CodeTabs files={['snippets/bellman-ford.js']} java={['snippets/java/BellmanFord.java']} python={['snippets/python/bellman_ford.py']} />
 
 That round count cracks <ProblemLink slug="cheapest-flights-within-k-stops" />: k stops is k + 1 flights, so k + 1 rounds. Updating in place would let one round chain several flights and break the limit. Anything still improving after `n - 1` rounds means a reachable negative cycle.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

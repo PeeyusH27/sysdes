@@ -63,7 +63,7 @@ Each course wears a badge counting its missing prerequisites. Press Step to run 
 
 The default. It is iterative, so a long chain can't overflow the stack; it builds the order directly; and the cycle check is a length comparison. It solves <ProblemLink slug="course-schedule" />, <ProblemLink slug="course-schedule-ii" /> and, once you've built the letter graph, <ProblemLink slug="alien-dictionary" />.
 
-<CodeTabs files={['snippets/kahn.js']} />
+<CodeTabs files={['snippets/kahn.js']} java={['snippets/java/Kahn.java']} python={['snippets/python/kahn.py']} />
 
 Most graphs have many valid orders; Kahn's returns one, depending on how nodes are seeded and edges listed. For the **smallest** order in dictionary order, swap the queue for a min-heap.
 
@@ -81,7 +81,7 @@ An edge into a **gray** node goes back up the current path: a cycle. An edge int
 
 <AlgoViz trace={dfsColors} />
 
-<CodeTabs files={['snippets/dfs-topo.js']} />
+<CodeTabs files={['snippets/dfs-topo.js']} java={['snippets/java/DfsTopo.java']} python={['snippets/python/dfs_topo.py']} />
 
 Colours also answer "which nodes can reach a cycle?", the DFS route to <ProblemLink slug="find-eventual-safe-states" />: a node is safe when its DFS finishes black without meeting gray.
 
@@ -89,13 +89,13 @@ Colours also answer "which nodes can reach a cycle?", the DFS route to <ProblemL
 
 When independent tasks run in parallel, process the queue in **rounds**: every node at in-degree 0 right now is one round, and placing them releases the next. The number of rounds is the minimum number of semesters, equal to the nodes on the longest chain: <ProblemLink slug="parallel-courses" />.
 
-<CodeTabs files={['snippets/kahn-levels.js']} />
+<CodeTabs files={['snippets/kahn-levels.js']} java={['snippets/java/KahnLevels.java']} python={['snippets/python/kahn_levels.py']} />
 
 Run Kahn's on the **reversed** graph, counting out-degrees, and you peel nodes off from the dead ends. Every peeled node can't reach a cycle: the other way to solve <ProblemLink slug="find-eventual-safe-states" />.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

@@ -4,10 +4,12 @@
 //   solution.md    step-by-step approach (Markdown)
 //   solution.js    reference solution (checked against every test by tests/dsa.test.ts)
 //   starter.js     optional; otherwise a starter is generated from fn/params/types
+// The Python starter is always generated (src/lib/dsa/python.ts), following starter.js for design problems.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { patterns } from "@content/dsa/registry";
 import { ProblemMeta, type FunctionProblemMeta, type RunnableProblem } from "./schema";
+import { generatePythonStarter } from "./python";
 
 export const PROBLEMS_DIR = path.join(process.cwd(), "content", "dsa", "problems");
 
@@ -18,6 +20,8 @@ export interface LoadedProblem {
   approach: string;
   solution: string;
   starter: string;
+  /** Python starter code (snake_case names, type hints). */
+  starterPy: string;
 }
 
 const read = (slug: string, file: string) => {
@@ -65,8 +69,10 @@ export function loadProblems(): LoadedProblem[] {
     const parsed = ProblemMeta.safeParse(raw);
     if (!parsed.success) throw new Error(`content/dsa/problems/${slug}/problem.json: ${parsed.error.message}`);
     const meta = parsed.data;
-    const starter = read(slug, "starter.js") || (meta.kind === "design" ? `class ${meta.className} {\n  constructor() {\n    \n  }\n}\n` : generateStarter(meta));
-    return { slug, meta, statement: read(slug, "statement.md"), approach: read(slug, "solution.md"), solution: read(slug, "solution.js"), starter };
+    const starterJs = read(slug, "starter.js");
+    const starter = starterJs || (meta.kind === "design" ? `class ${meta.className} {\n  constructor() {\n    \n  }\n}\n` : generateStarter(meta));
+    const starterPy = generatePythonStarter(meta, starterJs || undefined);
+    return { slug, meta, statement: read(slug, "statement.md"), approach: read(slug, "solution.md"), solution: read(slug, "solution.js"), starter, starterPy };
   });
   out.sort(
     (a, b) =>

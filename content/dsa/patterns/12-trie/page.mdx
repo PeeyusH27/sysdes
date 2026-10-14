@@ -62,7 +62,7 @@ Watch new words reuse shared prefixes and grow only the nodes they need. Then ty
 
 `find(prefix)` walks the path and returns the node it reaches, or `null`. `search` needs that node **and** its end flag; `startsWith` only needs the node.
 
-<CodeTabs files={['snippets/trie.js']} />
+<CodeTabs files={['snippets/trie.js']} java={['snippets/java/Trie.java']} python={['snippets/python/trie.py']} />
 
 <AlgoViz trace={trieLookup} />
 
@@ -78,7 +78,7 @@ This class is <ProblemLink slug="implement-trie" />. For <ProblemLink slug="long
 
 The array is fastest for a small known alphabet; a `Map` is the safe default. Either way each step is O(1).
 
-<CodeTabs files={['snippets/trie-array.js']} />
+<CodeTabs files={['snippets/trie-array.js']} java={['snippets/java/TrieArray.java']} python={['snippets/python/trie_array.py']} />
 
 ## Template 2: wildcard search with DFS
 
@@ -86,7 +86,7 @@ At a `.` (any one letter) there are several edges to follow, so the walk becomes
 
 <AlgoViz trace={wildcardSearch} />
 
-<CodeTabs files={['snippets/wildcard.js']} />
+<CodeTabs files={['snippets/wildcard.js']} java={['snippets/java/Wildcard.java']} python={['snippets/python/wildcard.py']} />
 
 This is <ProblemLink slug="design-add-and-search-words" />. No dots costs O(L); mostly dots can visit every node down to depth L.
 
@@ -97,13 +97,13 @@ The big wins come when **another search** produces the characters: scan a text f
 - **no child** for the next character: no word continues, so stop this branch;
 - the node **ends a word**: record a match, and keep going for longer words.
 
-<CodeTabs files={['snippets/scan.js']} />
+<CodeTabs files={['snippets/scan.js']} java={['snippets/java/Scan.java']} python={['snippets/python/scan.py']} />
 
 <ProblemLink slug="replace-words" /> stops at the **first** end flag, the shortest root. <ProblemLink slug="word-search-ii" /> runs a [backtracking](/dsa/patterns/backtracking) DFS from every cell with the trie pointer in step, checking every word in one pass. Store each word on its end node and clear it once found, so it is reported once.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

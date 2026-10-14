@@ -69,7 +69,7 @@ Paint walls, move the start and goal, then race a queue against a stack. BFS flo
 
 Graphs arrive as an **edge list** (`[[0, 1], [1, 2]]`), an **adjacency list** (`graph[i]` lists the neighbours of `i`), or an **implicit** graph (a grid, "words that differ by one letter"). Convert an edge list once, so finding a node's neighbours costs O(its degree), not a scan of every edge:
 
-<CodeTabs files={['snippets/adjacency.js']} />
+<CodeTabs files={['snippets/adjacency.js']} java={['snippets/java/Adjacency.java']} python={['snippets/python/adjacency.py']} />
 
 For a grid, build nothing. The neighbours of `(r, c)` come from a **directions array**, `[[1, 0], [-1, 0], [0, 1], [0, -1]]`, behind a bounds check. Add the four diagonals when corners count as touching.
 
@@ -77,7 +77,7 @@ For a grid, build nothing. The neighbours of `(r, c)` come from a **directions a
 
 Use DFS when the question is **what** can be reached, not **how far**: counting islands, measuring them, flood filling. The recursive version mirrors the definition ("this cell, plus everything reachable from its neighbours") and can return values up the stack, which is how <ProblemLink slug="max-area-of-island" /> adds up a size. The iterative version can't overflow: JavaScript allows around ten thousand nested calls, and a 300 × 300 grid of land would need 90,000.
 
-<CodeTabs files={['snippets/grid-dfs.js']} />
+<CodeTabs files={['snippets/grid-dfs.js']} java={['snippets/java/GridDfs.java']} python={['snippets/python/grid_dfs.py']} />
 
 This template solves <ProblemLink slug="flood-fill" />, <ProblemLink slug="number-of-islands" /> and <ProblemLink slug="max-area-of-island" />.
 
@@ -89,7 +89,7 @@ BFS spreads in rings: one edge away, then two, and so on. With equal-cost edges,
 
 Use an array with a **head index** as the queue: `queue.shift()` moves every element down a slot, which can make BFS O(V²).
 
-<CodeTabs files={['snippets/bfs.js']} />
+<CodeTabs files={['snippets/bfs.js']} java={['snippets/java/Bfs.java']} python={['snippets/python/bfs.py']} />
 
 For "how many steps", process one **level** at a time: note `levelEnd = queue.length`, pop up to it, count one step. That is how <ProblemLink slug="word-ladder" /> counts the words in the shortest sequence.
 
@@ -99,13 +99,13 @@ How far is each cell from the **nearest** source (rotten orange, exit, gate)? Do
 
 <AlgoViz trace={multiSourceBfs} />
 
-<CodeTabs files={['snippets/multi-source-bfs.js']} />
+<CodeTabs files={['snippets/multi-source-bfs.js']} java={['snippets/java/MultiSourceBfs.java']} python={['snippets/python/multi_source_bfs.py']} />
 
 Count the levels and you have the time until everything is reached: <ProblemLink slug="rotting-oranges" />. The trick also runs **backwards**: in <ProblemLink slug="pacific-atlantic-water-flow" />, start from every ocean-edge cell and climb uphill instead of asking each cell where its water goes.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

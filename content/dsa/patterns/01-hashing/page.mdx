@@ -64,7 +64,7 @@ Two sum on a real hash table: each number asks its bucket for `target - x`, then
 
 When only presence matters, a `Set` is the lightest tool: `has` and `add` are all you need.
 
-<CodeTabs files={['snippets/seen-set.js']} />
+<CodeTabs files={['snippets/seen-set.js']} java={['snippets/java/SeenSet.java']} python={['snippets/python/seen_set.py']} />
 
 The same lines detect duplicates, mark visited nodes, or spot a cycle of states (Happy Number). <ProblemLink slug="longest-consecutive-sequence" /> loads **all** values first, then uses `set.has(x - 1)` to find where runs start.
 
@@ -74,7 +74,7 @@ A frequency map answers "how many?" in O(1). It also works as a **budget**: coun
 
 <AlgoViz trace={frequencyBudget} />
 
-<CodeTabs files={['snippets/frequency.js']} />
+<CodeTabs files={['snippets/frequency.js']} java={['snippets/java/Frequency.java']} python={['snippets/python/frequency.py']} />
 
 <ProblemLink slug="valid-anagram" /> counts one word up and the other down; <ProblemLink slug="first-unique-character" /> counts, then rescans in order. For lowercase letters, an array of 26 indexed by `ch.charCodeAt(0) - 97` is a perfect hash: faster, and O(1) space.
 
@@ -84,7 +84,7 @@ Two elements must combine into a target? Fix the second and ask the map about th
 
 <AlgoViz trace={pairCount} />
 
-<CodeTabs files={['snippets/complement.js']} />
+<CodeTabs files={['snippets/complement.js']} java={['snippets/java/Complement.java']} python={['snippets/python/complement.py']} />
 
 <ProblemLink slug="two-sum" /> stores value → index and returns at the first hit. Store running totals and look up `total - k` instead, and you are in [Prefix Sums](/dsa/patterns/prefix-sum).
 
@@ -92,7 +92,7 @@ Two elements must combine into a target? Fix the second and ask the map about th
 
 Grouping maps a key to a list. The thinking goes into the key: two items get the **same** key exactly when they belong together.
 
-<CodeTabs files={['snippets/group-by-key.js']} />
+<CodeTabs files={['snippets/group-by-key.js']} java={['snippets/java/GroupByKey.java']} python={['snippets/python/group_by_key.py']} />
 
 | To group… | Key | Cost per item |
 |---|---|---|
@@ -105,7 +105,7 @@ Grouping maps a key to a list. The thinking goes into the key: two items get the
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

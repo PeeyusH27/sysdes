@@ -67,7 +67,7 @@ Values stream into a heap capped at k, and every swap plays on the tree and the 
 
 One class, one comparator: a min-heap, a max-heap, or pairs ordered by any key.
 
-<CodeTabs files={['snippets/heap.js']} />
+<CodeTabs files={['snippets/heap.js']} java={['snippets/java/Heap.java']} python={['snippets/python/heap.py']} />
 
 ```js
 new Heap((a, b) => a - b);          // min-heap of numbers
@@ -84,7 +84,7 @@ To keep the k **largest**, keep a **min**-heap of at most k. Its root is the wea
 
 <AlgoViz trace={topK} />
 
-<CodeTabs files={['snippets/top-k.js']} />
+<CodeTabs files={['snippets/top-k.js']} java={['snippets/java/TopK.java']} python={['snippets/python/top_k.py']} />
 
 The k **smallest** by some key (closest points, cheapest items) mirror it with a **max**-heap. Practice: <ProblemLink slug="kth-largest-element-in-a-stream" />, <ProblemLink slug="kth-largest-element-in-an-array" />, <ProblemLink slug="top-k-frequent-elements" /> (count with a Map, then top k by count) and <ProblemLink slug="k-closest-points-to-origin" />.
 
@@ -94,7 +94,7 @@ With k **sorted** inputs, the next output is always one of the k current heads. 
 
 <AlgoViz trace={kWayMerge} />
 
-<CodeTabs files={['snippets/k-way-merge.js']} />
+<CodeTabs files={['snippets/k-way-merge.js']} java={['snippets/java/KWayMerge.java']} python={['snippets/python/k_way_merge.py']} />
 
 Each entry must know its successor: an index into its array, or for linked lists the node itself (`node.next`). Practice: <ProblemLink slug="merge-k-sorted-lists" />.
 
@@ -107,13 +107,13 @@ Keep the **lower half** in a max-heap and the **upper half** in a min-heap, unde
 
 The median is the lower top (odd count) or the average of both tops (even). To add a number, push it low and move the lower top up (rule 1); if the upper half is now bigger, move its top back (rule 2). That's O(log n) per number and O(1) per median.
 
-<CodeTabs files={['snippets/two-heaps.js']} />
+<CodeTabs files={['snippets/two-heaps.js']} java={['snippets/java/TwoHeaps.java']} python={['snippets/python/two_heaps.py']} />
 
 Practice: <ProblemLink slug="find-median-from-data-stream" />.
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" java="snippets/java/TryIt.java" python="snippets/python/try_it.py" />
 
 ## Complexity
 

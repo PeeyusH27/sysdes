@@ -64,7 +64,7 @@ Watch the pattern squeeze the pair, then switch to **You play** and move the poi
 
 For sorted or symmetric input. Sort first if allowed; need the **original indices** of unsorted input? Use a hash map ([Hash Maps and Sets](/dsa/patterns/hashing)).
 
-<CodeTabs files={['snippets/opposite-ends.js']} />
+<CodeTabs files={['snippets/opposite-ends.js']} java={['snippets/java/OppositeEnds.java']} python={['snippets/python/opposite_ends.py']} />
 
 Only the body changes for palindromes (compare `s[left]` with `s[right]`), in-place reversal (swap, move both) and Container With Most Water (move the shorter wall).
 
@@ -74,7 +74,7 @@ Only the body changes for palindromes (compare `s[left]` with `s[right]`), in-pl
 
 <AlgoViz trace={removeDuplicates} />
 
-<CodeTabs files={['snippets/read-write.js']} />
+<CodeTabs files={['snippets/read-write.js']} java={['snippets/java/ReadWrite.java']} python={['snippets/python/read_write.py']} />
 
 Change the condition to remove a value, move zeroes to the end, or keep at most two copies of each number (compare with `nums[write - 2]`).
 
@@ -84,11 +84,11 @@ Two sorted sequences, or both ends of one? Give each a pointer and always take t
 
 <AlgoViz trace={sortedSquares} />
 
-<CodeTabs files={['snippets/two-inputs.js']} />
+<CodeTabs files={['snippets/two-inputs.js']} java={['snippets/java/TwoInputs.java']} python={['snippets/python/two_inputs.py']} />
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

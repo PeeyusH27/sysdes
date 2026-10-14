@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const HIDE = /\/\/\s*@hide\s*$/;
@@ -32,4 +32,32 @@ export function loadRunnable(file: string) {
     else if (!HIDE.test(line)) shown.push(line);
   }
   return { prelude: prelude.join("\n").trim(), code: asScript(shown.join("\n")).trim() };
+}
+
+const HIDE_PY = /#\s*@hide\s*$/;
+
+/**
+ * Prepares a Python snippet for <RunCode python="…">. Lines ending in `# @hide` (imports of the sibling templates) are
+ * hidden from the reader but run first, as `prelude`. The sibling .py files (tests excluded) come along as `modules`,
+ * which the Python worker writes into its file system so those imports resolve.
+ */
+export function loadRunnablePy(file: string) {
+  const prelude: string[] = [];
+  const shown: string[] = [];
+  for (const line of readFileSync(file, "utf8").split("\n")) (HIDE_PY.test(line) ? prelude : shown).push(line);
+  const dir = path.dirname(file);
+  const modules: Record<string, string> = {};
+  for (const f of readdirSync(dir).sort()) {
+    if (f.endsWith(".py") && !f.startsWith("test_") && path.join(dir, f) !== file) modules[f] = readFileSync(path.join(dir, f), "utf8");
+  }
+  return { prelude: prelude.join("\n").trim(), code: shown.join("\n").trim(), modules };
+}
+
+/** A read-only snippet (Java on a runnable block): `// @hide` and `// @display-only` lines are dropped, as in CodeBlock. */
+export function loadShownOnly(file: string) {
+  return readFileSync(file, "utf8")
+    .split("\n")
+    .filter((l) => !/(?:^|\s)(?:\/\/|#)\s*@hide\s*$/.test(l) && !/^\s*(?:\/\/|#)\s*@display-only/.test(l))
+    .join("\n")
+    .trim();
 }

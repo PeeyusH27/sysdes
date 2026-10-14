@@ -58,7 +58,7 @@ Run the ripple and watch each level take its colour as the queue slides. Then sw
 
 `levelMaxes` uses a head index; `levelValues` builds a `next` array while walking the current level, then swaps. Every level problem is a small edit of this loop:
 
-<CodeTabs files={['snippets/level-loop.js']} />
+<CodeTabs files={['snippets/level-loop.js']} java={['snippets/java/LevelLoop.java']} python={['snippets/python/level_loop.py']} />
 
 - <ProblemLink slug="average-of-levels" />: keep a running sum and push `sum / size`.
 - <ProblemLink slug="binary-tree-level-order-traversal" />: push each value into a `level` array.
@@ -71,7 +71,7 @@ DFS must explore the whole tree to be sure of the shallowest leaf: one at depth 
 
 <AlgoViz trace={firstLeaf} />
 
-<CodeTabs files={['snippets/first-match.js']} />
+<CodeTabs files={['snippets/first-match.js']} java={['snippets/java/FirstMatch.java']} python={['snippets/python/first_match.py']} />
 
 <ProblemLink slug="minimum-depth-of-binary-tree" /> is `shallowestDepth(root, isLeaf)`. A leaf has **no** children; a one-child node is not where a path ends.
 
@@ -83,11 +83,11 @@ DFS must explore the whole tree to be sure of the shallowest leaf: one at depth 
 - **Swap arrays per level**: build `next` while walking `level`.
 - **A small Queue class** that occasionally slices off the used prefix, for long-running queues.
 
-<CodeTabs files={['snippets/queue.js']} />
+<CodeTabs files={['snippets/queue.js']} java={['snippets/java/ArrayQueue.java']} python={['snippets/python/array_queue.py']} />
 
 ## Try it
 
-<RunCode src="snippets/try-it.js" />
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
 
 ## Complexity
 

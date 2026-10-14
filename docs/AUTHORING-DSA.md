@@ -45,7 +45,7 @@ The page automatically gets a **Practice problems** section listing every proble
 | Component | Use |
 |---|---|
 | `<AlgoViz trace={x} />` | animated, step-through walkthrough of a trace from `./viz` (optional `preset="Label"`) |
-| `<RunCode src="snippets/try-it.js" />` | highlighted snippet with **Run** (executes in a worker and shows console output) and **Edit** |
+| `<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />` | highlighted snippet with **Run** (executes in a worker and shows console output) and **Edit**; `python` and `java` are optional and add a JavaScript / Java / Python switch (Python runs in the browser via Pyodide, sibling `.py` modules are importable; Java is read-only) |
 | `<JsRef to="map-set" />` | inline chip linking to a cheat sheet topic; `to={["a", "b"]}` renders a labelled row |
 | `<ProblemLink slug="…" />` | link to a practice problem with difficulty and solved tick |
 | `<CodeTabs>`, `<CodeBlock>`, `<Steps>`, `<Callout>`, `<FollowUps>`, `<Quiz>`, `<TLDR>`, tables | as in `docs/AUTHORING.md` |
@@ -59,6 +59,7 @@ The page automatically gets a **Practice problems** section listing every proble
   console.log(pairSum([1, 3, 4, 6, 8, 11], 10)); // [2, 3]
   ```
   It must print something with `console.log` and must not throw. Put the expected output in a trailing comment. Local imports inside the templates (e.g. `dijkstra.js` importing `min-heap.js`) are inlined too, each file once, so templates should declare functions and classes rather than top-level `const`s that could clash.
+- **Java and Python versions.** Every snippet shown with `<CodeTabs>` has a Python version in `snippets/python/<snake_name>.py` and a Java version in `snippets/java/<PascalName>.java`, passed as `python={[…]}` / `java={[…]}` in the same order as `files`. Each language has its own tests (`snippets/python/test_*.py` with unittest, `snippets/java/*Test.java` with a `main` that exits non-zero on failure), run by `tests/patterns-langs-*.test.ts` (Java only when `JAVA_HOME` points at a JDK 17+). Python must run on 3.9.
 - For linked lists and trees, define small helpers in the snippet (`class ListNode`, a `fromArray` builder) so it runs standalone with `node`. `ListNode` and `TreeNode` are also provided in `<RunCode>` and the editor, and a snippet may declare its own classes with those names.
 
 ### viz.ts: animation traces
@@ -228,7 +229,53 @@ The page renders the topic title, its summary and the "Used in" pattern links; t
 
 ---
 
-## 4. Check your work (run often)
+## 4. Python in the practice IDE
+
+Learners can solve every problem in Python as well as JavaScript. Python runs **in the browser** with Pyodide (CPython compiled to WebAssembly): the worker `public/dsa-runner-py.js` loads the harness `public/dsa-runner.py`, the Python counterpart of `public/dsa-runner.js`. There are **no per-problem Python files**: the Python starter is generated from `problem.json` (`src/lib/dsa/python.ts`), and the same tests, compare modes and validators apply. Authoring a problem needs nothing Python-specific beyond the points under "What authors should know" below.
+
+### How learner Python is run
+
+| | |
+|---|---|
+| Names | The function is `snake_case(fn)`: `accountsMerge` → `accounts_merge`, `evalRPN` → `eval_rpn`, `isValidBST` → `is_valid_bst`. The camelCase `fn` and LeetCode's `class Solution` (either spelling; a fresh instance per test) are also accepted. Design problems: the class is `className`, the constructor op is `__init__`, other ops are snake_case (`getMin` → `get_min`, camelCase also accepted). |
+| Provided | `ListNode(val=0, next=None)`, `TreeNode(val=0, left=None, right=None)`, and `List`, `Optional`, `Dict`, `Set`, `Tuple` from `typing`. Learners may define their own node classes: nodes are recognised by their fields. |
+| Arguments | The same `io` conversions as JavaScript: `list` → `ListNode` head (or `None`), `tree` → `TreeNode` root (or `None`), `list-cycle` → a list whose tail links back to `pos`, `list[]` → a list of heads. Everything else is plain JSON: arrays → lists, numbers → `int`/`float`, `null` → `None`. Each test gets fresh copies. |
+| Results | A returned `ListNode` becomes an array (a loop shows `"…cycle"`), a `TreeNode` a level-order array (trailing nulls trimmed), `node-val` → the node's `val`. Tuples, sets (sorted), deques, dict views and generators become arrays; dict keys become strings. Returning a Python list where `io.returns` is `list`/`tree` is a `TypeError` with a clear message, not a silent pass. |
+| In place | The argument is judged after the call, so rebinding (`nums = …`) doesn't count and `nums[:] = …` does, as in real Python. |
+| Design | One output per call, `None` for the constructor; an expected `null` isn't checked, as in JavaScript. |
+| Output | `print()` lines are `log`, writes to `sys.stderr` are `error`; prints at module level are shown with the first test. Same limits as JavaScript (200 lines, 4000 characters per line). `input()` raises `EOFError` saying the arguments are passed in. |
+| Errors | Type, message, the line in the learner's code (the deepest frame of theirs; the line a `SyntaxError` points at) and a traceback of their frames only. A syntax error, a module-level error, or a missing function/class (the message names the snake_case name) is a compile error. |
+| Isolation | Each run gets a fresh namespace and its own `ListNode`/`TreeNode` subclasses, so state and patches (the common `ListNode.__lt__ = …` for `heapq`) don't leak between runs in the long-lived worker. |
+| Time limit | In the browser the page terminates the worker after `timeoutMs` per test (WebAssembly can't be interrupted from inside). Locally a per-test timer reports `TimeoutError` at the line that was running. |
+
+**Judging stays in JavaScript.** Python returns plain data, and the JS runner's own `compareValues`, validators and per-call design checks decide pass/fail, so both languages are judged by identical rules.
+
+### What authors should know
+
+- **Validators** receive the converted Python result (arrays, numbers, strings, `null`), exactly the shapes a JS answer has. Don't depend on JS-only values (`undefined`, typed arrays).
+- **Numbers**: Python ints are exact (no 2^53 limit). `/` always returns a float, which is fine because `2.0` equals `2` under every compare mode. `//` and `%` round toward negative infinity, unlike `Math.trunc`: when a problem truncates toward zero (Evaluate Reverse Polish Notation), say so in the statement.
+- **Recursion**: Python stops at about 1000 frames (Pyodide too). Keep a recursive solution's depth (tree height, list length) well under that; the current tests go no deeper than about 50.
+- **Speed**: tight loops in CPython are roughly 10–50× slower than V8, and Pyodide is roughly 2× slower than CPython. Tests sized for an O(n log n) solution finish in milliseconds; avoid tests whose intended solution needs more than about 10^6 Python steps.
+- **Snippets**: a `<RunCode python="snippets/python/try_it.py">` demo runs as `__main__` with the sibling `.py` files importable, so `from frequency import count_all  # @hide` works as written.
+
+### The harness API (for the IDE code)
+
+`public/dsa-runner.py` exposes `run_problem_json(problem_json, code, indices_json=None, on_result=None, time_limit_ms=None) -> str` and `run_script_json(code, modules_json=None, time_limit_ms=None) -> str` (JSON text in and out, the easy way across the Pyodide boundary), plus `run_problem` / `run_script` with Python values. A test run is `{index, actual, error, logs, stdout, ms}` (`stopped: true` after a `KeyboardInterrupt`), the outcome `{compileError, results}`, a script run `{error, logs, stdout, ms}`, and an error `{name, message, line, traceback}`. Non-finite floats are written as `{"$num": "Infinity"}`: parse with a reviver that turns them back into numbers. `judge()` in `scripts/dsa-lang-check.mjs` shows how a test run becomes the IDE's `TestResult`. The module docstring has the details.
+
+### Check Python against a problem
+
+```bash
+node scripts/dsa-lang-check.mjs two-sum --file my.py                 # every test, judged by the JS rules; exit 1 on failure
+node scripts/dsa-lang-check.mjs two-sum --file my.py --only 0,4 --timeout 1000
+node scripts/dsa-lang-check.mjs --script content/dsa/patterns/01-hashing/snippets/python/try_it.py   # a snippet, run like Run in the browser
+npx vitest run tests/dsa-python.test.ts                              # the harness's own tests (skipped without python3)
+```
+
+The report shows each failing test's input, expected vs received, the validator's reason, the learner's output, and errors with their line and traceback. `tests/fixtures/python/<slug>.py` holds one small solution per kind of problem (arrays, strings, grids, linked lists including a cycle, trees, design, in place, floats, a validator); they test the harness and aren't content.
+
+---
+
+## 5. Check your work (run often)
 
 ```bash
 node scripts/check-content.mjs dsa/patterns/05            # MDX compiles; components, files, JsRef ids, links exist
