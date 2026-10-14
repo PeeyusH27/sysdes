@@ -261,7 +261,11 @@ export function StagePane() {
       fitEl.style.width = `${L}px`;
       const h = fitEl.offsetHeight;
       let over = 0;
-      for (const sc of fitEl.querySelectorAll<HTMLElement>(".flow-scroll, .av-scroll, .algo-stage")) over = Math.max(over, sc.scrollWidth - sc.clientWidth);
+      for (const sc of fitEl.querySelectorAll<HTMLElement>(".flow-scroll, .av-scroll, .algo-stage")) {
+        // Only real scroll boxes count: an overflow-visible box (e.g. a pointer label hanging past the last array cell) doesn't scroll.
+        if (!/auto|scroll/.test(getComputedStyle(sc).overflowX)) continue;
+        over = Math.max(over, sc.scrollWidth - sc.clientWidth);
+      }
       return { h, w: L + over };
     }
 
@@ -415,6 +419,8 @@ export function StagePane() {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         place();
+        // The pane grows once the hero scrolls away, so whether the shown visual still scrolls can change mid-page.
+        checkScroll();
         const o = owner();
         if (o.i === active) {
           if (o.relation !== shownRelation) {
