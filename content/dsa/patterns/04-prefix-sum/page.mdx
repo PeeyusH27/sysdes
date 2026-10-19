@@ -81,7 +81,7 @@ To **count** instead, store how often each prefix sum occurred (seeded 0 → 1) 
 
 `P[r][c]` sums the rectangle from the top-left corner to row `r - 1`, column `c - 1` (with a padding row and column of zeros). Any rectangle is four lookups by **inclusion-exclusion**: the big one, minus the strips above and to the left, plus the corner cut twice.
 
-<CodeTabs files={['snippets/prefix-2d.js']} java={['snippets/java/Prefix2d.java']} python={['snippets/python/prefix_2d.py']} />
+<CodeTabs files={['snippets/prefix-2d.js']} java={['snippets/java/Prefix2D.java']} python={['snippets/python/prefix_2d.py']} />
 
 | Step | Formula |
 |---|---|
