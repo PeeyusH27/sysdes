@@ -46,7 +46,7 @@ npx playwright test          # end-to-end (builds must exist: run `npm run build
 | `content/dsa/problems/<slug>/` | Problems: `problem.json` (tests), `statement.md`, `solution.md`, `solution.js` |
 | `content/shorts/` | One-minute shorts for `/shorts` (schema in `types.ts`, validated by `tests/shorts.test.ts`) |
 | `src/lib/mdx/rehype-section-cards.mjs` | Wraps every `##` section of an MDX page in a `LessonSection` card and splits it into text and visuals |
-| `src/components/layout/StagePane.tsx`, `PageDrawer.tsx` | The pinned visual pane that follows the text being read; the page-list drawer |
+| `src/components/layout/PageDrawer.tsx` | The page-list drawer |
 | `src/components/algo/registry.ts` | Lazy loaders that let walkthroughs re-run on reader input (every trace must be listed) |
 | `src/lib/code-lang.ts` | The remembered JavaScript / Java / Python choice for multi-language code tabs |
 | `src/components/layout/Reader.tsx` | Lesson reader: section progress, Scroll / Cards modes, the live "On this page" map |

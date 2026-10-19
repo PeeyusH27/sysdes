@@ -2,24 +2,18 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { PageActions, ReadingProgress } from "./PageChrome";
 import { PageDrawer, PageDrawerButton } from "./PageDrawer";
-import { DeckNav, Reader, ReaderBar } from "./Reader";
-import { StagePane } from "./StagePane";
+import { DeckNav, Reader, ReaderBar, SectionRail } from "./Reader";
 
 export interface DocNavItem {
   href: string;
   label: string;
 }
 
-/** Without JS there is no pane to show the visuals in, so they stay under their text in one column. */
-const NO_JS = `@media (min-width:1080px){.doc-cols{display:block!important}.pane{display:none!important}.reader .sec-stage{display:block!important;margin-top:1.4em}}`;
-
 /**
- * The frame of every detail page (learn lessons, deep dives, questions, DSA patterns): a full-width hero, the sticky
- * reader bar, then the section cards. The page list ("Questions", "HLD path"…) lives in a drawer opened from the reader
- * bar, and the bar's section menu lists the sections.
- * From ~1080 px the body is two columns: on the left one pinned pane (StagePane) that shows the diagrams, simulators
- * and code for the text being read, fitted to the viewport; on the right all the words, scrolling. Below that each
- * section's visuals follow its text (src/app/reader.css).
+ * The frame of every detail page (learn lessons, deep dives, questions, DSA patterns): a compact hero, then two columns
+ * from 1080 px: a sticky outline of the sections on the left (SectionRail) and the lesson on the right, each section's
+ * diagrams and code sitting right under its text. Below 1080 px the outline becomes the sticky reader bar. The page list
+ * ("Questions", "HLD path"…) lives in a drawer opened from either (src/app/reader.css).
  */
 export function DocLayout({
   side,
@@ -60,7 +54,7 @@ export function DocLayout({
           </header>
           <ReaderBar lead={<PageDrawerButton title={sideTitle} items={side} />} headings={headings} />
           <div className="doc-cols">
-            <StagePane />
+            <SectionRail lead={<PageDrawerButton title={sideTitle} items={side} />} headings={headings} />
             <div className="lesson-main doc-main">
               <div className="prose">{children}</div>
               <DeckNav />
@@ -90,7 +84,6 @@ export function DocLayout({
         </article>
         <PageDrawer title={sideTitle} items={side} prev={prev} next={next} />
       </Reader>
-      <noscript dangerouslySetInnerHTML={{ __html: `<style>${NO_JS}</style>` }} />
     </div>
   );
 }

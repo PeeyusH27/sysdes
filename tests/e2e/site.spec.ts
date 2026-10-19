@@ -82,13 +82,13 @@ test("lesson sections are cards you can tick off and flip through", async ({ pag
   await page.goto("/learn/caching");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  const bar = page.locator(".reader-bar");
+  const bar = page.locator(".rail");
   const first = page.locator(".sec-card").first();
   await expect(first.getByRole("heading", { level: 2 })).toHaveText("Why it matters");
   await first.getByRole("button", { name: "Got it" }).click();
   await expect(first.getByRole("button", { name: "Got it" })).toHaveAttribute("aria-pressed", "true");
   await expect(bar).toContainText("Where caches live");
-  await expect(bar).toContainText("1 of 12 sections ticked");
+  await expect(bar).toContainText("1/12 ticked");
 
   await bar.getByRole("button", { name: /Cards/ }).click();
   await expect(page.locator(".sec-card:visible")).toHaveCount(1);
@@ -106,7 +106,7 @@ test("lesson sections are cards you can tick off and flip through", async ({ pag
 
 test("arrow keys inside a diagram still drive the diagram in Cards mode", async ({ page }) => {
   await page.goto("/learn/caching");
-  await page.locator(".reader-bar").getByRole("button", { name: /Cards/ }).click();
+  await page.locator(".rail").getByRole("button", { name: /Cards/ }).click();
   const card = page.locator(".sec-card[data-active]");
   await expect(card).toHaveAttribute("data-sec", "why-it-matters");
   await card.locator(".flow-scroll").focus();

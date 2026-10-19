@@ -1,9 +1,8 @@
-/* Lesson reader: the detail-page frame, section cards, the pinned visual pane (desktop), the sticky reader bar,
+/* Lesson reader: the detail-page frame, section cards, the sticky outline (desktop), the sticky reader bar,
    Cards mode and the page drawer.
    Sections are server-rendered `.sec-card`s; src/lib/mdx/rehype-section-cards.mjs splits each into `.sec-body` (the
    words) and `.sec-stage > .sec-fit` (the visuals). src/components/layout/Reader.tsx adds data-mode / data-active /
-   data-current / data-dir; StagePane.tsx adds data-pane on `.reader` from 1080 px and shows one stage at a time over
-   the pane (--pane-x/y/w/h, --stick-top). Below 1080 px, or without JS, each stage follows its text. */
+   data-current / data-dir; from 1080 px the sticky outline (SectionRail) sits beside the lesson. Each stage always follows its text. */
 
 /* ------------------------------------------------------------------ page frame (DocLayout) */
 .container-doc { max-width: 1560px; }
@@ -16,12 +15,12 @@
 .doc .prose > :is(p, ul, ol, .tldr, .callout) { max-width: 900px; }
 
 /* ------------------------------------------------------------------ lesson hero */
-.lesson-hero { position: relative; margin-top: 18px; padding: 26px 28px 22px !important; border: 1px solid var(--border); border-radius: var(--radius-lg); background:
+.lesson-hero { position: relative; margin-top: 18px; padding: 20px 26px 16px !important; border: 1px solid var(--border); border-radius: var(--radius-lg); background:
   radial-gradient(700px 240px at 0% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%),
   radial-gradient(500px 220px at 100% 0%, color-mix(in srgb, var(--k-client) 10%, transparent), transparent 70%),
   var(--card); box-shadow: var(--shadow); overflow: hidden; }
 .lesson-hero h1 { margin-top: 6px !important; }
-.lesson-hero .lede { font-size: 18px; line-height: 1.6; }
+.lesson-hero .lede { font-size: 16.5px; line-height: 1.55; max-width: 72ch; }
 .lesson-hero .meta-row .tag { background: color-mix(in srgb, var(--card) 70%, transparent); }
 @media (max-width: 640px) { .lesson-hero { padding: 20px 18px 16px !important; border-radius: 18px; } }
 
@@ -73,61 +72,25 @@
 .sec-card :is(.flow:not(.flow--compact), .widget, .chart, .quiz, .followups, .table-wrap, .callout, .code-block, .code-tabs, .req-grid section) { box-shadow: none; }
 .sec-card .flow:not(.flow--compact) { padding-left: 10px; padding-right: 10px; }
 
-/* ------------------------------------------------------------------ desktop: one pinned pane for the visuals, the words on the right */
-.pane, .pane-more { display: none; }
+/* ------------------------------------------------------------------ desktop: sticky outline on the left, lesson on the right */
+.rail { display: none; }
 @media (min-width: 1080px) {
-  .doc-cols:has(.sec-stage) { display: grid; grid-template-columns: minmax(0, var(--pane-col)) minmax(0, 1fr); column-gap: var(--stage-gap); align-items: start; }
-  .doc-cols:has(.sec-stage) > .pane { display: flex; }
-  .pane { position: sticky; top: var(--stick-top, 116px); flex-direction: column; min-width: 0; height: calc(100dvh - var(--stick-top, 116px) - 10px); margin-top: 22px; }
-  .pane-head { flex: none; display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 0 4px; }
-  .pane-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; border: 0; background: none; color: var(--fg); font: 650 14px var(--font-sans); padding: 4px 10px 4px 4px; border-radius: 10px; cursor: pointer; text-align: left; transition: background .15s; }
-  .pane-title:hover { background: color-mix(in srgb, var(--card) 80%, transparent); }
-  .pane-title-idle { color: var(--muted); cursor: default; padding-left: 8px; }
-  .pane-n { flex: none; font: 700 12px var(--font-mono); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 7px; padding: 2px 7px; }
-  .pane-rel { flex: none; font: 650 11px var(--font-sans); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  .pane-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pane-sub { color: var(--muted); font-weight: 550; }
-  .pane-pager { flex: none; margin-left: auto; display: flex; align-items: center; gap: 2px; font: 600 12.5px var(--font-sans); color: var(--muted); font-variant-numeric: tabular-nums; }
-  .pane-pager .icon-btn { width: 30px; height: 30px; border-color: var(--border); background: var(--card); }
-  .pane-count { padding: 0 6px; white-space: nowrap; }
-  .pane-body { flex: 1; min-height: 0; }
-  .pane-empty { margin: 0; height: 100%; display: grid; place-items: center; padding: 24px; text-align: center; border: 1.5px dashed var(--border); border-radius: var(--radius-lg); color: var(--muted); font-size: 14px; }
-  .pane:not([data-empty]) .pane-empty { visibility: hidden; }
-
-  /* Before the pane picks a stage (no JS yet) the stages wait out of sight; <noscript> in DocLayout puts them back inline. */
-  .reader:not([data-pane]) .sec-stage { display: none; }
-  /* The chosen stage is laid over the pane body. Nothing between it and the viewport may transform or filter,
-     which is why the reveal animations below move to the card's children in this mode. */
-  .reader[data-pane] .sec-stage { position: fixed; z-index: 5; left: var(--pane-x); top: var(--pane-y); width: var(--pane-w); height: var(--pane-h); margin: 0 !important; overflow: hidden auto; overscroll-behavior: auto; scrollbar-gutter: stable; scrollbar-width: thin; border-radius: var(--radius); transition: opacity .18s ease; }
-  .reader[data-pane] .sec-stage[hidden] { display: none; }
-  .reader[data-pane] .sec-stage[data-leaving] { opacity: 0; pointer-events: none; }
-  .reader[data-pane] .sec-stage:focus-visible { outline-offset: -2px; }
-  .reader[data-pane] .sec-fit { transform-origin: 0 0; }
-  .reader[data-pane] .sec-fit > [data-pane-off] { display: none !important; }
-  /* the visual fills the pane, so it needs no card of its own beyond what it draws */
-  .reader[data-pane] .sec-fit > :is(.widget, .flow, .chart, .quiz, .algo, .code-block, .code-tabs, .run-code) { box-shadow: var(--shadow); }
-  /* a pane that scrolls: fade + hint (outside the pane, which sits under the stage) */
-  .reader[data-pane] .pane-more:not([hidden]) { display: flex; position: fixed; z-index: 6; left: var(--pane-x); width: calc(var(--pane-w) - 14px); top: calc(var(--pane-y) + var(--pane-h) - 72px); height: 72px; align-items: flex-end; justify-content: center; padding: 0 0 10px; border: 0; border-radius: 0 0 var(--radius) var(--radius); background: linear-gradient(transparent, color-mix(in srgb, var(--bg) 94%, transparent) 70%); pointer-events: none; }
-  .pane-more-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--card); color: var(--fg); font: 650 12.5px var(--font-sans); box-shadow: var(--shadow); cursor: pointer; pointer-events: auto; }
-  .pane-more-chip svg { color: var(--accent); }
-  .pane-more:hover .pane-more-chip { border-color: var(--accent); }
-
-  /* the reading column: words only */
-  .reader[data-pane] .sec-card { padding: 20px 22px 18px; }
-  .reader[data-pane] .sec-body[data-has-stage] { scroll-margin-top: calc(var(--stick-top, 116px) + 14px); border-radius: 10px; }
-  .reader[data-pane] .sec-body[data-has-stage]:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
-  /* the text the pane is showing the visual for */
-  .reader[data-pane] .sec-body[data-pane-owner] { position: relative; }
-  .reader[data-pane] .sec-body[data-pane-owner]::before { content: ""; position: absolute; left: -13px; top: 3px; bottom: 3px; width: 3px; border-radius: 3px; background: var(--kind); animation: owner-in .3s var(--ease-out); }
-  @keyframes owner-in { from { transform: scaleY(.3); opacity: 0; } }
-
-  /* one column for sections without visuals is the same column: a comfortable measure, tables sized to content */
-  .sec-card[data-layout=single] > .sec-body > .table-wrap { width: fit-content; min-width: min(100%, 640px); max-width: 100%; }
-  .reader[data-pane] .sec-card[data-layout=split] .sec-body > .table-wrap :is(th, td) { padding: 8px 11px; }
-  .reader[data-pane] .sec-card .sec-body > .table-wrap table { font-size: 14px; }
+  .doc-cols { display: grid; grid-template-columns: 250px minmax(0, 1fr); column-gap: clamp(24px, 3vw, 48px); align-items: start; margin-top: 18px; }
+  .doc { --stick-top: 78px; }
+  .doc .reader-bar { display: none; }
+  .rail { display: flex; flex-direction: column; gap: 12px; position: sticky; top: var(--stick-top); max-height: calc(100dvh - var(--stick-top) - 16px); overflow: auto; scrollbar-width: thin; padding-bottom: 8px; }
+  .rail .rb-pages { align-self: flex-start; }
+  .rail-head { display: flex; justify-content: space-between; gap: 8px; padding: 0 8px; font: 650 11.5px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .rail-list { list-style: none; margin: 0; padding: 0 0 0 2px; border-left: 2px solid var(--border); }
+  .rail-list button { display: flex; align-items: flex-start; gap: 9px; width: 100%; margin-left: -2px; padding: 7px 8px 7px 10px; border: 0; border-left: 2px solid transparent; background: none; color: var(--muted); text-align: left; font: 550 13.5px/1.35 var(--font-sans); cursor: pointer; transition: color .15s, background .15s; }
+  .rail-list button:hover { color: var(--fg); background: var(--card-2); }
+  .rail-list button[aria-current=step] { color: var(--fg); font-weight: 650; border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .rail-n { flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; font: 700 10.5px var(--font-mono); border: 1px solid var(--border-strong); color: var(--muted); }
+  .rail-n[data-got=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .rail-list button[aria-current=step] .rail-n:not([data-got=true]) { border-color: var(--accent); color: var(--accent); }
+  .rail-mode { align-self: flex-start; }
+  .rail-mode button { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 }
-@media (min-width: 1080px) and (max-width: 1279px) { .doc { --pane-col: 1.14fr; } }
-@starting-style { .reader[data-pane] .sec-stage { opacity: 0; } }
 
 /* ------------------------------------------------------------------ the section you're on */
 .reader[data-mode=scroll] .sec-card[data-current] { border-color: color-mix(in srgb, var(--kind) 34%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--kind) 10%, transparent), var(--shadow); }
@@ -151,15 +114,6 @@
 @keyframes pop-in { 0% { transform: scale(.55); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 @keyframes burst { from { transform: scale(1); opacity: .8; } to { transform: scale(2.1); opacity: 0; } }
 
-/* reveal on scroll: CSS only, so nothing waits for JS and nothing is hidden without it */
-@keyframes sec-reveal { from { opacity: .3; transform: translateY(30px) scale(.985); } }
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    :root:not([data-motion=reduce]) .reader[data-mode=scroll]:not([data-pane]) .sec-card,
-    :root:not([data-motion=reduce]) .reader[data-mode=scroll][data-pane] .sec-card > :is(.sec-head, .sec-body, .sec-foot),
-    :root:not([data-motion=reduce]) .reader[data-mode=scroll][data-pane] .sec-row > .sec-body { animation: sec-reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 30%; }
-  }
-}
 
 /* ------------------------------------------------------------------ Cards mode */
 .reader[data-mode=cards] .sec-card:not([data-active]) { display: none; }

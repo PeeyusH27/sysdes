@@ -14,8 +14,7 @@ const KINDS = {
  *   layout="split"  one or more `div.sec-row`, each a `div.sec-body` (the h2 and the words) and a `div.sec-stage`
  *                   (diagrams, widgets, code, inside a `div.sec-fit`).
  *   layout="single" a `div.sec-body`, plus a `div.sec-stage` after it when the section is only visuals.
- * The DOM order is always text first, then its stage, so reading order and phones stay simple. From ~1080 px the
- * stages are shown one at a time in the pinned pane on the left (src/components/layout/StagePane.tsx).
+ * The DOM order is always text first, then its stage, so reading order and phones stay simple.
  */
 export function LessonSection({
   index,

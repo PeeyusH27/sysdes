@@ -15,8 +15,7 @@
 // own visuals (a "Code" section with one snippet per `###`), each subsection gets its own row, so each snippet is
 // shown while the words that explain it are being read.
 // A single card holds a `div.sec-body` (and a `div.sec-stage` after it when the section is all visuals).
-// Below ~1080 px a stage follows its text. From ~1080 px the stages leave the text column and the one that belongs to
-// the text being read is shown in the pinned pane on the left (src/components/layout/StagePane.tsx, src/app/reader.css).
+// A stage always follows its text (src/app/reader.css).
 //
 // Registered by absolute path in next.config.ts, because Turbopack only accepts plugins it can import by name.
 

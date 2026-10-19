@@ -400,6 +400,61 @@ export function ReaderBar({ lead, headings = [] }: { lead?: React.ReactNode; hea
   );
 }
 
+/**
+ * Desktop outline (from 1080 px, left of the lesson): the page-list button, ticked progress, every section as one
+ * row (current one highlighted, ticks shown) and the Scroll / Cards switch. Replaces the reader bar there.
+ */
+export function SectionRail({ lead, headings = [] }: { lead?: React.ReactNode; headings?: Heading[] }) {
+  const r = useReader();
+  if (!r) return null;
+  const { sections, activeIndex, mode, gotCount } = r;
+  const known = new Set(sections.map((s) => s.id));
+  const h2s = headings.filter((h) => h.depth === 2);
+  const list: SectionRef[] = sections.length ? sections : h2s.map((h) => ({ id: h.id, title: h.text }));
+  const extras = sections.length ? h2s.filter((h) => !known.has(h.id)) : [];
+  return (
+    <aside className="rail no-print" aria-label="On this page">
+      {lead}
+      <div className="rail-head">
+        <span>On this page</span>
+        <span>
+          {gotCount}/{sections.length} ticked
+        </span>
+      </div>
+      <ol className="rail-list">
+        {list.map((s, i) => (
+          <li key={s.id}>
+            <button type="button" aria-current={i === activeIndex ? "step" : undefined} onClick={() => (known.has(s.id) ? r.go(s.id) : jumpTo(s.id))}>
+              <span className="rail-n" data-got={r.isGot(s.id)}>
+                {r.isGot(s.id) ? <Check size={11} aria-label="Ticked" /> : i + 1}
+              </span>
+              <span className="rail-t">{s.title}</span>
+            </button>
+          </li>
+        ))}
+        {extras.map((h) => (
+          <li key={h.id}>
+            <button type="button" onClick={() => jumpTo(h.id)}>
+              <span className="rail-n" aria-hidden>
+                <ArrowRight size={11} />
+              </span>
+              <span className="rail-t">{h.text}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div className="seg rail-mode" role="group" aria-label="Reading mode">
+        <button type="button" aria-pressed={mode === "scroll"} onClick={() => r.setMode("scroll")} disabled={!sections.length}>
+          <Rows3 size={14} aria-hidden /> Scroll
+        </button>
+        <button type="button" aria-pressed={mode === "cards"} onClick={() => r.setMode("cards")} title="One section at a time (← →)" disabled={!sections.length}>
+          <GalleryHorizontalEnd size={14} aria-hidden /> Cards
+        </button>
+      </div>
+    </aside>
+  );
+}
+
 /** Cards mode: previous / dots / next under the active card. */
 export function DeckNav() {
   const r = useReader();
