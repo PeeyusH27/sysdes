@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Analytics } from "@vercel/analytics/next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/components/layout/Providers";
 import { SiteNav } from "@/components/layout/SiteNav";
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/glossary" className="link">Glossary</Link> · <Link href="/playground" className="link">Playground</Link>
           </footer>
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
