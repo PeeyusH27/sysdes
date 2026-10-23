@@ -15,6 +15,21 @@
     "short": "chat-store-then-ack"
   },
   {
+    "term": "Adaptive bitrate",
+    "def": "The video player picks a sharper or softer version for each short piece, depending on how fast the network is right now.",
+    "aliases": [
+      "ABR"
+    ],
+    "href": "/questions/video-streaming",
+    "short": "video-adaptive-bitrate"
+  },
+  {
+    "term": "Anti-entropy",
+    "def": "A background job that compares copies of the same data and fixes any that drifted apart, copying only what differs.",
+    "href": "/questions/key-value-store",
+    "short": "kv-store-vector-clocks-repair"
+  },
+  {
     "term": "Anycast",
     "def": "Many servers around the world share one IP address, and the network sends each user to the nearest one.",
     "short": "dns-anycast-geodns"
@@ -164,6 +179,18 @@
     "short": "ride-matching-compare-and-set"
   },
   {
+    "term": "Condition variable",
+    "def": "A place for a thread to sleep until another thread says something it was waiting for is now true.",
+    "href": "/cs/synchronization",
+    "short": "mutex-semaphore-condvar"
+  },
+  {
+    "term": "Congestion control",
+    "def": "The sender slowing down when the network starts dropping packets, so everyone shares the links fairly.",
+    "href": "/cs/tcp-in-depth",
+    "short": "flow-vs-congestion-control"
+  },
+  {
     "term": "Connection pool",
     "def": "A set of already-open connections that requests borrow and return, instead of opening a new one every time.",
     "aliases": [
@@ -195,9 +222,39 @@
     "href": "/learn/async-messaging"
   },
   {
+    "term": "Content-defined chunking",
+    "def": "Cutting a file where its own bytes say so, not every fixed number of bytes, so a small edit changes only a chunk or two.",
+    "href": "/questions/file-storage",
+    "short": "file-sync-chunking-dedupe"
+  },
+  {
+    "term": "Context switch",
+    "def": "The moment the CPU stops one thread and starts another, saving the first one’s place so it can resume later.",
+    "aliases": [
+      "context switching"
+    ],
+    "href": "/cs/processes-threads",
+    "short": "context-switch-cost"
+  },
+  {
+    "term": "CORS",
+    "def": "A browser rule: a page can read another site’s reply only if that site’s server says it is allowed.",
+    "aliases": [
+      "cross-origin resource sharing"
+    ],
+    "href": "/cs/sessions-auth-proxies",
+    "short": "cors-preflight"
+  },
+  {
     "term": "Count-min sketch",
     "def": "A small grid of counters that estimates how often each item appears. It can guess too high, but never too low.",
     "short": "count-min-sketch"
+  },
+  {
+    "term": "Covering index",
+    "def": "An index that already holds every column a query needs, so the table itself is never read.",
+    "href": "/cs/indexes-btree-lsm",
+    "short": "composite-index-order"
   },
   {
     "term": "CQRS",
@@ -243,6 +300,12 @@
     "short": "idempotent-consumers"
   },
   {
+    "term": "Deadlock",
+    "def": "Two or more threads each hold something the other needs, so none of them can ever move.",
+    "href": "/cs/synchronization",
+    "short": "deadlock-four-conditions"
+  },
+  {
     "term": "Debounce",
     "def": "Wait until typing pauses before doing the work, so you don't call the search server on every keystroke.",
     "aliases": [
@@ -280,6 +343,12 @@
     "def": "How much failure you are allowed: 100% minus your reliability target. You can spend it by shipping risky changes.",
     "href": "/learn/reliability-observability",
     "short": "slo-error-budget"
+  },
+  {
+    "term": "Event loop",
+    "def": "One thread that waits for events and runs the code for each one in turn, so it can serve many connections.",
+    "href": "/cs/concurrency-in-practice",
+    "short": "event-loop-vs-threads"
   },
   {
     "term": "Event sourcing",
@@ -358,6 +427,12 @@
     "short": "fencing-tokens"
   },
   {
+    "term": "Flow control",
+    "def": "The receiver telling the sender how much data it has room for, so a fast sender cannot overrun a slow reader.",
+    "href": "/cs/tcp-in-depth",
+    "short": "flow-vs-congestion-control"
+  },
+  {
     "term": "GeoDNS",
     "def": "A DNS that gives different answers depending on where the asker is, so users reach a nearby server.",
     "short": "dns-anycast-geodns"
@@ -387,12 +462,30 @@
     "short": "rest-grpc-graphql"
   },
   {
+    "term": "Hash join",
+    "def": "A join that puts one table in a hash table, then looks up each row of the other. Fast on unsorted data.",
+    "href": "/cs/schema-and-joins",
+    "short": "join-algorithms"
+  },
+  {
+    "term": "Head-of-line blocking",
+    "def": "One lost or slow item at the front of a line holds up everything queued behind it.",
+    "href": "/cs/tcp-in-depth",
+    "short": "cs-http-versions"
+  },
+  {
     "term": "Heartbeat",
     "def": "A regular \"I'm alive\" message. If several in a row are missed, the sender is assumed to be down.",
     "aliases": [
       "heartbeats"
     ],
     "short": "failure-detection"
+  },
+  {
+    "term": "Hinted handoff",
+    "def": "When a copy's machine is down, a healthy neighbour holds its writes and hands them over when the machine returns.",
+    "href": "/questions/key-value-store",
+    "short": "kv-store-quorums"
   },
   {
     "term": "Horizontal scaling",
@@ -423,12 +516,12 @@
   {
     "term": "HTTP/2",
     "def": "A newer HTTP that sends many requests at once over a single connection and compresses the headers.",
-    "short": "http-versions"
+    "short": "cs-http-versions"
   },
   {
     "term": "HTTP/3 (QUIC)",
     "def": "The newest HTTP, run over QUIC (which is built on UDP). One lost packet doesn't stall everything, and it connects faster.",
-    "short": "http-versions"
+    "short": "cs-http-versions"
   },
   {
     "term": "HyperLogLog",
@@ -455,6 +548,15 @@
     "term": "Inverted index",
     "def": "A list that maps each word to the documents containing it, like a book's index. It powers search.",
     "short": "inverted-index"
+  },
+  {
+    "term": "Isolation level",
+    "def": "A setting for how much concurrent transactions may see of each other’s unfinished work.",
+    "aliases": [
+      "isolation levels"
+    ],
+    "href": "/cs/transactions-isolation",
+    "short": "isolation-anomalies"
   },
   {
     "term": "Jitter",
@@ -587,12 +689,31 @@
     "href": "/learn/async-messaging"
   },
   {
+    "term": "Mutex",
+    "def": "A lock that lets one thread at a time into a piece of code. The thread that locked it unlocks it.",
+    "aliases": [
+      "mutual exclusion lock"
+    ],
+    "href": "/cs/synchronization",
+    "short": "mutex-semaphore-condvar"
+  },
+  {
     "term": "MVCC",
     "def": "Keeping several versions of each row, so readers see a steady snapshot and never block writers.",
     "aliases": [
       "multi-version concurrency control"
     ],
     "short": "mvcc-snapshot-isolation"
+  },
+  {
+    "term": "Normalization",
+    "def": "Storing each fact in exactly one place, so a change cannot leave two copies disagreeing.",
+    "aliases": [
+      "normalized",
+      "normalize"
+    ],
+    "href": "/cs/schema-and-joins",
+    "short": "normalize-vs-denormalize"
   },
   {
     "term": "NoSQL",
@@ -616,6 +737,12 @@
       "S3"
     ],
     "href": "/deep-dives/choosing-a-data-store"
+  },
+  {
+    "term": "Operational transformation",
+    "def": "Rewriting one person's edit so it still means the same thing after someone else's edit was applied first.",
+    "href": "/questions/collaborative-editor",
+    "short": "docs-operational-transform"
   },
   {
     "term": "Optimistic locking",
@@ -648,6 +775,15 @@
     "term": "PACELC",
     "def": "Extends CAP: during a network split, choose availability or consistency; otherwise, choose between fast answers and consistent ones.",
     "href": "/learn/consistency-cap"
+  },
+  {
+    "term": "Page fault",
+    "def": "The CPU asking the operating system for a memory page that is not ready, so the system loads it and retries.",
+    "aliases": [
+      "page faults"
+    ],
+    "href": "/cs/scheduling-memory",
+    "short": "virtual-memory-tlb"
   },
   {
     "term": "Password hashing",
@@ -713,6 +849,16 @@
     "short": "geohash-quadtree"
   },
   {
+    "term": "Query plan",
+    "def": "The database’s chosen steps for running a query: which indexes to use and how to join. EXPLAIN shows it.",
+    "aliases": [
+      "execution plan",
+      "query plans"
+    ],
+    "href": "/cs/indexes-btree-lsm",
+    "short": "composite-index-order"
+  },
+  {
     "term": "Quorum",
     "def": "With N copies, writing to W and reading from R overlap on a fresh copy whenever R + W > N.",
     "aliases": [
@@ -747,6 +893,12 @@
     "short": "token-bucket-vs-windows"
   },
   {
+    "term": "Read repair",
+    "def": "When a read finds one copy out of date, the newest value is written back to it right away.",
+    "href": "/questions/key-value-store",
+    "short": "kv-store-quorums"
+  },
+  {
     "term": "Read replica",
     "def": "A copy of the database that answers reads. If the main one fails, it can take over.",
     "aliases": [
@@ -768,6 +920,14 @@
     "term": "Redis",
     "def": "A very fast database that keeps data in memory. Often used as a cache, a counter store, or a leaderboard.",
     "href": "/learn/caching"
+  },
+  {
+    "term": "Rendezvous hashing",
+    "def": "Score every node for a key and pick the highest. Losing a node moves only that node's keys, spread over all the others.",
+    "aliases": [
+      "highest random weight"
+    ],
+    "href": "/questions/distributed-cache"
   },
   {
     "term": "Replica",
@@ -793,6 +953,24 @@
     "def": "Moving data between shards when you add or remove machines. It is slow and risky, so pick the key well.",
     "primer": "sharding",
     "href": "/deep-dives/sharding-strategies"
+  },
+  {
+    "term": "Reverse proxy",
+    "def": "A server that sits in front of your servers, takes every request first, and passes it on to the right one.",
+    "aliases": [
+      "reverse proxies"
+    ],
+    "href": "/cs/sessions-auth-proxies",
+    "short": "l4-vs-l7-proxy"
+  },
+  {
+    "term": "Rollup",
+    "def": "A coarser copy of old data, such as one summary per minute or hour, kept for a long time at a fraction of the space.",
+    "aliases": [
+      "downsampling"
+    ],
+    "href": "/questions/metrics-monitoring",
+    "short": "metrics-tsdb-compression-rollups"
   },
   {
     "term": "RPO",
@@ -830,6 +1008,12 @@
     "href": "/learn/databases-scaling"
   },
   {
+    "term": "Semaphore",
+    "def": "A counter of permits. Up to N threads may hold one at once, and any thread can hand one back.",
+    "href": "/cs/synchronization",
+    "short": "mutex-semaphore-condvar"
+  },
+  {
     "term": "Server-Sent Events (SSE)",
     "def": "The server keeps one web response open and keeps pushing events to the browser. The browser reconnects by itself if it drops.",
     "primer": "realtime",
@@ -865,6 +1049,15 @@
     "short": "shard-key-choice"
   },
   {
+    "term": "Single flight",
+    "def": "When many requests miss for the same key at once, only the first loads it and the rest wait for that same result.",
+    "aliases": [
+      "request coalescing"
+    ],
+    "href": "/questions/distributed-cache",
+    "short": "dcache-stampede-hot-key"
+  },
+  {
     "term": "Single point of failure (SPOF)",
     "def": "One part that, if it breaks, takes the whole system down with it.",
     "href": "/learn/api-load-balancing"
@@ -884,6 +1077,12 @@
     ],
     "href": "/learn/reliability-observability",
     "short": "slo-error-budget"
+  },
+  {
+    "term": "Snapshot isolation",
+    "def": "Each transaction reads the data as it was when it started, and never waits for writers.",
+    "href": "/cs/transactions-isolation",
+    "short": "mvcc-snapshots"
   },
   {
     "term": "Snowflake ID",
@@ -975,6 +1174,15 @@
     "short": "tcp-vs-udp"
   },
   {
+    "term": "Thread pool",
+    "def": "A fixed group of worker threads that take tasks from a queue, instead of starting a new thread for each task.",
+    "aliases": [
+      "worker pool"
+    ],
+    "href": "/cs/concurrency-in-practice",
+    "short": "thread-pool-sizing"
+  },
+  {
     "term": "Throughput",
     "def": "How much work a system finishes per second. Like cars passing a toll booth each minute.",
     "href": "/deep-dives/connections-pooling"
@@ -985,6 +1193,12 @@
     "href": "/questions/movie-booking"
   },
   {
+    "term": "Ticket server",
+    "def": "A database counter that hands out ids, usually in blocks, so servers get unique numbers without asking for each one.",
+    "href": "/questions/unique-id-generator",
+    "short": "id-generator-snowflake-layout"
+  },
+  {
     "term": "Time to live (TTL)",
     "def": "A timer on a stored item. When it runs out, the item is deleted, so stale copies don't stay forever.",
     "aliases": [
@@ -992,6 +1206,30 @@
     ],
     "primer": "cache",
     "href": "/learn/caching"
+  },
+  {
+    "term": "Time-series database",
+    "def": "A database for numbers that arrive with a timestamp, built to append fast and to compress neighbouring samples tightly.",
+    "aliases": [
+      "TSDB"
+    ],
+    "href": "/questions/metrics-monitoring",
+    "short": "metrics-tsdb-compression-rollups"
+  },
+  {
+    "term": "TIME-WAIT",
+    "def": "The minute a closed TCP connection lingers so late packets cannot be mistaken for a new connection.",
+    "aliases": [
+      "TIME_WAIT"
+    ],
+    "href": "/cs/tcp-in-depth",
+    "short": "tcp-time-wait"
+  },
+  {
+    "term": "TLB",
+    "def": "A tiny, fast cache of recent address translations, so the CPU rarely has to read the page table.",
+    "href": "/cs/scheduling-memory",
+    "short": "virtual-memory-tlb"
   },
   {
     "term": "TLS",
@@ -1009,9 +1247,20 @@
     "short": "token-bucket-vs-windows"
   },
   {
+    "term": "Tombstone",
+    "def": "A marker that says a value was deleted, kept so the delete reaches every copy and is not undone by repair.",
+    "href": "/questions/key-value-store"
+  },
+  {
     "term": "Transaction",
     "def": "A group of database changes that all succeed together or not at all. Like a bank transfer: both sides, or neither.",
     "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Transcoding",
+    "def": "Converting a video into several sizes and formats so every device can play a version that suits it.",
+    "href": "/questions/video-streaming",
+    "short": "video-transcoding-tasks"
   },
   {
     "term": "Two-phase commit (2PC)",
@@ -1025,6 +1274,12 @@
       "vector clocks"
     ],
     "short": "lamport-vector-clocks"
+  },
+  {
+    "term": "Virtual memory",
+    "def": "Each program sees its own private run of addresses, and the system quietly maps them to real memory.",
+    "href": "/cs/scheduling-memory",
+    "short": "virtual-memory-tlb"
   },
   {
     "term": "Virtual nodes",

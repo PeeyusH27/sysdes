@@ -1,3 +1,4 @@
+import { Children, cloneElement, isValidElement } from "react";
 import { AlertTriangle, Info, Lightbulb, MessageSquare } from "lucide-react";
 
 export function TLDR({ children }: { children: React.ReactNode }) {
@@ -49,11 +50,38 @@ export function Requirements({ functional = [], nonFunctional = [], outOfScope =
   );
 }
 
-export function Steps({ children }: { children: React.ReactNode }) {
-  return <ol className="steps">{children}</ol>;
+/**
+ * A numbered list of steps. With `compact` (added by rehype-section-cards when the steps lead a section), the list
+ * reads as an outline: each step shows its title and opens its words on a tap, so the reader sees the whole path
+ * at a glance first.
+ */
+export function Steps({ children, compact }: { children: React.ReactNode; compact?: boolean | string }) {
+  const on = compact === true || compact === "true";
+  return (
+    <ol className="steps" data-compact={on || undefined}>
+      {on ? Children.map(children, (c) => (isValidElement<StepProps>(c) && typeof c.props.title === "string" ? cloneElement(c, { compact: true }) : c)) : children}
+    </ol>
+  );
 }
 
-export function Step({ title, children }: { title: string; children?: React.ReactNode }) {
+interface StepProps {
+  title: string;
+  children?: React.ReactNode;
+  compact?: boolean;
+}
+
+export function Step({ title, children, compact }: StepProps) {
+  if (compact && children)
+    return (
+      <li className="step">
+        <details className="step-body">
+          <summary>
+            <h4>{title}</h4>
+          </summary>
+          <div className="step-more">{children}</div>
+        </details>
+      </li>
+    );
   return (
     <li className="step">
       <div className="step-body">

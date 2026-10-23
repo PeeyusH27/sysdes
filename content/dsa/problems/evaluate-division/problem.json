@@ -1,0 +1,26 @@
+{
+  "title": "Evaluate Division",
+  "difficulty": "Medium",
+  "patterns": ["graph-traversal"],
+  "js": ["map-set","graphs-in-js"],
+  "order": 5,
+  "summary": "Answer division queries between named variables from a set of known ratios.",
+  "fn": "calcEquation",
+  "params": ["equations","values","queries"],
+  "types": {"params":["string[][]","number[]","string[][]"],"returns":"number[]"},
+  "compare": "float",
+  "tests": [
+    {"args":[[["a","b"],["b","c"]],[2,3],[["a","c"],["b","a"],["a","e"],["a","a"],["x","x"]]],"expected":[6,0.5,-1,1,-1],"explain":"a / c = (a / b) * (b / c) = 6. b / a = 1/2. e is unknown, so a / e is -1. a / a is 1 because a is known. x is unknown, so even x / x is -1."},
+    {"args":[[["a","b"],["b","c"],["bc","cd"]],[1.5,2.5,5],[["a","c"],["c","b"],["bc","cd"],["cd","bc"]]],"expected":[3.75,0.4,5,0.2],"explain":"a, b, c form one group and bc, cd another; a query across groups would be -1. Here a / c = 3.75, c / b = 0.4, and the second group gives 5 and 0.2."},
+    {"args":[[["a","b"]],[0.5],[["a","b"],["b","a"],["a","c"],["x","y"]]],"expected":[0.5,2,-1,-1],"explain":"Only one equation: a / b = 0.5, so b / a = 2."},
+    {"args":[[["a","b"],["c","d"]],[2,4],[["a","d"],["a","c"],["c","d"],["d","c"]]],"expected":[-1,-1,4,0.25]},
+    {"args":[[["x1","x2"],["x2","x3"],["x3","x4"],["x4","x5"]],[3,4,5,6],[["x1","x5"],["x5","x1"],["x2","x4"],["x3","x3"]]],"expected":[360,0.0027777777777777775,20,1]},
+    {"args":[[["a","b"],["c","b"]],[2,3],[["a","c"],["c","a"]]],"expected":[0.6666666666666666,1.5]},
+    {"args":[[["a","a"]],[1],[["a","a"],["a","b"]]],"expected":[1,-1]},
+    {"args":[[["p","q"],["q","r"],["r","s"],["s","t"],["t","u"],["p","u"]],[2,2,2,2,2,32],[["p","u"],["u","p"],["q","t"]]],"expected":[32,0.03125,8]},
+    {"args":[[["v0","v1"],["v0","v2"],["v0","v3"],["v0","v4"],["v1","v5"],["v2","v6"],["v6","v7"],["v5","v8"],["v6","v9"],["v4","v10"],["v4","v11"],["v9","v12"],["v2","v13"],["v8","v14"],["v14","v15"],["v7","v16"],["v7","v17"],["v3","v18"],["v13","v19"]],[2.5,1.5,3,4,2,2.5,2,2,2.5,0.5,2,2,3,2,1.5,3,2,3,1.5],[["v0","v2"],["v15","v5"],["v4","v9"],["v5","v1"],["v7","v11"],["v1","v2"],["v17","v12"],["v12","v13"],["v10","v13"],["v0","v14"],["v9","v15"],["v3","v17"],["v3","zz"],["zz","zz"]]],"expected":[1.5,0.16666666666666666,2.34375,0.5,1.0666666666666667,0.6000000000000001,1.25,0.24000000000000005,2.25,20,3.2,5,-1,-1]},
+    {"args":[[["a","b"],["b","c"],["a","c"],["c","d"]],[2,3,6,0.25],[["a","d"],["d","a"],["b","d"]]],"expected":[1.5,0.6666666666666666,0.75]}
+  ],
+  "hints": ["Each equation says a / b = k. That is also b / a = 1 / k. Draw variables as nodes and equations as weighted edges in both directions.","A query c / d is answered by multiplying the edge weights along any path from c to d. Ratios along different paths in a consistent system agree, so the first path you find is enough.","Build an adjacency map from each variable to [neighbour, weight] pairs, with both directions. For each query, return -1 if either variable is unknown, 1 if they are the same known variable, otherwise run a DFS or BFS from c carrying the product so far, and return it when you reach d (or -1 if you never do)."],
+  "complexity": {"time":"O(Q * (V + E)): one traversal per query","space":"O(V + E) for the graph"}
+}

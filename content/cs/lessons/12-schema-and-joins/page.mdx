@@ -1,0 +1,105 @@
+import { shopSchema, joinChoice } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+**Normalization** stores each fact once so updates cannot disagree with themselves; **denormalization** copies facts on purpose so hot reads avoid joins. A **join** matches rows from two tables, and the database picks nested-loop, hash or merge by sizes, indexes and sort order.
+</TLDR>
+
+## Normalization: one fact in one place
+Imagine an `orders` table that repeats each customer's city on every order. When a customer moves, every order must change. Miss one and the data disagrees with itself: an **update anomaly**. The same repetition causes insert and delete anomalies.
+
+Normal forms remove such repetition. **First**: one atomic value per column. **Second**: no column depends on part of a composite key. **Third**: no column depends on another non-key column. In short: *the key, the whole key, and nothing but the key*.
+
+<ClassDiagram spec={shopSchema} />
+
+<CodeTabs files={['snippets/normalize.js', 'snippets/normalize.test.js']} />
+
+<Callout kind="interview" title="What interviewers listen for">
+You normalize first and name the anomaly it prevents, then denormalize deliberately and say how the copy stays correct.
+</Callout>
+
+## Denormalization: copy on purpose
+Joins cost time at read. So you copy: a `customer_city` column on orders, a precomputed total, a **materialized view**, or a document embedding its children.
+
+| | Normalized | Denormalized |
+|---|---|---|
+| Reads | Join several tables | One row or document |
+| Writes | Change one place | Change every copy |
+| Risk | Slow joins | Stale or conflicting copies |
+
+Keep copies correct with a transaction, a trigger, or an async job that tolerates staleness. Analytics **star schemas** are denormalized on purpose.
+
+## Joins: nested loop, hash and merge
+
+A **join** pairs rows from two tables that match on a key. The database has three main ways to do it, and the cost differs enormously. For 100 users and 1,000 orders, a nested loop makes 100,000 comparisons while a hash join makes about 1,100.
+
+<CodeTabs files={['snippets/joins.js', 'snippets/joins.test.js']} />
+
+<DecisionTree spec={joinChoice} />
+
+`EXPLAIN` shows which one was chosen (Nested Loop, Hash Join, Merge Join). The planner chooses from row estimates, so stale statistics can lead it to the wrong one.
+
+## Join types
+
+| Join | Returns |
+|---|---|
+| INNER | Only rows that match on both sides |
+| LEFT | Every left row, with NULLs where the right side has no match |
+| FULL | Every row from both, matched where possible |
+| CROSS | Every pair (n times m rows) |
+
+An **anti-join** finds rows with no match: customers who never ordered.
+
+```sql
+SELECT c.id, c.name
+FROM customers c
+LEFT JOIN orders o ON o.customer_id = c.id
+WHERE o.id IS NULL;
+```
+
+`NOT EXISTS` expresses the same thing. Do not write `NOT IN` over a column that can be NULL: it returns nothing at all.
+
+## Keys and constraints
+
+- **Primary key.** A surrogate key (an integer or UUID) survives changes to the real-world data. A random UUID inserts all over the B-tree, so time-ordered IDs (UUIDv7, Snowflake) keep inserts local and indexes small.
+- **Foreign keys** make the database refuse orphans and cascade deletes. They cost a little on writes, which is why some large systems enforce them in code instead.
+- **Unique and check constraints** are the cheapest correctness you can buy.
+
+## Joins at scale
+
+When tables are sharded, a join may need rows from different machines.
+
+- **Co-locate.** Shard orders and order items by the same key (customer id), so a customer's rows share a shard.
+- **Broadcast** a small table (countries, products) to every shard.
+- **Join in the application.** Fetch from each side and match in code, batching lookups (see the N+1 problem in [HTTP and API styles](/cs/http-and-api-styles)).
+- **Denormalize** the column you would have joined for.
+
+Shard choice and its costs are in [sharding strategies](/deep-dives/sharding-strategies).
+
+## Common modeling decisions
+
+- **Many-to-many** needs a join table with two foreign keys (students, courses, enrolments).
+- **Money** as integer cents or a decimal type, never a float.
+- **Timestamps** in UTC, with the zone only at display.
+- **Soft deletes** (a `deleted_at` column) keep history but must be in every query and unique index.
+- **JSON columns** are fine for data you do not filter on; if you query a field often, make it a column.
+
+<Callout kind="warning" title="Denormalizing is not free">
+Every copy is a promise to keep two places in sync. If you cannot say what updates the copy, and what happens when that update fails, the copy will drift.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What is normalization and what problem does it solve?">
+    It stores each fact once, up to third normal form, which prevents update, insert and delete anomalies where copies of a fact disagree.
+  </FollowUp>
+  <FollowUp q="When would you denormalize?">
+    When a measured hot read path is slow because of joins and you can keep the copies correct. Analytics and document stores do it by design.
+  </FollowUp>
+  <FollowUp q="How does a database execute a join?">
+    By nested loop (best with an index), hash join (build a table on the smaller input) or merge join (sorted inputs), chosen from row estimates.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

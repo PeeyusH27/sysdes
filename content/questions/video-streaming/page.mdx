@@ -1,0 +1,213 @@
+import { architecture, transcodeSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Upload in resumable chunks, **transcode** into short segments at several qualities in parallel, and let the player pick quality segment by segment (**adaptive bitrate**). Nearly all bytes are served by a **CDN**, not by your servers.
+</TLDR>
+
+<Requirements
+  functional={["Upload a video, even a large one over a flaky connection", "Process it into formats every device can play", "Stream it with fast start and no buffering stalls", "Browse and search by title, owner and tags", "Count views and likes without slowing playback"]}
+  nonFunctional={["Playback starts in about 2 seconds", "A 10 minute upload is playable within minutes", "Peak of 5 million concurrent streams", "Uploaded videos are never lost", "Reads outnumber uploads about 1,000 to 1"]}
+  outOfScope={["Recommendations and ranking", "Live streaming (a follow-up)", "Ads, payments and copyright matching"]}
+/>
+
+## Clarifying questions
+
+- **Scale?** Uploads a day, daily viewers, peak concurrent streams.
+- **Devices?** Weak phones and fibre TVs need different qualities.
+- **Live or on demand?** On demand here. Live changes the pipeline.
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Uploads | 500K videos/day ÷ 86,400 s | ≈ 6 per second |
+| Raw storage | 500K × 500 MB | **250 TB a day** |
+| Encoded storage | 5 qualities = 9.9 Mbps; 600 s × 9.9 Mbps ÷ 8 = 742.5 MB per video; × 500K | **371 TB a day** |
+| Views | 100M viewers × 5 videos ÷ 86,400 s | ≈ 5,800/s |
+| Peak egress | 5M streams × 2.5 Mbps | **12.5 Tbps** |
+| Edge servers | 12.5 Tbps ÷ 10 Gbps each | ≈ 1,250 |
+| Origin egress | 5% CDN miss × 12.5 Tbps | ≈ 0.6 Tbps |
+| Transcoding CPU | 500K × 600 s × 5 qualities ÷ 2x realtime ÷ 86,400 s | **≈ 8,700 cores** |
+
+Storage, egress and encoding CPU are the big three. Egress rules out serving from your own servers, so the **CDN** is the design, and a long-lived archive tier keeps storage costs in check.
+
+## API
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/videos` | `{ title, size, type }` → `{ videoId, uploadId, chunkSize }` |
+| PUT | `/uploads/:id` | One chunk, `Content-Range: bytes 0-8388607/524288000` |
+| HEAD | `/uploads/:id` | How many bytes are stored in order: the resume point |
+| POST | `/videos/:id/complete` | Optional; also triggered by the storage event |
+| GET | `/videos/:id` | Metadata and the playlist URL once `READY` |
+| GET | `/v/:id/master.m3u8` | Served by the CDN, with `/v/:id/720p/seg_00042.m4s` |
+| POST | `/videos/:id/view` | A beacon, counted asynchronously |
+
+## Data model
+
+```sql
+CREATE TABLE videos (
+  id          bigint PRIMARY KEY,                -- from an ID generator, so shards need no coordination
+  owner_id    bigint NOT NULL,
+  title       text   NOT NULL,
+  status      text   NOT NULL CHECK (status IN ('UPLOADING', 'PROCESSING', 'READY', 'FAILED')),
+  duration_s  int,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE upload_sessions (
+  upload_id   uuid PRIMARY KEY,
+  video_id    bigint NOT NULL REFERENCES videos (id),
+  size_bytes  bigint NOT NULL,
+  stored_in_order bigint NOT NULL DEFAULT 0      -- the resume point
+);
+```
+
+Bytes live in object storage under `v/{videoId}/{quality}/seg_{n}.m4s`. Metadata is sharded by video id. View counts go through Kafka into counters and are flushed to the table in batches.
+
+## Architecture
+
+The pipeline has two halves. Upload and transcoding are heavy but rare. Playback is light per viewer but happens a thousand times more often. Play **Upload and process**, **Watch a video**, **Network gets worse** and **Upload interrupted**.
+
+<FlowDiagram spec={architecture} />
+
+## Upload and transcoding
+
+Big uploads fail, so make them **resumable**: 8 MiB chunks go straight to object storage, and after a failure the client continues from the last byte the server holds.
+
+Then cut the video into 4-second segments and encode each segment at each quality as its own task. A 10 minute video at 5 qualities is **750 tasks**. Each writes a path set by video, quality and index, so a retry is harmless. Pick a branch: all succeed, a worker dies, or the source is corrupt.
+
+<SequenceDiagram spec={transcodeSequence} />
+
+## Adaptive bitrate
+
+The player, not the server, chooses quality. It times each segment download and picks the best quality that fits within 80% of its smoothed throughput.
+
+| Quality | Bitrate |
+|---|---|
+| 240p | 0.4 Mbps |
+| 360p | 0.8 Mbps |
+| 480p | 1.2 Mbps |
+| 720p | 2.5 Mbps |
+| 1080p | 5 Mbps |
+
+Down is fast, up is slow: a thin buffer steps down at once, while a step up needs a healthy buffer and goes one level at a time.
+
+## CDN and caching
+
+Segment files never change, so a **CDN** can keep them for a long time. Popular videos sit at the edge; the long tail is pulled in on first view. At a 95% hit rate the origin sees about 0.6 Tbps instead of 12.5.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Scale, devices, length, on demand or live.
+  </Step>
+  <Step title="Estimate">
+    Egress 12.5 Tbps, storage 600+ TB a day, 8,700 encoding cores.
+  </Step>
+  <Step title="Draw both halves">
+    Upload and processing, then playback through a CDN.
+  </Step>
+  <Step title="Deep dives">
+    Resumable upload, transcoding tasks, adaptive bitrate, caching.
+  </Step>
+  <Step title="Failure and cost">
+    Worker crashes, hot videos, storage tiers.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="Split the problem in two">
+
+"Upload and processing: heavy, rare, asynchronous. Playback: light each, but huge in total." Different shapes, different designs.
+
+</Step>
+<Step title="Make uploads resumable and direct">
+
+Signed chunk URLs send bytes to object storage, not through your API servers. The server keeps the resume point.
+
+</Step>
+<Step title="Queue one job, fan out many tasks">
+
+The storage event queues a job. A coordinator plans 750 idempotent tasks with leases and heartbeats. A dead worker's lease expires and another takes the task.
+
+</Step>
+<Step title="Package for streaming">
+
+Write HLS or DASH playlists and fragmented MP4 segments. Keep segment boundaries aligned across qualities so switching is seamless.
+
+</Step>
+<Step title="Serve through a CDN">
+
+Immutable segments, long cache times, an origin shield between edge and storage to collapse duplicate misses.
+
+</Step>
+<Step title="Start fast">
+
+Begin at a low quality, then climb. Preload the next segment. First frame in about 2 seconds beats the first frame in high quality.
+
+</Step>
+<Step title="Count views off the hot path">
+
+A beacon goes to Kafka. Counters aggregate in memory and flush in batches. Showing a number a minute stale is fine.
+
+</Step>
+<Step title="Control cost">
+
+Move old, unpopular videos to cheaper storage. Encode rare qualities only when a viewer asks. Drop the 240p rendition if almost nobody uses it.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Tabs: the resumable upload client, the transcoding plan, the player's quality chooser, and playlist generation.
+
+<CodeTabs files={['snippets/resumable-upload.js', 'snippets/transcode-plan.js', 'snippets/abr.js', 'snippets/manifest.js']} />
+
+- The upload test breaks the connection once and proves every byte is sent exactly once.
+- `planJob()` yields 750 tasks for a 10 minute video; the test also reproduces the 8,681-core estimate.
+- `pickRendition()` tests cover a bandwidth drop, a thin buffer, and one-step upswitching.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Upload connection drops | Creator restarts a big upload | Resumable chunks; resume point on the server |
+| Transcoder dies mid-task | Segment missing | Task lease expires; retry on another worker; same output path |
+| Corrupt source file | Every attempt fails | Cap retries; mark FAILED with a reason; tell the creator |
+| Viral video, cold edge | Origin overloaded | Origin shield; request collapsing; pre-warm |
+| CDN region outage | Viewers there buffer | Fail over to another CDN or region |
+| Queue backs up | Slow time to publish | Autoscale workers; priority lanes for short or paid videos |
+
+## Trade-offs
+
+| Choice | Gain | Cost |
+|---|---|---|
+| Pre-encode all qualities | Instant, simple playback | Storage and CPU for rarely watched videos |
+| Encode on demand | Saves storage | First viewers wait |
+| Short segments (2 s) | Faster adaptation | More requests and overhead |
+| Long segments (10 s) | Fewer requests | Slow to react to a bad network |
+
+<Callout kind="interview" title="What interviewers listen for">
+Resumable direct upload, **parallel idempotent transcoding**, adaptive bitrate chosen by the client, and a CDN doing the heavy lifting with the numbers to prove it.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would live streaming change this?">
+    Segments are made continuously, so encoding must keep up with realtime and playlists update every few seconds.
+  </FollowUp>
+  <FollowUp q="How do you make the first frame appear fast?">
+    Start at a low quality with a small, edge-cached first segment, and open connections early.
+  </FollowUp>
+  <FollowUp q="How do you handle a hot new video?">
+    Pre-warm the edges and add an origin shield so many misses become one fetch.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

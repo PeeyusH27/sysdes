@@ -1,0 +1,12 @@
+This is a small state machine (idle, moving, doors open) whose one interesting decision, "where next?", is a Strategy. The controller moves the car and keeps the calls. A policy only answers two questions about them.
+
+1. **Keep calls as data.** `stops` is a list of `{floor, kind}` in request order, with `kind` `up`, `down` or `car`. Order matters for FCFS, and duplicates are rejected by looking for the same floor and kind. Invalid floors and the impossible buttons (up on the top floor, down on floor 0) never enter the list, so no later code has to defend against them.
+2. **Make the tick the same for every policy.** Each tick asks the policy `serve(car)`: stop here? If yes, the doors open. Otherwise it asks `heading(car)`, moves one floor that way, and asks `serve` again, so arriving and opening happen in one tick. If there is no heading, the car idles. Nothing in `tick()` mentions LOOK or FCFS.
+3. **Write FCFS first, it is tiny.** It serves only `stops[0]` and heads toward it. Reaching its floor clears every call for that floor. It will pass a floor with a pending call and not stop, which is exactly why it zig-zags.
+4. **Write LOOK as three rules.** Stop for a car call or a hall call in the sweep direction. Keep going while any call lies ahead. When nothing lies ahead, also take an opposite hall call at this floor and reverse. Reversing only when nothing lies ahead is what bounds the wait: the car never turns around with work in front of it.
+5. **Handle the idle car as its own case.** With no sweep direction it takes everything at its floor, otherwise it picks the nearest call, the lower floor on a tie. Clearing the direction when a tick finds nothing pending is what makes the next call start a fresh sweep.
+6. **Look the policy up by name.** A `POLICIES` table maps `"look"` and `"fcfs"` to classes. A third policy, such as nearest-stop-first, is a new class with `serve` and `heading` and one new line in the table.
+
+Where the design bends: several cars add a second Strategy above this one, a dispatcher that gives each hall call to exactly one car, usually by lowest route cost with the lowest car id as the tie-break. A door timer or a load sensor becomes extra state in the controller, not in the policies. Displays and lamps would observe the tick result instead of being called from `tick()`.
+
+Cost: each tick scans the pending calls, O(P). With a few dozen calls that is nothing, and the decision logic stays easy to test because time is the tick, not a clock.

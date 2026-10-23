@@ -2,12 +2,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, Check } from "lucide-react";
-import { TRACK_LABEL, type Catalog, type Track } from "@/lib/prep/catalog-types";
+import { TRACK_LABEL, type Catalog, type ReadinessTrack } from "@/lib/prep/catalog-types";
 import { band, readiness, type Skill } from "@/lib/prep/readiness";
 import { useSignals } from "@/lib/prep/use-signals";
 
 /** One round's readiness: a score, and a tile for every skill that makes it up. Click a tile to see why and what next. */
-export function Readiness({ catalog, tracks }: { catalog: Catalog; tracks: Track[] }) {
+export function Readiness({ catalog, tracks }: { catalog: Catalog; tracks: ReadinessTrack[] }) {
   const signals = useSignals();
   const r = useMemo(() => readiness(catalog, signals), [catalog, signals]);
   const [picked, setPicked] = useState<string | null>(null);

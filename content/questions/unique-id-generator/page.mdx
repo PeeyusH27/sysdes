@@ -1,0 +1,193 @@
+import { architecture, pickScheme } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Pack **time, a worker id and a counter** into 64 bits (a Snowflake id) so every server makes unique, roughly time-ordered ids locally, with no network call. The risks are a clock that goes backwards and two servers sharing a worker id.
+</TLDR>
+
+<Requirements
+  functional={["Generate globally unique ids across servers and data centers", "Ids are 64-bit numbers", "Ids sort roughly by creation time", "No central lookup on the hot path"]}
+  nonFunctional={["100K ids a second at peak across the fleet", "Under 1 ms to make an id", "No duplicates, ever, even during failures", "Keeps working if the id registry is briefly down", "Lasts decades"]}
+  outOfScope={["Gapless sequences (invoice numbers with legal rules)", "Hiding how many ids were issued", "Ids that are hard to guess (use random tokens for that)"]}
+/>
+
+## Clarifying questions
+
+- **How big and how sorted?** Must the id fit 64 bits? Must it sort by time, or just be unique?
+- **How many ids, from how many servers?** This sets the bit split.
+- **How strict is "unique"?** One duplicate in a billion is too many for primary keys.
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Demand | 100K ids/s ÷ 20 servers | 5K/s per server |
+| One worker's limit | 4,096 per ms × 1,000 ms | **4.096M/s**, about 800x headroom |
+| Fleet limit | 1,024 workers × 4.096M | 4.19 billion/s |
+| Lifetime | 2^41 ms ÷ (1000 × 3600 × 24 × 365.25) | **69.7 years** from the epoch |
+| Rows | 10B × 8 B (64-bit) | 80 GB of keys |
+| Rows as UUIDs | 10B × 16 B | 160 GB, and bigger indexes |
+
+Demand is tiny next to capacity. The real problems are not speed. They are **clock correctness** and **who owns which worker id**.
+
+## API
+
+Usually a library call inside each service: `nextId()`. A shared service is optional.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/v1/ids?count=100` | Returns ids as **strings**, in increasing order |
+| GET | `/v1/ids/:id` | Decodes time, worker and sequence (debugging) |
+
+JavaScript numbers are exact only up to 2^53 - 1, and these ids go up to 2^63. Send them as strings in JSON, or the last digits change.
+
+## Data model
+
+Nothing about ids is stored. Only leases are.
+
+| Where | Key | Value |
+|---|---|---|
+| etcd | `/workers/17` | owner and a 30 second TTL |
+| Orders table | `id bigint PRIMARY KEY` | the generated id |
+
+```sql
+-- the ticket-server alternative: one row per counter
+CREATE TABLE tickets (id smallint PRIMARY KEY, next bigint NOT NULL);
+UPDATE tickets SET next = next + 1000 WHERE id = 1 RETURNING next - 1000 AS first;
+```
+
+## Architecture
+
+Each server makes its own ids. The only shared piece is the lease registry, used at boot and every ten seconds after. Play **Boot and first id**, **4,097 ids in one millisecond**, **Clock moves backwards** and **Lease lost**.
+
+<FlowDiagram spec={architecture} />
+
+## The Snowflake layout
+
+Split 64 bits into fields. The top field is time, so ids sort by time. The worker field stops two servers colliding. The sequence field separates ids made in the same millisecond.
+
+<StatTiles items={[{ label: "Sign", value: "1 bit", sub: "always 0" }, { label: "Time", value: "41 bits", sub: "69.7 years of ms" }, { label: "Worker", value: "10 bits", sub: "1,024 servers" }, { label: "Sequence", value: "12 bits", sub: "4,096 per ms" }]} />
+
+Use a **custom epoch** (2026 here), not 1970, so the 41 bits last until about 2095.
+
+## Clocks, workers and failure
+
+Uniqueness depends on two promises. **Time never repeats for one worker**: if the clock steps back, wait out a few milliseconds, but refuse and alert on a big step. **No two live servers share a worker id**: lease ids with a TTL, and stop issuing a few seconds before the lease ends.
+
+Ids are only roughly ordered across servers, because clocks differ by milliseconds. Do not use them to decide which event happened first.
+
+## Choosing a scheme
+
+Pick by constraints, not by habit. Click through the tree.
+
+<DecisionTree spec={pickScheme} />
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    64 bits? Sorted? How many ids, how strict?
+  </Step>
+  <Step title="Estimate">
+    5K ids a second per server against 4.1M of capacity.
+  </Step>
+  <Step title="Compare schemes">
+    Auto-increment, UUID, ticket server, Snowflake.
+  </Step>
+  <Step title="Design the bits">
+    41 time, 10 worker, 12 sequence.
+  </Step>
+  <Step title="Failure">
+    Clock skew, worker leases, sequence overflow.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="Rule out the easy answers">
+
+A database auto-increment is one machine and a round trip per id. A random UUID is 128 bits, unordered, and scatters inserts across the index.
+
+</Step>
+<Step title="Spend the bits">
+
+1 sign, 41 time, 10 worker, 12 sequence. Say what each buys: order, no collisions, throughput.
+
+</Step>
+<Step title="Generate locally">
+
+Read the clock, bump the sequence in the same millisecond, wait for the next one if it overflows. No network call.
+
+</Step>
+<Step title="Assign worker ids safely">
+
+Lease ids from etcd or ZooKeeper with a TTL. Renew often, and stop early when a renewal fails.
+
+</Step>
+<Step title="Defend against the clock">
+
+Wait out tiny backward steps. Refuse large ones, alert, and fail over. Keep NTP healthy with slewing rather than stepping.
+
+</Step>
+<Step title="Mention the alternatives">
+
+Ticket servers with blocks and odd and even machines; UUID v7 when 128 bits is fine and you want no coordination.
+
+</Step>
+<Step title="Show the gotchas">
+
+Ids as strings in JSON; gaps after crashes are normal; ids are roughly, not strictly, ordered across servers.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Tabs: the Snowflake generator, a ticket server with block allocation, UUID v7, and the worker lease registry.
+
+<CodeTabs files={['snippets/snowflake.js', 'snippets/ticket-server.js', 'snippets/uuid7.js', 'snippets/worker-registry.js']} />
+
+- The Snowflake tests check the layout numbers (69.7 years, 4,096 per ms, 1,024 workers), the sequence overflow wait, and the clock-back cases.
+- The ticket test shows 1 million ids cost 1,000 round trips, and a crash leaves gaps, never duplicates.
+- The registry test shows an id reused only after its lease expires.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Clock steps back | Duplicate ids | Wait out small steps; refuse big ones; alert |
+| Two servers share a worker id | Duplicate ids | Leases with TTL; stop before expiry |
+| Registry (etcd) is down | New servers cannot start | Running servers keep their lease margin; cache the id on disk |
+| Sequence overflow | Would repeat an id | Wait for the next millisecond |
+| Server crashes | Unused ids lost | Gaps are fine |
+| Epoch runs out | Ids overflow in decades | Choose the epoch; plan a format change |
+
+## Trade-offs
+
+| Choice | Gain | Cost |
+|---|---|---|
+| Snowflake | 64 bits, local, ordered | Needs worker ids and good clocks |
+| UUID v4 | No coordination | 128 bits, random inserts |
+| UUID v7 | Sortable, no coordination | 128 bits |
+| Ticket server | Simple, strictly ordered | Single point of contention, round trips |
+
+<Callout kind="interview" title="What interviewers listen for">
+The **bit layout with numbers**, what happens when the clock moves backwards, how worker ids are assigned safely, and why order across servers is only approximate.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What if the sequence overflows?">
+    Wait for the next millisecond. 4,096 per ms per worker is far above real demand; if not, add worker bits.
+  </FollowUp>
+  <FollowUp q="Are the ids strictly ordered?">
+    No. Within one worker yes; across workers only to clock accuracy. Use a log or database sequence if you need strict order.
+  </FollowUp>
+  <FollowUp q="How do you handle data centers?">
+    Split the 10 worker bits, for example 5 for the data center and 5 for the machine, or just lease from one global registry.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

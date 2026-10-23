@@ -1,7 +1,7 @@
 {
   "title": "Min Stack",
   "difficulty": "Medium",
-  "patterns": ["stack"],
+  "patterns": ["stack", "design-data-structures"],
   "js": ["classes", "stack-queue-deque"],
   "order": 3,
   "summary": "Build a stack that also reports its current minimum in O(1), even after pops.",

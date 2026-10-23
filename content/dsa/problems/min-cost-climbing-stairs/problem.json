@@ -1,0 +1,26 @@
+{
+  "title": "Min Cost Climbing Stairs",
+  "difficulty": "Easy",
+  "patterns": ["dp-1d"],
+  "js": ["arrays","numbers-math"],
+  "order": 2,
+  "summary": "Find the cheapest way to climb past the top of a staircase when every step you stand on has a price.",
+  "fn": "minCostClimbingStairs",
+  "params": ["cost"],
+  "types": {"params":["number[]"],"returns":"number"},
+  "tests": [
+    {"args":[[10,15,20]],"expected":15,"explain":"Start on step 1 (index 1), pay 15, and jump two steps to the top."},
+    {"args":[[1,100,1,1,1,100,1,1,100,1]],"expected":6,"explain":"Step on the 1s and skip every 100 by jumping over it: 1 + 1 + 1 + 1 + 1 + 1 = 6."},
+    {"args":[[0,0]],"expected":0,"explain":"Free steps cost nothing."},
+    {"args":[[5,5]],"expected":5},
+    {"args":[[7,1]],"expected":1},
+    {"args":[[1,2,3]],"expected":2},
+    {"args":[[0,2,2,1]],"expected":2},
+    {"args":[[100,1,100,1,100]],"expected":2},
+    {"args":[[22,22,19,42,2,8,22,19,25,45,46,42,46,12,5,17,2,24,32,20]],"expected":208},
+    {"args":[[745,183,857,56,583,431,170,755,350,975,394,386,169,205,773,297,296,339,665,246,24,78,601,696,897,698,832,235,638,435,627,562,111,741,566,527,643,503,233,800,206,428,871,231,45]],"expected":7962},
+    {"args":[[2,13,3,18,5,6,1,12,2,9,20,16,8,15,20,7,10,16,6,0,4,0,11,0,5,19,15,10,19,9,10,16,7,10,14,19,7,13,18,5,15,7,14,15,2,18,1,0,20,12,16,7,13,20,20,6,14,19,9,18]],"expected":262}
+  ],
+  "hints": ["Standing on step i costs cost[i], and from there you may move up 1 or 2 steps. The top is the position just past the last step, and you may start on step 0 or step 1.","Let best[i] be the minimum cost to arrive at position i (before paying for step i). You arrive at i from i - 1 (paying cost[i-1]) or from i - 2 (paying cost[i-2]).","best[0] = best[1] = 0, and best[i] = min(best[i-1] + cost[i-1], best[i-2] + cost[i-2]). The answer is best[n]. Only the last two values matter, so two variables are enough."],
+  "complexity": {"time":"O(n): one pass","space":"O(1): two rolling variables"}
+}

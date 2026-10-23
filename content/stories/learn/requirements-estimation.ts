@@ -33,6 +33,39 @@ const flow: FlowSpec = {
 };
 
 export const story: Story | undefined = {
+  learn: [
+    {
+      head: "What requirements are",
+      body: "Requirements are what the system must do and how well. Features like post a photo are the what. Targets like pages load in under 200 ms are the how well.",
+      eg: "Ordering a birthday cake",
+      example: "Before baking, the baker asks how many guests, which flavour and when. A cake for 8 and a cake for 200 need different ovens, not just more icing.",
+      doodle: "microservices",
+    },
+    {
+      head: "Why size it before drawing",
+      body: "The size of the load decides the design. One server copes with a few hundred requests a second. Tens of thousands need a fleet, a cache and copies of the data.",
+      eg: "Planning a party",
+      example: "Ten friends fit in your flat with one pizza order. Five hundred guests need a hall, caterers and parking. You count heads before you book anything.",
+    },
+    {
+      head: "Turning users into requests",
+      body: "Multiply daily users by the actions each one takes, then divide by 86,400, the seconds in a day. That is the average load. The busiest hour is about three times higher.",
+      eg: "A coffee shop's morning rush",
+      example: "A shop serves 500 coffees a day, but most of them between 8 and 9. It staffs for that rush hour, not for the daily average.",
+    },
+    {
+      head: "Reads and writes differ",
+      body: "Most apps are read far more than they are written. Count each path on its own. The busy path gets the cache and the copies; the quiet one may need nothing.",
+      eg: "A photo app",
+      example: "One person posts a photo once. Hundreds of followers scroll past it. Uploads stay small while feed reads are about fifty times larger.",
+    },
+    {
+      head: "Round, say it, move on",
+      body: "You want the right order of magnitude, not exact maths. Round 86,400 to 100,000, say the result aloud, and end every number with so we need.",
+      eg: "Estimating a road trip",
+      example: "Five hundred kilometres at about 100 an hour is roughly five hours. Nobody works out the minutes to decide when to leave.",
+    },
+  ],
   steps: [
     {
       tag: "pain",

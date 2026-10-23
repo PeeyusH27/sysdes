@@ -7,6 +7,39 @@ import type { Story } from "../types";
 const queue = getPrimer("queue")!.flow;
 
 export const story: Story | undefined = {
+  learn: [
+    {
+      head: "What a queue is",
+      body: "A queue is a waiting line for jobs. The app drops a note describing the work and answers the user at once. A separate worker picks notes up and does the work later.",
+      eg: "A restaurant order rail",
+      example: "The waiter clips your order on the kitchen rail and goes back to the tables. Cooks take tickets one by one. Nobody stands at the stove waiting.",
+      doodle: "queue",
+    },
+    {
+      head: "Why not do it right away",
+      body: "Slow or flaky work makes the user wait and can fail the whole request. On a queue, the user gets a fast answer, and the work is retried if it fails.",
+      eg: "Posting a letter",
+      example: "You drop a letter in the postbox and walk away. You do not wait at the box until it is delivered, and a missed collection just means the next one.",
+    },
+    {
+      head: "A queue soaks up spikes",
+      body: "When work arrives faster than workers can handle, the line grows instead of anything breaking. Workers keep a steady pace and catch up when the rush ends.",
+      eg: "A ticket machine at the deli",
+      example: "At lunch, twenty people take numbers at once. The counter still serves one at a time, and the line shrinks again by two o'clock.",
+    },
+    {
+      head: "The catch: a job can run twice",
+      body: "If a worker crashes before saying done, the queue hands the job out again. Make each job safe to repeat, for example by skipping ids you have already seen.",
+      eg: "A dry-cleaning ticket",
+      example: "Bring the same ticket twice and the shop checks its book. It hands the shirt over once and tells you the second time it was already collected.",
+    },
+    {
+      head: "When to keep it direct",
+      body: "If the user needs the answer to carry on, keep it in the request. Was my card accepted stays direct. The receipt email can go on a queue.",
+      eg: "Paying at a shop till",
+      example: "You wait to see the card machine say approved before you leave. The emailed receipt can arrive a minute later, and nobody waits for it.",
+    },
+  ],
   steps: [
     {
       tag: "pain",

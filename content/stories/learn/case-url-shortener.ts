@@ -54,6 +54,39 @@ const flow: FlowSpec = {
 };
 
 export const story: Story | undefined = {
+  learn: [
+    {
+      head: "What a URL shortener does",
+      body: "It swaps a long web address for a short code, then sends anyone who opens the code to the long address. That forward step is called a redirect.",
+      eg: "A coat check ticket",
+      example: "You hand over a bulky coat and get a small numbered ticket. Showing the ticket later brings back exactly that coat.",
+    },
+    {
+      head: "Far more clicks than links",
+      body: "A link is created once but clicked again and again. About 40 new links a second turn into 4,000 redirects a second, so reading is the real load.",
+      eg: "A shared party invite",
+      example: "One person writes the invite link, then posts it in a group of hundreds. Everyone taps it, many more than once.",
+      doodle: "cache",
+    },
+    {
+      head: "Where short codes come from",
+      body: "A counter hands out numbers in order, written with 62 symbols: digits and lower and upper case letters. Seven symbols give 3.5 trillion codes, more than enough.",
+      eg: "Deli ticket numbers",
+      example: "The machine at a deli counter prints the next number for each customer. Two people never get the same one, and nobody has to check.",
+    },
+    {
+      head: "Keep popular links close",
+      body: "Hot links are kept in a fast memory cache, so most clicks never reach the database. Only links nobody has opened lately need a database lookup.",
+      eg: "Speed dial on a phone",
+      example: "You save the five numbers you call most on speed dial. For anyone else you search your full contact list, which takes longer.",
+    },
+    {
+      head: "Count clicks off to the side",
+      body: "Analytics must never slow a redirect. Each click drops a small note on a queue, and a separate worker adds them up later.",
+      eg: "A turnstile counter",
+      example: "A stadium turnstile clicks a counter as each person passes. Nobody stops at the gate to fill in a form.",
+    },
+  ],
   steps: [
     {
       tag: "pain",

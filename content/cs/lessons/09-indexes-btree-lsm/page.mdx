@@ -1,0 +1,112 @@
+import { btreeLookup, lsmPaths } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+An index is a sorted copy of some columns that turns a full scan into a few page reads, paid for with slower writes and more space. **B-trees** update pages in place; **LSM-trees** turn writes into sequential appends and pay on reads and in compaction.
+</TLDR>
+
+## What an index is and what it costs
+
+Without an index, finding one row means scanning the table. An **index** is a sorted structure from key to row location, so a lookup takes about log(n) steps instead of n.
+
+Every write must also update each index, and indexes take disk and memory. Index the columns you filter, join and sort on, and no more. More in [the HLD path](/learn/databases-scaling).
+
+<Callout kind="interview" title="What interviewers listen for">
+You say what an index costs before what it gains, why column order matters, and that you check the plan.
+</Callout>
+
+## B-trees
+
+A **B-tree** (in practice a B+tree) stores keys in pages of 8 to 16 KiB. Each internal page holds hundreds of keys and child pointers, so the tree is wide and shallow: with about 300 keys per page, three levels reach 27 million rows and four reach 8 billion.
+
+<FlowDiagram spec={btreeLookup} />
+
+A lookup reads one page per level, and the top levels sit in memory. Leaf pages are linked in order, so a range scan walks along them. A full page **splits** in two. Writes change pages in place, so they are random I/O.
+
+## LSM-trees
+
+An **LSM-tree** never updates in place. A write is appended to a log and inserted into a sorted in-memory table (the memtable), which is flushed as an immutable sorted file when full. A read checks memory, then files newest to oldest; **Bloom filters** skip files that cannot hold the key.
+
+<FlowDiagram spec={lsmPaths} />
+
+Background **compaction** merges files and keeps the newest version of each key. A delete is a **tombstone** that hides older values until compaction removes both.
+
+<CodeTabs files={['snippets/lsm.js', 'snippets/lsm.test.js']} />
+
+RocksDB, LevelDB, Cassandra and HBase work this way.
+
+## B-tree or LSM: read and write cost
+
+Both pay somewhere. A B-tree rewrites a whole page for a small change. An LSM-tree makes writes sequential, but a read may touch several files and compaction rewrites data later.
+
+<IndexCostLab />
+
+| | B-tree | LSM-tree |
+|---|---|---|
+| Point read | A few pages, predictable | Several files, helped by Bloom filters |
+| Write | Random in-place page writes | Sequential appends, compaction later |
+| Best for | Read-heavy, range scans, OLTP | Write-heavy, ingest, time series |
+
+## Composite and covering indexes
+
+A **composite index** on (a, b, c) is sorted by a, then b within a, then c within b. It narrows a search using equality on a leading run of columns plus one range column after. That is the **leftmost-prefix rule**: a filter on b alone cannot use it.
+
+<CodeTabs files={['snippets/leftmost-prefix.js', 'snippets/leftmost-prefix.test.js']} />
+
+Put equality columns first, the range column last. A **covering index** holds every column the query needs, so the answer comes from the index alone (an index-only scan).
+
+## Reading a query plan
+
+Ask the database how it will run a query, and then how it did.
+
+```sql
+EXPLAIN ANALYZE
+SELECT status, created_at FROM orders
+WHERE user_id = 42 AND status = 'paid';
+```
+
+```text
+Index Only Scan using orders_user_status_idx on orders
+  (cost=0.43..8.45 rows=3) (actual time=0.03..0.04 rows=3 loops=1)
+```
+
+Read the scan type: a **sequential scan** reads the whole table, an **index scan** follows the index and fetches rows, an **index-only scan** fetches none. A big gap between estimated and actual rows means stale statistics. Wording differs by database.
+
+## When an index does not help
+
+- **Low selectivity.** If a query matches a large share of the rows (a boolean column, for example), reading the table in order is cheaper than jumping around, so the planner scans.
+- **A function on the column.** `WHERE lower(email) = ...` cannot use a plain index on `email`; index the expression.
+- **A leading wildcard.** `LIKE '%abc'` cannot use the sorted order.
+- **A type mismatch**, or an `OR` across different columns.
+- **Tiny tables.** Scanning a few pages is faster than any index.
+
+<Callout kind="warning" title="Every index is a write tax">
+A table with ten indexes does eleven writes per insert. Drop unused indexes, and never add one only because a query is slow without checking the plan.
+</Callout>
+
+## Other index types
+
+- **Hash index.** Equality only, no ranges.
+- **Inverted index (GIN).** Words or JSON keys to rows, for full-text search.
+- **Spatial (GiST, R-tree).** Nearby points and boxes.
+- **Clustered versus secondary.** In InnoDB the table is stored in primary-key order, and a secondary index stores the primary key, so a secondary lookup is two tree walks.
+- **Partial index.** Index only the rows you query, such as `WHERE status = 'open'`.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What does an index cost?">
+    Every insert, update and delete also updates each index, and indexes use disk and memory. It speeds reads that match its sort order and slows writes.
+  </FollowUp>
+  <FollowUp q="B-tree or LSM-tree for a write-heavy workload?">
+    An LSM-tree: writes are sequential appends. The price is read amplification, softened by Bloom filters, and background compaction. Read-heavy OLTP with range scans suits a B-tree.
+  </FollowUp>
+  <FollowUp q="How do you order a composite index?">
+    Equality columns first, then the range column, because the index narrows on a leading run of equalities and one range.
+  </FollowUp>
+  <FollowUp q="Why might the planner ignore your index?">
+    The query matches too many rows, statistics are stale, the table is tiny, or a function or leading wildcard is applied to the column.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

@@ -1,0 +1,27 @@
+{
+  "title": "Distinct Subsequences",
+  "difficulty": "Hard",
+  "patterns": ["dp-2d"],
+  "js": ["strings","arrays"],
+  "order": 7,
+  "summary": "Count the ways to pick characters from s, in order, that spell out t.",
+  "fn": "numDistinct",
+  "params": ["s","t"],
+  "types": {"params":["string","string"],"returns":"number"},
+  "tests": [
+    {"args":["rabbbit","rabbit"],"expected":3,"explain":"Drop any one of the three b's from \"rabbbit\": 3 ways to spell \"rabbit\"."},
+    {"args":["babgbag","bag"],"expected":5,"explain":"There are 5 ways to pick a b, then an a, then a g in order."},
+    {"args":["abc",""],"expected":1,"explain":"The empty string can be formed in exactly one way: pick nothing."},
+    {"args":["","a"],"expected":0},
+    {"args":["a","a"],"expected":1},
+    {"args":["a","b"],"expected":0},
+    {"args":["aaa","aa"],"expected":3},
+    {"args":["abc","abcd"],"expected":0},
+    {"args":["aabb","ab"],"expected":4},
+    {"args":["aabbabbababbaaaaabbbaaba","abab"],"expected":778},
+    {"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","aaaaaaaaaaaa"],"expected":86493225},
+    {"args":["baccaabbabbbbaaacbccaaacbbbaacabbabccbbc","abcab"],"expected":4354}
+  ],
+  "hints": ["A subsequence keeps the original order but may skip characters. Different sets of chosen positions count as different ways, even when they spell the same text.","Let dp[i][j] be the number of ways to form the first j characters of t from the first i characters of s. Look at the last character s[i-1]: you may always skip it, and if it equals t[j-1] you may also use it.","dp[i][j] = dp[i-1][j] + (s[i-1] === t[j-1] ? dp[i-1][j-1] : 0). Base cases: dp[i][0] = 1 (the empty t can be formed one way) and dp[0][j] = 0 for j > 0. The answer is dp[m][n]; one row, filled right to left, is enough."],
+  "complexity": {"time":"O(m * n) for the table","space":"O(n) with a single row"}
+}

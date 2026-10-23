@@ -1,0 +1,26 @@
+{
+  "title": "Contains Duplicate",
+  "difficulty": "Easy",
+  "patterns": ["hashing"],
+  "js": ["map-set","arrays"],
+  "order": 1,
+  "summary": "Decide whether any value appears more than once in an array.",
+  "fn": "containsDuplicate",
+  "params": ["nums"],
+  "types": {"params":["number[]"],"returns":"boolean"},
+  "tests": [
+    {"args":[[1,2,3,1]],"expected":true,"explain":"1 appears at index 0 and index 3."},
+    {"args":[[1,2,3,4]],"expected":false,"explain":"Every value is different."},
+    {"args":[[4,4,4,4]],"expected":true,"explain":"Only one distinct value, repeated: the first repeat is found at index 1."},
+    {"args":[[7]],"expected":false},
+    {"args":[[-1,-2,-3,-1]],"expected":true},
+    {"args":[[0,0]],"expected":true},
+    {"args":[[0,0,1]],"expected":true},
+    {"args":[[1000000000,-1000000000,1000000000]],"expected":true},
+    {"args":[[-40,-37,-34,-31,-28,-25,-22,-19,-16,-13,-10,-7,-4,-1,2,5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59,62,65,68,71,74,77,80,83,86,89,92,95,98,101,104,107]],"expected":false},
+    {"args":[[-40,-37,-34,-31,-28,-25,-22,-19,-16,-13,-10,-7,-4,-1,2,5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59,62,65,68,71,74,77,80,-19,86,89,92,95,98,101,104,107]],"expected":true},
+    {"args":[[23,60,216,180,702,76,-840,61,216,-99,-40,687,-160,341,363,-679,-643,-448,-208,-246,165,-745,194,153,-163,689,611,538,-365,246,-497,-888,482,956,-407,-707,487,-306,107,153]],"expected":true}
+  ],
+  "hints": ["The brute force compares every pair of elements. What do you need to remember about the elements you have already seen to avoid that?","You only need to know whether a value has been seen before, not where or how often: a Set answers exactly that in O(1).","Walk the array once. If the current value is already in the set, return true; otherwise add it. If the loop ends, return false."],
+  "complexity": {"time":"O(n): one pass with O(1) set lookups","space":"O(n): the set can hold every value"}
+}

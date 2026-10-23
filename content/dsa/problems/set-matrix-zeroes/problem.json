@@ -1,0 +1,43 @@
+{
+  "title": "Set Matrix Zeroes",
+  "difficulty": "Medium",
+  "patterns": [
+    "matrix"
+  ],
+  "js": [
+    "arrays"
+  ],
+  "order": 4,
+  "summary": "If a cell holds 0, set its whole row and whole column to 0, doing the update inside the grid itself.",
+  "fn": "setZeroes",
+  "params": [
+    "matrix"
+  ],
+  "types": {
+    "params": [
+      "number[][]"
+    ],
+    "returns": "void"
+  },
+  "inPlace": 0,
+  "tests": [
+    {"args":[[[1,1,1],[1,0,1],[1,1,1]]],"expected":[[1,0,1],[0,0,0],[1,0,1]],"explain":"The zero in the middle clears its row and its column, leaving only the four corners."},
+    {"args":[[[0,1,2,0],[3,4,5,2],[1,3,1,5]]],"expected":[[0,0,0,0],[0,4,5,0],[0,3,1,0]],"explain":"Two zeroes in the top row clear columns 0 and 3, and the whole top row."},
+    {"args":[[[1,2],[3,4]]],"expected":[[1,2],[3,4]],"explain":"No zero means nothing changes."},
+    {"args":[[[0]]],"expected":[[0]]},
+    {"args":[[[1,0,3]]],"expected":[[0,0,0]]},
+    {"args":[[[5],[0],[7]]],"expected":[[0],[0],[0]]},
+    {"args":[[[1,2,0],[4,5,6],[7,0,9]]],"expected":[[0,0,0],[4,0,0],[0,0,0]]},
+    {"args":[[[0,0],[0,0]]],"expected":[[0,0],[0,0]]},
+    {"args":[[[1,2,3],[0,5,6],[7,8,9]]],"expected":[[0,2,3],[0,0,0],[0,8,9]]},
+    {"args":[[[1,0,3],[4,5,6],[7,8,9]]],"expected":[[0,0,0],[4,0,6],[7,0,9]]},
+    {"args":[[[7,6,4,8,3,2],[8,4,-3,8,-1,-6],[-3,0,-6,5,0,4],[-8,-4,-4,9,-6,-3],[6,2,3,-6,2,1]]],"expected":[[7,0,4,8,0,2],[8,0,-3,8,0,-6],[0,0,0,0,0,0],[-8,0,-4,9,0,-3],[6,0,3,-6,0,1]]},
+    {"args":[[[9,-9,-8,3,4,6],[4,-7,4,-3,-3,7],[0,1,1,5,6,1],[6,0,2,-6,7,-9],[-8,-7,-6,6,7,6],[9,9,5,8,-8,-3]]],"expected":[[0,0,-8,3,4,6],[0,0,4,-3,-3,7],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,-6,6,7,6],[0,0,5,8,-8,-3]]}
+  ],
+  "hints": [
+    "Zeroing a row or column the moment you find a 0 is a trap: the new zeroes look like original zeroes to the rest of your scan.",
+    "First record which rows and columns must be cleared, then clear them. Extra arrays of flags work, but try to use the grid's own first row and first column as the flags.",
+    "Keep two booleans for whether the first row and the first column themselves held a zero. Mark with matrix[i][0] and matrix[0][j] for the inner cells, apply the marks to the inner cells, and only then clear the first row and column if needed."
+  ],
+  "complexity": {"time":"O(rows * columns)","space":"O(1) using the first row and column as markers"}
+}

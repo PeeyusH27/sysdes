@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildCatalog, type Track } from "@/lib/prep/catalog";
 import { mockScore, pickMock, type MockResult } from "@/lib/prep/mock";
 import { buildPlan, doNext, sharesFor, weeksLeft } from "@/lib/prep/plan";
+import { patterns as registryPatterns } from "@content/dsa/registry";
 import { band, emptySignals, readiness, READY_AT, weakest, type Signals } from "@/lib/prep/readiness";
 
 const c = buildCatalog();
@@ -20,11 +21,13 @@ function masterPattern(slug: string): Signals {
 }
 
 describe("catalog", () => {
-  it("covers every pattern with problems, every lesson with exercises, and the three LLD classics", () => {
-    expect(c.patterns).toHaveLength(22);
+  it("covers every pattern with problems, every lesson with exercises, and the LLD classics", () => {
+    expect(c.patterns).toHaveLength(registryPatterns.length);
     for (const p of c.patterns) expect(p.problems.length, p.slug).toBeGreaterThanOrEqual(4);
     expect(c.lldLessons.filter((l) => l.exercises.length > 0).length).toBeGreaterThanOrEqual(5);
-    expect(c.questions.filter((q) => q.lld)).toHaveLength(3);
+    const classics = c.questions.filter((q) => q.lld);
+    expect(classics.length).toBeGreaterThanOrEqual(3);
+    for (const q of classics) expect(q.exercises.length, `${q.slug} has an exercise`).toBeGreaterThan(0);
     expect(c.exercises.every((e) => e.key.startsWith("lld:"))).toBe(true);
   });
 });
@@ -36,8 +39,8 @@ describe("readiness", () => {
       expect(r[t].score).toBe(0);
       expect(r[t].skills.every((k) => k.next), t).toBe(true);
     }
-    expect(r.dsa.skills).toHaveLength(22);
-    expect(r.lld.skills).toHaveLength(9);
+    expect(r.dsa.skills).toHaveLength(registryPatterns.length);
+    expect(r.lld.skills).toHaveLength(c.lldLessons.length + c.questions.filter((q) => q.lld).length);
   });
 
   it("a fully practised pattern is interview-ready and has no next step", () => {
@@ -212,5 +215,24 @@ describe("bundle safety", () => {
         return importsBuilder && (/^"use client"/.test(src) || /lib\/prep\/(plan|mock|readiness|mock-store|use-signals)\.tsx?$/.test(f));
       });
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("CS fundamentals readiness", () => {
+  it("is a readiness-only track: one read-and-quiz skill per lesson, not offered to the plan or the mock", () => {
+    const r = readiness(c, none).cs;
+    expect(r.skills).toHaveLength(c.csLessons.length);
+    expect(r.skills.every((k) => k.track === "cs" && k.href.startsWith("/cs/") && k.next)).toBe(true);
+    expect(ALL).not.toContain("cs");
+  });
+
+  it("a lesson that is read and quizzed perfectly is interview-ready", () => {
+    const l = c.csLessons[0];
+    const s = emptySignals();
+    s.done[`/cs/${l.slug}`] = 1;
+    s.quiz[`/cs/${l.slug}`] = 1;
+    const k = readiness(c, s).cs.skills.find((x) => x.id === `cs:${l.slug}`)!;
+    expect(k.score).toBe(100);
+    expect(k.next).toBeNull();
   });
 });

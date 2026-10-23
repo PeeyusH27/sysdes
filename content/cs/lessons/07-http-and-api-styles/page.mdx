@@ -1,0 +1,94 @@
+import { conditionalGet, apiChoice } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+HTTP gives you methods with promises (safe, idempotent), status codes, and caching through `Cache-Control` and ETags. **REST** is resources over HTTP, **gRPC** is typed binary calls over HTTP/2, and **GraphQL** lets the client choose the fields; each fixes one problem and brings its own.
+</TLDR>
+
+## HTTP semantics that interviews probe
+
+Methods carry promises that clients, caches and retries rely on. **Safe** means it does not change anything; **idempotent** means doing it twice leaves the same state as doing it once.
+
+| Method | Safe | Idempotent |
+|---|---|---|
+| GET | yes | yes |
+| PUT, DELETE | no | yes |
+| POST | no | no |
+
+`PATCH` is not guaranteed idempotent. Status classes: 2xx worked, 3xx look elsewhere, 4xx the client erred (401 not logged in, 403 not allowed, 404 missing, 409 conflict, 429 slow down), 5xx the server erred (502 and 504: a gateway got a bad or no answer upstream).
+
+<Callout kind="interview" title="What interviewers listen for">
+You tie each method to a retry rule: GET, PUT and DELETE are safe to retry, POST needs an idempotency key. You pick the right 4xx, and you separate "the client was wrong" from "the server failed".
+</Callout>
+
+## Caching and conditional requests
+
+`Cache-Control: max-age=60` lets the browser reuse a response for 60 seconds with no request. After that it **revalidates**: it sends the `ETag` it saved as `If-None-Match`, and an unchanged resource answers `304` with no body.
+
+<SequenceDiagram spec={conditionalGet} />
+
+<CodeTabs files={['snippets/etag.js', 'snippets/etag.test.js']} />
+
+A 304 saves the bytes, not the round trip. Use `max-age` for things that change rarely, and `no-store` for private data.
+
+## REST: resources and verbs
+
+REST models the API as **resources** (nouns with URLs) acted on by HTTP verbs: `GET /orders/42`, `POST /orders`. Requests are **stateless**: each carries everything the server needs, so any instance can answer. That is what makes REST easy to cache, load balance and debug.
+
+Its weaknesses are chattiness (several round trips for one screen) and fixed response shapes. More in [the HLD path](/learn/api-load-balancing).
+
+## gRPC: typed contracts over HTTP/2
+
+gRPC defines services in a `.proto` file, generates client and server code, and sends compact binary **protobuf** over HTTP/2. It supports unary calls and server, client and bidirectional streaming, and every call carries a **deadline** that propagates through the chain of services.
+
+It shines between internal services. The costs: browsers need a proxy (gRPC-Web), payloads are not human-readable, and URL-based caching is lost.
+
+## GraphQL: ask for exactly what you need
+
+GraphQL exposes one endpoint and a typed schema. The client sends a query naming the fields it wants, so a phone screen and a dashboard each get their own shape from one API, with one round trip.
+
+The classic trap is **N+1**: a list of 100 posts, and each post's author field runs its own query. A loader batches every lookup in the same tick into one call.
+
+<CodeTabs files={['snippets/dataloader.js', 'snippets/dataloader.test.js']} />
+
+Also plan for query cost and depth limits, per-field authorization, and caching (everything is a POST to one URL, so cache by object ID in the client instead).
+
+## Choosing between them
+
+<DecisionTree spec={apiChoice} />
+
+## Idempotency and retries
+
+Networks fail after the server has acted but before the client hears. The client cannot tell, so it retries. For GET, PUT and DELETE that is safe. For `POST /payments` it can charge twice.
+
+The fix is an **idempotency key**: the client sends a unique `Idempotency-Key` header, and the server stores the result under that key and returns it for any repeat. Pair retries with exponential backoff and jitter, and only retry on errors that are plausibly transient (timeouts, 502, 503, 504, 429 with `Retry-After`).
+
+## Errors, versioning and pagination
+
+- **Errors.** Return a consistent body (a code, a message, a request ID) with the right status. Never return 200 with an error inside.
+- **Versioning.** Prefer additive changes. When you must break, version in the URL (`/v2/orders`) or a header, and keep the old one alive until clients move.
+- **Pagination.** Offset pagination skips and duplicates rows when data changes and gets slow on deep pages. **Cursor** pagination ("after this id") is stable and fast.
+- **Rate limits.** Answer 429 with `Retry-After` so well-behaved clients back off.
+
+<Callout kind="warning" title="GraphQL and gRPC are not upgrades">
+Both add tooling, a schema to evolve and failure modes (N+1, deadline propagation, proxies). Pick one for the problem it solves, not because it sounds modern.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="Which HTTP methods are idempotent, and why does it matter?">
+    GET, PUT, DELETE (and HEAD, OPTIONS) are idempotent. It matters because clients and proxies may retry them after a timeout. POST is not, so it needs an idempotency key.
+  </FollowUp>
+  <FollowUp q="How does HTTP caching work?">
+    Cache-Control says how long a response is fresh. When stale, the client revalidates with If-None-Match and the server returns 304 if the ETag still matches.
+  </FollowUp>
+  <FollowUp q="REST or gRPC for internal services?">
+    gRPC for latency-sensitive, high-volume or streaming calls where both ends are your code. REST where humans, browsers or partners call it, or where HTTP caching matters.
+  </FollowUp>
+  <FollowUp q="What is the N+1 problem in GraphQL and how do you fix it?">
+    A list resolver triggers one query per item for a nested field. Batch the lookups with a loader so the whole list costs one query.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

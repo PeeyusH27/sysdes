@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { ArrowRight, Timer } from "lucide-react";
-import { TRACKS, type Catalog } from "@/lib/prep/catalog-types";
+import { TRACKS, type Catalog, type ReadinessTrack } from "@/lib/prep/catalog-types";
 import { mockScore } from "@/lib/prep/mock";
 import { useMock } from "@/lib/prep/mock-store";
 import { useProgress } from "@/lib/progress";
@@ -13,7 +13,8 @@ export function PlanClient({ catalog }: { catalog: Catalog }) {
   const hydrated = useHydrated();
   const plan = useProgress((s) => s.plan);
   const history = useMock((s) => s.history);
-  const tracks = hydrated && plan ? plan.rounds : TRACKS;
+  // The fundamentals map is always shown: it is not a round you can plan or mock.
+  const tracks: ReadinessTrack[] = [...(hydrated && plan ? plan.rounds : TRACKS), "cs"];
   return (
     <div className="container hub" data-track="sd">
       <header className="page-head hub-head">

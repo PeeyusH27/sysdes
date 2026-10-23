@@ -3,6 +3,7 @@
 import { deepDives, learnSteps, questions } from "@content/registry";
 import { patterns } from "@content/dsa/registry";
 import { lldLessons, questionExercises } from "@content/lld/registry";
+import { csLessons } from "@content/cs/registry";
 import { isLowLevel, questionLabel } from "@content/home";
 import { getExtras } from "@content/extras";
 import { challenges } from "@/components/playground/challenges";
@@ -61,6 +62,7 @@ export function buildCatalog(): Catalog {
       minutes: l.minutes,
       exercises: loadExercises().filter((e) => e.meta.patterns.includes(l.slug)).map(exerciseItem),
     })),
+    csLessons: csLessons.map((l) => ({ slug: l.slug, title: l.title, short: l.short, group: l.group, minutes: l.minutes })),
     exercises,
     challenges: challenges.map((c) => ({ slug: c.slug, title: c.title, missionSteps: getMission(c.slug)?.steps.length ?? 0, learn: c.learn })),
   };

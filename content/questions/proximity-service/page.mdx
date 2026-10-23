@@ -1,0 +1,201 @@
+import { architecture, pickIndex } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Businesses barely move, so build a **geo index** once and read it a lot: a geohash column, or an in-memory **quadtree** that splits only where places are dense. Search one cell, or the few cells covering your radius, then sort by exact distance. Reads dwarf writes.
+</TLDR>
+
+<Requirements
+  functional={["Find businesses within a radius of a point (0.5 to 20 km)", "Filter by category and sort by distance", "Business details page", "Owners add, edit and delete listings", "Show results on a map"]}
+  nonFunctional={["Search responds in under 100 ms", "About 17K searches a second at peak", "Highly available: reads work if a server dies", "Edits show up within minutes to a day", "Scales to 200 million businesses"]}
+  outOfScope={["Reviews and photos storage", "Ranking by personal taste", "Live location tracking of moving things (see the ride-sharing design)"]}
+/>
+
+## Clarifying questions
+
+- **Static or moving?** Restaurants do not move. Cars do, and that is a different design.
+- **Radius and size?** Fixed radii or any, and how many businesses?
+- **Freshness?** Is a listing visible the next day, or within a minute?
+- **Result order?** Distance, rating, or a mix?
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Searches | 100M daily users × 5 ÷ 86,400 s | ≈ 5.8K/s, **~17K/s** at 3x peak |
+| Businesses | 200M × 1 KB | 200 GB |
+| Geohash index | 200M × (9 chars + 8 B id = 17 B) | ≈ 3.4 GB |
+| Quadtree leaves | 200M ÷ 100 per leaf | 2M leaves |
+| Quadtree memory | 200M × 8 B ids + 2.67M nodes × 100 B | **≈ 1.9 GB** |
+| Search servers | 17K ÷ 6 servers | ≈ 2.8K/s each |
+
+The index is tiny and fits in the memory of one machine. So **replicate** it; do not shard it. Search is a read-only, stateless service, and writes are rare.
+
+## API
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/v1/search/nearby` | `lat`, `lon`, `radius`, `category`, `cursor` → businesses with `distanceM`, plus `nextCursor` |
+| GET | `/v1/businesses/:id` | Details, from the cache |
+| POST | `/v1/businesses` | Owner adds a listing; address is geocoded |
+| PUT | `/v1/businesses/:id` | Edit |
+| DELETE | `/v1/businesses/:id` | Remove |
+
+Results are paged with a cursor (distance and id of the last result), not an offset, so the next page is stable.
+
+## Data model
+
+```sql
+CREATE TABLE business (
+  id        bigint PRIMARY KEY,
+  name      text   NOT NULL,
+  category  text   NOT NULL,
+  lat       double precision NOT NULL,
+  lon       double precision NOT NULL,
+  geohash   text   NOT NULL,              -- 9 characters, about 5 m cells
+  hours     jsonb, rating real
+);
+CREATE INDEX business_geohash ON business (geohash text_pattern_ops);   -- makes LIKE 'prefix%' a range scan
+-- search: WHERE geohash LIKE '9q8yy%' OR geohash LIKE '9q8yz%' ... then filter by exact distance
+```
+
+The quadtree is not stored in the database. It is built from this table every night, saved as a snapshot file, and kept current from the change feed.
+
+## Architecture
+
+Two paths. Search reads an in-memory index and a cache. Writes go to the database and a change feed that updates the index. Play **Search nearby**, **A cold business**, **Owner adds a business** and **An index server restarts**.
+
+<FlowDiagram spec={architecture} />
+
+## Geohash
+
+A **geohash** turns a point into a short string: longer is a smaller cell, and a shared prefix means the same cell. So "near me" becomes an indexed `LIKE 'prefix%'` query.
+
+Pick the longest hash whose cells are at least as big as the radius, and the circle touches at most 3 x 3 = 9 cells. In San Francisco, 0.5 km uses 6 characters, 1 or 2 km use 5, 5 km uses 4, and 20 km uses 3. Scan those cells, drop anything past the radius, sort, take 20.
+
+The weakness is density: one cell in midtown can hold thousands of places while the next holds none.
+
+## Quadtree
+
+A **quadtree** starts with the whole map as one box. When a box holds more than 100 businesses, it splits into four. Downtown ends up as many tiny leaves, the desert as one big leaf, so every leaf stays near 100.
+
+Search walks down to the boxes that touch the circle and checks their points. 200M businesses make about 2M leaves and 1.9 GB, so each search server holds a full copy.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Static places, radius range, freshness, order.
+  </Step>
+  <Step title="Estimate">
+    17K searches a second; an index of about 2 to 3 GB.
+  </Step>
+  <Step title="Pick the index">
+    Geohash first, quadtree for uneven density.
+  </Step>
+  <Step title="Design the services">
+    Read-only search, cached details, a change feed.
+  </Step>
+  <Step title="Scale and failure">
+    Replicas, rebuilds, hot cells, cache.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="Notice it is read heavy and static">
+
+Searches outnumber edits by orders of magnitude, and places do not move. Precompute, replicate and cache.
+
+</Step>
+<Step title="Store the source of truth in a database">
+
+A business table with latitude, longitude and a 9-character geohash. A read replica pool serves details.
+
+</Step>
+<Step title="Index space with cells">
+
+Explain geohash: strings, shared prefixes, cell sizes. Cover the circle with at most 9 cells and filter by exact distance.
+
+</Step>
+<Step title="Handle the edges and density">
+
+Cells have edges, so read neighbours. Cells have uneven populations, so mention quadtrees or S2 and H3.
+
+</Step>
+<Step title="Build the quadtree">
+
+Capacity 100 per leaf. Sizes: 2M leaves, about 2 GB, so a full copy per search server. Rebuild nightly; apply the change feed in between.
+
+</Step>
+<Step title="Cache the details">
+
+Search returns ids and distances. A multi-get fetches names and photos from a cache with a one hour expiry.
+
+</Step>
+<Step title="Deal with freshness">
+
+Adds and deletes arrive through a feed within minutes. A deleted business is also filtered at read time against the cache.
+
+</Step>
+<Step title="Add filters and ranking">
+
+Filter by category after the geo lookup, or keep a quadtree per category. Rank by distance blended with rating.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Tabs: distance helpers, the geohash index (covering cells and a range scan), and the quadtree. Both indexes are checked against a brute-force scan.
+
+<CodeTabs files={['snippets/distance.js', 'snippets/geohash-index.js', 'snippets/quadtree.js']} />
+
+- The geohash test shows radius to precision (0.5 km: 6, 1 and 2 km: 5, 5 km: 4, 20 km: 3) and at most 9 cells per circle.
+- Both indexes return exactly what a brute-force scan returns over 100 queries at five radii.
+- The quadtree test shows depth adapting to density and the 200M-business memory sum.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| A search server restarts | Fewer copies | Other copies serve; reload snapshot, replay feed |
+| A zone is lost | Half the capacity | Copies in two zones; sized for 3x peak |
+| Index and database disagree | A closed business appears | Check status in the detail cache; fix by the feed and nightly rebuild |
+| A hot cell (a stadium event) | One cell dominates | Smaller leaves; cache popular queries |
+| Geocoding is wrong | A pin in the sea | Validate; manual review for outliers |
+| Cache goes cold | Database load spikes | Replicas; stagger expiries; warm after deploy |
+
+## Trade-offs
+
+Pick by constraints. Click through the tree, then compare.
+
+<DecisionTree spec={pickIndex} />
+
+| Choice | Gain | Cost |
+|---|---|---|
+| Geohash in SQL | Simplest; any database | Uneven cells; neighbours to read |
+| In-memory quadtree | Adapts to density | A service to build and refresh |
+| S2 or H3 | Hierarchical ids, shardable | More machinery |
+| Replicate vs shard | Simple, resilient | Memory per server |
+
+<Callout kind="interview" title="What interviewers listen for">
+The **read-heavy, static** insight, choosing a cell size from the radius, the 9-cell cover with an exact distance check, and why a quadtree adapts to density.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would this change for moving objects?">
+    A moving thing needs constant writes and a short-lived index, as in the ride-sharing design: overwrite the latest position in memory.
+  </FollowUp>
+  <FollowUp q="How do you search near the date line or the poles?">
+    Cells wrap in longitude and degenerate near the poles, so the covering code handles those as special cases. Most apps clamp the search area.
+  </FollowUp>
+  <FollowUp q="How do you rank beyond distance?">
+    Fetch the nearest few hundred, then blend distance, rating, popularity and opening hours in a second stage.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

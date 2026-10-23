@@ -1,0 +1,26 @@
+{
+  "title": "Clone Graph",
+  "difficulty": "Medium",
+  "patterns": ["graph-traversal"],
+  "js": ["map-set","graphs-in-js","classes"],
+  "order": 3,
+  "summary": "Make a deep copy of a connected undirected graph whose nodes are objects pointing at their neighbours.",
+  "fn": "cloneGraph",
+  "params": ["adjList"],
+  "types": {"params":["number[][]"],"returns":"number[][]"},
+  "tests": [
+    {"args":[[[2,4],[1,3],[2,4],[1,3]]],"expected":[[2,4],[1,3],[2,4],[1,3]],"explain":"A square: node 1 touches 2 and 4, node 2 touches 1 and 3, and so on. The clone must have the same four nodes with the same neighbour lists."},
+    {"args":[[[]]],"expected":[[]],"explain":"A single node with no neighbours."},
+    {"args":[[]],"expected":[],"explain":"An empty graph has no nodes at all, so the clone is empty too."},
+    {"args":[[[2],[1]]],"expected":[[2],[1]]},
+    {"args":[[[2,3],[1,3],[1,2]]],"expected":[[2,3],[1,3],[1,2]]},
+    {"args":[[[2,3,4,5],[1],[1],[1],[1]]],"expected":[[2,3,4,5],[1],[1],[1],[1]]},
+    {"args":[[[2],[1,3],[2,4],[3]]],"expected":[[2],[1,3],[2,4],[3]]},
+    {"args":[[[3,2],[4,1],[1,4],[2,3]]],"expected":[[3,2],[4,1],[1,4],[2,3]]},
+    {"args":[[[2,6],[1,3,12,4],[2,4,7,5,11],[3,5,8,2],[4,3,10,6,7],[1,9,5],[3,5],[4,10],[6,11],[8,5],[9,3],[2]]],"expected":[[2,6],[1,3,12,4],[2,4,7,5,11],[3,5,8,2],[4,3,10,6,7],[1,9,5],[3,5],[4,10],[6,11],[8,5],[9,3],[2]]},
+    {"args":[[[2,11,19,5],[1,3,5],[2,4,7,10,15,16],[3,6,9,8],[2,8,12,15,1],[4,21],[3,11,26,15,27],[5,18,27,4],[4,30,18],[3,22,13],[7,13,20,1],[5,17,23,21],[11,14,10],[13,25,15],[3,24,14,7,5,23],[3,29,30],[12,21],[8,19,26,30,9],[18,27,22,1],[11,30],[6,12,17],[10,19,28],[12,24,15],[23,15],[14,27,28],[7,18,27],[25,19,8,7,26],[25,22],[16],[9,18,16,20]]],"expected":[[2,11,19,5],[1,3,5],[2,4,7,10,15,16],[3,6,9,8],[2,8,12,15,1],[4,21],[3,11,26,15,27],[5,18,27,4],[4,30,18],[3,22,13],[7,13,20,1],[5,17,23,21],[11,14,10],[13,25,15],[3,24,14,7,5,23],[3,29,30],[12,21],[8,19,26,30,9],[18,27,22,1],[11,30],[6,12,17],[10,19,28],[12,24,15],[23,15],[14,27,28],[7,18,27],[25,19,8,7,26],[25,22],[16],[9,18,16,20]]},
+    {"args":[[[2,17],[1,3,4,6,23],[2,5],[2,7,13,14],[3,8,20],[2,11,24],[4],[5,9,15,18],[8,10,12],[9],[6],[9,21],[4,16],[4],[8],[13],[1,19],[8,22,25],[17],[5],[12],[18],[2],[6],[18]]],"expected":[[2,17],[1,3,4,6,23],[2,5],[2,7,13,14],[3,8,20],[2,11,24],[4],[5,9,15,18],[8,10,12],[9],[6],[9,21],[4,16],[4],[8],[13],[1,19],[8,22,25],[17],[5],[12],[18],[2],[6],[18]]}
+  ],
+  "hints": ["A deep copy needs a new object for every node, and every new node must point at the new versions of the neighbours, never at the originals. What do you need to remember to know 'which new node belongs to which old node'?","Keep a Map from each original node to its clone. If a node is already in the map, return its clone instead of creating another one: this also stops the infinite loop on cycles.","Do a DFS or BFS from the start node. On first sight of a node, create its clone and store it in the map before visiting neighbours; then for each neighbour, push clone(neighbour) onto the clone's neighbors list."],
+  "complexity": {"time":"O(V + E): each node is cloned once and each edge is followed from both ends","space":"O(V) for the map and the recursion or queue"}
+}

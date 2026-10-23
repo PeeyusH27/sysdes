@@ -1,0 +1,703 @@
+{
+  "title": "Logging Framework",
+  "difficulty": "Medium",
+  "patterns": [
+    "strategy-decorator",
+    "state-observer"
+  ],
+  "js": [],
+  "order": 11,
+  "summary": "Build a logger tree with inherited levels, appenders that each have their own threshold, and a swappable plain or JSON format.",
+  "kind": "design",
+  "className": "LogManager",
+  "samples": 3,
+  "tests": [
+    {
+      "ops": [
+        "LogManager",
+        "addAppender",
+        "log",
+        "log",
+        "lines"
+      ],
+      "args": [
+        [],
+        [
+          "mem",
+          "root",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "app",
+          "DEBUG",
+          "noise",
+          1
+        ],
+        [
+          "app",
+          "INFO",
+          "hello",
+          2
+        ],
+        [
+          "mem"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        0,
+        1,
+        [
+          "2 INFO app - hello"
+        ]
+      ],
+      "explain": "The root level is INFO, so the DEBUG call is dropped before any appender sees it. The INFO call is written in plain format."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "setLevel",
+        "effectiveLevel",
+        "effectiveLevel",
+        "effectiveLevel"
+      ],
+      "args": [
+        [],
+        [
+          "app",
+          "WARN"
+        ],
+        [
+          "app"
+        ],
+        [
+          "app.db"
+        ],
+        [
+          "other"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        "WARN",
+        "WARN",
+        "INFO"
+      ],
+      "explain": "app.db has no level of its own, so it asks app, which says WARN. other has no ancestor with a level, so it falls through to root's INFO."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "addAppender",
+        "log",
+        "lines"
+      ],
+      "args": [
+        [],
+        [
+          "j",
+          "root",
+          "DEBUG",
+          "json"
+        ],
+        [
+          "api",
+          "ERROR",
+          "say \"hi\"",
+          5
+        ],
+        [
+          "j"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        1,
+        [
+          "{\"time\":5,\"level\":\"ERROR\",\"logger\":\"api\",\"message\":\"say \\\"hi\\\"\"}"
+        ]
+      ],
+      "explain": "JSON format has the keys in a fixed order and escapes quotes inside the message."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "setLevel",
+        "setLevel",
+        "effectiveLevel",
+        "effectiveLevel",
+        "addAppender",
+        "log",
+        "log",
+        "lines"
+      ],
+      "args": [
+        [],
+        [
+          "app",
+          "WARN"
+        ],
+        [
+          "app.db.pool",
+          "DEBUG"
+        ],
+        [
+          "app.db.pool"
+        ],
+        [
+          "app.db"
+        ],
+        [
+          "mem",
+          "root",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "app.db.pool",
+          "DEBUG",
+          "d",
+          1
+        ],
+        [
+          "app.db",
+          "INFO",
+          "i",
+          2
+        ],
+        [
+          "mem"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        "DEBUG",
+        "WARN",
+        true,
+        1,
+        0,
+        [
+          "1 DEBUG app.db.pool - d"
+        ]
+      ],
+      "explain": "The deepest explicit level wins for app.db.pool, while its parent app.db keeps WARN and drops the INFO call."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "setLevel",
+        "effectiveLevel",
+        "setLevel",
+        "effectiveLevel",
+        "setLevel",
+        "setLevel",
+        "effectiveLevel"
+      ],
+      "args": [
+        [],
+        [
+          "app",
+          "ERROR"
+        ],
+        [
+          "app.x"
+        ],
+        [
+          "app",
+          "INHERIT"
+        ],
+        [
+          "app.x"
+        ],
+        [
+          "root",
+          "INHERIT"
+        ],
+        [
+          "app",
+          "LOUD"
+        ],
+        [
+          "app"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        "ERROR",
+        true,
+        "INFO",
+        false,
+        false,
+        "INFO"
+      ],
+      "explain": "INHERIT removes a logger's own level. Root cannot inherit from anyone, and an unknown level is refused without changing anything."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "addAppender",
+        "addAppender",
+        "log",
+        "log",
+        "lines",
+        "lines"
+      ],
+      "args": [
+        [],
+        [
+          "console",
+          "root",
+          "INFO",
+          "plain"
+        ],
+        [
+          "file",
+          "root",
+          "ERROR",
+          "json"
+        ],
+        [
+          "svc",
+          "INFO",
+          "a",
+          1
+        ],
+        [
+          "svc",
+          "ERROR",
+          "b",
+          2
+        ],
+        [
+          "console"
+        ],
+        [
+          "file"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        1,
+        2,
+        [
+          "1 INFO svc - a",
+          "2 ERROR svc - b"
+        ],
+        [
+          "{\"time\":2,\"level\":\"ERROR\",\"logger\":\"svc\",\"message\":\"b\"}"
+        ]
+      ],
+      "explain": "Each appender applies its own threshold. The INFO record reaches only the console, and the ERROR record reaches both."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "addAppender",
+        "addAppender",
+        "addAppender",
+        "log",
+        "log",
+        "log",
+        "lines",
+        "lines"
+      ],
+      "args": [
+        [],
+        [
+          "a",
+          "app",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "d",
+          "app.db",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "r",
+          "root",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "app.db",
+          "INFO",
+          "m",
+          1
+        ],
+        [
+          "app",
+          "INFO",
+          "n",
+          2
+        ],
+        [
+          "other",
+          "INFO",
+          "o",
+          3
+        ],
+        [
+          "d"
+        ],
+        [
+          "a"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        3,
+        2,
+        1,
+        [
+          "1 INFO app.db - m"
+        ],
+        [
+          "1 INFO app.db - m",
+          "2 INFO app - n"
+        ]
+      ],
+      "explain": "A record goes to the appenders on its logger and on every ancestor. app.db reaches d, a and r, app reaches a and r, and other reaches only r."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "addAppender",
+        "addAppender",
+        "addAppender",
+        "addAppender",
+        "log",
+        "lines",
+        "removeAppender"
+      ],
+      "args": [
+        [],
+        [
+          "mem",
+          "root",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "mem",
+          "app",
+          "ERROR",
+          "json"
+        ],
+        [
+          "x",
+          "root",
+          "LOUD",
+          "plain"
+        ],
+        [
+          "y",
+          "root",
+          "INFO",
+          "xml"
+        ],
+        [
+          "app",
+          "TRACE",
+          "t",
+          1
+        ],
+        [
+          "ghost"
+        ],
+        [
+          "ghost"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        false,
+        false,
+        false,
+        -1,
+        [],
+        false
+      ],
+      "explain": "A taken name, an unknown threshold and an unknown format are all refused. An unknown log level returns -1, and an unknown appender has no lines."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "addAppender",
+        "log",
+        "removeAppender",
+        "log",
+        "lines",
+        "addAppender",
+        "log",
+        "lines"
+      ],
+      "args": [
+        [],
+        [
+          "m",
+          "root",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "a",
+          "INFO",
+          "one",
+          1
+        ],
+        [
+          "m"
+        ],
+        [
+          "a",
+          "INFO",
+          "two",
+          2
+        ],
+        [
+          "m"
+        ],
+        [
+          "m",
+          "root",
+          "INFO",
+          "json"
+        ],
+        [
+          "a",
+          "INFO",
+          "three",
+          3
+        ],
+        [
+          "m"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        1,
+        true,
+        0,
+        [],
+        true,
+        1,
+        [
+          "{\"time\":3,\"level\":\"INFO\",\"logger\":\"a\",\"message\":\"three\"}"
+        ]
+      ],
+      "explain": "Removing an appender forgets its lines and stops writes to it. The name can then be reused, and the new appender starts empty with its own format."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "addAppender",
+        "log",
+        "setLevel",
+        "log",
+        "setLevel",
+        "log",
+        "lines"
+      ],
+      "args": [
+        [],
+        [
+          "mem",
+          "root",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "app.db",
+          "DEBUG",
+          "before",
+          1
+        ],
+        [
+          "app",
+          "DEBUG"
+        ],
+        [
+          "app.db",
+          "DEBUG",
+          "after",
+          2
+        ],
+        [
+          "app",
+          "ERROR"
+        ],
+        [
+          "app.db",
+          "WARN",
+          "late",
+          3
+        ],
+        [
+          "mem"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        0,
+        true,
+        1,
+        true,
+        0,
+        [
+          "2 DEBUG app.db - after"
+        ]
+      ],
+      "explain": "Levels can change while running, and a child inherits the change at once: app.db drops DEBUG, then accepts it, then drops WARN."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "setLevel",
+        "addAppender",
+        "addAppender",
+        "log",
+        "log",
+        "lines",
+        "lines"
+      ],
+      "args": [
+        [],
+        [
+          "app",
+          "DEBUG"
+        ],
+        [
+          "quiet",
+          "root",
+          "WARN",
+          "plain"
+        ],
+        [
+          "loud",
+          "root",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "app",
+          "DEBUG",
+          "d",
+          1
+        ],
+        [
+          "app",
+          "WARN",
+          "w",
+          2
+        ],
+        [
+          "quiet"
+        ],
+        [
+          "loud"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        1,
+        2,
+        [
+          "2 WARN app - w"
+        ],
+        [
+          "1 DEBUG app - d",
+          "2 WARN app - w"
+        ]
+      ],
+      "explain": "The logger lets DEBUG through, but quiet's own threshold is WARN. The result counts only the appenders that wrote."
+    },
+    {
+      "ops": [
+        "LogManager",
+        "setLevel",
+        "addAppender",
+        "log",
+        "log",
+        "log",
+        "lines"
+      ],
+      "args": [
+        [],
+        [
+          "svc",
+          "ERROR"
+        ],
+        [
+          "all",
+          "root",
+          "DEBUG",
+          "plain"
+        ],
+        [
+          "svc",
+          "WARN",
+          "w",
+          1
+        ],
+        [
+          "svc",
+          "ERROR",
+          "e",
+          2
+        ],
+        [
+          "svc.job",
+          "ERROR",
+          "j",
+          3
+        ],
+        [
+          "all"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        0,
+        1,
+        1,
+        [
+          "2 ERROR svc - e",
+          "3 ERROR svc.job - j"
+        ]
+      ],
+      "explain": "An appender with a low threshold cannot bring back a record the logger already dropped. Both levels must pass."
+    }
+  ],
+  "hints": [
+    "The tree is implied by the names: the parent of a.b.c is a.b. Store a level only for loggers that have one, and find the effective level by walking up with a parent function.",
+    "Keep appenders in one map by name, and a second map from logger name to the appender names attached there. A record is checked twice: once against the logger's effective level, once per appender against its threshold.",
+    "Make a format a function in a table (plain and json). In log, check the level first and return 0 before building anything, then walk from the logger up to root, writing to each appender that passes its threshold."
+  ],
+  "complexity": {
+    "time": "O(depth of the logger name + appenders on that path) per log call",
+    "space": "O(loggers with a level + appenders + lines)"
+  }
+}

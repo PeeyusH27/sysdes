@@ -1,0 +1,202 @@
+import { classes, borrowFlow, returnFlow } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Separate the **title** (a Book people search and reserve) from the **copy** (a BookItem that is loaned, held or lost). Give each copy a small **state machine**, make fines a swappable **strategy**, and make "check the copy is free, then loan it" one atomic step.
+</TLDR>
+
+<Requirements
+  functional={['Add books with several copies; search by title, author or ISBN', 'Members borrow and return copies', 'A loan limit and a loan period that depend on the member type', 'Reserve a title with no free copy; the first in line gets the next copy', 'Renew a loan, within limits', 'A fine for late returns', 'Notify members: ready for pickup, overdue']}
+  nonFunctional={['Two members never get the same copy', 'The queue is first come, first served', 'Fine rules change without editing the library', 'Notifications can be added without editing the library', 'Deterministic tests: time is passed in as a day number']}
+  outOfScope={['Payments for fines', 'Shelf locations and barcode hardware', 'Several branches (a follow-up)']} />
+
+A **low-level design** (LLD) question where the nouns are easy and the rules are the test. Get the model right, then handle the queue and the race.
+
+New to this? Read [State machines and observers](/lld/foundations/state-observer) and [Swap behaviour](/lld/foundations/strategy-decorator) first.
+
+## Clarifying questions
+
+- Are there different kinds of member, with different limits and loan periods?
+- How are fines worked out, and is there a cap?
+- Can a member reserve a title? How long is a hold kept?
+- Can loans be renewed, and how often?
+- One branch or many? Digital loans too?
+
+## Public interface
+
+| Call | Returns | Notes |
+|---|---|---|
+| `borrow(member, isbn, day)` | A loan, or a reason | `LIMIT_REACHED`, `NO_COPY`, `UNKNOWN` |
+| `returnItem(loan, day)` | The fine in cents | Hands the copy to the queue first |
+| `reserve(member, isbn)` | Place in the queue | Refused while a copy is free |
+| `renew(loan, day)` | The new due day | Refused if overdue, waited for, or renewed twice |
+| `search(text)` | ISBNs | Title or author contains it, or the ISBN matches |
+| `sweep(day)` | | Overdue notices once, lapsed holds pass on |
+
+## What it remembers
+
+- `books`: ISBN → title, author, its copies and its queue of waiting members.
+- Each copy: state, and who it is held for and until when.
+- `loans`: copy, member, due day, renewals, open or closed.
+- `members`: type, which gives the limit and the loan period.
+
+## Build the design in stages
+
+Step through: title and copy, then members and loans, then the copy's lifecycle, then fines, then listeners. Green marks what the latest stage added.
+
+<ClassDiagram spec={classes} />
+
+## Borrow and return, step by step
+
+Pick a branch on each diagram: a normal borrow, the limit, a title with every copy out; a return with and without a queue.
+
+<SequenceDiagram spec={borrowFlow} />
+
+<SequenceDiagram spec={returnFlow} />
+
+## A copy's life
+
+A copy is always in one state. Only the moves in the table are legal, and anything else is a bug that should fail loudly.
+
+| From | Event | To |
+|---|---|---|
+| AVAILABLE | Member borrows it | LOANED |
+| LOANED | Returned, nobody waiting | AVAILABLE |
+| LOANED | Returned, someone waiting | HELD |
+| HELD | Waiting member borrows it | LOANED |
+| HELD | Hold lapses | AVAILABLE, or HELD for the next |
+| LOANED | Reported lost | LOST |
+
+A returned copy goes to the queue **before** it can become available. That one rule keeps the queue fair.
+
+## Patterns, and when to skip them
+
+**State** keeps the legal moves in one table. **Strategy** turns days late into cents, one policy per member type, and a **Decorator** wraps a policy in a cap or a grace period without editing it. **Observer** sends "ready" and "overdue" to email or SMS, so the library never knows who listens.
+
+**Skip the rest.** A subclass per member type is data pretending to be code, so use a small record of limits. A `FineCalculatorFactory` for two policies, or a `LibraryManager` that does everything, loses points. Keep one `Library` as the entry point.
+
+## The last copy
+
+Two members borrow the last copy in the same instant. If the code checks "is it free?" and then sets "loaned" as two steps, both pass the check.
+
+- **Make it one step.** One lock around the change is the honest first answer. In a database it is one conditional update, `SET state = 'LOANED' WHERE id = ? AND state = 'AVAILABLE'`, then checking that a row changed.
+- **Check the member limit in the same step**, or two quick borrows slip past it.
+- **Tell listeners after releasing the lock**, so a slow email never blocks a borrow.
+- **Scale up later** with a lock per title, not one for the whole library.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Member types, fines, reservations, renewals.
+  </Step>
+  <Step title="Split title and copy">
+    Search and queues on the title, state on the copy.
+  </Step>
+  <Step title="Draw the copy's states">
+    Four states, a table of legal moves.
+  </Step>
+  <Step title="Pull out what varies">
+    Fines as a policy, notices as events.
+  </Step>
+  <Step title="Walk the race">
+    The last copy, then the queue.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="Nouns">
+    Book, BookItem, Member, Loan, Reservation queue, FinePolicy. A reservation is just a place in the book's queue, so it needs no class of its own.
+  </Step>
+  <Step title="Borrow, in order">
+    Check the limit. Prefer a copy held for this member, otherwise any available one. Move it to LOANED, create the loan with a due day from the member type.
+  </Step>
+  <Step title="Return hands over before it frees">
+
+The copy goes to the first waiting member, or becomes available.
+
+```js
+#release(item, day) {
+  const next = this.books.get(item.isbn).queue.shift();
+  if (next === undefined) { item.moveTo('AVAILABLE'); return; }
+  item.moveTo('HELD');
+  item.heldFor = next;
+  item.holdUntil = day + HOLD_DAYS;
+}
+```
+
+  </Step>
+  <Step title="Fines are a policy">
+    `fine(daysLate)` for each member type. A cap wraps a per-day rate. Money is integer cents.
+  </Step>
+  <Step title="Daily sweep">
+    A sweep gets the day as an argument. It sends each overdue notice once and passes lapsed holds on, with no clock and no timer thread.
+  </Step>
+  <Step title="Tests">
+    Test the queue order, a hold lapsing, each renewal refusal, every fine, and eight threads racing for one copy.
+  </Step>
+</Steps>
+
+## Implementation
+
+The same design in **JavaScript, Java or Python**. Java and Python guard every change with a real lock and notify listeners after releasing it.
+
+<CodeTabs
+  files={['snippets/models.js', 'snippets/fines.js', 'snippets/library.js', 'snippets/library.test.js']}
+  java={['snippets/java/Models.java', 'snippets/java/Fines.java', 'snippets/java/Library.java', 'snippets/java/LibraryTest.java']}
+  python={['snippets/python/models.py', 'snippets/python/fines.py', 'snippets/python/library.py', 'snippets/python/test_library.py']}
+/>
+
+- `moveTo` throws on an illegal move, so a logic error surfaces in the test and not as a wrong count.
+- The race test starts eight threads on one copy, 100 times: there is always exactly one winner.
+
+## Code it yourself
+
+Try the [Library System exercise](/lld/exercises/library-system): borrowing limits, a fair reservation queue with holds, renewals and a fine policy, all checked by exact numbers.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Check then write | One copy loaned twice | One atomic step |
+| Returned copy goes to AVAILABLE first | A walk-in jumps the queue | Release to the queue first |
+| Hold never expires | An absent member blocks others | Deadline, then pass on |
+| Overdue notice every sweep | Members get spammed | A notified flag per loan |
+| Fine as a float | Cents drift | Integer cents |
+
+## Trade-offs
+
+| Choice | Pros | Cons |
+|---|---|---|
+| One lock vs lock per title | Simple and correct | Contention at scale |
+| Member type as data vs subclass | No hierarchy to grow | Odd rules need code |
+| Hold with a deadline vs no hold | Fair to the queue | A sweep and a notice |
+| Queue on the book vs Reservation class | Less code | No place for per-reservation data |
+
+<Callout kind="interview" title="What interviewers listen for">
+Title versus copy, said early. A state table for the copy. Fines as a strategy, notices as observers, and no subclass per member type. The race on the last copy, with an atomic check-and-set.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would you add another fine rule?">
+    Write a new `FinePolicy` and register it for a member type. A weekend discount wraps an existing policy as a decorator. The library does not change.
+  </FollowUp>
+  <FollowUp q="How would you support many branches?">
+    A `Branch` owns copies, and the title and the queue stay global. A return at another branch is a transfer, and a hold names the branch to collect from.
+  </FollowUp>
+  <FollowUp q="How do you handle a lost book?">
+    Move the copy to LOST, close the loan, and charge a replacement fee from a policy. LOST has no way out, so it can never be loaned again.
+  </FollowUp>
+  <FollowUp q="How would you make search fast?">
+    Keep an inverted index from words in titles and authors to ISBNs, and a map for exact ISBNs. A search service takes over at scale.
+  </FollowUp>
+  <FollowUp q="How would you send reminders three days before the due date?">
+    The daily sweep emits a `dueSoon` event for loans due within three days. Listeners decide to send email or SMS.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

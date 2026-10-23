@@ -1,0 +1,165 @@
+import { lruCache, swapAndPop, historyLookup } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+A "design a class" question asks you to **pick the structures so that every method is O(1) or O(log n)**. No single structure does it alone, so you pair them: a map to find things, and a list, an array or sorted buckets to keep the order you need.
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- The statement says **"design a class"** and lists methods like `get`, `put`, `insert`, `remove`.
+- Each method must run in **O(1)** (or O(log n)) time, so scanning is not allowed.
+- It mentions **eviction**: drop the least recently or least frequently used item.
+- It asks for **history** ("the value at time t") or a **random** member.
+
+</Callout>
+
+| Need | Pair | Classic problems |
+|---|---|---|
+| Find fast, evict the oldest | map + doubly linked list | LRU cache |
+| Evict the least used | map + buckets by count | LFU cache |
+| Value at a past time | map of sorted histories + binary search | time-based store |
+| Pick a random member | array + map of positions | insert delete getrandom |
+| Extra answer on every push | stack of (value, answer so far) | min stack |
+
+## The core idea: pair a structure that finds with one that orders
+
+Every structure is fast at one thing and slow at another. A **hash map** finds a key in O(1) but remembers no order. A **list** keeps an order but needs O(n) to find anything. Ask what each method needs, then glue structures together until every need is covered.
+
+The cache below keeps a map from key to value, and the order of use. Watch a hit move a key to the end, and a miss throw out the front:
+
+<AlgoViz trace={lruCache} />
+
+Rule of thumb: for every method, name the structure that makes it O(1). If a method has no such structure, add one.
+
+## Play with it
+
+Request keys one by one and compare an LRU cache with an LFU cache on the same requests. Try a key that was used often long ago.
+
+<DesignLab />
+
+## Step by step
+
+<Steps>
+  <Step title="List the operations and the target cost">
+    Write each method and its budget, such as `get` in O(1).
+  </Step>
+  <Step title="Give each operation a structure">
+    Lookup by key: a map. Oldest first: a list. By time: a sorted array.
+  </Step>
+  <Step title="Connect the structures">
+    Store in the map a pointer into the other structure, such as a list node or an array index.
+  </Step>
+  <Step title="Update both on every change">
+    Every `put` or `remove` must fix the map and the second structure. Write the invariant down.
+  </Step>
+  <Step title="Test the edges">
+    Empty, capacity 1, updating an existing key, removing the last element, repeated keys.
+  </Step>
+</Steps>
+
+## Template 1: hash map plus a recency list (LRU)
+
+The map finds the node, and a **doubly linked list** moves it to the front in O(1) because a node knows both neighbours. Two sentinel nodes remove the "first or last" special cases.
+
+<CodeTabs files={['snippets/lru-cache.js']} java={['snippets/java/LruCache.java']} python={['snippets/python/lru_cache.py']} />
+
+This is <ProblemLink slug="lru-cache" />. The file also shows the shortcut: a JavaScript `Map` iterates in insertion order, so deleting and re-setting a key moves it to the end. A hand-built <ProblemLink slug="design-hashmap" /> uses the same bucket idea that the built-in map hides.
+
+## Template 2: frequency buckets (LFU)
+
+LFU needs two orders at once: by use count, then by recency inside a count. The trick is that a use raises a count by **exactly one**, so keep a bucket per count and move the key up one bucket at a time. Track `minCount`, the lowest non-empty bucket, and evict from it.
+
+<CodeTabs files={['snippets/lfu-cache.js']} java={['snippets/java/LfuCache.java']} python={['snippets/python/lfu_cache.py']} />
+
+Use it for <ProblemLink slug="lfu-cache" />. Counts that move by one also power <ProblemLink slug="all-oone-data-structure" />, where the buckets form a linked list so the minimum and maximum sit at its ends.
+
+## Template 3: per-key history with binary search
+
+When a read asks about the past, keep every write. Timestamps for one key only grow, so appending keeps its list sorted, and the value at time t is the last write at or before t.
+
+<AlgoViz trace={historyLookup} />
+
+<CodeTabs files={['snippets/time-map.js']} java={['snippets/java/TimeMap.java']} python={['snippets/python/time_map.py']} />
+
+This is <ProblemLink slug="time-based-key-value-store" />. The search is the "last position that still satisfies a condition" form from [Binary Search](/dsa/patterns/binary-search).
+
+## Template 4: array plus map for O(1) random
+
+An array picks a random member in O(1) but cannot delete from the middle cheaply. A map from value to position finds the slot, and **swap and pop** fills the hole with the last element, so nothing shifts.
+
+<AlgoViz trace={swapAndPop} />
+
+<CodeTabs files={['snippets/randomized-set.js']} java={['snippets/java/RandomizedSet.java']} python={['snippets/python/randomized_set.py']} />
+
+This solves <ProblemLink slug="insert-delete-getrandom-o1" />. Update the **moved** element's position in the map, or the next removal breaks.
+
+## Template 5: auxiliary state on a stack
+
+If a stack must also answer "what is the minimum?", store with each value the answer for everything below it. That entry never changes while it lives, so `pop` needs no repair.
+
+<CodeTabs files={['snippets/min-max-stack.js']} java={['snippets/java/MinMaxStack.java']} python={['snippets/python/min_max_stack.py']} />
+
+This is <ProblemLink slug="min-stack" />, and the same idea gives a max stack. For stack basics see [Stacks](/dsa/patterns/stack).
+
+## Try it
+
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
+
+## Complexity
+
+| Structure | Time per operation | Extra space |
+|---|---|---|
+| LRU: map + list | O(1) get and put | O(capacity) |
+| LFU: map + count buckets | O(1) get and put | O(capacity) |
+| Time store: sorted history | O(1) set, O(log m) get | O(total writes) |
+| Randomized set | O(1) average | O(n) |
+| Min / max stack | O(1) all | O(n) |
+
+## JavaScript you'll use
+
+<JsRef to={["classes", "map-set", "arrays"]} />
+
+```js
+const m = new Map();
+m.set(k, v); m.get(k); m.has(k); m.delete(k);   // O(1) average
+m.keys().next().value;                          // the OLDEST key (insertion order)
+const s = new Set(); s.values().next().value;   // the oldest member of a Set
+arr[i] = arr.at(-1); arr.pop();                 // swap and pop
+```
+
+A `Map` and a `Set` both remember insertion order, which gives you a free queue of keys. Deleting and re-adding a key moves it to the end.
+
+<Callout kind="warning">
+
+- Updating the map but not the list (or the reverse) when you evict.
+- Treating a `put` on an existing key as a plain overwrite: it is also a **use**.
+- Using `splice` or a scan for removal: it silently makes the method O(n).
+- Forgetting to re-point the moved element after a swap and pop.
+- Using truthiness (`if (map.get(k))`) when `0` is a valid value.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="Why a doubly linked list and not a singly linked one for LRU?">
+    To unlink a node in O(1) you must change its predecessor's `next`, so each node needs a `prev` pointer. A singly linked list would need a scan to find the predecessor.
+  </FollowUp>
+  <FollowUp q="LRU or LFU: which would you pick for a cache?">
+    LRU is simpler and adapts quickly when popularity shifts. LFU keeps genuinely popular items but can hold on to items that were hot long ago, so it is usually combined with aging.
+  </FollowUp>
+  <FollowUp q="How would you make the LRU cache thread safe?">
+    A single lock around `get` and `put` is correct but serialises everything, because even a read reorders the list. Shard the cache into several independent LRUs keyed by hash to reduce contention.
+  </FollowUp>
+  <FollowUp q="How does this connect to a real cache like Redis?">
+    Redis approximates LRU by sampling a few keys and evicting the oldest of the sample, which avoids the pointer overhead of a perfect list. See [caching techniques](/deep-dives/caching-techniques).
+  </FollowUp>
+  <FollowUp q="What if the time-based store may receive writes out of order?">
+    Appending no longer keeps the history sorted. Use a sorted structure that supports insertion, such as a balanced tree, or insert with binary search and accept O(n) shifting.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

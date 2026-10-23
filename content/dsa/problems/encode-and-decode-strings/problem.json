@@ -1,0 +1,27 @@
+{
+  "title": "Encode and Decode Strings",
+  "difficulty": "Medium",
+  "patterns": ["hashing"],
+  "js": ["strings","arrays"],
+  "order": 6,
+  "summary": "Pack a list of strings into one string and recover the exact list, whatever characters the strings contain.",
+  "fn": "roundTrip",
+  "params": ["strs"],
+  "types": {"params":["string[]"],"returns":"[string, string[]]"},
+  "validate": "(result, args) => {\n  const strs = args[0];\n  if (!Array.isArray(result) || result.length !== 2) return \"Return a pair: [encode(strs), decode(encode(strs))].\";\n  const [encoded, decoded] = result;\n  if (typeof encoded !== \"string\") return \"encode must return a single string, but got \" + typeof encoded + \".\";\n  if (!Array.isArray(decoded)) return \"decode must return an array of strings.\";\n  if (decoded.length !== strs.length) return \"Decoding gave \" + decoded.length + \" strings, but \" + strs.length + \" went in. Encoded text: \" + JSON.stringify(encoded);\n  for (let i = 0; i < strs.length; i++) if (decoded[i] !== strs[i]) return \"String \" + (i + 1) + \" came back as \" + JSON.stringify(decoded[i]) + \" instead of \" + JSON.stringify(strs[i]) + \". Encoded text: \" + JSON.stringify(encoded);\n  return true;\n}",
+  "tests": [
+    {"args":[["lint","code","love","you"]],"expected":["(any single string)",["lint","code","love","you"]],"explain":"Four ordinary words. After encode then decode you must get exactly the same four words, in the same order."},
+    {"args":[["we","say",":","yes"]],"expected":["(any single string)",["we","say",":","yes"]],"explain":"A string that is just a punctuation mark is still data: it must survive unchanged."},
+    {"args":[[]],"expected":["(any single string)",[]],"explain":"An empty list encodes to a string (possibly empty) that decodes back to an empty list, not to a list holding one empty string."},
+    {"args":[[""]],"expected":["(any single string)",[""]]},
+    {"args":[["",""]],"expected":["(any single string)",["",""]]},
+    {"args":[["a","","b"]],"expected":["(any single string)",["a","","b"]]},
+    {"args":[["3#abc","12#","#","#3"]],"expected":["(any single string)",["3#abc","12#","#","#3"]]},
+    {"args":[["10#0123456789","2#","5"]],"expected":["(any single string)",["10#0123456789","2#","5"]]},
+    {"args":[[", ",",","a,b,c","[]","\"quoted\"","line\nbreak","tab\tchar"]],"expected":["(any single string)",[", ",",","a,b,c","[]","\"quoted\"","line\nbreak","tab\tchar"]]},
+    {"args":[["héllo wörld","日本語","emoji 🙂 ok"]],"expected":["(any single string)",["héllo wörld","日本語","emoji 🙂 ok"]]},
+    {"args":[["","x#1","xx#2","xxx#3","xxxx#4","","xxxxxx#6","#7","x#8","xx#9","","xxxx#11","xxxxx#12","xxxxxx#13","#14","","xx#16","xxx#17","xxxx#18","xxxxx#19","","#21","x#22","xx#23","xxx#24","","xxxxx#26","xxxxxx#27","#28","x#29","","xxx#31","xxxx#32","xxxxx#33","xxxxxx#34","","x#36","xx#37","xxx#38","xxxx#39"]],"expected":["(any single string)",["","x#1","xx#2","xxx#3","xxxx#4","","xxxxxx#6","#7","x#8","xx#9","","xxxx#11","xxxxx#12","xxxxxx#13","#14","","xx#16","xxx#17","xxxx#18","xxxxx#19","","#21","x#22","xx#23","xxx#24","","xxxxx#26","xxxxxx#27","#28","x#29","","xxx#31","xxxx#32","xxxxx#33","xxxxxx#34","","x#36","xx#37","xxx#38","xxxx#39"]]}
+  ],
+  "hints": ["Joining with a separator such as a comma fails as soon as a string contains that separator. Whatever you pick, the decoder must be able to tell separator characters from data characters.","Instead of hunting for a delimiter that never appears in the data, store each string's length in front of it. Then the decoder knows exactly how many characters to read and never has to inspect them.","Encode each string as its length, a marker such as #, then the string itself, and concatenate. To decode, read digits until the marker to get the length, then take exactly that many characters, and repeat from the next position."],
+  "complexity": {"time":"O(total characters) for both encode and decode","space":"O(total characters) for the encoded string and the decoded list"}
+}

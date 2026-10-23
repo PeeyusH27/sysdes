@@ -1,0 +1,77 @@
+import { writePath } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+A database writes a small, sequential **log record** before it changes data pages, so a commit is durable once the log is flushed. After a crash, recovery replays the log from the last **checkpoint**, and the same log, shipped to other servers, is replication.
+</TLDR>
+
+## Why a database needs a log
+
+Data pages are slow to write in place, so the database keeps hot ones in a **buffer pool** and flushes later. A committed change can exist only in RAM.
+
+The fix is the **write-ahead log** (WAL): before a change may reach a data page, a small record of it is appended to the log, and the commit is acknowledged once that record is on disk.
+
+<Callout kind="interview" title="What interviewers listen for">
+You state the rule, log before data, and use it to explain crash recovery. Naming the checkpoint shows experience.
+</Callout>
+
+## The write path
+
+<FlowDiagram spec={writePath} />
+
+The only disk wait in a commit is the log flush (**fsync**), which caps commits per second. **Group commit** shares one fsync: at 2 ms, one at a time allows 500 a second, batches of 100 allow 50,000.
+
+## Checkpoints and crash recovery
+
+A **checkpoint** flushes dirty pages and records a log position. Everything before it is on disk, so recovery starts there. Frequent checkpoints mean faster recovery but more write work.
+
+Recovery redoes committed changes the data files lack and ignores a torn tail with no commit record. Replay is harmless to repeat, so a crash during recovery is safe too.
+
+<CodeTabs files={['snippets/wal.js', 'snippets/wal.test.js']} />
+
+
+## The replication log
+
+The log is an ordered record of every change, so a replica applying the same records ends up with the same data.
+
+- **Physical** shipping sends page-level records (Postgres streaming): exact copies.
+- **Logical** shipping sends row changes (MySQL binlog): works across versions and feeds change-data-capture.
+
+<ReplicationLag />
+
+A **synchronous** replica confirms before the commit is acknowledged: no loss on failover, but each commit waits on the network. An **asynchronous** one lags and can lose the last transactions. More in [the HLD path](/learn/databases-scaling).
+
+## What fsync really means
+
+`write()` only hands data to the operating system's page cache. Durability needs `fsync`, and disks and controllers can still hold data in a volatile cache unless they are told to flush or are battery-backed.
+
+- **Relaxed durability.** Postgres `synchronous_commit = off` acknowledges before the flush: a crash can lose the last few milliseconds of commits but never corrupts the database.
+- **Torn pages.** A crash can leave an 8 KiB page half written. Engines guard against it with full-page images in the log or a doublewrite buffer.
+
+## Log-structured and copy-on-write engines
+
+Some engines make the log the data. An LSM-tree appends to a log and sorted files and never updates in place, as in [the indexes lesson](/cs/indexes-btree-lsm). Copy-on-write B-trees (LMDB) write new pages and switch a root pointer atomically, so they need no separate WAL. Kafka is an append-only log offered as a product.
+
+## Backups and point-in-time recovery
+
+A base backup plus the archived log gives **point-in-time recovery**: restore the backup, then replay the log up to just before the bad `DELETE`. Keeping the log is what turns "we have last night's backup" into "we can restore to 14:32:05".
+
+<Callout kind="warning" title="Log disk full is an outage">
+The log must be flushed on every commit. If its disk fills up, or a stuck replica or archive job stops old log being recycled, the database stops accepting writes. Alert on log size and replication lag.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What is a write-ahead log and why does it make commits durable?">
+    A record of each change is appended to a sequential log before the page changes, and the commit is acknowledged once it is flushed. After a crash the log can redo the change.
+  </FollowUp>
+  <FollowUp q="What happens when a database restarts after a crash?">
+    It starts from the last checkpoint, replays the log to redo committed changes, discards transactions with no commit record, then accepts connections.
+  </FollowUp>
+  <FollowUp q="Synchronous or asynchronous replication?">
+    Synchronous loses no committed data on failover but adds network latency to every commit. Asynchronous is faster but can lose the last transactions.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

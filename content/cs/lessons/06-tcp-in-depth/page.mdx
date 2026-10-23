@@ -1,0 +1,88 @@
+import { lossRecovery } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+TCP turns lossy packets into an ordered, reliable stream, with **flow control** to protect the receiver and **congestion control** to protect the network. A loss costs more than one packet: it shrinks the window and stalls everything behind it.
+</TLDR>
+
+## What TCP promises
+
+Data arrives once and in order, or the connection fails. The sender numbers every byte, the receiver acknowledges the next byte it expects (a cumulative **ACK**), and unacknowledged data is resent.
+
+<SequenceDiagram spec={lossRecovery} />
+
+<Callout kind="interview" title="What interviewers listen for">
+You keep flow and congestion control apart, and say what a loss does to the window and why a timeout is worse than three duplicate ACKs.
+</Callout>
+
+## Flow control versus congestion control
+
+| | Flow control | Congestion control |
+|---|---|---|
+| Protects | The receiver's buffer | The network between you |
+| Limit | Receive window (rwnd), sent in each ACK | Congestion window (cwnd), computed by the sender |
+| Signal | The receiver says how much room it has | Loss or delay |
+
+The sender may have at most min(rwnd, cwnd) bytes unacknowledged.
+
+## Congestion control: slow start and AIMD
+
+A new connection probes the network. In **slow start** the window doubles every round trip from 10 segments. Past the threshold (**ssthresh**) it adds one per round trip, and on loss it cuts the window. This add-one, halve-on-loss rule (**AIMD**) lets many flows share a link fairly.
+
+<CongestionWindow />
+
+Try each loss event. Throughput is roughly one window per round trip, so 64 segments at 50 ms is about 15 Mbit/s.
+
+<CodeTabs files={['snippets/congestion.js', 'snippets/congestion.test.js']} />
+
+Linux defaults to **CUBIC**; **BBR** models bandwidth and delay instead of reacting to loss.
+
+## Loss and retransmission
+
+After **three duplicate ACKs** the sender retransmits at once (fast retransmit). If nothing arrives, it waits for the **retransmission timeout** (RTO).
+
+The RTO is learned: the smoothed round-trip time plus four times its variation.
+
+<CodeTabs files={['snippets/rto.js', 'snippets/rto.test.js']} />
+
+A timeout is the expensive case: the sender idles for the whole RTO, then restarts from one segment.
+
+## Head-of-line blocking
+
+If segment 2 is lost, segments 3 to 5 may already have arrived, but the application sees none of them until segment 2 is resent. That wait is **head-of-line blocking**. It is why one loss stalls every HTTP/2 stream, and why HTTP/3 moved to [QUIC](/cs/request-journey), which orders each stream separately.
+
+## Closing a connection and TIME-WAIT
+
+Closing takes a FIN and an ACK in each direction. The side that closes first then waits in **TIME-WAIT** (60 seconds on Linux, twice the maximum segment lifetime). That ensures its final ACK arrives and that late packets from the old connection cannot be mistaken for a new one.
+
+Each TIME-WAIT holds a source port. With about 28,000 ephemeral ports and 60 seconds, one client can open only about 470 new connections a second to one destination.
+
+<CodeTabs files={['snippets/time-wait.js', 'snippets/time-wait.test.js']} />
+
+<Callout kind="warning" title="Do not tune TIME-WAIT away">
+Shrinking TIME-WAIT or recycling sockets risks old packets landing in new connections. Stop opening so many connections instead: keep-alive, [connection pools](/deep-dives/connections-pooling) or HTTP/2. Making the server close first only moves the cost to the server.
+</Callout>
+
+## Other knobs worth knowing
+
+- **Nagle's algorithm and delayed ACKs.** Together they can add 40 ms stalls to small writes. Latency-sensitive services set `TCP_NODELAY`.
+- **Window scaling.** The window field is 16 bits, so a negotiated scale factor lets it reach gigabytes for fast long-distance links.
+- **Keepalive.** Idle connections die silently behind NATs and firewalls; TCP keepalive or application heartbeats detect it.
+- **SYN flood and backlog.** A full accept queue drops new connections. SYN cookies defend against floods.
+- **MSS and MTU.** Segments are sized to fit one packet (about 1460 bytes on Ethernet), so large writes are split.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What is the difference between flow control and congestion control?">
+    Flow control protects the receiver with the window it advertises. Congestion control protects the network with a window the sender computes from loss. The sender obeys the smaller.
+  </FollowUp>
+  <FollowUp q="Explain slow start and what happens on packet loss.">
+    The window doubles each round trip until ssthresh, then grows by one. Three duplicate ACKs halve it; a timeout resets it to one segment.
+  </FollowUp>
+  <FollowUp q="What is TIME-WAIT and why can it cause trouble?">
+    The side that closes first holds the connection about 60 seconds. Many short connections exhaust ports; reuse connections.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

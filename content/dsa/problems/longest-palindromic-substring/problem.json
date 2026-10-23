@@ -1,0 +1,28 @@
+{
+  "title": "Longest Palindromic Substring",
+  "difficulty": "Medium",
+  "patterns": ["dp-1d"],
+  "js": ["strings"],
+  "order": 5,
+  "summary": "Return the longest contiguous piece of a string that reads the same forwards and backwards.",
+  "fn": "longestPalindrome",
+  "params": ["s"],
+  "types": {"params":["string"],"returns":"string"},
+  "validate": "(result, args, expected) => {\n  const s = args[0];\n  if (typeof result !== \"string\") return \"Return a string.\";\n  if (result.length !== expected.length) return \"Your answer has length \" + result.length + \", but the longest palindromic substring has length \" + expected.length + \".\";\n  if (!s.includes(result)) return JSON.stringify(result) + \" is not a contiguous substring of the input.\";\n  for (let i = 0, j = result.length - 1; i < j; i++, j--) if (result[i] !== result[j]) return JSON.stringify(result) + \" is not a palindrome.\";\n  return true;\n}",
+  "tests": [
+    {"args":["babad"],"expected":"bab","explain":"Both \"bab\" and \"aba\" have length 3; either is accepted."},
+    {"args":["cbbd"],"expected":"bb","explain":"An even-length palindrome: \"bb\"."},
+    {"args":["a"],"expected":"a","explain":"A single character is a palindrome."},
+    {"args":["ac"],"expected":"a"},
+    {"args":["aaaa"],"expected":"aaaa"},
+    {"args":["abcdefg"],"expected":"a"},
+    {"args":["forgeeksskeegfor"],"expected":"geeksskeeg"},
+    {"args":["abacdfgdcaba"],"expected":"aba"},
+    {"args":["racecarxyz"],"expected":"racecar"},
+    {"args":["ababaaaaabababbbbaabbbabaaaaaaabbabababa"],"expected":"ababaaaaababa"},
+    {"args":["aababacaaaabbbbcaaabccbabbaccbcbcaaccbabcaaaaabcabcbcca"],"expected":"abccba"},
+    {"args":["xxxxxxxxxxxxxxxxxxxxxxxxxyxxxxxxxxxxxxxxxxxxxxxxxxx"],"expected":"xxxxxxxxxxxxxxxxxxxxxxxxxyxxxxxxxxxxxxxxxxxxxxxxxxx"}
+  ],
+  "hints": ["Every palindrome has a center: a single character for odd lengths, or the gap between two equal characters for even lengths. Checking all substrings directly costs O(n³).","Try each of the 2n - 1 centers and expand outward while the characters on both sides match. Each expansion stops at the first mismatch.","Write expand(l, r) that moves l left and r right while s[l] === s[r], and returns the length. Call it with (i, i) and (i, i + 1) for each i, remember the best start and length, and slice the answer at the end. Any longest palindrome is accepted."],
+  "complexity": {"time":"O(n²): 2n - 1 centers, each expanding up to n / 2 steps","space":"O(1) besides the answer"}
+}

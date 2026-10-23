@@ -1,0 +1,27 @@
+{
+  "title": "Reconstruct Itinerary",
+  "difficulty": "Hard",
+  "patterns": ["graph-traversal"],
+  "js": ["map-set","sorting","graphs-in-js"],
+  "order": 7,
+  "summary": "Use every flight ticket exactly once to build the lexicographically smallest trip starting at JFK.",
+  "fn": "findItinerary",
+  "params": ["tickets"],
+  "types": {"params":["string[][]"],"returns":"string[]"},
+  "validate": "(result, args, expected) => {\n  const tickets = args[0];\n  if (!Array.isArray(result)) return \"Return an array of airport codes.\";\n  if (result.length !== tickets.length + 1) return \"Using all \" + tickets.length + \" tickets visits \" + (tickets.length + 1) + \" airports, but your itinerary has \" + result.length + \".\";\n  if (result[0] !== \"JFK\") return \"The trip must start at JFK, but yours starts at \" + result[0] + \".\";\n  const left = new Map();\n  for (const [a, b] of tickets) left.set(a + \">\" + b, (left.get(a + \">\" + b) || 0) + 1);\n  for (let i = 0; i + 1 < result.length; i++) {\n    const key = result[i] + \">\" + result[i + 1];\n    if (!left.get(key)) return \"Step \" + (i + 1) + \" flies \" + result[i] + \" to \" + result[i + 1] + \", but there is no unused ticket for that.\";\n    left.set(key, left.get(key) - 1);\n  }\n  for (let i = 0; i < result.length; i++) {\n    if (result[i] !== expected[i]) return \"This uses every ticket once, but it is not the lexicographically smallest trip: at stop \" + (i + 1) + \" you go to \" + result[i] + \", while a valid trip goes to \" + expected[i] + \".\";\n  }\n  return true;\n}",
+  "tests": [
+    {"args":[[["MUC","LHR"],["JFK","MUC"],["SFO","SJC"],["LHR","SFO"]]],"expected":["JFK","MUC","LHR","SFO","SJC"],"explain":"Only one order uses every ticket: JFK to MUC to LHR to SFO to SJC."},
+    {"args":[[["JFK","SFO"],["JFK","ATL"],["SFO","ATL"],["ATL","JFK"],["ATL","SFO"]]],"expected":["JFK","ATL","JFK","SFO","ATL","SFO"],"explain":"Two valid trips exist; JFK ATL JFK SFO ATL SFO is lexicographically smaller than JFK SFO ATL JFK ATL SFO."},
+    {"args":[[["JFK","KUL"],["JFK","NRT"],["NRT","JFK"]]],"expected":["JFK","NRT","JFK","KUL"],"explain":"KUL is smaller than NRT, but going there first strands the NRT to JFK ticket. The valid trip is JFK NRT JFK KUL."},
+    {"args":[[["JFK","AAA"]]],"expected":["JFK","AAA"]},
+    {"args":[[["JFK","AAA"],["AAA","JFK"],["JFK","AAA"]]],"expected":["JFK","AAA","JFK","AAA"]},
+    {"args":[[["JFK","BBB"],["JFK","AAA"],["AAA","BBB"],["BBB","JFK"]]],"expected":["JFK","AAA","BBB","JFK","BBB"]},
+    {"args":[[["JFK","AAA"],["JFK","AAA"],["AAA","JFK"],["AAA","CCC"]]],"expected":["JFK","AAA","JFK","AAA","CCC"]},
+    {"args":[[["JFK","ZZZ"],["ZZZ","AAA"],["AAA","ZZZ"],["ZZZ","JFK"],["JFK","BBB"]]],"expected":["JFK","ZZZ","AAA","ZZZ","JFK","BBB"]},
+    {"args":[[["JFK","JFK"],["ATL","LAX"],["LAX","SFO"],["ATL","SFO"],["SFO","LAX"],["SFO","JFK"],["JFK","LAX"],["LAX","ATL"],["SFO","SFO"],["JFK","LAX"],["LAX","LAX"],["LAX","SFO"],["JFK","ATL"],["SFO","JFK"]]],"expected":["JFK","ATL","LAX","ATL","SFO","JFK","JFK","LAX","LAX","SFO","JFK","LAX","SFO","SFO","LAX"]},
+    {"args":[[["ATL","SFO"],["ORD","ORD"],["LAX","DFW"],["SFO","LAX"],["JFK","ORD"],["ORD","JFK"],["JFK","ORD"],["DFW","DFW"],["JFK","SFO"],["SFO","LAX"],["DFW","ATL"],["ORD","DFW"],["DFW","JFK"],["LAX","JFK"],["DFW","ORD"],["ATL","DFW"],["LAX","ATL"],["JFK","LAX"],["JFK","LAX"],["DFW","DFW"],["LAX","ATL"],["ATL","JFK"]]],"expected":["JFK","LAX","ATL","DFW","ATL","JFK","LAX","ATL","SFO","LAX","DFW","DFW","DFW","JFK","ORD","DFW","ORD","JFK","SFO","LAX","JFK","ORD","ORD"]},
+    {"args":[[["DDD","CCC"],["BBB","CCC"],["JFK","BBB"],["CCC","DDD"],["JFK","AAA"],["DDD","DDD"],["DDD","CCC"],["CCC","CCC"],["AAA","CCC"],["BBB","DDD"],["BBB","BBB"],["AAA","JFK"],["DDD","AAA"],["CCC","BBB"],["BBB","BBB"],["CCC","BBB"],["AAA","JFK"],["JFK","BBB"],["BBB","AAA"],["AAA","BBB"],["BBB","AAA"],["CCC","CCC"],["BBB","CCC"],["DDD","JFK"],["CCC","BBB"],["JFK","DDD"],["DDD","CCC"],["CCC","BBB"],["CCC","DDD"],["BBB","DDD"]]],"expected":["JFK","AAA","BBB","AAA","CCC","BBB","AAA","JFK","BBB","BBB","BBB","CCC","BBB","CCC","BBB","DDD","AAA","JFK","BBB","DDD","CCC","CCC","CCC","DDD","CCC","DDD","DDD","JFK","DDD","CCC","BBB"]}
+  ],
+  "hints": ["Treat airports as nodes and tickets as directed edges. Using every ticket exactly once is an Eulerian path from JFK, and the smallest-first rule decides which of the several paths to report.","Greedily taking the smallest destination can strand you at an airport with no way out while tickets remain (a dead end). The dead-end airport must come last in the trip, so it should be written at the end, not where you first met it.","Sort each airport's destinations. Run a DFS from JFK that repeatedly takes (and removes) the smallest remaining destination, and add an airport to the route only when you return from it, after all its tickets are used. Reverse the collected route at the end (Hierholzer's algorithm)."],
+  "complexity": {"time":"O(E log E): sorting the tickets dominates; the DFS uses each ticket once","space":"O(E) for the adjacency lists and the route"}
+}

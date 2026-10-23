@@ -1,0 +1,85 @@
+import { contextSwitch, forkExec, modelChoice } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+A **process** is a running program with its own private memory. **Threads** are the paths of execution inside it, and they share that memory, which is why they are cheap to switch and easy to break.
+</TLDR>
+
+## Process or thread: what is the difference?
+A process is a house; threads are the people living in it. The house has its own address and front door. The people share the kitchen but each keeps their own bed.
+
+| | Process | Thread |
+|---|---|---|
+| Owns | Address space, open files, PID | Stack, registers, program counter |
+| Shares | Nothing by default | Code, heap, globals, open files |
+| Crash | Others are safe | Takes the whole process down |
+
+<Callout kind="interview" title="What interviewers listen for">
+You say what is shared (heap, code, files) and what is private (stack, registers) unprompted, and the consequence: threads talk through memory, so they need locks; processes are isolated but slower to cooperate.
+</Callout>
+
+## What a context switch saves, and why it costs
+When a thread's time slice ends, the kernel **context switches**: it saves the running thread's registers (including the program counter and stack pointer) and loads the next thread's.
+
+<Timeline spec={contextSwitch} />
+
+The switch takes a few microseconds. The hidden cost is bigger: the next thread meets caches and a **TLB** (the cache of address translations) full of someone else's data. A switch between processes also changes the address space, so it costs more.
+
+<CodeTabs files={['snippets/switch-cost.js', 'snippets/switch-cost.test.js']} />
+
+A 50 microsecond slice loses about a tenth of the CPU, which is why a thread per request melts down under load.
+
+## Sharing memory is the danger
+Threads share memory, so two can touch one variable at once. `counter++` is not one step: the CPU does LOAD, ADD, STORE, and another thread can slip in between.
+
+<CodeTabs files={['snippets/lost-update.js', 'snippets/lost-update.test.js']} />
+
+If both load 0 before either stores, both store 1 and one update vanishes: a **race condition**. A lock makes the three steps one **critical section**. The next lessons cover locks and alternatives.
+
+## fork, exec and starting a thread
+
+`fork()` clones the calling process. The child gets a copy of the address space, which the kernel shares **copy-on-write**: pages are copied only when someone writes. `exec()` then replaces the child's code with a new program. Shells do exactly this for every command you run.
+
+<SequenceDiagram spec={forkExec} />
+
+Starting a thread (`pthread_create`, `new Thread`) allocates a stack and a control block and shares everything else. It is much cheaper than a fork, but a thread's stack is real memory you pay for: about a megabyte of address space each on a typical JVM.
+
+## Kernel threads, green threads and the event loop
+
+Most languages map one language thread to one kernel thread (1:1), so the OS schedules it. Go and Erlang run many cheap **green threads** (goroutines, processes) on a few kernel threads (M:N), so a goroutine costs a few kilobytes, not a megabyte.
+
+Node.js uses neither: one thread runs your JavaScript and an **event loop** hands it each finished I/O event. It handles thousands of idle sockets with one stack, but a long CPU loop blocks everyone. CPython's default build has a global interpreter lock, so threads help with waiting on I/O but not with CPU-bound Python code.
+
+## Pick one: process, thread or event loop
+
+Ask in this order: does a failure need to stay contained, is the work mostly waiting, and does it share state?
+
+<DecisionTree spec={modelChoice} />
+
+Real systems mix them. Chrome gives each site its own process, each process runs several threads, and a Node deployment often runs one process per CPU core.
+
+## Where this goes wrong
+
+<Callout kind="warning" title="More threads is not more speed">
+Past the core count, extra CPU-bound threads only add switching and lock contention. For CPU-bound work start near the number of cores, for I/O-bound work more, and measure.
+</Callout>
+
+- **Zombies.** A child that exits but is never `wait()`ed for stays in the process table. **Orphans** are reparented to init and are harmless.
+- **One thread can kill the process.** A segfault or an uncaught out-of-memory in any thread ends all of them.
+- **Fork in a threaded program.** The child gets only the calling thread, but copies the locks other threads held. It can deadlock instantly.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What is the difference between a process and a thread?">
+    A process owns an address space and resources. Its threads share the heap and code but keep their own stack and registers.
+  </FollowUp>
+  <FollowUp q="What happens during a context switch?">
+    The kernel saves the running thread's registers, picks another thread and loads its registers. A process switch also changes the page tables.
+  </FollowUp>
+  <FollowUp q="How many threads should a server have?">
+    About one per core for CPU-bound work, more for work that waits. Measure as you raise it.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

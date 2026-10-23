@@ -74,6 +74,34 @@ const lanes: FlowSpec = {
 };
 
 export const story: Story | undefined = {
+  learn: [
+    {
+      head: "What a notification system does",
+      body: "It takes one event, like order shipped, and delivers messages to the right people by push, email or SMS. It answers the caller at once and sends in the background.",
+      eg: "A post office sorting room",
+      example: "Letters arrive in one sack. Staff sort them into bins by delivery route and send each van out separately.",
+      doodle: "pubsub",
+    },
+    {
+      head: "Urgent messages need their own lane",
+      body: "A login code must arrive in seconds. A marketing blast can take an hour. If both share one line, the code waits behind a million promotions.",
+      eg: "A hospital emergency entrance",
+      example: "Ambulances use their own entrance, so a heart attack never queues behind a sprained wrist in the main waiting room.",
+      doodle: "queue",
+    },
+    {
+      head: "Never send the same thing twice",
+      body: "Queues can deliver a job more than once. Each message gets a unique id, and the sender skips ids it has already sent.",
+      eg: "A guest list at the door",
+      example: "A bouncer ticks each name as the guest walks in. If someone tries the same name again, the tick shows they are already inside.",
+    },
+    {
+      head: "Have a backup provider",
+      body: "SMS and email providers go down sometimes. When one keeps failing, stop using it for a while and switch to a second provider.",
+      eg: "A second courier",
+      example: "A shop ships with one courier, but when that courier's depot floods, it books parcels with another so orders still go out.",
+    },
+  ],
   steps: [
     {
       tag: "pain",

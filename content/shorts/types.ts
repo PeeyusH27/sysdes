@@ -4,7 +4,7 @@
 // with that page. Building blocks shorts stand alone (Bloom filters, gossip, LSM trees…): they link to the
 // closest lesson section when there is one.
 
-export type ShortTrack = "System design" | "DSA" | "JavaScript" | "Building blocks";
+export type ShortTrack = "System design" | "DSA" | "JavaScript" | "Building blocks" | "CS fundamentals";
 
 export interface ShortMore {
   /** Small heading for the group, e.g. "How it works", "Watch out", "Example". */

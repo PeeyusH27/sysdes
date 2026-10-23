@@ -12,7 +12,7 @@ import { Inline } from "./Inline";
 export type ShortItem = Short & { codeHtml?: string; sourceTitle?: string };
 type Filter = "All" | ShortTrack | "Saved";
 
-const FILTERS: Filter[] = ["All", "System design", "Building blocks", "DSA", "JavaScript", "Saved"];
+const FILTERS: Filter[] = ["All", "System design", "Building blocks", "CS fundamentals", "DSA", "JavaScript", "Saved"];
 /** How long a short must stay on screen to count as seen. */
 const SEEN_AFTER_MS = 1200;
 

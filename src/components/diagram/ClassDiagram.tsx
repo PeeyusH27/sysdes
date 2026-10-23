@@ -150,21 +150,40 @@ export function ClassDiagram({ spec, stage: startStage = 0, bare = false }: { sp
     <figure className={compact ? "flow uml uml--compact" : "flow uml"}>
       {stages && current && !bare && (
         <div className="uml-stages">
-          <div className="uml-stage-bar">
-            <button type="button" className="wbtn" onClick={() => setStage(stage - 1)} disabled={stage === 0} aria-label="Previous stage">
-              <ChevronLeft size={15} aria-hidden />
-            </button>
-            <span className="uml-stage-title" aria-live="polite">
-              <b>
-                Stage {stage + 1} of {stages.length}
-              </b>
-              {current.title}
-            </span>
-            <button type="button" className="wbtn" onClick={() => setStage(stage + 1)} disabled={stage === stages.length - 1} aria-label="Next stage">
-              <ChevronRight size={15} aria-hidden />
-            </button>
+          <div className="uml-stage-nav">
+            <ol className="uml-stage-dots" aria-label="Stages">
+              {stages.map((st, k) => (
+                <li key={st.title}>
+                  <button type="button" aria-label={`Stage ${k + 1}: ${st.title}`} aria-current={k === stage ? "step" : undefined} data-done={k < stage || undefined} onClick={() => setStage(k)}>
+                    {k + 1}
+                  </button>
+                </li>
+              ))}
+            </ol>
+            <div className="uml-stage-buttons">
+              <button type="button" className="btn btn-sm" onClick={() => setStage(stage - 1)} disabled={stage === 0}>
+                <ChevronLeft size={15} aria-hidden /> Back
+              </button>
+              <span className="uml-stage-count" aria-hidden>
+                {stage + 1} / {stages.length}
+              </span>
+              <button type="button" className="btn btn-sm btn-primary" onClick={() => setStage(stage + 1)} disabled={stage === stages.length - 1}>
+                Next stage <ChevronRight size={15} aria-hidden />
+              </button>
+            </div>
           </div>
-          <p className="uml-stage-note">{current.note}</p>
+          <div className="step-banner" role="status" aria-live="polite" aria-atomic>
+            <span className="step-no" aria-hidden>
+              {stage + 1}
+            </span>
+            <div className="step-banner-body" key={stage}>
+              <p className="step-banner-meta">
+                Stage {stage + 1} of {stages.length}
+              </p>
+              <p className="step-banner-title">{current.title}</p>
+              <p className="step-banner-text">{current.note}</p>
+            </div>
+          </div>
         </div>
       )}
       {/* Focusable so keyboard users can scroll it sideways when it is wider than the column. */}

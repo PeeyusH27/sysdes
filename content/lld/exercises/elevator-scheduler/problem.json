@@ -1,0 +1,787 @@
+{
+  "title": "Elevator Scheduler",
+  "difficulty": "Medium",
+  "patterns": [
+    "state-observer",
+    "strategy-decorator"
+  ],
+  "js": [],
+  "order": 13,
+  "summary": "Drive one elevator car tick by tick with a swappable scheduling policy (LOOK sweeps or first-come-first-served) and exact call handling.",
+  "kind": "design",
+  "className": "ElevatorController",
+  "samples": 3,
+  "tests": [
+    {
+      "ops": [
+        "ElevatorController",
+        "carCall",
+        "tick",
+        "tick",
+        "tick",
+        "state"
+      ],
+      "args": [
+        [
+          5,
+          0,
+          "look"
+        ],
+        [
+          2
+        ],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        "UP@1",
+        "OPEN@2",
+        "IDLE@2",
+        "IDLE@2"
+      ],
+      "explain": "One tick moves one floor. Arriving at floor 2 and opening the doors happen in the same tick, then the doors close and nothing is pending, so the car idles."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "tick",
+        "hallCall",
+        "hallCall",
+        "tick",
+        "tick",
+        "pending"
+      ],
+      "args": [
+        [
+          5,
+          2,
+          "look"
+        ],
+        [],
+        [
+          2,
+          "up"
+        ],
+        [
+          2,
+          "up"
+        ],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        "IDLE@2",
+        true,
+        false,
+        "OPEN@2",
+        "IDLE@2",
+        []
+      ],
+      "explain": "An idle car at floor 2 serves a call for floor 2 on the next tick. The duplicate press is not a new call, so it returns false."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "hallCall",
+        "hallCall",
+        "hallCall",
+        "carCall",
+        "carCall",
+        "hallCall",
+        "pending"
+      ],
+      "args": [
+        [
+          5,
+          2,
+          "look"
+        ],
+        [
+          4,
+          "up"
+        ],
+        [
+          0,
+          "down"
+        ],
+        [
+          9,
+          "up"
+        ],
+        [
+          5
+        ],
+        [
+          -1
+        ],
+        [
+          2,
+          "sideways"
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        []
+      ],
+      "explain": "There is no up button on the top floor (4), no down button on floor 0, and floors 5, -1 and 9 do not exist. Nothing becomes pending."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "carCall",
+        "hallCall",
+        "hallCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "pending"
+      ],
+      "args": [
+        [
+          10,
+          0,
+          "look"
+        ],
+        [
+          6
+        ],
+        [
+          3,
+          "down"
+        ],
+        [
+          4,
+          "up"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        "UP@1",
+        "UP@2",
+        "UP@3",
+        "OPEN@4",
+        "UP@5",
+        "OPEN@6",
+        "DOWN@5",
+        "DOWN@4",
+        "OPEN@3",
+        "IDLE@3",
+        []
+      ],
+      "explain": "Sweeping up, LOOK passes floor 3 (a down call) and stops at 4 and 6. With nothing left ahead it reverses and comes back for 3."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "carCall",
+        "hallCall",
+        "hallCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "pending"
+      ],
+      "args": [
+        [
+          10,
+          0,
+          "fcfs"
+        ],
+        [
+          6
+        ],
+        [
+          3,
+          "down"
+        ],
+        [
+          4,
+          "up"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        "UP@1",
+        "UP@2",
+        "UP@3",
+        "UP@4",
+        "UP@5",
+        "OPEN@6",
+        "DOWN@5",
+        "DOWN@4",
+        "OPEN@3",
+        "OPEN@4",
+        "IDLE@4",
+        []
+      ],
+      "explain": "The same calls under FCFS: the car runs to 6 without stopping at 3 or 4, because 6 is the oldest call. Then it zig-zags to 3, then to 4."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "carCall",
+        "carCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick"
+      ],
+      "args": [
+        [
+          10,
+          4,
+          "look"
+        ],
+        [
+          2
+        ],
+        [
+          6
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        "DOWN@3",
+        "OPEN@2",
+        "UP@3",
+        "UP@4",
+        "UP@5",
+        "OPEN@6",
+        "IDLE@6"
+      ],
+      "explain": "Floors 2 and 6 are equally near, so the lower floor wins the tie. After serving 2 the car sweeps up to 6."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "hallCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "state"
+      ],
+      "args": [
+        [
+          10,
+          0,
+          "look"
+        ],
+        [
+          5,
+          "down"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        "UP@1",
+        "UP@2",
+        "UP@3",
+        "UP@4",
+        "OPEN@5",
+        "IDLE@5",
+        "IDLE@5",
+        "IDLE@5"
+      ],
+      "explain": "A lone down call above an idle car: the car goes up to it, finds nothing ahead, serves it and turns around."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "carCall",
+        "hallCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "pending"
+      ],
+      "args": [
+        [
+          8,
+          5,
+          "look"
+        ],
+        [
+          1
+        ],
+        [
+          3,
+          "up"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        "DOWN@4",
+        "DOWN@3",
+        "DOWN@2",
+        "OPEN@1",
+        "UP@2",
+        "OPEN@3",
+        "IDLE@3",
+        "IDLE@3",
+        []
+      ],
+      "explain": "Floor 3 is nearer, so the car heads down. Sweeping down it passes the up call at 3 because floor 1 still lies ahead. After 1 it reverses and serves 3."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "carCall",
+        "tick",
+        "carCall",
+        "tick",
+        "tick",
+        "tick"
+      ],
+      "args": [
+        [
+          6,
+          0,
+          "look"
+        ],
+        [
+          1
+        ],
+        [],
+        [
+          1
+        ],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        "OPEN@1",
+        true,
+        "OPEN@1",
+        "IDLE@1",
+        "IDLE@1"
+      ],
+      "explain": "A car call made while the doors are open is a new pending call. The next tick closes the doors and, standing on that floor, opens them again."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "carCall",
+        "tick",
+        "carCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "state"
+      ],
+      "args": [
+        [
+          10,
+          0,
+          "look"
+        ],
+        [
+          3
+        ],
+        [],
+        [
+          5
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        "UP@1",
+        true,
+        "UP@2",
+        "OPEN@3",
+        "UP@4",
+        "OPEN@5",
+        "IDLE@5",
+        "IDLE@5"
+      ],
+      "explain": "A call for a floor ahead of the sweep joins it: the car serves 3 and keeps going up to 5 without turning."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "state",
+        "hallCall",
+        "carCall",
+        "hallCall",
+        "carCall",
+        "pending"
+      ],
+      "args": [
+        [
+          10,
+          3,
+          "look"
+        ],
+        [],
+        [
+          7,
+          "down"
+        ],
+        [
+          2
+        ],
+        [
+          2,
+          "up"
+        ],
+        [
+          7
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "IDLE@3",
+        true,
+        true,
+        true,
+        true,
+        [
+          [
+            2,
+            "car"
+          ],
+          [
+            2,
+            "up"
+          ],
+          [
+            7,
+            "car"
+          ],
+          [
+            7,
+            "down"
+          ]
+        ]
+      ],
+      "explain": "pending() sorts by floor, then by kind spelling: car, down, up. Nothing has been served, so nothing is removed."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "carCall",
+        "hallCall",
+        "carCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "pending",
+        "tick",
+        "tick",
+        "tick",
+        "tick"
+      ],
+      "args": [
+        [
+          10,
+          0,
+          "fcfs"
+        ],
+        [
+          4
+        ],
+        [
+          4,
+          "up"
+        ],
+        [
+          1
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        "UP@1",
+        "UP@2",
+        "UP@3",
+        "OPEN@4",
+        [
+          [
+            1,
+            "car"
+          ]
+        ],
+        "DOWN@3",
+        "DOWN@2",
+        "OPEN@1",
+        "IDLE@1"
+      ],
+      "explain": "FCFS passes floor 1 on the way to the oldest call, 4. At 4 it satisfies every call for that floor at once. Only then does it turn back for floor 1."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "hallCall",
+        "hallCall",
+        "tick",
+        "tick",
+        "pending"
+      ],
+      "args": [
+        [
+          6,
+          3,
+          "look"
+        ],
+        [
+          3,
+          "up"
+        ],
+        [
+          3,
+          "down"
+        ],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        "OPEN@3",
+        "IDLE@3",
+        []
+      ],
+      "explain": "An idle car takes every call pending at its own floor in one stop."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "carCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "hallCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick"
+      ],
+      "args": [
+        [
+          10,
+          0,
+          "look"
+        ],
+        [
+          4
+        ],
+        [],
+        [],
+        [],
+        [],
+        [
+          2,
+          "up"
+        ],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        "UP@1",
+        "UP@2",
+        "UP@3",
+        "OPEN@4",
+        true,
+        "DOWN@3",
+        "OPEN@2",
+        "IDLE@2",
+        "IDLE@2"
+      ],
+      "explain": "After serving 4 the car is idle. A call for 2 sets its heading down; arriving at 2 with nothing ahead, it serves the up call by turning around there."
+    },
+    {
+      "ops": [
+        "ElevatorController",
+        "tick",
+        "carCall",
+        "tick",
+        "tick",
+        "hallCall",
+        "carCall",
+        "tick",
+        "tick",
+        "tick",
+        "tick",
+        "tick"
+      ],
+      "args": [
+        [
+          6,
+          2,
+          "fcfs"
+        ],
+        [],
+        [
+          2
+        ],
+        [],
+        [],
+        [
+          4,
+          "down"
+        ],
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        "IDLE@2",
+        true,
+        "OPEN@2",
+        "IDLE@2",
+        true,
+        true,
+        "UP@3",
+        "OPEN@4",
+        "DOWN@3",
+        "DOWN@2",
+        "DOWN@1"
+      ],
+      "explain": "FCFS also serves a call for the floor it is standing on, as long as it is the oldest. Then 4 is older than 0, so the car goes to 4 first."
+    }
+  ],
+  "hints": [
+    "Keep the pending calls as data (floor and kind) in request order, and let the controller own the floor, the sweep direction and the status. A policy should only answer two questions about that data.",
+    "Give each policy serve(car) (should the doors open here, and which calls does that satisfy?) and heading(car) (which way to move, or none). tick() is then the same for both: serve, else heading and move one floor, then serve again.",
+    "For LOOK, a stop is wanted if it is a car call or a hall call in the sweep direction; when nothing lies ahead, a hall call in the other direction is served too and the sweep reverses. FCFS only ever looks at stops[0]. Look the policy up in a table by name."
+  ],
+  "complexity": {
+    "time": "O(P) per tick for P pending calls",
+    "space": "O(P)"
+  }
+}

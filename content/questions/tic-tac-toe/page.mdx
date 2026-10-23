@@ -1,0 +1,202 @@
+import { classes, moveFlow, raceFlow } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Two classes with two jobs: a **Board** that knows its lines, and a **Game** that knows the turn and how the match ends. Keep a running total per row, column and diagonal and a move is checked in **O(1)**, on a 3 by 3 board or a 500 by 500 one.
+</TLDR>
+
+<Requirements
+  functional={['Two players, X first, then alternating', 'Place a mark on a free cell', 'A full row, column or diagonal wins', 'A full board with no line is a draw', 'Rejected moves change nothing and keep the turn', 'Undo the last move', 'Optional computer opponent']}
+  nonFunctional={['Checking a move is O(1)', 'Board size is a parameter, not a constant', 'Safe when two clients send moves at once', 'The opponent can be swapped without touching the game', 'Deterministic tests: no clock, no randomness in the core']}
+  outOfScope={['Rendering and animation', 'Matchmaking and accounts (an HLD follow-up)', 'More than two players (a follow-up)']} />
+
+A **low-level design** (LLD) question that looks trivial. The grade is on who owns what, and on the follow-ups.
+
+New to this? Read [From requirements to classes](/lld/foundations/thinking-in-objects) first.
+
+## Clarifying questions
+
+- Is the board always 3 by 3, or n by n?
+- Is it n in a row, or fewer than n (a k-in-a-row game)?
+- Two players only, or more?
+- Is there undo? Is there a computer opponent?
+- One screen, or two remote clients?
+
+## Public interface
+
+| Call | Returns | Notes |
+|---|---|---|
+| `move(mark, row, col)` | `OK`, `WIN`, `DRAW` | Applies the move |
+| | `NOT_YOUR_TURN`, `INVALID_MOVE`, `GAME_OVER`, `STALE` | Rejected: nothing changes |
+| `undo()` | `true` if there was a move | Also takes a game back from won or drawn |
+| `status`, `winner`, `current` | | Read-only views |
+
+Every check runs before any change, in a fixed order: game over, stale version, turn, cell.
+
+## What it remembers
+
+- `cells`: the grid, empty or a mark.
+- `rows`, `cols`, `diag`, `anti`: one signed total per line.
+- `filled`: how many cells are used, so a draw needs no scan.
+- `turn`, `status`, `winner`, `version`, and the `history` stack for undo.
+
+The totals and the grid describe the same board. Only `place` and `clear` write them, so they cannot drift apart.
+
+## Build the design in stages
+
+Step through: the board, then the game, then undo, then the opponent as a strategy. Green marks what the latest stage added.
+
+<ClassDiagram spec={classes} />
+
+## One move, step by step
+
+Pick a branch: a normal move, a win, a draw on the last cell, and a rejected move.
+
+<SequenceDiagram spec={moveFlow} />
+
+## Win check in O(1)
+
+Scanning a row, a column and two diagonals costs O(n) per move. A **running total** per line costs nothing to read.
+
+Give X the value +1 and O the value -1. A move touches one row, one column, and at most two diagonals, so add its value to just those totals. A line belongs to one player exactly when its total is n or minus n, because a mixed line cancels toward zero.
+
+| After X plays 0,0 then 1,1 | Total |
+|---|---|
+| Row 0 | 1 |
+| Main diagonal | 2 |
+| X plays 2,2 | **3 = n, X wins** |
+
+**Fewer than n in a row?** The totals no longer work, because a winning run can sit inside a longer line. Then count same marks outward from the new cell in four directions. That is O(k) per move, and still no board scan.
+
+## Patterns, and when to skip them
+
+**Command** earns its place once there is undo: each move is a record that can reverse itself. **Strategy** earns its place once there is a computer player: a bot is a function from board to cell. A tiny **state machine** (in progress, won, draw) makes the ending one field instead of three flags.
+
+**Skip the rest.** A `Player` class that holds one string, a `WinChecker` with one implementation, or a rules engine for three rules are what interviewers mark down. For a plain 3 by 3, a function over a 2D array is a fine first answer.
+
+## Two clients, one game
+
+With two clients the danger is a **lost update**: both act on the same board.
+
+<SequenceDiagram spec={raceFlow} />
+
+- **One writer.** A lock per game makes the turn check and the cell check one step.
+- **A version number.** A move based on an older version is refused as stale.
+- **The server decides the turn**, never the client.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Size, k in a row, players, undo, bot, remote.
+  </Step>
+  <Step title="Name the owners">
+    Board owns lines. Game owns turns.
+  </Step>
+  <Step title="Order the checks">
+    Over, stale, turn, cell, then place.
+  </Step>
+  <Step title="Make the win check O(1)">
+    A signed total per line.
+  </Step>
+  <Step title="Add the extras only on request">
+    Undo, bot, remote play.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="Nouns and verbs">
+    Nouns: game, board, mark. Verbs: move, check a win, report the result. A `Player` class would hold one string, so the mark is enough.
+  </Step>
+  <Step title="Board.wouldComplete">
+
+Read the totals before placing, so the game knows the result without changing anything yet.
+
+```js
+wouldComplete(mark, r, c) {
+  const d = weight(mark);
+  const totals = [this.rows[r] + d, this.cols[c] + d];
+  if (r === c) totals.push(this.diag + d);
+  if (r + c === this.n - 1) totals.push(this.anti + d);
+  return totals.some(t => Math.abs(t) === this.n);
+}
+```
+
+  </Step>
+  <Step title="Game.move is a short list">
+    Game over, stale, turn, cell. Then place, push on the history, and choose win, draw or next turn. Check the win before the draw, so a last move that completes a line is a win.
+  </Step>
+  <Step title="Undo reverses the same counters">
+    `clear` is `place` with the sign flipped. Undo also restores the turn and the status, which can go back from won or drawn.
+  </Step>
+  <Step title="A bot is a function">
+    The sensible bot wins if it can, then blocks, then takes the middle. It uses `wouldComplete` for both checks. Minimax is another function behind the same interface.
+  </Step>
+  <Step title="Tests">
+    Compare the counters against a brute-force scan over hundreds of random games. Add the mixed line, the last-cell win and a 500 by 500 board.
+  </Step>
+</Steps>
+
+## Implementation
+
+The same design in **JavaScript, Java or Python**. Java and Python guard the game with a real lock.
+
+<CodeTabs
+  files={['snippets/board.js', 'snippets/game.js', 'snippets/bots.js', 'snippets/game.test.js']}
+  java={['snippets/java/Board.java', 'snippets/java/Game.java', 'snippets/java/Bots.java', 'snippets/java/GameTest.java']}
+  python={['snippets/python/board.py', 'snippets/python/game.py', 'snippets/python/bots.py', 'snippets/python/test_game.py']}
+/>
+
+- `wouldComplete` is read-only, so bots can try every cell without touching the board.
+- The Java test races two threads for the same move 200 times: exactly one is applied.
+
+## Code it yourself
+
+Try the [Tic-Tac-Toe exercise](/lld/exercises/tic-tac-toe): the same `Board` and `Game` split, with a 500 by 500 board that rules out scanning.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Win checked after the draw | A winning last move counts as a draw | Check the win first |
+| Mark placed before validation | A bad move uses up the turn | Validate everything first |
+| Grid and totals disagree | A phantom win after undo | One method writes both |
+| Two moves race | Lost update, wrong turn | Lock plus version |
+| Client picks the mark | A player moves for the other | The server owns the turn |
+
+## Trade-offs
+
+| Choice | Pros | Cons |
+|---|---|---|
+| Totals vs scanning | O(1) per move | Only for n in a row |
+| Mark as a string vs a Player class | Less code | No place for names or scores |
+| Lock vs one thread per game | Simple | Contention if one game is hot |
+| Undo stack vs recomputing | Fast | Extra state to keep correct |
+
+<Callout kind="interview" title="What interviewers listen for">
+A clean split between Board and Game. "Checking a move does not scan." Rejected moves that change nothing. Undo and a bot as follow-ups, and "I would not build a rules engine for this".
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would you support k in a row on a larger board?">
+    Keep the grid, drop the totals, and after each move count same marks outward in the four line directions from the new cell. That is O(k) and needs no board scan.
+  </FollowUp>
+  <FollowUp q="How would you add a computer opponent?">
+    A `Bot` that maps board and mark to a cell. Start with win, block, middle. Minimax searches every reply and is fine for 3 by 3, with pruning for more.
+  </FollowUp>
+  <FollowUp q="How would you support three players?">
+    Replace the two-way turn toggle with a list of marks. The totals need one map per mark instead of a sign.
+  </FollowUp>
+  <FollowUp q="How do you store and replay a game?">
+    The history already lists every move. Save it as a list of mark, row and column, and replay by calling `move` again.
+  </FollowUp>
+  <FollowUp q="How would you run it as an online service?">
+    One game per key, one writer per game, a version in every request, and the history as the source of truth. That is the HLD version of the same design.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

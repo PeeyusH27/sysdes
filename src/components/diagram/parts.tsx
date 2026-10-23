@@ -90,6 +90,27 @@ export function Legend({ kinds }: { kinds: NodeKind[] }) {
   );
 }
 
+/**
+ * What is happening in the current step, big and above the picture, so the eye lands on it first. Before the first
+ * step it shows the overview and says how to start. The text re-mounts per step so it fades in again.
+ */
+export function StepBanner({ index, total, text }: { index: number; total: number; text: string }) {
+  const started = index >= 0;
+  return (
+    <div className="step-banner" data-idle={started ? undefined : ""} role="status" aria-live="polite" aria-atomic>
+      <span className="step-no" aria-hidden>
+        {started ? index + 1 : <Play size={14} />}
+      </span>
+      <div className="step-banner-body">
+        <p className="step-banner-meta">{started ? `Step ${index + 1} of ${total}` : total > 0 ? `Overview · press Play or Next to step through (${total} steps)` : "Overview"}</p>
+        <p className="step-banner-text" key={index}>
+          {text}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function StepControls({ stepper, children }: { stepper: Stepper; children?: React.ReactNode }) {
   const done = stepper.index >= stepper.total - 1 && stepper.total > 0;
   return (

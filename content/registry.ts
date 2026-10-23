@@ -3,6 +3,7 @@
 // The DSA track has its own registry in content/dsa/registry.ts.
 import { jsTopics, patterns } from "./dsa/registry";
 import { lldLessons } from "./lld/registry";
+import { csLessons } from "./cs/registry";
 
 export type Level = "Easy" | "Medium" | "Hard";
 export type Category = "Frontend" | "Backend" | "Full-stack";
@@ -184,6 +185,41 @@ export const questions: Question[] = [
     tags: ["lld", "state pattern", "oop", "inventory", "change making"], related: ["/questions/parking-lot", "/questions/elevator"],
   },
   {
+    slug: "library-management", order: 36, title: "Design a Library Management System (LLD)", category: "Backend", level: "Medium", minutes: 35,
+    summary: "Separate the title from the copy, give each copy a small state machine, make fines a strategy, and make the last-copy borrow atomic.",
+    tags: ["lld", "state machine", "strategy pattern", "observer", "concurrency"], related: ["/questions/vending-machine", "/questions/parking-lot"],
+  },
+  {
+    slug: "splitwise", order: 32, title: "Design Splitwise (LLD)", category: "Backend", level: "Medium", minutes: 35,
+    summary: "Split bills four ways in integer cents with a fixed leftover rule, net the debts per pair, simplify them greedily, and keep settle-up race-free.",
+    tags: ["lld", "strategy pattern", "money", "ledger", "concurrency"], related: ["/questions/parking-lot", "/questions/atm"],
+  },
+  {
+    slug: "snake-and-ladder", order: 34, title: "Design Snake and Ladder (LLD)", category: "Backend", level: "Easy", minutes: 25,
+    summary: "A toy game with real design questions: one jump type for snakes and ladders, dice and the ending rule as strategies, and a layout check that stops jump loops.",
+    tags: ["lld", "strategy pattern", "oop", "game design", "concurrency"], related: ["/questions/vending-machine", "/questions/logger"],
+  },
+  {
+    slug: "tic-tac-toe", order: 35, title: "Design Tic-Tac-Toe (LLD)", category: "Backend", level: "Easy", minutes: 25,
+    summary: "Two classes with two jobs: a board that knows its lines and a game that knows the turn. Running totals check a win in O(1) on any size.",
+    tags: ["lld", "oop", "game", "command pattern", "strategy pattern"], related: ["/questions/vending-machine", "/lld/foundations/thinking-in-objects"],
+  },
+  {
+    slug: "atm", order: 31, title: "Design an ATM (LLD)", category: "Backend", level: "Medium", minutes: 35,
+    summary: "A state machine for the card and PIN flow, a chain of note handlers that backtracks on limited stock, and a withdrawal that never charges without paying.",
+    tags: ["lld", "state pattern", "chain of responsibility", "oop", "concurrency"], related: ["/questions/vending-machine", "/questions/lru-cache-lld"],
+  },
+  {
+    slug: "logger", order: 33, title: "Design a Logging Framework (LLD)", category: "Backend", level: "Medium", minutes: 35,
+    summary: "A tree of named loggers with inherited levels, appenders with their own thresholds and formats, and an async queue that forces a choice between dropping and blocking.",
+    tags: ["lld", "observer pattern", "strategy pattern", "decorator", "concurrency"], related: ["/questions/lru-cache-lld", "/learn/reliability-observability"],
+  },
+  {
+    slug: "lru-cache-lld", order: 30, title: "Design an LRU Cache (LLD)", category: "Backend", level: "Medium", minutes: 35,
+    summary: "A hash map plus a doubly linked list gives O(1) get and put. The design questions are the swappable eviction policy and why even a read needs the lock.",
+    tags: ["lld", "lru", "linked list", "strategy pattern", "concurrency"], related: ["/questions/parking-lot", "/learn/caching"],
+  },
+  {
     slug: "rate-limiter", order: 4, title: "Design a Rate Limiter", category: "Backend", level: "Medium", minutes: 35,
     summary: "Asked both as an algorithm question and as a distributed system question; be ready for either.",
     tags: ["redis", "lua", "token bucket", "gateway"], related: ["/learn/api-load-balancing", "/deep-dives/request-flows"], challenge: "rate-limiter",
@@ -228,6 +264,51 @@ export const questions: Question[] = [
     summary: "Drivers report their location every few seconds. A geospatial index finds the nearest ones, and the matcher gives each ride to exactly one driver.",
     tags: ["geohash", "geospatial", "location updates", "matching", "websockets"], related: ["/deep-dives/polling-sse-websockets", "/deep-dives/sharding-strategies"],
   },
+  {
+    slug: "web-crawler", order: 13, title: "Design a Web Crawler", category: "Backend", level: "Hard", minutes: 45,
+    summary: "Fetch a billion pages a month without hammering any site. A frontier with a queue per host keeps it polite, and a Bloom filter keeps it from repeating itself.",
+    tags: ["frontier", "politeness", "bloom filter", "dedupe", "kafka"], related: ["/learn/async-messaging", "/deep-dives/sharding-strategies"],
+  },
+  {
+    slug: "video-streaming", order: 14, title: "Design YouTube (Video Streaming)", category: "Full-stack", level: "Hard", minutes: 45,
+    summary: "Upload in resumable chunks, transcode into short segments in parallel, and let the player pick quality while a CDN serves the bytes.",
+    tags: ["cdn", "transcoding", "adaptive bitrate", "hls", "object storage"], related: ["/learn/async-messaging", "/learn/caching"],
+  },
+  {
+    slug: "file-storage", order: 15, title: "Design Dropbox (File Sync)", category: "Full-stack", level: "Hard", minutes: 45,
+    summary: "Chunk files by content hash so an edit uploads one chunk, keep metadata separate from bytes, and handle conflicting edits without losing work.",
+    tags: ["chunking", "dedupe", "sync", "conflicts", "object storage"], related: ["/learn/databases-scaling", "/deep-dives/sharding-strategies"],
+  },
+  {
+    slug: "key-value-store", order: 16, title: "Design a Distributed Key-Value Store", category: "Backend", level: "Hard", minutes: 50,
+    summary: "A Dynamo-style store: consistent hashing places keys, quorums balance freshness against availability, and vector clocks, hinted handoff and Merkle trees handle the failures.",
+    tags: ["consistent hashing", "quorum", "vector clocks", "replication", "gossip"], related: ["/learn/consistency-cap", "/deep-dives/sharding-strategies"],
+  },
+  {
+    slug: "unique-id-generator", order: 17, title: "Design a Unique ID Generator", category: "Backend", level: "Medium", minutes: 35,
+    summary: "Make unique, roughly time-ordered 64-bit ids on every server with no network call, and survive clock skew and shared worker ids.",
+    tags: ["snowflake", "clock skew", "uuid", "ticket server", "id generation"], related: ["/deep-dives/sharding-strategies", "/learn/case-url-shortener"],
+  },
+  {
+    slug: "collaborative-editor", order: 18, title: "Design Google Docs (Collaborative Editing)", category: "Full-stack", level: "Hard", minutes: 50,
+    summary: "Many people type in one document at once. Local echo keeps typing instant, a server orders the edits, and OT or a CRDT merges the concurrent ones.",
+    tags: ["operational transform", "crdt", "websockets", "operation log", "snapshots"], related: ["/deep-dives/polling-sse-websockets", "/learn/consistency-cap"],
+  },
+  {
+    slug: "proximity-service", order: 19, title: "Design Yelp (Nearby Places)", category: "Backend", level: "Medium", minutes: 40,
+    summary: "Places barely move and reads dominate. Index them with a geohash column or an in-memory quadtree, cover the search circle with a few cells, and replicate the index.",
+    tags: ["geohash", "quadtree", "geospatial", "read heavy", "caching"], related: ["/learn/caching", "/questions/ride-sharing"],
+  },
+  {
+    slug: "distributed-cache", order: 20, title: "Design a Distributed Cache", category: "Backend", level: "Hard", minutes: 45,
+    summary: "Shard keys over many memory nodes, evict and expire sensibly, and survive the three classic failures: stampedes, hot keys and stale fills.",
+    tags: ["cache", "consistent hashing", "lru", "stampede", "hot key"], related: ["/learn/caching", "/deep-dives/caching-techniques"],
+  },
+  {
+    slug: "metrics-monitoring", order: 21, title: "Design a Metrics and Monitoring System", category: "Backend", level: "Hard", minutes: 45,
+    summary: "A million samples a second from 100K hosts: batch and queue the ingest, compress into a time-series store, roll up old data, and alert without noise.",
+    tags: ["time series", "kafka", "compression", "rollups", "alerting"], related: ["/learn/reliability-observability", "/learn/async-messaging"],
+  },
 ];
 
 export const getLearnStep = (slug: string) => learnSteps.find((s) => s.slug === slug);
@@ -237,7 +318,7 @@ export const getQuestion = (slug: string) => questions.find((q) => q.slug === sl
 export interface PageRef {
   href: string;
   title: string;
-  section: "Learn" | "Deep dives" | "Questions" | "Reference" | "Patterns" | "JavaScript" | "Problems" | "LLD";
+  section: "Learn" | "Deep dives" | "Questions" | "Reference" | "Patterns" | "JavaScript" | "Problems" | "LLD" | "CS";
   summary: string;
   tags: string[];
   /** MDX file relative to content/ */
@@ -248,12 +329,14 @@ export function allPages(): PageRef[] {
   return [
     ...learnSteps.map((s) => ({ href: `/learn/${s.slug}`, title: s.title, section: "Learn" as const, summary: s.summary, tags: s.tags, file: `learn/${s.dir}/page.mdx` })),
     ...lldLessons.map((l) => ({ href: `/lld/foundations/${l.slug}`, title: l.title, section: "LLD" as const, summary: l.summary, tags: l.tags, file: `lld/foundations/${l.dir}/page.mdx` })),
+    ...csLessons.map((l) => ({ href: `/cs/${l.slug}`, title: l.title, section: "CS" as const, summary: l.summary, tags: l.tags, file: `cs/lessons/${l.dir}/page.mdx` })),
     ...deepDives.map((d) => ({ href: `/deep-dives/${d.slug}`, title: d.title, section: "Deep dives" as const, summary: d.summary, tags: d.tags, file: `deep-dives/${d.dir}/page.mdx` })),
     ...questions.map((q) => ({ href: `/questions/${q.slug}`, title: q.title, section: "Questions" as const, summary: q.summary, tags: q.tags, file: `questions/${q.slug}/page.mdx` })),
     { href: "/cheatsheet", title: "Cheatsheet", section: "Reference", summary: "Numbers to know, formulas and decision tables.", tags: ["numbers", "latency"], file: "cheatsheet.mdx" },
     { href: "/glossary", title: "Glossary", section: "Reference", summary: "System design terms in one line each.", tags: ["terms"] },
     { href: "/playground", title: "Playground", section: "Reference", summary: "Design challenges graded on a canvas, plus a free sandbox: simulate traffic and kill servers.", tags: ["playground", "builder", "challenge"] },
     { href: "/lld", title: "Low-level design", section: "Reference", summary: "Foundations, classic LLD questions and runnable design exercises.", tags: ["lld", "oop", "solid", "design patterns"] },
+    { href: "/cs", title: "CS fundamentals", section: "Reference", summary: "Operating systems and concurrency, networking and database internals: short lessons with follow-up questions and a quiz.", tags: ["cs", "operating systems", "networking", "databases", "concurrency", "fundamentals"] },
     { href: "/architecture", title: "Architecture lab", section: "Reference", summary: "Grow an infrastructure from one server to a full stack, click any component to learn it, then spike the traffic and break things.", tags: ["architecture", "infrastructure", "interactive", "scaling"] },
     { href: "/plan", title: "Interview plan and readiness", section: "Reference", summary: "How ready you are in coding, system design and LLD, and a week-by-week plan built from your progress and deadline.", tags: ["plan", "readiness", "schedule"] },
     { href: "/mock", title: "Mock interview rounds", section: "Reference", summary: "Timed rounds with hints held back, then a debrief on what to fix.", tags: ["mock", "interview", "timed"] },

@@ -195,16 +195,32 @@ export function Reader({ children, detail = [] }: { children: React.ReactNode; d
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, step]);
 
-  // Links to #anchors (in the text, search results) open the card that holds the anchor.
+  // Links to #anchors (in the text, search results) open the card that holds the anchor, and the "Read more" fold
+  // around it. Printing opens every fold, so the paper copy has all the words.
   useEffect(() => {
+    const unfold = (id: string) => {
+      const el = id ? document.getElementById(id) : null;
+      const fold = el?.closest<HTMLDetailsElement>("details.sec-more");
+      if (fold && !fold.open) {
+        fold.open = true;
+        requestAnimationFrame(() => el?.scrollIntoView({ block: "start" }));
+      }
+    };
+    unfold(decodeURIComponent(window.location.hash.slice(1)));
+    const onPrint = () => document.querySelectorAll<HTMLDetailsElement>("details.sec-more").forEach((d) => (d.open = true));
+    window.addEventListener("beforeprint", onPrint);
     const onHash = () => {
       const id = decodeURIComponent(window.location.hash.slice(1));
+      unfold(id);
       const sec = id ? document.getElementById(id)?.closest<HTMLElement>(".sec-card")?.dataset.sec : undefined;
       if (sec && detailKey.split(",").includes(sec)) setStoredDepth("all");
       if (sec) setActive(sec);
     };
     window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("beforeprint", onPrint);
+    };
   }, [detailKey, setStoredDepth]);
 
   const api = useMemo<ReaderApi>(

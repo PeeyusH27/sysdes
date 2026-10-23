@@ -1,0 +1,28 @@
+{
+  "title": "Lowest Common Ancestor of a BST",
+  "difficulty": "Medium",
+  "patterns": ["tree-dfs"],
+  "js": ["recursion","linked-list-tree-nodes"],
+  "order": 5,
+  "summary": "Use the ordering of a binary search tree to find the lowest common ancestor of two values.",
+  "fn": "lowestCommonAncestorBST",
+  "params": ["root","p","q"],
+  "types": {"params":["TreeNode","number","number"],"returns":"number"},
+  "io": {"args":["tree",null,null]},
+  "tests": [
+    {"args":[[6,2,8,0,4,7,9,null,null,3,5],2,8],"expected":6,"explain":"2 is in the left subtree of 6 and 8 is in the right subtree, so the paths split at the root, 6."},
+    {"args":[[6,2,8,0,4,7,9,null,null,3,5],2,4],"expected":2,"explain":"4 is below 2, and a node counts as its own ancestor, so the answer is 2."},
+    {"args":[[6,2,8,0,4,7,9,null,null,3,5],3,5],"expected":4,"explain":"Both are descendants of 4 (3 on its left, 5 on its right)."},
+    {"args":[[6,2,8,0,4,7,9,null,null,3,5],0,5],"expected":2},
+    {"args":[[6,2,8,0,4,7,9,null,null,3,5],9,7],"expected":8},
+    {"args":[[6,2,8,0,4,7,9,null,null,3,5],6,7],"expected":6},
+    {"args":[[2,1],2,1],"expected":2},
+    {"args":[[2,1],1,2],"expected":2},
+    {"args":[[1,null,2,null,3,null,4,null,5,null,6],3,6],"expected":3},
+    {"args":[[1,null,2,null,3,null,4,null,5,null,6],1,2],"expected":1},
+    {"args":[[55,20,95,-35,50,70,115,-40,-5,40,null,65,90,105,130,-50,null,-25,15,35,45,60,null,75,null,100,110,125,135,-60,-45,-30,-20,5,null,30,null,null,null,null,null,null,80,null,null,null,null,120,null,null,null,null,-55,null,null,null,null,null,-10,0,10,25,null,null,85,null,null,null,null,-15],70,-30],"expected":55},
+    {"args":[[55,20,95,-35,50,70,115,-40,-5,40,null,65,90,105,130,-50,null,-25,15,35,45,60,null,75,null,100,110,125,135,-60,-45,-30,-20,5,null,30,null,null,null,null,null,null,80,null,null,null,null,120,null,null,null,null,-55,null,null,null,null,null,-10,0,10,25,null,null,85,null,null,null,null,-15],-15,95],"expected":55}
+  ],
+  "hints": ["In a BST, everything left of a node is smaller and everything right is larger. What does that tell you about where p and q must be relative to the current node?","If both p and q are smaller than the current value, both live in the left subtree, so move left. If both are larger, move right.","The first node where p and q are not on the same side (one is smaller or equal and the other larger or equal) is the answer. This is a loop, no recursion or extra space is needed."],
+  "complexity": {"time":"O(h): one step down per level, where h is the tree height","space":"O(1) with the loop"}
+}

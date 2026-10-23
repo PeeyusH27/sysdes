@@ -7,7 +7,7 @@ import { HubTabs } from "@/components/content/HubBits";
 
 export const metadata = {
   title: "DSA patterns",
-  description: "The 22 patterns behind most coding interview problems, each explained step by step with animations and JavaScript code.",
+  description: "The 24 patterns behind most coding interview problems, each explained step by step with animations and JavaScript code.",
 };
 
 export default function PatternsIndex() {

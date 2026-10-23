@@ -73,5 +73,12 @@ export const getLldLesson = (slug: string) => lldLessons.find((l) => l.slug === 
 export const questionExercises: Record<string, string[]> = {
   "parking-lot": ["parking-lot", "pricing-rules"],
   "vending-machine": ["vending-machine"],
-  elevator: [],
+  elevator: ["elevator-scheduler"],
+  "tic-tac-toe": ["tic-tac-toe"],
+  "library-management": ["library-system"],
+  "lru-cache-lld": ["eviction-cache"],
+  atm: ["atm-machine"],
+  splitwise: ["expense-splitter"],
+  logger: ["logger-framework"],
+  "snake-and-ladder": ["snake-and-ladder"],
 };

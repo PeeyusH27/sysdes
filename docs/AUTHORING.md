@@ -41,6 +41,12 @@ Every `##` section is wrapped in a numbered card automatically (`src/lib/mdx/reh
 
 **Pinned visual pane.** The same plugin splits each section into text (paragraphs, lists, tables, `TLDR`, `Callout`, `Requirements`, `Steps`, `FollowUps`…) and visuals (every other component, plus top-level fenced code). From 1080 px wide, one pane on the left is pinned at the viewport's height and shows the visuals for the text being read (a section, or a `###` subsection with its own visual); all text scrolls on the right. The pane scales a visual down to fit, but not below 0.8, then scrolls inside. Narrower screens stack each section's visuals under its text. So:
 
+**Picture first, few words.** The plugin also folds words: in each row only the heading, the visuals and the **first block of words** stay out (a long first paragraph keeps just its first sentence; a big table or list up front folds entirely). Everything else goes behind "Read more · N words". A `<Steps>` that leads a section becomes an outline: step titles show, each step's words open on a tap. `<FollowUps>` and `<ProblemLink>` never fold. So:
+
+- Make the first sentence of every section the one that carries the idea. It may be the only one most readers see.
+- Give every `<Step>` a title that works on its own.
+- Check with `node scripts/fold-report.mjs [path]` (add `--sections` for one row per section). The site-wide target, checked by `tests/section-cards.test.ts`: under a third of prose showing, and no page over half.
+
 - Never refer to a visual by position ("below", "on the left"). Say "the diagram", "the simulator".
 - Put the sentence that says what to try in the same section as its widget or diagram.
 - Keep tables to 4 columns or fewer: they sit in the text column.

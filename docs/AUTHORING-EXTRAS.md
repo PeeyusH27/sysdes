@@ -12,7 +12,7 @@ Read `docs/AUTHORING.md` first for the site's voice: short, vivid, correct, no e
 
 ## Page extras
 
-Files: `content/extras/{learn,deep-dives,questions,patterns,lld}.ts`, each `export const extras: Record<slug, PageExtras> = { ... }`, keyed by the page's registry slug (`content/registry.ts`, `content/dsa/registry.ts`, `content/lld/registry.ts`). The type is in `content/extras/types.ts`. Run the checks with
+Files: `content/extras/{learn,deep-dives,questions,patterns,lld,cs}.ts`, each `export const extras: Record<slug, PageExtras> = { ... }`, keyed by the page's registry slug (`content/registry.ts`, `content/dsa/registry.ts`, `content/lld/registry.ts`). The type is in `content/extras/types.ts`. Run the checks with
 
 ```bash
 npx vitest run tests/extras.test.ts -t "extras: questions"      # or learn, deep-dives, patterns, lld

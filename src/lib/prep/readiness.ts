@@ -1,7 +1,7 @@
 // How ready someone is, per skill and per round, from what the site already records: pages finished, quiz scores,
 // problems and exercises solved, challenge and mission progress, and pattern-drill accuracy. Pure functions.
 // Each skill is scored out of 100 as a few weighted signals, so "why is this 40%?" always has an answer.
-import type { Catalog, CatalogItem, Track } from "./catalog-types";
+import type { Catalog, CatalogItem, ReadinessTrack, Track } from "./catalog-types";
 
 export interface Signals {
   /** href → time marked done. */
@@ -39,7 +39,7 @@ export interface Evidence {
 
 export interface Skill {
   id: string;
-  track: Track;
+  track: ReadinessTrack;
   group: string;
   title: string;
   short: string;
@@ -102,7 +102,7 @@ export function patternSkills(c: Catalog, s: Signals): Skill[] {
   });
 }
 
-function readQuizSkill(id: string, track: Track, group: string, title: string, short: string, href: string, minutes: number, s: Signals): Skill {
+function readQuizSkill(id: string, track: ReadinessTrack, group: string, title: string, short: string, href: string, minutes: number, s: Signals): Skill {
   const next: Action = !s.done[href] ? { kind: "read", href, label: `Read ${title}`, minutes } : { kind: "read", href, label: `Finish the quiz at the end of ${short}`, minutes: 5 };
   return skill({ id, track, group, title, short, href }, [donePart(href, s, 60), quizPart(href, s, 40)], next);
 }
@@ -178,17 +178,22 @@ export function lldSkills(c: Catalog, s: Signals): Skill[] {
 }
 
 export interface TrackReadiness {
-  track: Track;
+  track: ReadinessTrack;
   score: number;
   band: ReturnType<typeof band>;
   skills: Skill[];
   ready: number;
 }
 
-export function readiness(c: Catalog, s: Signals): Record<Track, TrackReadiness> {
-  const by: Record<Track, Skill[]> = { dsa: patternSkills(c, s), hld: hldSkills(c, s), lld: lldSkills(c, s) };
-  const out = {} as Record<Track, TrackReadiness>;
-  for (const t of ["dsa", "hld", "lld"] as Track[]) {
+/** The CS fundamentals lessons: read the lesson, then pass its quiz. */
+export function csSkills(c: Catalog, s: Signals): Skill[] {
+  return c.csLessons.map((l) => readQuizSkill(`cs:${l.slug}`, "cs", l.group, l.title, l.short, `/cs/${l.slug}`, l.minutes, s));
+}
+
+export function readiness(c: Catalog, s: Signals): Record<ReadinessTrack, TrackReadiness> {
+  const by: Record<ReadinessTrack, Skill[]> = { dsa: patternSkills(c, s), hld: hldSkills(c, s), lld: lldSkills(c, s), cs: csSkills(c, s) };
+  const out = {} as Record<ReadinessTrack, TrackReadiness>;
+  for (const t of ["dsa", "hld", "lld", "cs"] as ReadinessTrack[]) {
     const skills = by[t];
     const score = skills.length ? Math.round(skills.reduce((n, k) => n + k.score, 0) / skills.length) : 0;
     out[t] = { track: t, score, band: band(score), skills, ready: skills.filter((k) => k.score >= READY_AT).length };

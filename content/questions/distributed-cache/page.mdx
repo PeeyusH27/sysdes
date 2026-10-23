@@ -1,0 +1,200 @@
+import { architecture, staleSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Shard keys over many in-memory nodes with **rendezvous or consistent hashing**, evict with **LRU** and expire with a jittered **TTL**. The design is won or lost on three failure cases: a **stampede** on one expired key, a **hot key** on one node, and a **stale fill** after a write.
+</TLDR>
+
+<Requirements
+  functional={["get, set and delete by key, with an optional TTL", "Cache-aside use from application code", "Spread data over many nodes and add nodes without downtime", "Evict old data when memory is full", "Stats: hit ratio, evictions, memory"]}
+  nonFunctional={["1M reads a second at peak, under 1 ms per read", "Hit ratio of at least 98% to protect the database", "Losing a node must not take the database down", "Values are small (about 1 KB)", "Eventually consistent with the database"]}
+  outOfScope={["Being a durable database", "Transactions and secondary indexes", "Cross-region replication"]}
+/>
+
+## Clarifying questions
+
+- **Why cache?** Which store is limited, and what can it take (20K reads a second here)?
+- **Staleness?** Can a value be a few seconds old?
+- **Hot keys or big values?** Both change the design.
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Required hit ratio | 1 − 20K database reads ÷ 1M reads | **98%** |
+| Working set | 100M objects × 1 KB × 1.3 overhead | 130 GB |
+| Nodes by memory | 130 GB ÷ 24 GB usable (75% of 32 GB) | 6 |
+| Nodes by throughput | 1M ops/s ÷ 100K per node | 10, so use **12** |
+| Load per node | 1M ÷ 12 | ≈ 83K ops/s |
+| Bandwidth | 1M × 1 KB = 1 GB/s ÷ 12 | ≈ 0.7 Gbps per node |
+| One node lost | 1 ÷ 12 | 8.3% of keys miss |
+
+Throughput, not memory, sets the node count. The scary number is the last one: a dead node sends about 80K extra reads a second to a database that handles 20K.
+
+## API
+
+A client library over a plain wire protocol (Memcached or Redis style).
+
+| Call | Behaviour |
+|---|---|
+| `get(key)` | Value or a miss |
+| `set(key, value, ttl)` | Stores with expiry; evicts if full |
+| `delete(key)` | Removes; used after writes |
+| `getOrLoad(key, loader)` | Read-through: cache, then one guarded load, then fill |
+| `mget(keys)` | One round trip per node for a batch |
+
+## Data model
+
+A cache entry is a key, a value, an expiry and a recency stamp.
+
+| Field | Notes |
+|---|---|
+| Key | `type:id`, such as `user:42`; add a version to the name when the format changes |
+| Value | Serialized bytes, about 1 KB; refuse values over 1 MB |
+| Expiry | TTL with up to 10% jitter |
+| Recency | Position in the LRU list, updated on every hit |
+
+Nothing is persisted. A restarted node starts empty and refills.
+
+## Architecture
+
+The client does the routing: no proxy hop, so a hit is one network round trip. Play **Cache hit**, **Miss and fill**, **Thundering herd** and **A cache node dies**.
+
+<FlowDiagram spec={architecture} />
+
+## Sharding the cache
+
+The client hashes the key to pick a node. **Hash mod N** moves almost every key when N changes, emptying the cache. Use **rendezvous hashing** (or a ring): score each node for the key and take the best.
+
+Lose a node and only its 1/12 of keys move, spread over all survivors. A node-list service marks dead nodes so clients skip them within seconds.
+
+## Eviction and expiry
+
+**LRU** evicts the entry unused for longest and suits most workloads. A **TTL** bounds staleness. Add up to 10% **jitter** so keys written together do not expire together. Count memory in bytes, not entries: one big value can push out many small ones.
+
+## Stampedes, hot keys and stale data
+
+A popular key expires and 1,000 requests miss at once. **Single flight** lets the first load and makes the rest wait for it: one database read, not 1,000. Cache "not found" briefly too.
+
+A **hot key** lives on one node, so more nodes cannot help. Detect it and keep a copy in each app server for about a second.
+
+A write can race a slow reader and leave a **stale fill**. Pick a branch to see the race and two fixes.
+
+<SequenceDiagram spec={staleSequence} />
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    What the cache protects, staleness, hot keys.
+  </Step>
+  <Step title="Estimate">
+    98% hit ratio, 130 GB, 12 nodes, 8% loss per node.
+  </Step>
+  <Step title="Shard">
+    Rendezvous or consistent hashing, client-side.
+  </Step>
+  <Step title="Eviction and TTL">
+    LRU by bytes, jittered expiry.
+  </Step>
+  <Step title="Failure modes">
+    Stampede, hot key, stale fill, node loss.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="Show why a cache is needed">
+
+"The database does 20K reads a second; traffic is 1M. The cache must absorb 98%." The hit-ratio target frames everything else.
+
+</Step>
+<Step title="Choose the pattern">
+
+Cache-aside by default: the app reads the cache, loads on a miss, and fills. Losing the cache only costs latency. See [caching techniques](/deep-dives/caching-techniques) for write-through and write-behind.
+
+</Step>
+<Step title="Route in the client">
+
+Client library with rendezvous hashing and a refreshed node list. No proxy hop, no central router to scale.
+
+</Step>
+<Step title="Size the fleet">
+
+Nodes by throughput and by memory, take the larger, add headroom. Say what one node's loss does to the database.
+
+</Step>
+<Step title="Evict and expire">
+
+LRU by bytes, TTL with jitter. Negative caching for missing keys.
+
+</Step>
+<Step title="Protect the database">
+
+Single flight on misses, a rate limit or circuit breaker on the load path, and gradual warm-up after a restart.
+
+</Step>
+<Step title="Handle hot keys">
+
+Detect by counting requests per second per key in the client. Serve hot keys from a one second local cache or replicate them across nodes.
+
+</Step>
+<Step title="Keep it correct enough">
+
+Delete on write, short TTL as a backstop. For strictness, delay-delete or version the values.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Tabs: a byte-limited LRU with TTL, single flight with jitter and negative caching, rendezvous hashing, and a hot-key guard.
+
+<CodeTabs files={['snippets/lru-cache.js', 'snippets/single-flight.js', 'snippets/rendezvous.js', 'snippets/hot-keys.js']} />
+
+- The single-flight test proves 1,000 simultaneous misses make exactly one database read.
+- The rendezvous test shows a lost node moves about 8% of keys onto all 11 survivors, and hash mod N moves over 85%.
+- The hot-key test cuts 5,000 reads to under 150 node reads.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| A cache node dies | 8% of keys miss; database burst | Single flight; rate limit; spread keys over survivors |
+| Whole cache restarts | Cold start; database overload | Warm up gradually; limit load; replicas for critical keys |
+| Stampede on one key | Many identical queries | Single flight; jittered TTL |
+| Hot key | One node saturated | Local cache; replicate the key |
+| Stale fill after a write | Old data until TTL | Short TTL; delayed second delete; versions |
+| Cache poisoning with a bad value | Wrong data served | Validate on fill; version the key name; flush by prefix |
+| Memory pressure | Evicting useful data | Alert on hit ratio and evictions; resize |
+
+## Trade-offs
+
+| Choice | Gain | Cost |
+|---|---|---|
+| Client-side routing | One hop, nothing central | Every client needs the node list |
+| Proxy routing | Thin clients; central policy | Extra hop; proxy must scale |
+| Cache-aside | Simple; cache loss is harmless | App code on every read path |
+| Write-through | Always fresh | Slower writes; caches unread data |
+| Replicas per node | Survives a node loss | Double the memory |
+
+<Callout kind="interview" title="What interviewers listen for">
+The **98% hit-ratio arithmetic**, hashing that survives resizing, and the three failure cases: stampede, hot key, stale fill, each with a concrete fix.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="LRU or LFU?">
+    LRU suits recency-driven traffic. LFU keeps frequent items through scans but adapts slowly.
+  </FollowUp>
+  <FollowUp q="Should the cache be replicated?">
+    Only for keys whose loss would overload the database. Otherwise accept 8% misses and protect the database.
+  </FollowUp>
+  <FollowUp q="How do you warm a new cache?">
+    Load the hottest keys first, throttled so the database is not overwhelmed.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

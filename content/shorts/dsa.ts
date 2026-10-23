@@ -1015,6 +1015,97 @@ function popcount(n) { // one iteration per set bit
     source: "/dsa/patterns/bit-manipulation#the-core-idea-one-operator-every-bit-at-once",
   },
 
+  {
+    id: "design-data-structures-pattern",
+    track: "DSA",
+    topic: "Design",
+    title: "Pair a structure that finds with one that orders",
+    hook: "Design questions give you a class and an O(1) budget per method. No single structure meets it, so you glue two together.",
+    points: [
+      "Spot it: \"design a class\", every method in **O(1)**, \"evict the least recently used\", or \"the value at time t\".",
+      "A **hash map** finds a key in O(1) but has no order. A **list** keeps order but needs a scan to find anything.",
+      "Pair them: the map points at a **list node**, so a hit unlinks and moves the node to the front in O(1).",
+      "Name what each method needs and which structure makes it O(1). A method with no answer needs one more structure.",
+    ],
+    more: [
+      {
+        title: "The classics",
+        points: [
+          "**LRU**: map + doubly linked list. **LFU**: map + one bucket of keys per use count, plus `minCount`.",
+          "**Time-based store**: per-key sorted history, then binary search for the last write at or before t.",
+          "**Random member**: array + map of positions. Remove by copying the **last element** into the hole, then `pop`.",
+          "**Min stack**: store the minimum so far with each pushed value, so `pop` needs no repair.",
+        ],
+      },
+      {
+        title: "Complexity",
+        points: ["LRU and LFU **get/put in O(1)**, space O(capacity). Time-based `get` is **O(log m)** for m writes of that key."],
+      },
+      {
+        title: "Watch out",
+        points: [
+          "A `put` on an existing key is also a **use**: refresh it, do not just overwrite.",
+          "Evicting from the list but not the map (or the reverse) leaves them disagreeing.",
+          "After swap-and-pop, update the **moved** element's index, or the next removal breaks.",
+        ],
+      },
+    ],
+    code: `class LRU { // map: key -> node, list: newest first
+  get(key) {
+    const n = this.map.get(key);
+    if (!n) return -1;
+    this.unlink(n); this.pushFront(n); // a read is a use
+    return n.val;
+  }
+}`,
+    say: "I'd pair a hash map with a doubly linked list: the map finds the node, the list keeps order, and a hit moves the node to the front, so get and put are both O(1).",
+    source: "/dsa/patterns/design-data-structures#the-core-idea-pair-a-structure-that-finds-with-one-that-orders",
+  },
+  {
+    id: "matrix-pattern",
+    track: "DSA",
+    topic: "Matrix",
+    title: "A grid is coordinates: rotate, spiral, mark in place",
+    hook: "Most grid problems are index arithmetic with a thin-grid edge case, and many can be done in O(1) extra space.",
+    points: [
+      "Spot it: **rotate or transpose**, spiral or diagonal order, \"in place\", or every cell changes **at the same time**.",
+      "A clockwise turn sends `(i, j)` to `(j, n - 1 - i)`: **transpose**, then **reverse each row**, all in place.",
+      "A spiral is four walls (`top`, `bottom`, `left`, `right`) that move inward after each side is read.",
+      "Write the coordinate rule for one cell first, test it on a 2 by 2 grid, then loop it.",
+    ],
+    more: [
+      {
+        title: "Tricks",
+        points: [
+          "**Set zeroes**: use the first row and column as flags, plus two booleans for whether they held a zero.",
+          "**Game of Life**: encode 2 = alive then dead, 3 = dead then alive, so cells still see the old grid.",
+          "**Sorted grid**: position `p` is row `Math.floor(p / cols)`, column `p % cols`. Diagonals share `r + c`.",
+        ],
+      },
+      {
+        title: "Complexity",
+        points: ["Rotate, spiral, zeroes and life are **O(rows × columns)** time. In-place versions use **O(1)** extra space."],
+      },
+      {
+        title: "Watch out",
+        points: [
+          "`new Array(rows).fill(new Array(cols))` shares **one row**. Use `Array.from`.",
+          "Transposing with `j` from 0 swaps every pair twice. Start at `j = i + 1`.",
+          "Spiral without `top <= bottom` and `left <= right` checks reads a single row twice.",
+        ],
+      },
+    ],
+    code: `function rotate(m) { // 90 degrees clockwise, in place
+  const n = m.length;
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++)
+      [m[i][j], m[j][i]] = [m[j][i], m[i][j]];
+  for (const row of m) row.reverse();
+}`,
+    say: "To rotate a square grid in place I transpose it, swapping each pair above the diagonal once, then reverse every row. That is O(n squared) time and O(1) space.",
+    source: "/dsa/patterns/matrix#the-core-idea-a-grid-is-a-set-of-coordinates",
+  },
+
   // ─── JavaScript cheat sheet, in cheat-sheet order ──────────────────────────
   {
     id: "js-falsy-zero",

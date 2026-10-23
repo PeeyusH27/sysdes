@@ -1,0 +1,217 @@
+import { architecture, commitSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Split every file into chunks named by the hash of their bytes. Upload only chunks the server lacks, and keep a small **metadata** service that says which chunks make up each file. Sync devices with a change **cursor**, and never overwrite silently: a stale commit becomes a conflicted copy.
+</TLDR>
+
+<Requirements
+  functional={["Put files in a folder that syncs across a user's devices", "Upload and download large files reliably", "Pick up edits quickly on other devices", "Keep version history and restore old versions", "Share a file or folder with other people"]}
+  nonFunctional={["Edits appear on other devices within seconds", "Uploading a small edit to a big file costs a small upload", "Never lose or silently overwrite a user's work", "About 200 PB stored, strongly consistent file metadata", "Works offline and catches up later"]}
+  outOfScope={["Real-time collaborative editing (see the Docs design)", "Search inside files and previews", "Billing and storage plans"]}
+/>
+
+## Clarifying questions
+
+- **Scale?** Users, files per user, largest file.
+- **Conflicts?** Do two people edit one file at once? What wins?
+- **Sharing and history?** How many versions, for how long?
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Stored data | 100M users × 2 GB average | **200 PB** |
+| Chunks | 200 PB ÷ 4 MiB | ≈ 47.7 billion |
+| Chunk index | 47.7B × 64 B (hash, location, count) | ≈ 3 TB |
+| Changes | 50M daily users × 10 changes ÷ 86,400 s | ≈ 5,800/s, ~17K/s at peak |
+| Upload bytes | 500M changes × at most 1 chunk of 4 MiB | ≤ 2 PB/day ≈ 24 GB/s |
+| Connections | 50M online devices ÷ 50K per server | ≈ 1,000 notifier servers |
+| Edit of a 1 GiB file | 1 chunk ÷ 256 chunks | **0.4%** of the file |
+
+Metadata is small but must be right. Chunk bytes are huge but easy to spread. That split drives the design: object storage for bytes, a sharded SQL store for metadata.
+
+## API
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/chunks/unknown` | `{ hashes[] }` → the ones the server lacks |
+| PUT | `/chunks/:hash` | One chunk; the server verifies the hash |
+| POST | `/files/commit` | `{ path, baseRev, chunks[] }` → `{ rev, cursor }` or `409` |
+| GET | `/changes?cursor=` | Everything after the cursor, plus the new cursor |
+| GET | `/files/:id?rev=` | Ordered chunk list for a revision |
+| POST | `/shares` | Grant another user a folder |
+
+Devices authenticate with a token. The notifier connection is a WebSocket or long poll that carries only a poke.
+
+## Data model
+
+```sql
+CREATE TABLE files (
+  user_id   bigint,
+  path      text,
+  rev       int     NOT NULL,                 -- bumped on every accepted commit
+  chunks    text[]  NOT NULL,                 -- ordered chunk hashes
+  deleted   boolean NOT NULL DEFAULT false,
+  PRIMARY KEY (user_id, path)
+);
+CREATE TABLE journal (
+  user_id   bigint,
+  cursor    bigint,                           -- 1, 2, 3 ... per user
+  path      text, rev int, chunks text[], deleted boolean,
+  PRIMARY KEY (user_id, cursor)
+);
+CREATE TABLE chunks (
+  hash      bytea PRIMARY KEY,                -- SHA-256 of the bytes
+  location  text   NOT NULL,                  -- key in the block store
+  refs      int    NOT NULL                   -- how many revisions use it
+);
+```
+
+All of one user's rows share a shard key, so a commit is one single-shard transaction. The `chunks` table is a separate, much larger key-value store sharded by hash.
+
+## Architecture
+
+Bytes and metadata take different paths. The client works out what is new, uploads only that to the block store, and then commits a small list of hashes. Play **Save a new file**, **Edit one paragraph**, **Another device syncs** and **Edit conflict**.
+
+<FlowDiagram spec={architecture} />
+
+The same push as a sequence. Pick a branch: a normal edit, a dedupe hit, or a conflict.
+
+<SequenceDiagram spec={commitSequence} />
+
+## Chunking and dedupe
+
+<Doodle name="hash-map" size={150} caption />
+
+Cut each file into chunks of about 4 MiB and name each by its SHA-256. Same bytes, same name. An edit uploads one chunk, a broken upload resumes at the last good chunk, and identical chunks are stored once. The client sends hashes first and uploads only the unknown ones.
+
+**Fixed** chunks break when you insert one byte at the front: every boundary shifts. **Content-defined** chunking cuts where a rolling hash matches a pattern, so cuts re-sync after an edit and most hashes survive.
+
+## Sync and conflicts
+
+A file is a path, a revision and an ordered list of chunk hashes. A commit says "I started from revision N". If the file is still at N, it moves to N+1. If not, someone got there first: **conflict**. The loser is saved as "report (Maya's conflicted copy)", and nothing is lost.
+
+Each commit is appended to a per-user journal. A device keeps a **cursor** and asks "what changed since 40?". Asking twice is harmless, and a device offline for a week catches up the same way.
+
+## Telling other devices
+
+Polling every device every few seconds would cost millions of requests for nothing. Instead each online device holds a connection to a notifier. After a commit, the notifier sends a tiny poke, and the device pulls the journal.
+
+A poke carries no data, so a lost one only delays sync. Devices also poll slowly (every few minutes) as a backstop. Offline devices simply use their cursor when they return.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Scale, file sizes, conflicts, history, sharing.
+  </Step>
+  <Step title="Estimate">
+    200 PB, 47.7B chunks, 5,800 changes a second.
+  </Step>
+  <Step title="Separate bytes from metadata">
+    Block store by hash; sharded SQL for the tree.
+  </Step>
+  <Step title="Deep dive">
+    Chunking and dedupe, then versions and conflicts.
+  </Step>
+  <Step title="Notifications and failure">
+    Pokes, cursors, partial uploads, garbage collection.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="Split bytes from metadata">
+
+Bytes are huge, immutable and content-addressed: object storage. Metadata is small, mutable and needs transactions: a sharded SQL store keyed by user.
+
+</Step>
+<Step title="Chunk and hash on the client">
+
+4 MiB chunks, SHA-256 names. The client hashes locally, so unchanged data never leaves the machine.
+
+</Step>
+<Step title="Ask before sending">
+
+"Which of these hashes are new?" Upload only those. This is dedupe, delta sync and resumable upload in one move.
+
+</Step>
+<Step title="Commit with a base revision">
+
+The metadata service refuses a commit if any chunk is missing or the base revision is stale. A file never points at bytes that do not exist.
+
+</Step>
+<Step title="Journal the change">
+
+Append to the user's journal in the same transaction. The journal is the sync protocol: cursors, not timestamps, so clock skew cannot lose a change.
+
+</Step>
+<Step title="Poke, then pull">
+
+The notifier tells online devices something changed. They fetch the journal from their cursor and download the missing chunks.
+
+</Step>
+<Step title="Keep versions and clean up">
+
+Old revisions keep their chunk lists. A chunk's count drops when a revision expires; at zero, a delayed garbage collector deletes it, after a grace period so an in-flight commit cannot reference it.
+
+</Step>
+<Step title="Share safely">
+
+A shared folder is one namespace many users can read. Permissions are checked on the metadata call; chunk URLs are short-lived and signed.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Tabs: fixed chunking with hashes, content-defined chunking, the metadata service with revisions and the journal, and the client's push and pull loops.
+
+<CodeTabs files={['snippets/chunker.js', 'snippets/cdc.js', 'snippets/metadata.js', 'snippets/sync-client.js']} />
+
+- The chunker test proves one changed byte makes one new chunk, and that an inserted byte changes all fixed chunks.
+- The CDC test keeps over 95% of chunks after a 100-byte insertion; fixed chunks keep under 5%.
+- The metadata test runs the conflict: first commit wins, the second gets a conflicted copy.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Upload dies mid-file | Wasted bandwidth | Per-chunk upload; resume by asking which hashes are unknown |
+| Commit before chunks exist | File points at nothing | Metadata verifies every chunk before accepting |
+| Two devices edit offline | Lost update | Base revision check; conflicted copy |
+| Garbage collection races a commit | A live file loses a chunk | Reference counts and a grace period before deleting |
+| Notifier restarts | Pokes lost | Devices also poll slowly and use cursors |
+| Hash collision or corrupt chunk | Wrong bytes served | SHA-256 verified on write and read; checksums at rest |
+| Metadata shard fails | Users on it cannot sync | Replicas with failover; clients retry |
+
+## Trade-offs
+
+| Choice | Gain | Cost |
+|---|---|---|
+| Fixed chunks | Trivial and fast | Insertions re-upload the file |
+| Content-defined chunks | Small deltas on inserts | CPU, variable sizes, more metadata |
+| Conflicted copies | No lost work | The user merges by hand |
+| Cross-user dedupe | Big storage savings | Leaks "someone has this file" unless handled |
+
+<Callout kind="interview" title="What interviewers listen for">
+Bytes apart from metadata, **chunking by content hash**, ask-then-upload, a base-revision commit with a conflicted copy, and a journal with cursors.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="Is cross-user dedupe safe?">
+    It can reveal that someone stores a file. Make the client prove it holds the bytes, or dedupe within an account only.
+  </FollowUp>
+  <FollowUp q="How would you support large video files?">
+    Bigger chunks, parallel uploads and per-chunk retries, using multipart upload in object storage.
+  </FollowUp>
+  <FollowUp q="How do you delete a file for good?">
+    Mark it deleted, drop chunk counts after the retention window, and let garbage collection remove chunks that hit zero.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

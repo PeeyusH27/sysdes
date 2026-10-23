@@ -1,0 +1,199 @@
+import { classes, addFlow, settleFlow } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Turn each bill into one **share per person** with a swappable **split strategy**, record each share as a debt to the payer in a **ledger** that nets opposite debts, and keep all money in **integer cents** with a fixed rule for the leftover cent. Simplifying debts is a greedy match of the biggest debtor to the biggest creditor.
+</TLDR>
+
+<Requirements
+  functional={['Groups of members add expenses paid by one member', 'Split a bill equally, by exact amounts, by percent, or by shares', 'Show who owes whom, and each member\'s net balance', 'Settle up a debt, partly or fully', 'Simplify debts into fewer payments', 'Notify members of new expenses and settlements']}
+  nonFunctional={['Shares always add up to the bill, to the cent', 'The same input always gives the same split', 'A rejected expense changes nothing', 'Two settle-ups cannot both pay the same debt', 'New split types need no change to the group or the ledger']}
+  outOfScope={['Currencies and exchange rates (a follow-up)', 'Accounts, login and payments', 'Recurring expenses']} />
+
+A **low-level design** (LLD) question where the classes are easy and the money is not. The test is whether you handle the stray cent and the races.
+
+New to this? Read [Swap behaviour](/lld/foundations/strategy-decorator) first.
+
+## Clarifying questions
+
+- Which split types: equal only, or exact, percent and shares too?
+- Is money in one currency? Who rounds, and how?
+- May the payer be outside the participants?
+- Is a debt tracked per pair, or only as a net balance per person?
+- Do we only show balances, or also suggest fewer payments?
+
+## Public interface
+
+| Call | Returns | Notes |
+|---|---|---|
+| `addExpense(payer, amount, type, users, data)` | Shares, or a reason | Validated before anything is written |
+| `settleUp(from, to, cents)` | `ok`, or a reason | Never more than is owed |
+| `owes(from, to)` | Cents | Netted per pair |
+| `balances()` | Net cents per member | Sums to 0 |
+| `simplify()` | Transfers `[from, to, cents]` | At most n - 1 |
+| `on(listener)` | | Hears `expense` and `settled` |
+
+## What it remembers
+
+- `members` and the list of `expenses`.
+- `owed`: for each ordered pair, cents one member owes the other. At most one direction per pair is non-zero.
+- Nothing else: balances and the simplified plan are computed from `owed` when asked.
+
+## Build the design in stages
+
+Step through: the group and its expenses, then the ledger, then the split strategy, then new splits, then observers. Green marks what the latest stage added.
+
+<ClassDiagram spec={classes} />
+
+## Splitting the bill
+
+Each split type has one job: turn an amount and a list of people into one share each, or say the data is invalid. That is a **Strategy**. The group looks the type up by name, so it has no `if (type === ...)` ladder.
+
+The cent problem is the real test. Split 1001 cents three ways: each floor is 333, leaving 2. Hand the leftover out **one cent each to the first people, in the order given**. Shares are now 334, 334, 333 and always add to 1001.
+
+```js
+const shares = weights.map(w => Math.floor((amount * w) / total));
+for (let i = 0, left = amount - sum(shares); left > 0; i++, left--) shares[i]++;
+```
+
+**When this is over-engineering.** If the interviewer only asked for equal splits, a plain function is enough. Add the interface when the second split type shows up.
+
+## Simplifying debts
+
+First net everyone: add up what they are owed and subtract what they owe. Nets always sum to 0.
+
+Then repeat: take the **biggest debtor** and the **biggest creditor**, move the smaller of the two amounts, and drop whoever reaches 0. Break ties by name so the answer repeats.
+
+Each transfer clears at least one person, so n people need at most n - 1 transfers. The true minimum is NP-hard in general, so say so and keep the greedy answer.
+
+Example: Ana owes Ben 10 and Ben owes Cam 10. The pairs show two debts, but the nets show Ana owing 10 and Cam owed 10, so one payment Ana to Cam settles both.
+
+## Threads and races
+
+Put one lock on each group. Every method that reads or changes the ledger takes it.
+
+The dangerous one is `settleUp`. If it reads the debt and subtracts in two steps, two taps both see 100 and both pay. Do the check and the subtract in one locked step.
+
+Run listeners after the lock is released, so a slow notification cannot block the group.
+
+## Settle up, step by step
+
+Play the add-expense diagram, then open the settle-up branches to see the second racer lose cleanly.
+
+<SequenceDiagram spec={addFlow} />
+
+<SequenceDiagram spec={settleFlow} />
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Split types, rounding, currency, simplify.
+  </Step>
+  <Step title="Pick the money type">
+    Integer cents, never floats.
+  </Step>
+  <Step title="Model expense and ledger">
+    One payer, many shares, netted pairs.
+  </Step>
+  <Step title="Split as a strategy">
+    Validate first, fixed leftover rule.
+  </Step>
+  <Step title="Break it">
+    Stray cent, bad data, double settle.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="Entities">
+    `Group`, `Expense`, `Ledger`, `SplitStrategy`. A debt is a ledger entry, not an object.
+  </Step>
+  <Step title="Money is integer cents">
+    `0.1 + 0.2` is `0.30000000000000004`. A dinner costs `1001`, not `10.01`.
+  </Step>
+  <Step title="Validate before you write">
+    Check members, amount and split data first. Then add every share to the ledger. A bad expense never half-applies.
+  </Step>
+  <Step title="Net each pair">
+
+Adding a debt also cancels any debt the other way, so each pair holds one number.
+
+```js
+const net = this.owes(debtor, creditor) + cents - this.owes(creditor, debtor);
+this.owed.set(`${debtor}>${creditor}`, Math.max(0, net));
+this.owed.set(`${creditor}>${debtor}`, Math.max(0, -net));
+```
+
+  </Step>
+  <Step title="Balances and simplify come from the ledger">
+    Compute both when asked. Nothing is stored twice, so nothing can disagree.
+  </Step>
+  <Step title="Tests">
+    Random bills must always sum to the amount. Add the stray cent, a repeated pair, an overpay, a thread race on settle-up, and a messy trip that simplifies to zero.
+  </Step>
+</Steps>
+
+## Implementation
+
+The same design in **JavaScript, Java or Python**. Java and Python add a real lock per group and run listeners after releasing it.
+
+<CodeTabs
+  files={['snippets/splits.js', 'snippets/ledger.js', 'snippets/group.js', 'snippets/splitwise.test.js']}
+  java={['snippets/java/Splits.java', 'snippets/java/Ledger.java', 'snippets/java/Group.java', 'snippets/java/SplitwiseTest.java']}
+  python={['snippets/python/splits.py', 'snippets/python/ledger.py', 'snippets/python/group.py', 'snippets/python/test_splitwise.py']}
+/>
+
+- `spread` is the only place that rounds. Every strategy except exact goes through it.
+- The ledger is not thread-safe by itself. The group's lock is what makes it safe.
+
+## Code it yourself
+
+Try the [Expense Splitter exercise](/lld/exercises/expense-splitter): four split types, a fixed leftover rule, settle-up limits and a simplify with exact tie-breaks.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Floats for money | Cents drift and books do not balance | Integer cents everywhere |
+| Leftover cent dropped | Shares sum to less than the bill | Hand the cents out in a fixed order |
+| Overpaid settle-up | A debt flips direction by accident | Reject more than is owed |
+| Read-then-write settle | Two payments for one debt | Check and subtract under the lock |
+| Percent not summing to 100 | Part of the bill is nobody's | Reject the expense |
+| Plan from stale balances | Wrong payments suggested | Compute simplify from the live ledger |
+
+## Trade-offs
+
+| Choice | Pros | Cons |
+|---|---|---|
+| Per-pair debts vs net balances only | Shows who owes whom | Two numbers to keep in step |
+| Strategy per split vs one function | Open to new splits | An interface for a few lines |
+| Greedy simplify vs the minimum | Fast, repeatable | Not always the fewest payments |
+| One lock per group | Simple and correct | Busy groups serialize |
+
+<Callout kind="interview" title="What interviewers listen for">
+Integer cents and a stated rule for the leftover cent. A strategy per split type, with validation before any write. Netting per pair. Greedy simplify with the NP-hard remark. Settle-up as one locked check-and-subtract.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would you support several currencies?">
+    Keep one ledger per currency and convert only when the user asks. Never mix them in one number.
+  </FollowUp>
+  <FollowUp q="How would you add a tax or tip on top?">
+    Wrap a strategy in a decorator that adds the extra amount first and splits the total. The group does not change.
+  </FollowUp>
+  <FollowUp q="How would you let people undo an expense?">
+    Store each expense with its shares, then reverse them in the ledger. Do it as a new entry, so the history stays honest.
+  </FollowUp>
+  <FollowUp q="How do you scale this to millions of groups?">
+    A group is the unit of locking and of sharding. Shard by group id, and the locks never cross machines.
+  </FollowUp>
+  <FollowUp q="How would you test the simplify step?">
+    Check that nets reach zero after applying the plan, that it has at most n - 1 transfers, and that ties give a fixed order.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

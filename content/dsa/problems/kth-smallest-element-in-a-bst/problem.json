@@ -1,0 +1,28 @@
+{
+  "title": "Kth Smallest Element in a BST",
+  "difficulty": "Medium",
+  "patterns": ["tree-dfs"],
+  "js": ["recursion","linked-list-tree-nodes"],
+  "order": 6,
+  "summary": "Return the k-th smallest value in a binary search tree.",
+  "fn": "kthSmallest",
+  "params": ["root","k"],
+  "types": {"params":["TreeNode","number"],"returns":"number"},
+  "io": {"args":["tree",null]},
+  "tests": [
+    {"args":[[3,1,4,null,2],1],"expected":1,"explain":"In sorted order the values are 1, 2, 3, 4. The 1st smallest is 1."},
+    {"args":[[5,3,6,2,4,null,null,1],3],"expected":3,"explain":"Sorted order is 1, 2, 3, 4, 5, 6. The 3rd smallest is 3."},
+    {"args":[[5,3,6,2,4,null,null,1],6],"expected":6,"explain":"k may equal the number of nodes: the 6th smallest is the maximum."},
+    {"args":[[1],1],"expected":1},
+    {"args":[[2,1,3],2],"expected":2},
+    {"args":[[1,null,2,null,3,null,4,null,5,null,6,null,7],5],"expected":5},
+    {"args":[[7,6,null,5,null,4,null,3,null,2,null,1],2],"expected":2},
+    {"args":[[0,-5,5,-10,-3,3,10],4],"expected":0},
+    {"args":[[-65,-93,5,-100,-72,-30,68,null,null,-79,null,-44,-16,33,187,-86,null,-51,-37,-23,-2,26,40,166,208,null,null,-58,null,null,null,null,null,-9,null,12,null,null,54,89,180,201,null,null,null,null,null,null,19,47,61,82,145,173,null,194,null,null,null,null,null,null,null,75,null,131,159,null,null,null,null,null,null,96,138,152,null,null,124,null,null,null,null,110,null,103,117],1],"expected":-100},
+    {"args":[[-65,-93,5,-100,-72,-30,68,null,null,-79,null,-44,-16,33,187,-86,null,-51,-37,-23,-2,26,40,166,208,null,null,-58,null,null,null,null,null,-9,null,12,null,null,54,89,180,201,null,null,null,null,null,null,19,47,61,82,145,173,null,194,null,null,null,null,null,null,null,75,null,131,159,null,null,null,null,null,null,96,138,152,null,null,124,null,null,null,null,110,null,103,117],45],"expected":208},
+    {"args":[[-65,-93,5,-100,-72,-30,68,null,null,-79,null,-44,-16,33,187,-86,null,-51,-37,-23,-2,26,40,166,208,null,null,-58,null,null,null,null,null,-9,null,12,null,null,54,89,180,201,null,null,null,null,null,null,19,47,61,82,145,173,null,194,null,null,null,null,null,null,null,75,null,131,159,null,null,null,null,null,null,96,138,152,null,null,124,null,null,null,null,110,null,103,117],17],"expected":12},
+    {"args":[[-65,-93,5,-100,-72,-30,68,null,null,-79,null,-44,-16,33,187,-86,null,-51,-37,-23,-2,26,40,166,208,null,null,-58,null,null,null,null,null,-9,null,12,null,null,54,89,180,201,null,null,null,null,null,null,19,47,61,82,145,173,null,194,null,null,null,null,null,null,null,75,null,131,159,null,null,null,null,null,null,96,138,152,null,null,124,null,null,null,null,110,null,103,117],30],"expected":103}
+  ],
+  "hints": ["One traversal order of a BST visits the values in sorted order. Which one?","In-order traversal (left, node, right) visits a BST in ascending order. The k-th node you visit is the answer, so you can stop there without visiting the rest.","Do the in-order walk iteratively with a stack: push the left spine, pop a node, decrement k, and if k hits 0 return its value; otherwise continue with its right child. Recursion with a counter also works."],
+  "complexity": {"time":"O(h + k): walk down to the smallest node, then visit k nodes","space":"O(h) for the stack or recursion"}
+}

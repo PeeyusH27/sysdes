@@ -186,7 +186,20 @@ export const patterns: Pattern[] = [
     slug: "bit-manipulation", dir: "22-bit-manipulation", order: 22, title: "Bit Manipulation", short: "Bits", group: "Bits",
     summary: "XOR cancels pairs, masks test and set flags, and n & (n - 1) drops the lowest set bit.",
     minutes: 20, signals: ["every element appears twice except one", "count set bits", "without + or -", "subsets as bitmasks"],
-    js: ["bitwise", "numbers-math"], next: "",
+    js: ["bitwise", "numbers-math"], next: "Two extra topics pull the earlier ideas together: designing classes whose every operation is fast, and grids.",
+  },
+  {
+    slug: "design-data-structures", dir: "23-design-data-structures", order: 23, title: "Design Data Structures: LRU, LFU and Friends", short: "Design",
+    group: "Search & optimisation",
+    summary: "Combine a hash map with a list, an array or sorted buckets so that every operation of a class costs O(1) or O(log n).",
+    minutes: 40, signals: ["design a class with these methods", "each operation in O(1)", "evict the least recently / frequently used", "remember the history of every key"],
+    js: ["classes", "map-set", "arrays"], next: "Grids have their own toolkit: boundaries, direction arrays and in-place tricks.",
+  },
+  {
+    slug: "matrix", dir: "24-matrix", order: 24, title: "Matrix and Grid Simulation", short: "Matrix", group: "Arrays & strings",
+    summary: "Rotate, spiral, zero out and simulate on a 2D grid using boundaries, direction arrays and in-place encodings.",
+    minutes: 35, signals: ["rotate or transpose a matrix", "walk in a spiral or along diagonals", "update the grid in place", "all cells change at the same time"],
+    js: ["arrays", "gotchas", "destructuring-spread"], next: "",
   },
 ];
 

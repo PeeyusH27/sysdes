@@ -62,7 +62,7 @@ const TRACKS: Track[] = [
     id: "sd",
     label: "System Design",
     blurb: `${learnSteps.length} steps, deep dives, questions`,
-    match: ["/system-design", "/basics", "/learn", "/deep-dives", "/questions", "/lld", "/architecture", "/playground", "/cheatsheet", "/glossary"],
+    match: ["/system-design", "/basics", "/learn", "/deep-dives", "/questions", "/lld", "/cs", "/architecture", "/playground", "/cheatsheet", "/glossary"],
     columns: [
       {
         id: "sd-path",
@@ -96,6 +96,7 @@ const TRACKS: Track[] = [
               { href: "/basics", label: "The basics", note: "What is a cache? A shard? One minute each" },
               { href: "/architecture", label: "Architecture lab", note: "Grow it, click it, break it" },
               { href: "/lld", label: "LLD track", note: "Foundations and coding exercises" },
+              { href: "/cs", label: "CS fundamentals", note: "OS, networking, database internals" },
               { href: "/playground", label: "Playground", note: "Drag, connect, get graded" },
               { href: "/cheatsheet", label: "Cheatsheet", note: "Numbers worth memorising" },
               { href: "/glossary", label: "Glossary", note: "Every term in one line" },
@@ -122,7 +123,7 @@ function railFor(track: TrackId, path: string): Item[] {
     ];
   }
   const tool = under(path, "/cheatsheet") ? { href: "/cheatsheet", label: "Cheatsheet" } : under(path, "/glossary") ? { href: "/glossary", label: "Glossary" } : { href: "/playground", label: "Playground" };
-  return [{ href: "/basics", label: "Basics" }, { href: "/learn", label: "HLD path" }, { href: "/deep-dives", label: "Deep dives" }, { href: "/questions", label: "Questions" }, { href: "/lld", label: "LLD" }, tool];
+  return [{ href: "/basics", label: "Basics" }, { href: "/learn", label: "HLD path" }, { href: "/deep-dives", label: "Deep dives" }, { href: "/questions", label: "Questions" }, { href: "/lld", label: "LLD" }, { href: "/cs", label: "CS" }, tool];
 }
 
 /* ------------------------------------------------------------------ menu pieces (shared by the mega menu and the drawer) */

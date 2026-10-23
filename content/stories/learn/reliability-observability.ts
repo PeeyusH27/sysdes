@@ -7,6 +7,39 @@ import type { Story } from "../types";
 const stuck = getPrimer("circuit-breaker")!.flow;
 
 export const story: Story | undefined = {
+  learn: [
+    {
+      head: "Something is always broken",
+      body: "A request often passes through many services. Each one fails now and then, so at scale some part is failing at any moment. Plan for it instead of hoping.",
+      eg: "Christmas lights in a chain",
+      example: "Old fairy lights go dark when one bulb fails, because every bulb sits on one wire. Ten services in a row behave the same way.",
+      doodle: "circuit-breaker",
+    },
+    {
+      head: "Never wait forever",
+      body: "A timeout is the longest you will wait for an answer. Without one, a stuck service holds your workers until none are left, and healthy pages slow down too.",
+      eg: "Waiting on hold",
+      example: "If a helpline keeps you on hold for an hour, you cannot make other calls. Hanging up after five minutes frees your phone for the rest of the day.",
+    },
+    {
+      head: "Stop calling what is down",
+      body: "A circuit breaker counts failures. After too many, it stops calling the service for a while and returns a fallback, such as a cached answer, straight away.",
+      eg: "A tripped fuse at home",
+      example: "When a heater shorts, the fuse cuts that circuit so the rest of the house keeps its lights. You reset it once the heater is fixed.",
+    },
+    {
+      head: "Retry gently, not all at once",
+      body: "Retries help with brief blips, but thousands of clients retrying together bury a struggling service. Wait a little longer each time, with a random extra delay.",
+      eg: "A busy phone line",
+      example: "If everyone redials the second a line is free, it jams again. Waiting a random minute or two lets calls get through one by one.",
+    },
+    {
+      head: "Measure what users feel",
+      body: "Pick a number users notice, like requests answered in under 300 ms, and a target such as 99.9%. Alert when that slips, not when a server's CPU is high.",
+      eg: "A delivery firm's promise",
+      example: "Customers care that parcels arrive on time, not how hot the vans run. The firm tracks on-time deliveries and acts when that number drops.",
+    },
+  ],
   steps: [
     {
       tag: "pain",

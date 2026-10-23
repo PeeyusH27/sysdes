@@ -1,0 +1,28 @@
+{
+  "title": "Serialize and Deserialize Binary Tree",
+  "difficulty": "Hard",
+  "patterns": ["tree-bfs"],
+  "js": ["strings","stack-queue-deque","linked-list-tree-nodes"],
+  "order": 6,
+  "summary": "Turn a binary tree into a string and rebuild the identical tree from that string.",
+  "fn": "roundTrip",
+  "params": ["root"],
+  "types": {"params":["TreeNode"],"returns":"[string, TreeNode]"},
+  "io": {"args":["tree"]},
+  "validate": "(result, args) => {\n  const original = args[0];\n  if (!Array.isArray(result) || result.length !== 2) return \"Return a pair: [serialize(root), deserialize(serialize(root))].\";\n  const [text, back] = result;\n  if (typeof text !== \"string\") return \"serialize must return a string, but got \" + (text === null ? \"null\" : typeof text) + \".\";\n  const got = back === null || back === undefined ? [] : back;\n  if (JSON.stringify(got) !== JSON.stringify(original)) return \"Deserializing \" + JSON.stringify(text) + \" rebuilt the tree \" + JSON.stringify(got) + \" (level order), but the original was \" + JSON.stringify(original) + \".\";\n  return true;\n}",
+  "tests": [
+    {"args":[[1,2,3,null,null,4,5]],"expected":["(any single string)",[1,2,3,null,null,4,5]],"explain":"Whatever string you invent, deserializing it must rebuild this exact tree (shape and values)."},
+    {"args":[[]],"expected":["(any single string)",[]],"explain":"An empty tree must serialize to some string and come back as an empty tree."},
+    {"args":[[7]],"expected":["(any single string)",[7]],"explain":"A single node."},
+    {"args":[[1,null,2,null,3,null,4]],"expected":["(any single string)",[1,null,2,null,3,null,4]]},
+    {"args":[[4,3,null,2,null,1]],"expected":["(any single string)",[4,3,null,2,null,1]]},
+    {"args":[[1,2,3,4,5,6,7]],"expected":["(any single string)",[1,2,3,4,5,6,7]]},
+    {"args":[[-5,-10,0,null,-1,null,10]],"expected":["(any single string)",[-5,-10,0,null,-1,null,10]]},
+    {"args":[[0,0,0,0,0]],"expected":["(any single string)",[0,0,0,0,0]]},
+    {"args":[[1000,-1000,1000,5]],"expected":["(any single string)",[1000,-1000,1000,5]]},
+    {"args":[[10,5,15,null,null,6,20,1]],"expected":["(any single string)",[10,5,15,null,null,6,20,1]]},
+    {"args":[[-142,-74,2,138,10,22,null,-26,-6,146,106,30,-58,null,-146,66,-150,50,-114,-22,-46,null,-106,86,126,null,null,-126,110,null,-14,-78,null,-70,-30,34,-54,null,null,null,null,null,null,-102,null,null,null,null,58,null,null,null,null,null,-42,null,null,null,-2,null,null,null,null,null,null,-110]],"expected":["(any single string)",[-142,-74,2,138,10,22,null,-26,-6,146,106,30,-58,null,-146,66,-150,50,-114,-22,-46,null,-106,86,126,null,null,-126,110,null,-14,-78,null,-70,-30,34,-54,null,null,null,null,null,null,-102,null,null,null,null,58,null,null,null,null,null,-42,null,null,null,-2,null,null,null,null,null,null,-110]]}
+  ],
+  "hints": ["A traversal that lists only the values loses the shape. What extra information must the string record so that the shape can be rebuilt?","Record the missing children too: write a marker such as # for every null child. A preorder or level-order listing with null markers describes exactly one tree.","Serialize with a level-order BFS, writing each value or the marker, joined by commas. To deserialize, split the string, create the root, and walk the tokens with a queue of parents: the next two tokens are the left and right child of the node you pop."],
+  "complexity": {"time":"O(n) for both serialize and deserialize","space":"O(n) for the string and the queue"}
+}

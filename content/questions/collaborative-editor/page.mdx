@@ -1,0 +1,211 @@
+import { architecture, mergeSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Show every edit locally at once, and send it to a session server that puts all edits in **one order**. Concurrent edits are fixed by **operational transformation** (rewrite an edit to fit the ones it missed) or by a **CRDT** (give every character a permanent id). The operation log is the source of truth.
+</TLDR>
+
+<Requirements
+  functional={["Many people edit one document at the same time", "Everyone sees the same text in the end", "See other people's cursors and names", "Version history and restore", "Keep working offline and merge on return"]}
+  nonFunctional={["Your own typing appears instantly (local echo)", "Others' edits arrive in about 100 to 200 ms", "No accepted edit is ever lost", "1M concurrent editors at peak", "A document survives a server crash"]}
+  outOfScope={["Rich-text formatting rules and tables", "Comments, suggestions and permissions UI", "Search across documents"]}
+/>
+
+## Clarifying questions
+
+- **How many editors per document?** Three is typical; hundreds is a special case.
+- **Plain text or rich text?** Rich text adds attributes; the idea is the same.
+- **Offline?** Long offline edits favour CRDTs.
+- **Server in the loop?** A central server makes ordering simple.
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Edit rate | 1M editors × 2 batched ops/s | **2M ops/s** |
+| Ingest | 2M/s × 50 B | 100 MB/s |
+| Active documents | 1M editors ÷ 3 per document | ≈ 333K |
+| Session servers | 333K ÷ 5,000 documents per server | **≈ 67** |
+| Operation log | 10M editors × 1 h × 2 ops/s × 50 B | ≈ 3.6 TB/day |
+| Replay after a crash | snapshot every 500 ops | at most 500 ops |
+
+The key insight: traffic is high overall but tiny **per document**. One server can own a document and order its edits. Shard by document id.
+
+## API
+
+WebSocket messages, one socket per open document.
+
+| Direction | Message | Payload |
+|---|---|---|
+| Client to server | `join` | `{ docId, lastRev }` |
+| Client to server | `op` | `{ opId, baseRev, op }` |
+| Server to client | `ack` | `{ opId, rev }` |
+| Server to client | `remote` | `{ rev, op, by }` |
+| Both | `cursor` | `{ pos, name, color }`, not stored |
+
+REST: `POST /docs`, `GET /docs/:id` (latest snapshot and revision), `GET /docs/:id/revisions`.
+
+## Data model
+
+```sql
+CREATE TABLE ops (
+  doc_id    bigint,
+  rev       int,                    -- 1, 2, 3 ... per document, assigned by the session server
+  op_id     uuid,                   -- from the client, so a retry is recognised
+  author    bigint,
+  op        jsonb,
+  PRIMARY KEY (doc_id, rev),
+  UNIQUE (doc_id, op_id)
+);
+CREATE TABLE snapshots (
+  doc_id bigint, rev int, content text,   -- the text after `rev` operations
+  PRIMARY KEY (doc_id, rev)
+);
+```
+
+Large snapshots live in object storage; the table keeps a pointer. Cursors and presence are never stored.
+
+## Architecture
+
+Edits take the path editor, gateway, session server, log. The router sends all editors of a document to one session server. Play **Type a character**, **Concurrent edits**, **Reconnect after offline** and **Session server crashes**.
+
+<FlowDiagram spec={architecture} />
+
+## Operational transform
+
+Two people edit 'cat' at once: A appends 's', B deletes 'c'. Each edit is a position in the text, and positions go stale when something else changes. **Operational transformation** (OT) fixes this: the server rewrites the later edit so it means the same thing after the earlier one.
+
+Each client sends an edit tagged with the revision it started from. The server transforms it past everything accepted since, assigns the next revision and broadcasts it. Each client keeps one edit in flight and transforms incoming edits past its own unacknowledged ones. Everyone converges, and typing never waits.
+
+## CRDTs as the alternative
+
+A **CRDT** avoids rewriting. Every character gets a permanent id. An insert says "after character X", and a delete only marks a character dead (a tombstone). Edits merge in any order, so no central server is needed and offline editing is natural.
+
+The price is memory: ids and tombstones stay until compaction. Compare both on the same example, then pick.
+
+<SequenceDiagram spec={mergeSequence} />
+
+## Presence and cursors
+
+A cursor changes ten times a second and is worthless a second later. Send it over the same socket but through a lightweight channel, never write it to the log, and drop it when the socket closes. Throttle to about 10 updates a second and fade idle cursors.
+
+## Storage and history
+
+Append every accepted operation to the log. Every few hundred operations write a **snapshot** of the whole text. Loading a document means the latest snapshot plus the tail of the log, at most about 500 operations.
+
+Version history is the log: pick a revision, replay up to it. Old operations can be merged into coarser "named versions" after a month to save space.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Editors per document, rich text, offline.
+  </Step>
+  <Step title="Estimate">
+    2M ops a second, 67 session servers, 3.6 TB of log a day.
+  </Step>
+  <Step title="Pick an owner per document">
+    One server orders edits for one document.
+  </Step>
+  <Step title="Resolve conflicts">
+    OT or a CRDT, with the trade-off.
+  </Step>
+  <Step title="Durability and scale">
+    Log, snapshots, crash recovery, presence.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="Start with the user experience">
+
+Typing must feel instant, so apply edits locally first and reconcile later. That is the whole reason this is hard.
+
+</Step>
+<Step title="Route a document to one server">
+
+Hash the document id to a session server. All its editors connect there through gateways, so one process can order edits.
+
+</Step>
+<Step title="Number every accepted edit">
+
+Each edit carries the revision it was based on. The server transforms it past newer ones, appends it to the log, and assigns the next revision.
+
+</Step>
+<Step title="Keep one edit in flight per client">
+
+The client sends one edit, buffers the rest, and transforms incoming edits past its pending ones. This keeps the protocol simple and correct.
+
+</Step>
+<Step title="Acknowledge after the log write">
+
+An edit is durable only once the log append succeeds. Clients keep unacknowledged edits and resend them by operation id.
+
+</Step>
+<Step title="Snapshot and recover">
+
+Snapshot every few hundred edits. After a crash, the new server loads the snapshot and replays the log tail.
+
+</Step>
+<Step title="Handle offline and reconnect">
+
+On reconnect, send the last revision seen and the queued edits. The server transforms them past what was missed.
+
+</Step>
+<Step title="Say when you would choose a CRDT">
+
+For long offline work, peer-to-peer sync or no central server. Mention tombstone growth and compaction.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Tabs: the transform function and its tests, the client and server protocol, and a sequence CRDT (RGA).
+
+<CodeTabs files={['snippets/ot.js', 'snippets/ot-session.js', 'snippets/rga.js']} />
+
+- The OT test checks convergence for 5,000 random pairs of operations, and for three clients with random message timing over 200 runs.
+- The CRDT test applies the same operations in shuffled order with duplicates and checks every replica ends equal.
+- `rga.test.js` also shows tombstones: an empty document that still remembers 100 characters.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Session server crashes | Editing pauses | Reassign the document; snapshot plus log replay |
+| Duplicate delivery | An edit applied twice | Operation ids; the server ignores repeats |
+| Client offline for long | Large rebase | Transform queued edits past missed ones; cap the queue |
+| Transform bug | Copies diverge | Property tests; periodic checksum of the document |
+| Hot document, 1,000 editors | One server saturated | Read-only viewers on a fan-out tier; limit editors |
+| Log grows forever | Storage cost | Snapshots; compact old operations |
+
+## Trade-offs
+
+| Choice | Gain | Cost |
+|---|---|---|
+| OT with a central server | Compact, no tombstones | Transform functions are subtle; needs a server |
+| CRDT | Works peer-to-peer and offline | Ids and tombstones grow memory |
+| Last-writer-wins on the whole doc | Trivial | Loses people's edits |
+| Lock the paragraph | Simple conflict story | Blocks people; poor feel |
+
+<Callout kind="interview" title="What interviewers listen for">
+Local echo, one server ordering edits per document, a clear explanation of **OT versus CRDT** with the 'cat' example, and recovery from the log.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How do you undo?">
+    Undo is a new operation that reverses your last edit after transforming it past everyone else's later edits, not a rollback of the document.
+  </FollowUp>
+  <FollowUp q="How do you scale one very popular document?">
+    Keep editing on one server, and fan out read-only viewers through a separate tier that follows the log.
+  </FollowUp>
+  <FollowUp q="How do you test a transform function?">
+    Property tests: random pairs of operations must converge in both orders, and random multi-client runs must end equal.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

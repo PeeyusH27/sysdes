@@ -1,0 +1,101 @@
+import { roundRobin as rrDiagram, translation } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+The scheduler decides who runs next; **virtual memory** gives each process private addresses, translated page by page. The **TLB** keeps that fast, and a page fault is the OS fetching a page not yet in RAM.
+</TLDR>
+
+## Scheduling: who runs next
+
+The scheduler picks which ready thread gets a core, and for how long. Each policy trades average wait against fairness and overhead.
+
+| Policy | Idea | Catch |
+|---|---|---|
+| First come, first served | Run in arrival order | A long job blocks the short ones |
+| Shortest job first | Run the shortest next | Needs burst times; long jobs starve |
+| Round robin | A quantum each, then the back of the queue | Tiny quantum wastes time switching |
+
+<Timeline spec={rrDiagram} />
+
+Take jobs of 24, 3 and 3 ms. Average wait is 17 ms first come first served, 3 ms shortest first, and about 5.7 ms round robin, which needs no burst times. Real schedulers blend these.
+
+<CodeTabs files={['snippets/scheduler.js', 'snippets/scheduler.test.js']} />
+
+<Callout kind="interview" title="What interviewers listen for">
+You say what you optimise (throughput, response time or fairness) and that you cannot have all three.
+</Callout>
+
+## Virtual memory gives each process a private address space
+
+Every process sees addresses starting at zero, as if it owned all memory. Hardware and kernel translate them to real RAM, which gives **isolation**.
+
+Memory is cut into **pages** (usually 4 KiB) and RAM into **frames**. A per-process **page table** maps page numbers to frame numbers; the low 12 bits are the offset and pass through.
+
+<SequenceDiagram spec={translation} />
+
+## Walk an address through the TLB and page table
+
+Click the three tabs. Address 0x3A7C is page 3, offset 0xA7C; if page 3 is in frame 7, the physical address is 0x7A7C.
+
+The page table lives in memory, so the CPU caches recent translations in the **TLB**: a hit takes about a nanosecond, and hit rates are typically above 99%.
+
+<CodeTabs files={['snippets/paging.js', 'snippets/paging.test.js']} />
+
+## Page faults, replacement and thrashing
+
+A **page fault** means "this page is not mapped or not present". Often that is normal.
+
+| Fault | Cause | Cost |
+|---|---|---|
+| Minor | Page is in RAM, mapping missing (new or copy-on-write page) | Microseconds |
+| Major | Page must be read from disk | Milliseconds |
+| Invalid | Address was never valid | Segmentation fault |
+
+When RAM is full the kernel evicts a page, ideally the least recently used (LRU).
+
+<CodeTabs files={['snippets/replacement.js', 'snippets/replacement.test.js']} />
+
+**Thrashing** is when the active pages no longer fit in RAM: a loop over five pages with four frames faults on every access, and the machine waits on disk.
+
+## Stack versus heap
+
+| | Stack | Heap |
+|---|---|---|
+| Holds | Call frames: locals, return address | Objects that outlive a call |
+| Owner | One per thread | Shared by all threads |
+| Freed | On return | By you or a garbage collector |
+| Failure | Stack overflow | Out of memory, leaks |
+
+The stack is fast: allocating is moving a pointer. In JavaScript or Java, objects live on the heap and frames hold references.
+
+## The cost of translation
+
+A flat page table is only affordable for small address spaces. Real tables are trees: x86-64 uses four levels of nine bits, so a TLB miss costs up to four memory reads.
+
+With memory at 100 ns, a TLB at 1 ns and a single-level table, a 99% hit rate gives 0.99 × 101 + 0.01 × 201 = 102 ns, only 2% slower than raw memory. At a 90% hit rate it is 111 ns. Huge pages (2 MiB) need far fewer TLB entries, so databases and JVMs with big heaps often use them.
+
+## Scheduling traps
+
+<Callout kind="warning" title="Priority inversion">
+A low-priority thread holds a lock a high-priority thread needs, and a medium-priority thread keeps preempting the low one. The high-priority thread waits indefinitely. The fix is priority inheritance. The 1997 Mars Pathfinder resets were this bug.
+</Callout>
+
+- **Starvation.** Pure priority or shortest-job policies can leave a task waiting forever. Aging raises the priority of waiting tasks.
+- **Virtual memory is not swap.** Swap is only where evicted pages can go. A server without swap still uses virtual memory.
+- **fork is cheap.** Copy-on-write shares pages until one side writes.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What is virtual memory and why do we need it?">
+    Each process gets its own address space, translated page by page to physical frames. It isolates processes and lets programs use more address space than RAM.
+  </FollowUp>
+  <FollowUp q="What happens on a TLB miss, and on a page fault?">
+    A miss makes the hardware walk the page table. A fault means the page is absent: the kernel loads it and retries.
+  </FollowUp>
+  <FollowUp q="What is thrashing?">
+    Working sets exceed RAM, so pages are evicted just before they are needed again.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

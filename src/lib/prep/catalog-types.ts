@@ -3,7 +3,13 @@
 
 export type Track = "dsa" | "hld" | "lld";
 export const TRACKS: Track[] = ["dsa", "hld", "lld"];
-export const TRACK_LABEL: Record<Track, string> = { dsa: "Coding (DSA)", hld: "High-level design", lld: "Low-level design" };
+/**
+ * Rounds you can plan and mock (Track), plus the fundamentals track, which is a readiness map only: it has no
+ * exercises or timed round, so the plan and the mock do not offer it.
+ */
+export type ReadinessTrack = Track | "cs";
+export const READINESS_TRACKS: ReadinessTrack[] = [...TRACKS, "cs"];
+export const TRACK_LABEL: Record<ReadinessTrack, string> = { dsa: "Coding (DSA)", hld: "High-level design", lld: "Low-level design", cs: "CS fundamentals" };
 
 export interface CatalogItem {
   slug: string;
@@ -21,6 +27,7 @@ export interface Catalog {
   deepDives: { slug: string; title: string; minutes: number }[];
   questions: { slug: string; title: string; label: string; level: string; minutes: number; lld: boolean; challenge?: string; exercises: string[]; /** Has an "Explain it back" rehearsal. */ explain: boolean }[];
   lldLessons: { slug: string; title: string; short: string; minutes: number; exercises: CatalogItem[] }[];
+  csLessons: { slug: string; title: string; short: string; group: string; minutes: number }[];
   exercises: CatalogItem[];
   challenges: { slug: string; title: string; missionSteps: number; learn: string }[];
 }

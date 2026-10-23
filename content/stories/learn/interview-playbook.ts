@@ -2,6 +2,32 @@ import { interviewFramework } from "../../learn/10-interview-playbook/diagrams";
 import type { Story } from "../types";
 
 export const story: Story | undefined = {
+  learn: [
+    {
+      head: "Same steps every time",
+      body: "A system design round is about 45 minutes. Run the same six steps each time: requirements, numbers, API and data, design, deep dives, trade-offs. Nerves then cannot make you skip one.",
+      eg: "A pilot's checklist",
+      example: "Pilots with thousands of hours still read the checklist before take-off. It is not for lack of skill: it stops a busy moment from skipping a step.",
+    },
+    {
+      head: "Ask before you draw",
+      body: "Spend the first five minutes on what to build and for how many people. A design for a hundred users and one for a hundred million look nothing alike.",
+      eg: "An architect's first visit",
+      example: "An architect asks how many people will live in the house and what they need before sketching. A flat and a hotel need very different plans.",
+    },
+    {
+      head: "Let numbers pick the parts",
+      body: "Quick estimates tell you when a single server is enough and when you need a cache, copies or shards. Each number should end in so we need.",
+      eg: "Packing for a trip",
+      example: "Two nights fits in a backpack; two weeks needs a suitcase. You check the length of the trip before you choose the bag.",
+    },
+    {
+      head: "Say why, and the cost",
+      body: "Interviewers score your reasoning, not one right answer. Say every choice as I use X because Y, and the cost is Z.",
+      eg: "A doctor explaining treatment",
+      example: "A good doctor says this medicine because of your symptoms, and it may make you drowsy. You trust the advice because you hear the trade.",
+    },
+  ],
   steps: [
     {
       tag: "pain",

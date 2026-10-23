@@ -1,0 +1,27 @@
+{
+  "title": "Rotate Array",
+  "difficulty": "Medium",
+  "patterns": ["two-pointers"],
+  "js": ["arrays","destructuring-spread"],
+  "order": 3,
+  "summary": "Rotate an array to the right by k places, in place.",
+  "fn": "rotate",
+  "params": ["nums","k"],
+  "types": {"params":["number[]","number"],"returns":"void"},
+  "inPlace": 0,
+  "tests": [
+    {"args":[[1,2,3,4,5,6,7],3],"expected":[5,6,7,1,2,3,4],"explain":"The last three values 5, 6, 7 move to the front, giving [5, 6, 7, 1, 2, 3, 4]."},
+    {"args":[[-1,-100,3,99],2],"expected":[3,99,-1,-100],"explain":"Rotating by 2 moves 3 and 99 to the front."},
+    {"args":[[1,2],5],"expected":[2,1],"explain":"5 steps on a 2-element array is the same as 1 step (5 % 2), which swaps the two values."},
+    {"args":[[1],10],"expected":[1]},
+    {"args":[[1,2,3],0],"expected":[1,2,3]},
+    {"args":[[1,2,3],3],"expected":[1,2,3]},
+    {"args":[[1,2,3,4,5,6],4],"expected":[3,4,5,6,1,2]},
+    {"args":[[5,5,5,1],1],"expected":[1,5,5,5]},
+    {"args":[[1,2,3,4,5,6,7,8],100],"expected":[5,6,7,8,1,2,3,4]},
+    {"args":[[38,55,-56,25,-83,19,44,-8,82,-54,56,48,32,-98,-7,-40,80,-43,51,45,-50,-97,59,-59,-46,-76,-6,99,-51,-84,70,-37,-19,98,-46,-23,-57,74,45,76,2,61,30,-72,27],17],"expected":[-51,-84,70,-37,-19,98,-46,-23,-57,74,45,76,2,61,30,-72,27,38,55,-56,25,-83,19,44,-8,82,-54,56,48,32,-98,-7,-40,80,-43,51,45,-50,-97,59,-59,-46,-76,-6,99]},
+    {"args":[[38,55,-56,25,-83,19,44,-8,82,-54,56,48,32,-98,-7,-40,80,-43,51,45,-50,-97,59,-59,-46,-76,-6,99,-51,-84,70],61],"expected":[55,-56,25,-83,19,44,-8,82,-54,56,48,32,-98,-7,-40,80,-43,51,45,-50,-97,59,-59,-46,-76,-6,99,-51,-84,70,38]}
+  ],
+  "hints": ["Rotating right by k moves the last k elements to the front. If k is larger than the length, rotating a full lap changes nothing, so reduce k first.","Copying into a second array is easy but uses O(n) extra space. Try reversing parts of the array instead: what happens to the order of the two blocks when you reverse the whole thing?","Reverse the entire array, then reverse the first k elements, then reverse the remaining n - k elements. Use two pointers swapping toward each other for each reversal, and take k = k % n first."],
+  "complexity": {"time":"O(n): every element is swapped a constant number of times","space":"O(1): only a few indices"}
+}

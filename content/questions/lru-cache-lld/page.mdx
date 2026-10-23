@@ -1,0 +1,189 @@
+import { classes, getFlow, putFlow } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+A **hash map** finds an entry in O(1), and a **doubly linked list** remembers the order of use in O(1), so `get` and `put` both cost O(1). Put the order behind an **eviction policy** only if a second rule is likely, and guard everything with one lock, because even a read changes the order.
+</TLDR>
+
+<Requirements
+  functional={['get(key) and put(key, value) with a fixed capacity', 'When full, a new key evicts the least recently used one', 'Reading or replacing a key makes it the most recent', 'Optional time to live (TTL) per entry or per cache', 'delete(key) and a size', 'Listeners hear every removal and its reason', 'Hit, miss and eviction counters']}
+  nonFunctional={['get and put in O(1)', 'Safe when many threads call it at once', 'Never above capacity, even for a moment', 'Policy can change without editing the cache', 'Deterministic tests: the clock is injected']}
+  outOfScope={['A distributed cache (an HLD follow-up)', 'Persistence to disk', 'Loading values on a miss (a follow-up)']} />
+
+A **low-level design** (LLD) question that is mostly a data-structure question in disguise. Get the structure right, then show how the design bends.
+
+New to this? Read [Swap behaviour](/lld/foundations/strategy-decorator) first, and see the hash-map-plus-list trick in the [LRU Cache problem](/dsa/problems/lru-cache).
+
+## Clarifying questions
+
+- Is it generic over keys and values, and how big is the capacity?
+- Only LRU, or must the rule be swappable (LFU, FIFO)?
+- Do entries expire? Is the TTL per cache or per entry?
+- Many threads, or one? Are reads far more common than writes?
+- Does a miss load from somewhere, or does the caller handle it?
+
+## Public interface
+
+| Call | Returns | Notes |
+|---|---|---|
+| `get(key)` | Value, or a miss | A hit makes the key the newest |
+| `put(key, value, ttl?)` | Nothing | A new key on a full cache evicts first |
+| `delete(key)` | `true` if it existed | Also frees the slot |
+| `size` | Count of live entries | Never above capacity |
+| `onRemove(listener)` | | Called with key, value and why: evicted, expired or deleted |
+
+## What it remembers
+
+- `entries`: key → value and deadline.
+- The policy's own order. For LRU, a doubly linked list with a node per key, plus a map from key to node.
+- `stats`: hits, misses, evictions.
+
+Two structures describe the same keys. Every operation must update both, or a key is evicted twice or never.
+
+## Build the design in stages
+
+Step through: a map with a limit, then the order as a policy, then other policies, then time and the lock, then observers. Green marks what the latest stage added.
+
+<ClassDiagram spec={classes} />
+
+## Watch it run
+
+Press keys and watch the oldest one fall off the back. Try reading an old key just before the cache fills, then see it survive.
+
+<LRUViz />
+
+## Get and put, step by step
+
+Pick a branch on each diagram: hit, expired and miss for `get`; new key on a full cache, new key with room, and a known key for `put`.
+
+<SequenceDiagram spec={getFlow} />
+
+<SequenceDiagram spec={putFlow} />
+
+## Patterns, and when to skip them
+
+**Strategy** is the one worth drawing: the cache asks `policy.victim()` and never knows if the answer came from a list or a counter. **Observer** gives metrics and write-back a place to hook in. Skip both if the interviewer said "just LRU".
+
+**Skip the rest.** A `CacheFactory`, a `CacheBuilder` for three options, or a singleton cache add nothing here. Take the capacity in the constructor.
+
+## Thread safety
+
+A map plus a list is not safe under two threads. Two writers can corrupt the list. And a **reader is a writer** too: a hit relinks the node.
+
+- **One lock** around `get` and `put` is the right first answer. It is correct and cheap while the work inside is a few pointer moves.
+- **Lock striping**: hash the key to one of N small caches, each with its own lock. Reads on different stripes never wait. The cost is that LRU becomes approximate across stripes.
+- **Read buffering**: record hits in a queue and replay them in batches, as high-end caches do. Fast, but harder to reason about.
+- **Listeners run after the lock is released**, or a slow one blocks every caller and a re-entrant one deadlocks.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Policy, TTL, threads, loading on miss.
+  </Step>
+  <Step title="Pick the structure">
+    Map for lookup, list for order.
+  </Step>
+  <Step title="Write get and put">
+    Hit, replace, evict, insert.
+  </Step>
+  <Step title="Split out the policy">
+    Only if a second rule is likely.
+  </Step>
+  <Step title="Add safety and time">
+    One lock, injected clock.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="Why not just a map, or just a list?">
+    A map alone cannot say which key is oldest. A list alone makes lookup O(n). Together each fixes the other.
+  </Step>
+  <Step title="Sentinels remove the edge cases">
+    A dummy head and tail mean every real node has a neighbour on both sides, so unlink and push-front never test for null.
+  </Step>
+  <Step title="Put evicts before it inserts">
+
+Evict first, so the cache is never over capacity, and only for a new key.
+
+```js
+put(key, value) {
+  if (this.entries.has(key)) { /* replace, then onAccess */ return; }
+  if (this.entries.size >= this.capacity) this.#remove(this.policy.victim(), 'evicted');
+  this.entries.set(key, { value });
+  this.policy.onInsert(key);
+}
+```
+
+  </Step>
+  <Step title="Time is injected">
+    Expiry checks `now()` on read (lazy). Tests move a fake clock instead of sleeping. A background sweep can come later.
+  </Step>
+  <Step title="Tests">
+    A model check against a simple ordered map over thousands of random operations catches list bugs that hand-picked cases miss.
+  </Step>
+</Steps>
+
+## Implementation
+
+The same design in **JavaScript, Java or Python**. Java and Python add a real lock and run listeners after releasing it.
+
+<CodeTabs
+  files={['snippets/policies.js', 'snippets/cache.js', 'snippets/cache.test.js']}
+  java={['snippets/java/Policies.java', 'snippets/java/Cache.java', 'snippets/java/CacheTest.java']}
+  python={['snippets/python/policies.py', 'snippets/python/cache.py', 'snippets/python/test_cache.py']}
+/>
+
+- `victim()` reads the back of the list. It does not remove it, so the cache stays in charge of removal.
+- A hit never extends a TTL; only `put` sets a deadline.
+
+## Code it yourself
+
+Try the [Eviction Cache exercise](/lld/exercises/eviction-cache): one class, three policies chosen by name, and ties that the tests check.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Map and list disagree | A key evicted twice, or never | Update both in one method, test against a model |
+| Evict-then-check on update | A good entry thrown away | Check for the key first |
+| Slow listener under the lock | Every caller stalls | Notify after unlocking |
+| Expired entries fill the cache | Live keys get evicted | Sweep, or prefer expired victims |
+| One hot key | All threads queue on one lock | Stripe the cache, or shield it with a tiny front cache |
+
+## Trade-offs
+
+| Choice | Pros | Cons |
+|---|---|---|
+| Hand-built list vs built-in ordered map | Shows the structure; any language | More code to get wrong |
+| One lock vs striping | Exact LRU, simple | Contention under many cores |
+| Lazy expiry vs sweeper | No extra thread | Dead entries use memory until read |
+| Policy interface vs inline LRU | Swappable | An extra layer for one rule |
+
+<Callout kind="interview" title="What interviewers listen for">
+Map plus doubly linked list, with O(1) for both calls. The reason a read needs the lock. Strategy only when a second policy is asked for, and "I would not build a factory for this".
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would you add LFU?">
+    A new `LfuPolicy` with the same four methods. Keep a count per key and buckets of keys per count. Break ties by recency. The cache does not change.
+  </FollowUp>
+  <FollowUp q="How do you load a value on a miss without a stampede?">
+    Add `getOrLoad(key, loader)` that remembers one in-flight load per key, so ten callers share one load. Never run the loader while holding the cache lock.
+  </FollowUp>
+  <FollowUp q="How would you make reads scale across cores?">
+    Stripe the keys over N caches, or buffer hits and apply them in batches. Say that you trade exact LRU order for throughput.
+  </FollowUp>
+  <FollowUp q="How would this become a distributed cache?">
+    Shard keys with consistent hashing, so each node holds its own LRU. That is the HLD version of the same idea.
+  </FollowUp>
+  <FollowUp q="How do you size it by bytes instead of entries?">
+    Give each entry a weight, track the total, and evict until the new entry fits. The loop is the only change.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

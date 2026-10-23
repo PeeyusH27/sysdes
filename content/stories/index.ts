@@ -27,6 +27,8 @@ import { story as questionsInfiniteFeed } from "./questions/infinite-feed";
 import { story as questionsChat } from "./questions/chat";
 import { story as questionsNewsFeed } from "./questions/news-feed";
 import { story as questionsRideSharing } from "./questions/ride-sharing";
+import { hldMoreStories } from "./questions/hld-more";
+import { lldMoreStories } from "./questions/lld-more";
 import { story as patternsHashing } from "./patterns/hashing";
 import { story as patternsTwoPointers } from "./patterns/two-pointers";
 import { story as patternsSlidingWindow } from "./patterns/sliding-window";
@@ -49,21 +51,36 @@ import { story as patternsGreedy } from "./patterns/greedy";
 import { story as patternsDp1d } from "./patterns/dp-1d";
 import { story as patternsDp2d } from "./patterns/dp-2d";
 import { story as patternsBitManipulation } from "./patterns/bit-manipulation";
+import { story as patternsDesignDataStructures } from "./patterns/design-data-structures";
+import { story as patternsMatrix } from "./patterns/matrix";
 import { story as lldThinkingInObjects } from "./lld/thinking-in-objects";
 import { story as lldSolid } from "./lld/solid";
 import { story as lldStrategyDecorator } from "./lld/strategy-decorator";
 import { story as lldStateObserver } from "./lld/state-observer";
 import { story as lldCreationAndCommands } from "./lld/creation-and-commands";
 import { story as lldLldPlaybook } from "./lld/lld-playbook";
+import { story as csProcessesThreads } from "./cs/processes-threads";
+import { story as csSchedulingMemory } from "./cs/scheduling-memory";
+import { story as csSynchronization } from "./cs/synchronization";
+import { story as csConcurrencyInPractice } from "./cs/concurrency-in-practice";
+import { story as csRequestJourney } from "./cs/request-journey";
+import { story as csTcpInDepth } from "./cs/tcp-in-depth";
+import { story as csHttpAndApiStyles } from "./cs/http-and-api-styles";
+import { story as csSessionsAuthProxies } from "./cs/sessions-auth-proxies";
+import { story as csIndexesBtreeLsm } from "./cs/indexes-btree-lsm";
+import { story as csTransactionsIsolation } from "./cs/transactions-isolation";
+import { story as csStorageEngineWal } from "./cs/storage-engine-wal";
+import { story as csSchemaAndJoins } from "./cs/schema-and-joins";
 
 export type { Scene, Story, StoryStep, LearnStep, StepTag, Tone, Predict } from "./types";
-export type StorySection = "learn" | "deep-dives" | "questions" | "patterns" | "lld";
+export type StorySection = "learn" | "deep-dives" | "questions" | "patterns" | "lld" | "cs";
 const all: Record<StorySection, Record<string, Story | undefined>> = {
   "learn": { "requirements-estimation": learnRequirementsEstimation, "api-load-balancing": learnApiLoadBalancing, "databases-scaling": learnDatabasesScaling, "caching": learnCaching, "async-messaging": learnAsyncMessaging, "consistency-cap": learnConsistencyCap, "reliability-observability": learnReliabilityObservability, "case-url-shortener": learnCaseUrlShortener, "case-notification-system": learnCaseNotificationSystem, "interview-playbook": learnInterviewPlaybook },
   "deep-dives": { "caching-techniques": deepDivesCachingTechniques, "sharding-strategies": deepDivesShardingStrategies, "choosing-a-data-store": deepDivesChoosingADataStore, "polling-sse-websockets": deepDivesPollingSseWebsockets, "connections-pooling": deepDivesConnectionsPooling, "request-flows": deepDivesRequestFlows },
-  "questions": { "parking-lot": questionsParkingLot, "elevator": questionsElevator, "vending-machine": questionsVendingMachine, "rate-limiter": questionsRateLimiter, "movie-booking": questionsMovieBooking, "leaderboard": questionsLeaderboard, "payment-system": questionsPaymentSystem, "typeahead": questionsTypeahead, "infinite-feed": questionsInfiniteFeed, "chat": questionsChat, "news-feed": questionsNewsFeed, "ride-sharing": questionsRideSharing },
-  "patterns": { "hashing": patternsHashing, "two-pointers": patternsTwoPointers, "sliding-window": patternsSlidingWindow, "prefix-sum": patternsPrefixSum, "binary-search": patternsBinarySearch, "stack": patternsStack, "intervals": patternsIntervals, "fast-slow-pointers": patternsFastSlowPointers, "linked-list-reversal": patternsLinkedListReversal, "tree-dfs": patternsTreeDfs, "tree-bfs": patternsTreeBfs, "trie": patternsTrie, "heaps": patternsHeaps, "graph-traversal": patternsGraphTraversal, "topological-sort": patternsTopologicalSort, "union-find": patternsUnionFind, "shortest-paths": patternsShortestPaths, "backtracking": patternsBacktracking, "greedy": patternsGreedy, "dp-1d": patternsDp1d, "dp-2d": patternsDp2d, "bit-manipulation": patternsBitManipulation },
+  "questions": { "parking-lot": questionsParkingLot, "elevator": questionsElevator, "vending-machine": questionsVendingMachine, "rate-limiter": questionsRateLimiter, "movie-booking": questionsMovieBooking, "leaderboard": questionsLeaderboard, "payment-system": questionsPaymentSystem, "typeahead": questionsTypeahead, "infinite-feed": questionsInfiniteFeed, "chat": questionsChat, "news-feed": questionsNewsFeed, "ride-sharing": questionsRideSharing, ...hldMoreStories, ...lldMoreStories },
+  "patterns": { "hashing": patternsHashing, "two-pointers": patternsTwoPointers, "sliding-window": patternsSlidingWindow, "prefix-sum": patternsPrefixSum, "binary-search": patternsBinarySearch, "stack": patternsStack, "intervals": patternsIntervals, "fast-slow-pointers": patternsFastSlowPointers, "linked-list-reversal": patternsLinkedListReversal, "tree-dfs": patternsTreeDfs, "tree-bfs": patternsTreeBfs, "trie": patternsTrie, "heaps": patternsHeaps, "graph-traversal": patternsGraphTraversal, "topological-sort": patternsTopologicalSort, "union-find": patternsUnionFind, "shortest-paths": patternsShortestPaths, "backtracking": patternsBacktracking, "greedy": patternsGreedy, "dp-1d": patternsDp1d, "dp-2d": patternsDp2d, "bit-manipulation": patternsBitManipulation, "design-data-structures": patternsDesignDataStructures, "matrix": patternsMatrix },
   "lld": { "thinking-in-objects": lldThinkingInObjects, "solid": lldSolid, "strategy-decorator": lldStrategyDecorator, "state-observer": lldStateObserver, "creation-and-commands": lldCreationAndCommands, "lld-playbook": lldLldPlaybook },
+  "cs": { "processes-threads": csProcessesThreads, "scheduling-memory": csSchedulingMemory, "synchronization": csSynchronization, "concurrency-in-practice": csConcurrencyInPractice, "request-journey": csRequestJourney, "tcp-in-depth": csTcpInDepth, "http-and-api-styles": csHttpAndApiStyles, "sessions-auth-proxies": csSessionsAuthProxies, "indexes-btree-lsm": csIndexesBtreeLsm, "transactions-isolation": csTransactionsIsolation, "storage-engine-wal": csStorageEngineWal, "schema-and-joins": csSchemaAndJoins },
 };
 
 export const getStory = (section: string, slug: string): Story | undefined => all[section as StorySection]?.[slug];

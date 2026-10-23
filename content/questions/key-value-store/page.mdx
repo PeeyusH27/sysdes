@@ -1,0 +1,207 @@
+import { architecture, conflictSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Spread keys over a **consistent-hash ring**, keep each key on N = 3 nodes, and let every node coordinate. A write waits for W acks and a read asks R replicas; R + W greater than N makes reads see the latest write. **Vector clocks**, hinted handoff and Merkle-tree repair deal with the failures.
+</TLDR>
+
+<Requirements
+  functional={["put(key, value), get(key) and delete(key)", "Values up to a few KB, keys up to a few hundred bytes", "Tunable consistency per request", "Add and remove nodes without downtime", "Optional expiry (TTL)"]}
+  nonFunctional={["About 1M operations a second at peak, 80% reads", "p99 latency under 10 ms", "Highly available: writes still work when a node or a zone is down", "Scales to 100 TB of data by adding nodes", "No single point of failure: no leader to lose"]}
+  outOfScope={["Multi-key transactions and joins", "Secondary indexes and range scans across the cluster", "Cross-region replication (a follow-up)"]}
+/>
+
+## Clarifying questions
+
+- **Consistency or availability?** If a node is down, may a read be stale, or must it fail?
+- **Data and access?** Value size, volume, read or write heavy, hot keys.
+- **Conflicts?** Can two clients write one key at once? Who merges?
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Logical data | given | 100 TB |
+| With replicas | 100 TB × 3 copies | 300 TB |
+| Nodes | 300 TB ÷ 6 TB usable per node | **50 nodes** |
+| Writes | 20% of 1M ops/s, × 3 replicas | 200K/s → 600K replica writes/s |
+| Reads | 80% of 1M ops/s, × R = 2 | 800K/s → 1.6M replica reads/s |
+| Per node | (600K + 1.6M) ÷ 50 | **≈ 44K ops/s** |
+| Ring points | 50 nodes × 128 virtual nodes | 6,400 |
+
+Forty-four thousand small operations a second is comfortable for a node with an LSM tree on SSD. Capacity comes from adding nodes, not from a bigger machine.
+
+## API
+
+| Call | Notes |
+|---|---|
+| `PUT /kv/:key` | Body is the value. Optional `context` (the clock from a previous get), `w`, `ttl` |
+| `GET /kv/:key` | Returns one value or several siblings, plus a `context`. Optional `r` |
+| `DELETE /kv/:key` | Writes a tombstone, removed after a grace period |
+
+The **context** is the vector clock a get returned. Sending it back on the next put says "I have seen these versions", so the new value replaces them.
+
+## Data model
+
+Each node stores records in an **LSM tree**: writes go to a commit log and an in-memory table, which is flushed to sorted files and merged in the background.
+
+| Field | Meaning |
+|---|---|
+| `key` | The partition key, hashed onto the ring |
+| `value` | Opaque bytes |
+| `clock` | Vector clock, for example `{X:2, Y:1}` |
+| `tombstone` | True for a delete, so the delete replicates and repair does not resurrect the value |
+| `expires_at` | Optional TTL |
+
+## Architecture
+
+Every node runs the same code: any node looks up the key's replicas and fans the request out. Play **Write**, **Read and read repair**, **Replica down** and **Anti-entropy repair**.
+
+<FlowDiagram spec={architecture} />
+
+## Partitioning
+
+Hash nodes and keys onto a circle. A key lives on the first node clockwise, and the next two distinct nodes hold its copies. Add a node and about 1 in 51 keys move, all onto it. Plain `hash mod N` would move over 90%.
+
+Give each machine many **virtual nodes**. One point each leaves some nodes with three times their share; 128 keep the largest within about 20% of average. Try it: add and remove nodes, then change the virtual nodes.
+
+<HashRing />
+
+## Replication and quorums
+
+Each key lives on N = 3 nodes. A write waits for **W** acks; a read asks **R** replicas and takes the newest. If R + W is above N, every read overlaps every write, so a read sees the latest acknowledged write.
+
+| Setting | Behaviour |
+|---|---|
+| W = 2, R = 2 | Balanced; survives one dead replica |
+| W = 1, R = 3 | Fast writes, slow reads |
+| W = 3, R = 1 | Fast reads; one dead node blocks writes |
+
+Try values and kill replicas.
+
+<QuorumPlayground />
+
+## Conflicts and repair
+
+With no leader, two writes can meet. A **vector clock** records who has seen what. If one clock includes the other, keep the newer. If neither does, keep both as **siblings** for the client to merge. Last-write-wins is simpler, but clock skew can drop the newer write.
+
+Drift is repaired three ways. **Read repair** fixes replicas a read touched. **Hinted handoff** has a stand-in hold writes for a down replica. **Anti-entropy** compares Merkle trees and copies only mismatching ranges.
+
+<SequenceDiagram spec={conflictSequence} />
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Consistency, size, access pattern, conflicts.
+  </Step>
+  <Step title="Estimate">
+    50 nodes, 44K operations per node, 6,400 ring points.
+  </Step>
+  <Step title="Partition">
+    Consistent hashing with virtual nodes.
+  </Step>
+  <Step title="Replicate">
+    N, W, R, and what each setting trades.
+  </Step>
+  <Step title="Repair and fail">
+    Vector clocks, hinted handoff, Merkle trees, gossip.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="Choose the model first">
+
+"I'll build a Dynamo-style store: always writable, eventually consistent by default, tunable per request." Then say what you give up.
+
+</Step>
+<Step title="Place keys with a ring">
+
+Hash keys and nodes onto a ring. Replicas are the next three distinct nodes. Virtual nodes even out load and let big machines take more.
+
+</Step>
+<Step title="Make every node a coordinator">
+
+Nodes learn the ring by gossip, so any node can route a request. No leader means nothing to fail over.
+
+</Step>
+<Step title="Set N, W and R">
+
+N = 3, W = 2, R = 2 by default. Lower W for write speed, raise R for freshness. State R + W greater than N.
+
+</Step>
+<Step title="Version values">
+
+Attach a vector clock. Return siblings on conflict, or use last-write-wins where overwrites are acceptable and say that out loud.
+
+</Step>
+<Step title="Survive failures">
+
+Sloppy quorum with hinted handoff keeps writes flowing when replicas are down. Read repair and Merkle-tree anti-entropy bring replicas back in line.
+
+</Step>
+<Step title="Detect failure with gossip">
+
+Each node tracks heartbeat counters from peers. A silent peer is marked down by many nodes, not just one, which avoids flapping on a single slow link.
+
+</Step>
+<Step title="Store it on disk">
+
+Commit log first, then a memtable, flushed to sorted files that are merged in the background. Bloom filters skip files that cannot hold a key.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Tabs: the ring with virtual nodes and a preference list, vector clocks, a small quorum cluster with read repair and hinted handoff, and a Merkle tree diff.
+
+<CodeTabs files={['snippets/ring.js', 'snippets/vector-clock.js', 'snippets/quorum-store.js', 'snippets/merkle.js']} />
+
+- The ring test shows 1 point per node is uneven (some node over 3x), 128 is within 1.4x, and adding the 51st node moves about 2%.
+- The quorum tests show W = 1, R = 1 reading stale data and W = 2, R = 2 never doing so.
+- The Merkle test finds one stale key among 10,000 in 21 comparisons instead of scanning 1,024 leaves.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| A replica goes down | Fewer acks available | W = 2 of 3 still works; hinted handoff |
+| Two replicas down | Writes fail at W = 2 | Sloppy quorum, or lower W and accept risk |
+| Network partition | Both sides accept writes | Vector clocks keep siblings; merge on read |
+| A node loses disk | Missing keys | Anti-entropy rebuilds from the other replicas |
+| Hot key | One replica set overloaded | Cache in front; split the key; more replicas for that key |
+| Tombstones removed too early | Deleted values come back | Keep tombstones past the longest repair interval |
+| Clock skew with LWW | Newer write dropped | Use vector clocks or logical timestamps |
+
+## Trade-offs
+
+| Choice | Gain | Cost |
+|---|---|---|
+| Leaderless (Dynamo style) | Always writable, no failover | Conflicts to resolve |
+| Leader per shard (Raft) | Simple strong consistency | Writes stall during an election |
+| Vector clocks | No lost updates | Siblings; clients must merge |
+| Last-write-wins | Simple | Silent data loss with skew |
+| Sloppy quorum | Higher availability | Reads can miss recent writes |
+
+<Callout kind="interview" title="What interviewers listen for">
+A ring with **virtual nodes**, the arithmetic of R + W greater than N, why you chose a consistency model, and **three repair paths** (read repair, hinted handoff, Merkle trees).
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would you make it strongly consistent?">
+    Use a Raft group per key range, so one leader orders writes. You lose some availability during elections.
+  </FollowUp>
+  <FollowUp q="How do you add a node safely?">
+    Join the ring, stream the arcs it owns, then serve. Old copies go after the stream ends.
+  </FollowUp>
+  <FollowUp q="How do you handle a hot key?">
+    Cache in front, replicate that key more widely, or split it into sub-keys.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

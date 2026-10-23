@@ -11,6 +11,7 @@ import { allExtras, type ExtrasSection } from "@content/extras";
 import { deepDives, learnSteps, questions } from "@content/registry";
 import { patterns } from "@content/dsa/registry";
 import { lldLessons } from "@content/lld/registry";
+import { csLessons } from "@content/cs/registry";
 
 const pages: { section: ExtrasSection; slug: string; file: string }[] = [
   ...learnSteps.map((s) => ({ section: "learn" as const, slug: s.slug, file: `learn/${s.dir}/page.mdx` })),
@@ -18,6 +19,7 @@ const pages: { section: ExtrasSection; slug: string; file: string }[] = [
   ...questions.map((s) => ({ section: "questions" as const, slug: s.slug, file: `questions/${s.slug}/page.mdx` })),
   ...patterns.map((s) => ({ section: "patterns" as const, slug: s.slug, file: `dsa/patterns/${s.dir}/page.mdx` })),
   ...lldLessons.map((s) => ({ section: "lld" as const, slug: s.slug, file: `lld/foundations/${s.dir}/page.mdx` })),
+  ...csLessons.map((s) => ({ section: "cs" as const, slug: s.slug, file: `cs/lessons/${s.dir}/page.mdx` })),
 ];
 
 /** Words of prose in the sections a reader sees by default (everything not folded into "detail"), and on the whole page. */

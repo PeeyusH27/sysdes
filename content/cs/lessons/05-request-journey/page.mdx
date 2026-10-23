@@ -1,0 +1,94 @@
+import { urlJourney, dnsLookup } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Before a server sees your request, the client resolves a name with **DNS**, opens a **TCP** connection and sets up **TLS**, each costing at least one round trip. HTTP/2 shares one connection between requests, and HTTP/3 also removes TCP's head-of-line blocking.
+</TLDR>
+
+## What happens when you type a URL
+Four stages in order: find the address (DNS), connect (TCP), secure it (TLS), ask for the page (HTTP). Each needs at least one round trip, so latency is the round-trip time times the trips.
+
+<SequenceDiagram spec={urlJourney} />
+
+<Callout kind="interview" title="What interviewers listen for">
+You name the stages in order, say where caches help (browser, OS, resolver, CDN), and count round trips. Strong answers add what a repeat visit skips.
+</Callout>
+
+## DNS: names to addresses
+Computers connect to addresses, not names. Your browser asks a **recursive resolver**. On a cold cache the resolver follows referrals: a root server points to the `.com` servers, which point to the domain's **authoritative** server, which holds the answer.
+
+<FlowDiagram spec={dnsLookup} />
+
+Every answer carries a **TTL**, how long anyone may cache it. That is why DNS is fast but changes are slow: lower the TTL a day before a planned move.
+
+<CodeTabs files={['snippets/dns-resolver.js', 'snippets/dns-resolver.test.js']} />
+
+## The TCP handshake
+TCP gives ordered, reliable delivery over unreliable packets. The client sends **SYN**, the server answers **SYN-ACK**, and the client's **ACK** completes it: one round trip before data flows, and the ACK can already carry the next stage's first bytes.
+
+Three messages are needed because each side must show it can send and receive and learn the other's starting sequence number. It also stops a delayed old SYN from opening a connection nobody wants. Lesson 6 goes inside TCP.
+
+## TLS: encryption and identity
+TLS adds **confidentiality**, **integrity** and **authentication** on top of TCP. In TLS 1.3 the client's first message carries its half of a key exchange. The server replies with its half, its **certificate** and proof it holds the private key. Both derive one session key and the request follows: one round trip.
+
+The browser trusts the certificate if it chains to a known authority, matches the hostname and has not expired.
+
+<HandshakeTimeline />
+
+## HTTP/1.1, HTTP/2 and HTTP/3
+| | HTTP/1.1 | HTTP/2 | HTTP/3 |
+|---|---|---|---|
+| Transport | TCP | TCP | QUIC (over UDP) |
+| Requests per connection | One at a time | Many streams | Many streams |
+| Head-of-line blocking | Between requests | In TCP, on loss | Per stream only |
+
+HTTP/1.1 handles one request at a time per connection, so browsers open about six. **HTTP/2** multiplexes streams on one connection, but they share one TCP byte stream, so one lost packet stalls all of them. **HTTP/3** runs on **QUIC**: a lost packet delays only its own stream, TLS 1.3 is built into the handshake, and a connection survives a change of network.
+
+## Putting numbers on it
+
+Assume a 50 ms round trip to the server and nothing cached.
+
+| Setup | Round trips | Time to the response |
+|---|---|---|
+| DNS + TCP + TLS 1.2 + request | 1 + 1 + 2 + 1 = 5 | 250 ms |
+| DNS + TCP + TLS 1.3 + request | 1 + 1 + 1 + 1 = 4 | 200 ms |
+| DNS + QUIC + request | 1 + 1 + 1 = 3 | 150 ms |
+| Warm connection, request only | 1 | 50 ms |
+
+The biggest wins are not new protocols but not repeating the setup: keep connections alive and reuse them, serve from a CDN near the user so the round trip itself is short, and resume TLS sessions.
+
+## Speeding up the first byte
+
+- **Connection reuse.** Keep-alive and HTTP/2 mean the handshakes are paid once.
+- **Nearby servers.** A CDN or edge node ends the TCP and TLS handshake close to the user.
+- **Resumption.** A returning client can resume a TLS session and skip full key exchange. TLS 1.3 early data (0-RTT) saves another round trip but can be replayed, so use it only for safe, repeatable requests.
+- **Hints.** `preconnect` opens the connection early; `dns-prefetch` resolves a name early.
+- **Fewer origins.** Each extra hostname costs its own DNS, TCP and TLS setup.
+
+For how pools and keep-alive show up on the server side, see [connections, pooling and keep-alive](/deep-dives/connections-pooling) and [request flows end to end](/deep-dives/request-flows).
+
+## Where this goes wrong
+
+<Callout kind="warning" title="Caches make the failure last longer than the fix">
+A wrong DNS record or an expired certificate is fixed in minutes and still hurts for hours, because resolvers and clients cache the bad answer for the TTL. Monitor certificate expiry and lower TTLs before risky changes.
+</Callout>
+
+- **Certificate problems.** Expired, wrong hostname, or a missing intermediate certificate cause hard failures in browsers.
+- **Stale DNS after failover.** Clients that ignore TTL, or long-lived connections, keep using the dead address.
+- **Middleboxes.** Some networks block or throttle UDP, so HTTP/3 must fall back to HTTP/2 over TCP.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What happens when you type a URL into a browser?">
+    The browser checks caches, resolves the name through DNS, opens TCP, negotiates TLS, sends the HTTP request and renders the response.
+  </FollowUp>
+  <FollowUp q="How does TLS give you a secure channel?">
+    A key exchange gives both sides a secret nobody on the wire can compute, a certificate proves the server's identity, and a symmetric cipher protects the data.
+  </FollowUp>
+  <FollowUp q="What does HTTP/3 fix that HTTP/2 does not?">
+    HTTP/2 streams share one TCP connection, so one loss blocks all of them. QUIC delivers streams independently and merges the handshakes.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

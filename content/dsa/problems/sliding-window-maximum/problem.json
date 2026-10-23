@@ -1,0 +1,27 @@
+{
+  "title": "Sliding Window Maximum",
+  "difficulty": "Hard",
+  "patterns": ["sliding-window"],
+  "js": ["stack-queue-deque","arrays"],
+  "order": 7,
+  "summary": "Report the maximum of every window of size k as it slides across an array.",
+  "fn": "maxSlidingWindow",
+  "params": ["nums","k"],
+  "types": {"params":["number[]","number"],"returns":"number[]"},
+  "tests": [
+    {"args":[[1,3,-1,-3,5,3,6,7],3],"expected":[3,3,5,5,6,7],"explain":"The windows are [1,3,-1], [3,-1,-3], [-1,-3,5], [-3,5,3], [5,3,6], [3,6,7], with maxima 3, 3, 5, 5, 6, 7."},
+    {"args":[[1],1],"expected":[1],"explain":"One window, holding one value."},
+    {"args":[[9,11],2],"expected":[11],"explain":"The window covers the whole array."},
+    {"args":[[4,3,2,1],2],"expected":[4,3,2]},
+    {"args":[[1,2,3,4],2],"expected":[2,3,4]},
+    {"args":[[5,5,5,5,5],3],"expected":[5,5,5]},
+    {"args":[[-7,-8,-9,-2,-10],2],"expected":[-7,-8,-2,-2]},
+    {"args":[[7,2,4],1],"expected":[7,2,4]},
+    {"args":[[1,-1],1],"expected":[1,-1]},
+    {"args":[[2,1,2,1,2,1],3],"expected":[2,2,2,2]},
+    {"args":[[-37,27,4,14,-12,20,9,47,-27,-43,-12,30,-11,38,-2,-39,-44,-8,-48,-31,26,-23,-45,15,-46,9,-45,-6,36,-7,25,42,13,-44,-34,-36,2,-50,14,-38,-33,-46,46,-7,-36,27,-16,26,-29,-3,43,-36,-22,11,45,-6,-13,26,-38,34],7],"expected":[27,47,47,47,47,47,47,47,38,38,38,38,38,38,26,26,26,26,26,26,26,15,36,36,36,42,42,42,42,42,42,42,14,14,14,14,46,46,46,46,46,46,46,27,43,43,43,43,45,45,45,45,45,45]},
+    {"args":[[254,149,-99,754,-267,-561,-681,-327,292,287,-816,-781,552,-751,454,317,186,-502,219,384,395,667,-619,770,667,260,239,114,-610,-300,4,-664,91,921,628,98,-683,-659,335,984,-849,-232,282,-30,-785],20],"expected":[754,754,754,754,770,770,770,770,770,770,770,770,770,770,921,921,921,921,921,921,984,984,984,984,984,984]}
+  ],
+  "hints": ["Scanning each window for its maximum costs O(k), for O(n * k) in total. You need the maximum to update cheaply as the window moves by one position.","When a new value arrives, any earlier value in the window that is smaller can never be the maximum again: the new one is larger and stays in the window longer. So you can throw those earlier values away.","Keep a deque of indices whose values are in decreasing order. Before pushing index i, pop from the back while nums[back] <= nums[i]. Pop from the front when its index is <= i - k. Once i >= k - 1, the front of the deque is the window maximum."],
+  "complexity": {"time":"O(n): every index is pushed once and popped at most once","space":"O(k) for the deque"}
+}

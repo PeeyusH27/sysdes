@@ -1,0 +1,188 @@
+import { classes, logFlow, asyncFlow } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+A **logger tree** keyed by dotted names lets a child inherit its level, and each logger fans one record out to a list of **appenders**, each with its own threshold and **formatter**. Check the level before building anything, and put slow I/O behind a bounded queue.
+</TLDR>
+
+<Requirements
+  functional={['Four levels: DEBUG, INFO, WARN, ERROR', 'Named loggers in a tree: app.db inherits from app', 'Many appenders per logger (console, file, memory), each with a threshold', 'A formatter per appender: plain text or JSON', 'Change a level or add an appender at runtime', 'Optional async appender with a bounded queue and flush on shutdown']}
+  nonFunctional={['A disabled call costs almost nothing', 'Safe when many threads log at once, and lines never interleave', 'A failing appender never breaks the application or the other appenders', 'New formats and destinations plug in without editing Logger', 'Deterministic tests: the clock is injected']}
+  outOfScope={['Log shipping and search (an HLD follow-up)', 'File rotation details', 'Structured fields and tracing context (a follow-up)']} />
+
+A **low-level design** (LLD) question where the patterns are easy to name and the real test is judgement: what to build, and what to leave out.
+
+New to this? Read [Swap behaviour](/lld/foundations/strategy-decorator) and [State machines and observers](/lld/foundations/state-observer) first.
+
+## Clarifying questions
+
+- Do loggers form a hierarchy, or is there one global logger?
+- Can levels and appenders change while the program runs?
+- Must a log call ever block, or may it lose lines under load?
+- Plain text only, or JSON for a log shipper too?
+- Many threads? Does the order of lines matter?
+
+## Public interface
+
+| Call | Returns | Notes |
+|---|---|---|
+| `manager.getLogger(name)` | A logger | Same name, same logger; parents are created on demand |
+| `logger.log(level, message)` | How many appenders wrote it | The message may be a function, called only if the level is on |
+| `logger.level = ...` | | Unset means inherit from the parent |
+| `logger.addAppender(a)` | | Copy-on-write, safe while others log |
+| `appender.append(record)` | `true` if it wrote | Applies its own threshold and formatter |
+
+## What it remembers
+
+- `LogManager.loggers`: name → logger, plus the `root`, which always has a level.
+- Per logger: an optional level, its parent, and a list of appenders.
+- Per appender: a threshold, a formatter, and a sink. An async appender also holds a bounded queue and a drop count.
+
+A record is built once per call and shared, never copied per appender.
+
+## Build the design in stages
+
+Step through: named loggers with a level, then appenders, then formatters, then a queue, then the clock. Green marks what the latest stage added.
+
+<ClassDiagram spec={classes} />
+
+## A log call, step by step
+
+Pick a branch: a call that is switched off, one that reaches two appenders through the tree, and one where an appender throws.
+
+<SequenceDiagram spec={logFlow} />
+
+## Async logging
+
+A slow disk must not slow the request. The **async appender** is a **decorator**: it puts records on a bounded queue, and one worker thread writes them in order.
+
+<SequenceDiagram spec={asyncFlow} />
+
+The bound is the real decision. **Drop** keeps the app fast and counts what it lost. **Block** keeps every line but can stall callers. Choose drop for debug noise, block for audit lines, and always flush the queue on shutdown.
+
+## Patterns, and when to skip them
+
+**Strategy** for the formatter, **Decorator** for the async wrapper, and **Observer** in spirit for the appender list: the logger never knows who is listening. These three earn their place because real changes land on them.
+
+**Skip the rest.** A `LoggerFactoryBuilder`, an abstract `LogHandlerChain`, or a level class per level add nothing. Levels are four ordered values.
+
+**Singleton is a smell.** A global logger cannot be reset between tests. Inject the manager, and offer a module-level default as a convenience only.
+
+## Thread safety
+
+- **Appenders list**: copy-on-write. Adds are rare and log calls constant, so each call iterates a snapshot with no lock.
+- **Line order**: each sink call holds a lock, so two threads never interleave half-lines.
+- **Level**: one reference read, safe if it is volatile (Java) and read once per call.
+- **Listener failures**: catch per appender, so one broken disk does not silence the console.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Hierarchy, runtime changes, blocking, threads.
+  </Step>
+  <Step title="Name the nouns">
+    Logger, Level, Record, Appender, Formatter.
+  </Step>
+  <Step title="Write the hot path">
+    Check level, build record, walk up, append.
+  </Step>
+  <Step title="Add the two real extension points">
+    Formatter and appender.
+  </Step>
+  <Step title="Then async and threads">
+    Bounded queue, copy-on-write, flush.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="The level check comes first">
+
+A disabled call must cost almost nothing. Check before building the record, and take the message as a function so the string is built only when needed.
+
+```js
+log(level, message) {
+  if (!this.isEnabled(level)) return 0;
+  const text = typeof message === 'function' ? message() : message;
+  /* build the record, walk up the tree */
+}
+```
+
+  </Step>
+  <Step title="Inheritance is a walk up the tree">
+    A null level means ask the parent. The root always has one, so the loop ends. Changing `app` changes every descendant that inherits from it.
+  </Step>
+  <Step title="Parents come from the name">
+    `getLogger("app.db")` cuts at the last dot and gets `app` first. No registry of parents to keep in step.
+  </Step>
+  <Step title="Appenders are independent">
+    Each has its own threshold and formatter. Return how many wrote, so callers and tests can see the effect.
+  </Step>
+  <Step title="Tests">
+    Inherit, override, thresholds, a lazy message that is not built, an appender added mid-call, one that throws, and an async queue that drops.
+  </Step>
+</Steps>
+
+## Implementation
+
+The same design in **JavaScript, Java or Python**. Java and Python add real threads for the async appender.
+
+<CodeTabs
+  files={['snippets/models.js', 'snippets/logger.js', 'snippets/logger.test.js']}
+  java={['snippets/java/Models.java', 'snippets/java/Logger.java', 'snippets/java/LoggerTest.java']}
+  python={['snippets/python/models.py', 'snippets/python/logger.py', 'snippets/python/test_logger.py']}
+/>
+
+- `AsyncAppender.close()` puts a stop marker behind the last record, so everything queued is written first.
+- The JavaScript async appender uses a microtask as its worker, and `flush()` makes tests deterministic.
+
+## Code it yourself
+
+Try the [Logging Framework exercise](/lld/exercises/logger-framework): inherited levels, appenders with thresholds, and two formats.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Disk full or slow | Every request stalls | Async appender with a bounded queue |
+| Queue grows without a limit | Out of memory | Bound it, drop and count |
+| Process exits with a full queue | Lost last lines | Flush on shutdown |
+| An appender throws | Other appenders silent | Catch per appender |
+| Log call builds a big string | CPU cost even when off | Lazy message, level check first |
+
+## Trade-offs
+
+| Choice | Pros | Cons |
+|---|---|---|
+| Drop vs block | Drop: fast. Block: complete | Drop loses lines. Block can stall |
+| Hierarchy vs one logger | Per-area levels | Inheritance rules to explain |
+| Copy-on-write vs lock | No lock on the hot path | A copy on each add |
+| Lazy message vs string | No cost when off | Slightly clumsier calls |
+
+<Callout kind="interview" title="What interviewers listen for">
+Level check before work. Inheritance as a walk up the tree. Strategy for formatters, Decorator for async. A bounded queue with a stated policy, and "I would not make this a singleton".
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would you add structured fields like request id?">
+    Give the record a map of fields, filled from a per-thread or per-request context. Formatters decide how to print them. The call sites do not change.
+  </FollowUp>
+  <FollowUp q="How would you rotate log files?">
+    Make rotation part of the file sink: when the size or day changes, close the file and open the next. The logger and the formatter do not know.
+  </FollowUp>
+  <FollowUp q="How do you stop sensitive data from leaking?">
+    Add a filter or a decorating formatter that masks known fields, so every appender is covered by one change.
+  </FollowUp>
+  <FollowUp q="How do logs from 1,000 servers reach one place?">
+    Each server writes JSON lines to local disk, and an agent ships them to a queue and a search index. That is the HLD version of this appender.
+  </FollowUp>
+  <FollowUp q="How would you test it?">
+    Inject the clock and a memory sink, then assert whole lines. Add a slow sink to test drop and block, and a throwing appender to test isolation.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

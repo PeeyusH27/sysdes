@@ -1,0 +1,42 @@
+{
+  "title": "Game of Life",
+  "difficulty": "Medium",
+  "patterns": [
+    "matrix"
+  ],
+  "js": [
+    "arrays"
+  ],
+  "order": 8,
+  "summary": "Advance a grid of live and dead cells by one generation, where every cell changes at the same moment.",
+  "fn": "gameOfLife",
+  "params": [
+    "board"
+  ],
+  "types": {
+    "params": [
+      "number[][]"
+    ],
+    "returns": "void"
+  },
+  "inPlace": 0,
+  "tests": [
+    {"args":[[[0,1,0],[0,0,1],[1,1,1],[0,0,0]]],"expected":[[0,0,0],[1,0,1],[0,1,1],[0,1,0]],"explain":"Each cell counts its eight neighbours in the old board. A live cell survives with 2 or 3 live neighbours; a dead cell with exactly 3 comes alive."},
+    {"args":[[[1,1],[1,0]]],"expected":[[1,1],[1,1]],"explain":"Three live cells in a corner form an L. The dead cell has three live neighbours and is born, so the block becomes stable."},
+    {"args":[[[0,1,0],[0,1,0],[0,1,0]]],"expected":[[0,0,0],[1,1,1],[0,0,0]],"explain":"A vertical bar of three flips into a horizontal bar. This pattern is called a blinker."},
+    {"args":[[[1]]],"expected":[[0]]},
+    {"args":[[[0]]],"expected":[[0]]},
+    {"args":[[[1,1,1]]],"expected":[[0,1,0]]},
+    {"args":[[[1,1],[1,1]]],"expected":[[1,1],[1,1]]},
+    {"args":[[[0,0,0],[0,0,0]]],"expected":[[0,0,0],[0,0,0]]},
+    {"args":[[[1,1,0,0,1,1],[0,0,0,0,1,0],[1,0,0,0,0,0],[0,1,1,0,1,0],[1,1,1,1,1,1],[1,1,0,0,1,0]]],"expected":[[0,0,0,0,1,1],[1,1,0,0,1,1],[0,1,0,1,0,0],[0,0,0,0,1,1],[0,0,0,0,0,1],[1,0,0,0,1,1]]},
+    {"args":[[[1,1,1,0,1],[1,0,0,1,1],[0,1,1,1,1],[0,1,0,1,1],[1,1,0,1,1],[0,0,1,1,1],[1,0,0,0,0],[1,0,0,1,0]]],"expected":[[1,1,1,0,1],[1,0,0,0,0],[1,1,0,0,0],[0,0,0,0,0],[1,1,0,0,0],[1,0,1,0,1],[0,1,1,0,1],[0,0,0,0,0]]},
+    {"args":[[[1,0,1,0,1,1,0,1,0,1],[0,0,0,1,0,0,0,0,1,0],[0,1,0,1,1,0,0,0,0,1],[1,1,0,1,0,0,1,0,1,1],[0,0,0,0,1,0,1,0,0,1],[0,0,1,1,0,0,0,0,1,1],[1,1,0,1,0,0,0,0,1,1],[0,0,0,0,1,1,1,0,0,1],[1,0,0,0,0,0,0,0,1,0],[0,0,0,1,1,0,1,0,0,0]]],"expected":[[0,0,0,1,1,0,0,0,1,0],[0,1,0,0,0,1,0,0,1,1],[1,1,0,1,1,0,0,1,0,1],[1,1,0,1,0,0,0,1,1,1],[0,1,0,0,1,1,0,0,0,0],[0,1,1,1,1,0,0,1,0,0],[0,1,0,1,0,1,0,1,0,0],[1,1,0,0,1,1,0,1,0,1],[0,0,0,1,0,0,1,1,0,0],[0,0,0,0,0,0,0,0,0,0]]}
+  ],
+  "hints": [
+    "Every cell must be judged by the OLD board. If you overwrite cells as you go, later cells see a mixture of old and new states.",
+    "A copy of the board solves it in O(rows * columns) extra space. To do it in place, store the new state in the same cell without losing the old one.",
+    "Encode transitions with extra numbers: 2 means 'was alive, will die' and 3 means 'was dead, will live'. While counting neighbours treat 1 and 2 as alive. Finish with a pass that turns 2 into 0 and 3 into 1."
+  ],
+  "complexity": {"time":"O(rows * columns * 8)","space":"O(1) with in-place state encoding"}
+}

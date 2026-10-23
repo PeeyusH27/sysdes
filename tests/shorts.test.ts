@@ -12,7 +12,7 @@ const files = import.meta.glob(["../content/shorts/*.ts", "!../content/shorts/in
   () => Promise<{ shorts?: Short[] }>
 >;
 
-const TRACKS = ["System design", "DSA", "JavaScript", "Building blocks"];
+const TRACKS = ["System design", "DSA", "JavaScript", "Building blocks", "CS fundamentals"];
 const LIMITS = { title: 70, hook: 150, point: 150, say: 220, moreTitle: 30, codeLines: 10, codeCols: 70 };
 
 /** Same slugging as rehype-slug, so anchors in `source` match the ids on the rendered page. */

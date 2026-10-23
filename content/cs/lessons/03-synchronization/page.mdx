@@ -1,0 +1,106 @@
+import { conditionVariable } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+A **race condition** is a result that depends on timing; a **mutex** removes it by letting one thread into a **critical section** at a time. Locks bring their own failure, **deadlock**, which needs four conditions and is prevented by breaking any one of them, usually with a fixed lock order.
+</TLDR>
+
+## Race conditions and critical sections
+
+A race is two threads touching the same data with no rule for who goes first. The part of the code that touches that shared data is the **critical section**, and the cure is **mutual exclusion**: only one thread inside at a time.
+
+JavaScript has a single thread, yet it can still race. Any time you read a value, `await`, then write it back, another task runs in between.
+
+<CodeTabs files={['snippets/mutex.js', 'snippets/mutex.test.js']} />
+
+Without the mutex, two awaiting increments give 1. With it, ten give 10. Keep the critical section small: lock, touch the shared data, unlock. Never call slow I/O while holding a lock.
+
+<Callout kind="interview" title="What interviewers listen for">
+You separate the symptom (wrong result) from the cause (unsynchronised shared state), and you name the fix that fits: a lock, an atomic, a queue, or removing the sharing. Bonus points for noting that holding a lock across I/O turns a small lock into a bottleneck.
+</Callout>
+
+## Mutex, semaphore and condition variable
+
+Three tools, three jobs.
+
+| Tool | Job | Detail |
+|---|---|---|
+| Mutex | One at a time | Has an owner; the thread that locks it unlocks it |
+| Semaphore | At most N at a time | A counter of permits; any thread may release |
+| Condition variable | Wait until something is true | Always used together with a mutex |
+
+A semaphore is how you limit concurrency: a pool of 10 database connections is a semaphore of 10. A condition variable is how a thread sleeps until a condition holds, such as "the queue is not empty".
+
+<CodeTabs files={['snippets/semaphore.js', 'snippets/semaphore.test.js']} />
+
+Always wait in a loop: `while (queue is empty) wait(cond)`. Another thread may take the item first, and some systems wake waiters spuriously, so the condition must be rechecked after waking.
+
+<SequenceDiagram spec={conditionVariable} />
+
+## Deadlock and its four conditions
+
+Thread 1 holds lock A and wants B. Thread 2 holds B and wants A. Neither can move, and neither will. Try it: with opposite lock orders and alternating steps the lab deadlocks; with the same order it cannot.
+
+<DeadlockLab />
+
+A deadlock needs all four **Coffman conditions** at once:
+
+1. **Mutual exclusion**: a resource is held by one thread at a time.
+2. **Hold and wait**: a thread keeps what it has while waiting for more.
+3. **No preemption**: a held resource cannot be taken away.
+4. **Circular wait**: a ring of threads each waits for the next.
+
+## Prevent, avoid or detect
+
+Break any one condition and deadlock is impossible. The cheapest is **circular wait**: every thread takes locks in the same global order, for example by account id.
+
+<CodeTabs files={['snippets/deadlock.js', 'snippets/deadlock.test.js']} />
+
+| Break this | How | Cost |
+|---|---|---|
+| Circular wait | One global lock order | Must know all locks up front |
+| Hold and wait | Take everything at once, or try-lock and back off | Lower concurrency, can livelock |
+| No preemption | Lock with a timeout, release and retry | Work may be redone |
+
+Databases instead **detect**: they find a cycle in the wait-for graph, abort one transaction and let the application retry. **Avoidance** (the banker's algorithm) needs each thread's maximum demand in advance, so it is a textbook idea more than a production one.
+
+## Livelock, starvation and priority inversion
+
+Deadlock is not the only way to stop making progress.
+
+- **Livelock.** Threads keep running but undo each other's work. Two polite people in a corridor both step aside, forever. Random backoff breaks the symmetry.
+- **Starvation.** A thread never gets the lock because others keep winning. Fair locks queue waiters.
+- **Priority inversion.** A low-priority thread holds a lock a high-priority one needs. Priority inheritance fixes it.
+
+<Callout kind="warning" title="Do not call out to unknown code under a lock">
+Calling a callback, an event handler or a network service while holding a lock hands control to code that may take its own locks. That is how a deadlock appears two years after the code was written.
+</Callout>
+
+## Safer than locking
+
+Locks are the tool of last resort. Prefer to avoid sharing.
+
+- **Immutable data** needs no lock: nobody can change it.
+- **Message passing** gives each piece of data one owner thread, and others send it requests (actors, Go channels, queues).
+- **Atomics** make a single variable update indivisible without a lock (next lesson).
+- **Read-write locks** let many readers in together but one writer alone, which helps read-heavy data.
+- A **spinlock** busy-waits instead of sleeping. It is right only for waits shorter than a context switch.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What is the difference between a mutex and a semaphore?">
+    A mutex guards a critical section and has an owner who must unlock it. A semaphore counts permits, lets up to N holders in, and any thread can release it.
+  </FollowUp>
+  <FollowUp q="What are the four conditions for deadlock, and how do you prevent it?">
+    Mutual exclusion, hold and wait, no preemption, circular wait. Break any one: usually take locks in a global order, or use timeouts and retry.
+  </FollowUp>
+  <FollowUp q="How do databases deal with deadlocks?">
+    They look for a cycle in the wait-for graph, abort the cheapest transaction, and the client retries it.
+  </FollowUp>
+  <FollowUp q="Why wait on a condition variable in a loop?">
+    Another thread may take the item before you wake, and spurious wake-ups exist, so the predicate must be rechecked.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

@@ -1,0 +1,43 @@
+{
+  "title": "Maximal Rectangle",
+  "difficulty": "Hard",
+  "patterns": [
+    "matrix",
+    "stack"
+  ],
+  "js": [
+    "arrays",
+    "stack-queue-deque"
+  ],
+  "order": 9,
+  "summary": "Find the area of the largest rectangle made only of 1s inside a grid of 0s and 1s.",
+  "fn": "maximalRectangle",
+  "params": [
+    "matrix"
+  ],
+  "types": {
+    "params": [
+      "number[][]"
+    ],
+    "returns": "number"
+  },
+  "tests": [
+    {"args":[[[1,0,1,0,0],[1,0,1,1,1],[1,1,1,1,1],[1,0,0,1,0]]],"expected":6,"explain":"The best rectangle is the 2 x 3 block of 1s in rows 1 and 2, columns 2 to 4: area 6."},
+    {"args":[[[0]]],"expected":0,"explain":"No 1s at all means area 0."},
+    {"args":[[[1]]],"expected":1,"explain":"A single 1 is a rectangle of area 1."},
+    {"args":[[[1,1],[1,1]]],"expected":4},
+    {"args":[[[0,1],[1,0]]],"expected":1},
+    {"args":[[[1,1,1,1]]],"expected":4},
+    {"args":[[[1],[1],[1]]],"expected":3},
+    {"args":[[[1,0,1],[1,1,1],[1,1,0]]],"expected":4},
+    {"args":[[[1,1,1,1,1,1,1],[1,1,0,0,0,1,1],[1,1,1,1,1,1,1],[0,1,1,0,1,1,1],[1,1,1,0,1,0,1],[1,1,0,1,1,1,1]]],"expected":8},
+    {"args":[[[1,1,1,1,0,1,1,0],[1,1,1,0,0,0,1,1],[1,0,1,1,1,1,0,0],[1,1,1,0,1,1,1,0],[1,0,1,0,1,1,1,1],[1,1,1,1,0,1,0,0],[1,0,0,1,1,1,1,1],[1,1,1,0,1,0,0,1]]],"expected":8},
+    {"args":[[[1,1,1,1,0,1,0,1,0,0,1,0],[1,1,1,1,0,1,1,1,1,1,1,0],[0,0,1,0,1,1,1,1,1,1,1,1],[1,0,1,1,0,1,1,1,1,1,0,1],[1,1,1,0,1,1,1,0,1,1,1,1],[1,1,1,1,0,0,1,1,1,1,0,0],[1,1,1,1,1,1,1,1,0,1,0,1],[1,1,1,1,1,1,1,1,0,1,0,1],[1,0,0,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,0,0]]],"expected":20}
+  ],
+  "hints": [
+    "Fix the bottom edge of the rectangle at row i. Then a rectangle is determined by a left column, a right column and how far up the 1s go.",
+    "For each row, build heights[j] = how many consecutive 1s end at row i in column j (reset to 0 on a 0). Each row then looks like a histogram.",
+    "The best rectangle with its bottom on row i is the largest rectangle in that histogram. Solve the histogram with a monotonic stack in O(columns), so the total is O(rows * columns)."
+  ],
+  "complexity": {"time":"O(rows * columns): one histogram pass per row","space":"O(columns) for the heights and the stack"}
+}

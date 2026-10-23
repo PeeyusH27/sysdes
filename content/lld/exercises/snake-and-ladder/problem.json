@@ -1,0 +1,925 @@
+{
+  "title": "Snake and Ladder",
+  "difficulty": "Medium",
+  "patterns": [
+    "strategy-decorator"
+  ],
+  "js": [],
+  "order": 12,
+  "summary": "Build a Snake and Ladder engine with jumps, three swappable ending rules, extra turns on a six and validation of bad boards, all driven by fixed dice.",
+  "kind": "design",
+  "className": "Game",
+  "samples": 3,
+  "tests": [
+    {
+      "ops": [
+        "Game",
+        "isValid",
+        "turn",
+        "turn",
+        "position",
+        "next"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {},
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              3,
+              4,
+              2
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [],
+        [
+          "A"
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        true,
+        {
+          "player": "A",
+          "roll": 3,
+          "from": 0,
+          "to": 3,
+          "event": "move"
+        },
+        {
+          "player": "B",
+          "roll": 4,
+          "from": 0,
+          "to": 4,
+          "event": "move"
+        },
+        3,
+        "A"
+      ],
+      "explain": "A and B alternate. A rolls 3 and B rolls 4, both starting off the board. After two turns it is A's turn again."
+    },
+    {
+      "ops": [
+        "Game",
+        "turn",
+        "position",
+        "next"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {},
+            "ladders": {
+              "3": 8
+            },
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              3,
+              2
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [
+          "A"
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        {
+          "player": "A",
+          "roll": 3,
+          "from": 0,
+          "to": 8,
+          "event": "ladder"
+        },
+        8,
+        "B"
+      ],
+      "explain": "A lands on 3, the bottom of a ladder, and is carried to 8. The turn passes to B."
+    },
+    {
+      "ops": [
+        "Game",
+        "turn",
+        "position"
+      ],
+      "args": [
+        [
+          {
+            "size": 20,
+            "snakes": {
+              "5": 1
+            },
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              5,
+              2
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [
+          "A"
+        ]
+      ],
+      "expected": [
+        null,
+        {
+          "player": "A",
+          "roll": 5,
+          "from": 0,
+          "to": 1,
+          "event": "snake"
+        },
+        1
+      ],
+      "explain": "A lands on 5, a snake head, and slides to 1."
+    },
+    {
+      "ops": [
+        "Game",
+        "turn",
+        "turn",
+        "turn",
+        "turn",
+        "turn",
+        "turn",
+        "turn",
+        "winner",
+        "next",
+        "turn"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {},
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              4,
+              1,
+              4,
+              1,
+              3,
+              1,
+              2
+            ],
+            "rule": "exact",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        {
+          "player": "A",
+          "roll": 4,
+          "from": 0,
+          "to": 4,
+          "event": "move"
+        },
+        {
+          "player": "B",
+          "roll": 1,
+          "from": 0,
+          "to": 1,
+          "event": "move"
+        },
+        {
+          "player": "A",
+          "roll": 4,
+          "from": 4,
+          "to": 8,
+          "event": "move"
+        },
+        {
+          "player": "B",
+          "roll": 1,
+          "from": 1,
+          "to": 2,
+          "event": "move"
+        },
+        {
+          "player": "A",
+          "roll": 3,
+          "from": 8,
+          "to": 8,
+          "event": "stay"
+        },
+        {
+          "player": "B",
+          "roll": 1,
+          "from": 2,
+          "to": 3,
+          "event": "move"
+        },
+        {
+          "player": "A",
+          "roll": 2,
+          "from": 8,
+          "to": 10,
+          "event": "win"
+        },
+        "A",
+        "",
+        "OVER"
+      ],
+      "explain": "A reaches 8. On A's next roll 8 + 3 is past 10, so A stays on 8 (event stay). Then A rolls 2 and lands exactly on 10 to win. Afterwards nobody is next and turn says OVER."
+    },
+    {
+      "ops": [
+        "Game",
+        "turn",
+        "turn",
+        "turn",
+        "winner",
+        "position"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {},
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              6,
+              1,
+              6
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        [
+          "A"
+        ]
+      ],
+      "expected": [
+        null,
+        {
+          "player": "A",
+          "roll": 6,
+          "from": 0,
+          "to": 6,
+          "event": "move"
+        },
+        {
+          "player": "B",
+          "roll": 1,
+          "from": 0,
+          "to": 1,
+          "event": "move"
+        },
+        {
+          "player": "A",
+          "roll": 6,
+          "from": 6,
+          "to": 10,
+          "event": "win"
+        },
+        "A",
+        10
+      ],
+      "explain": "With the finish rule, 6 + 6 reaches past 10, so A stops on 10 and wins."
+    },
+    {
+      "ops": [
+        "Game",
+        "turn",
+        "turn",
+        "turn",
+        "turn",
+        "turn",
+        "position"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {},
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              6,
+              1,
+              6,
+              1,
+              6
+            ],
+            "rule": "bounce",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          "A"
+        ]
+      ],
+      "expected": [
+        null,
+        {
+          "player": "A",
+          "roll": 6,
+          "from": 0,
+          "to": 6,
+          "event": "move"
+        },
+        {
+          "player": "B",
+          "roll": 1,
+          "from": 0,
+          "to": 1,
+          "event": "move"
+        },
+        {
+          "player": "A",
+          "roll": 6,
+          "from": 6,
+          "to": 8,
+          "event": "move"
+        },
+        {
+          "player": "B",
+          "roll": 1,
+          "from": 1,
+          "to": 2,
+          "event": "move"
+        },
+        {
+          "player": "A",
+          "roll": 6,
+          "from": 8,
+          "to": 6,
+          "event": "move"
+        },
+        6
+      ],
+      "explain": "A reaches 6. The next 6 would be 12, two past the end, so A bounces back to 8. The third roll would be 14, four past the end, so A bounces to 6. Nobody wins."
+    },
+    {
+      "ops": [
+        "Game",
+        "turn",
+        "next",
+        "turn",
+        "next",
+        "turn",
+        "position"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {},
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              6,
+              2,
+              1
+            ],
+            "rule": "finish",
+            "sixAgain": true
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          "B"
+        ]
+      ],
+      "expected": [
+        null,
+        {
+          "player": "A",
+          "roll": 6,
+          "from": 0,
+          "to": 6,
+          "event": "move"
+        },
+        "A",
+        {
+          "player": "A",
+          "roll": 2,
+          "from": 6,
+          "to": 8,
+          "event": "move"
+        },
+        "B",
+        {
+          "player": "B",
+          "roll": 1,
+          "from": 0,
+          "to": 1,
+          "event": "move"
+        },
+        1
+      ],
+      "explain": "A's 6 gives A another roll. The 2 ends A's extra turn, so B is next and rolls 1."
+    },
+    {
+      "ops": [
+        "Game",
+        "turn",
+        "turn",
+        "next",
+        "turn",
+        "winner"
+      ],
+      "args": [
+        [
+          {
+            "size": 8,
+            "snakes": {},
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              6,
+              6,
+              2
+            ],
+            "rule": "exact",
+            "sixAgain": true
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        {
+          "player": "A",
+          "roll": 6,
+          "from": 0,
+          "to": 6,
+          "event": "move"
+        },
+        {
+          "player": "A",
+          "roll": 6,
+          "from": 6,
+          "to": 6,
+          "event": "stay"
+        },
+        "A",
+        {
+          "player": "A",
+          "roll": 2,
+          "from": 6,
+          "to": 8,
+          "event": "win"
+        },
+        "A"
+      ],
+      "explain": "A moves to 6. The second 6 would be 12, past 8, so the move is refused, but a rolled 6 still earns another turn. The 2 then lands exactly on 8."
+    },
+    {
+      "ops": [
+        "Game",
+        "turn",
+        "winner",
+        "turn",
+        "next",
+        "position"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {},
+            "ladders": {
+              "4": 10
+            },
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              4
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        [
+          "B"
+        ]
+      ],
+      "expected": [
+        null,
+        {
+          "player": "A",
+          "roll": 4,
+          "from": 0,
+          "to": 10,
+          "event": "win"
+        },
+        "A",
+        "OVER",
+        "",
+        0
+      ],
+      "explain": "A ladder whose top is the last square is a win. After that, turn says OVER and B has never moved."
+    },
+    {
+      "ops": [
+        "Game",
+        "turn",
+        "turn",
+        "turn",
+        "turn",
+        "position",
+        "position",
+        "position",
+        "position",
+        "next"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {},
+            "ladders": {},
+            "players": [
+              "A",
+              "B",
+              "C"
+            ],
+            "rolls": [
+              1,
+              2
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        [
+          "A"
+        ],
+        [
+          "B"
+        ],
+        [
+          "C"
+        ],
+        [
+          "Z"
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        {
+          "player": "A",
+          "roll": 1,
+          "from": 0,
+          "to": 1,
+          "event": "move"
+        },
+        {
+          "player": "B",
+          "roll": 2,
+          "from": 0,
+          "to": 2,
+          "event": "move"
+        },
+        {
+          "player": "C",
+          "roll": 1,
+          "from": 0,
+          "to": 1,
+          "event": "move"
+        },
+        {
+          "player": "A",
+          "roll": 2,
+          "from": 1,
+          "to": 3,
+          "event": "move"
+        },
+        3,
+        2,
+        1,
+        -1,
+        "B"
+      ],
+      "explain": "Three players take turns in order and the two rolls repeat: A1, B2, C1, then A2 makes 3. The name Z is not a player."
+    },
+    {
+      "ops": [
+        "Game",
+        "isValid",
+        "turn",
+        "position",
+        "winner",
+        "next"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {
+              "3": 8
+            },
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              1
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [
+          "A"
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        false,
+        "INVALID",
+        -1,
+        "",
+        ""
+      ],
+      "explain": "A snake whose head is below its tail is not a snake, so the config is invalid and every call returns its sentinel."
+    },
+    {
+      "ops": [
+        "Game",
+        "isValid",
+        "turn",
+        "position",
+        "winner",
+        "next"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {
+              "10": 3
+            },
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              1
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [
+          "A"
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        false,
+        "INVALID",
+        -1,
+        "",
+        ""
+      ],
+      "explain": "No jump may start on the last square, or the winner could slide away."
+    },
+    {
+      "ops": [
+        "Game",
+        "isValid",
+        "turn",
+        "position",
+        "winner",
+        "next"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {
+              "7": 2
+            },
+            "ladders": {
+              "7": 9
+            },
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              1
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [
+          "A"
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        false,
+        "INVALID",
+        -1,
+        "",
+        ""
+      ],
+      "explain": "Square 7 would be the start of a snake and a ladder at once."
+    },
+    {
+      "ops": [
+        "Game",
+        "isValid",
+        "turn",
+        "position",
+        "winner",
+        "next"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {
+              "6": 1
+            },
+            "ladders": {
+              "3": 6
+            },
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              1
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [
+          "A"
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        false,
+        "INVALID",
+        -1,
+        "",
+        ""
+      ],
+      "explain": "The ladder lands on the head of a snake: a chain, which is not allowed."
+    },
+    {
+      "ops": [
+        "Game",
+        "isValid",
+        "turn",
+        "position",
+        "winner",
+        "next"
+      ],
+      "args": [
+        [
+          {
+            "size": 10,
+            "snakes": {},
+            "ladders": {},
+            "players": [
+              "A",
+              "B"
+            ],
+            "rolls": [
+              3,
+              7
+            ],
+            "rule": "finish",
+            "sixAgain": false
+          }
+        ],
+        [],
+        [],
+        [
+          "A"
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        false,
+        "INVALID",
+        -1,
+        "",
+        ""
+      ],
+      "explain": "Dice only show 1 to 6, so a 7 in the list makes the config invalid."
+    }
+  ],
+  "hints": [
+    "Keep the rules that differ in one place: write the three ending rules as small functions from (position, roll, size) to a landing square or null, and look the rule up by name instead of branching inside turn.",
+    "A snake and a ladder are the same thing pointing different ways. Store them as maps from a start square to an end square, with Number keys, and check the landing square against both.",
+    "Validate everything in the constructor and remember the answer. Then turn applies, in order: the rule, one jump, the win check on the final square, and the turn change (skipped on a six when sixAgain is on and nobody has won)."
+  ],
+  "complexity": {
+    "time": "O(1) per turn after an O(jumps + players) validation",
+    "space": "O(jumps + players)"
+  }
+}

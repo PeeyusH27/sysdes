@@ -1,0 +1,180 @@
+import { classes, turn } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+A **board** holds one map of jumps (a snake and a ladder are the same thing pointing different ways), and a **game** rolls, applies the ending rule, then applies one jump per turn. Make the **dice** and the **ending rule** strategies, and the game becomes easy to test and easy to change.
+</TLDR>
+
+<Requirements
+  functional={['A board of N squares with snakes and ladders', 'Two or more players who take turns, starting off the board', 'A dice roll moves the player, and a jump on the landing square moves them again', 'First to reach the last square wins, with a chosen rule for overshooting', 'Optional extra turn on a six', 'Events for a UI: who moved, from where, to where']}
+  nonFunctional={['Invalid boards are refused up front: no loops, no jump from the last square', 'Deterministic tests: the dice are injected', 'A new ending rule or dice plugs in without editing Game', 'One game is safe if several threads call play, and games never block each other']}
+  outOfScope={['A graphical board', 'Online multiplayer (an HLD follow-up)', 'Betting, scores and leaderboards']} />
+
+A **low-level design** (LLD) question that looks like a toy. The marks come from how you handle the rules people argue about, and from keeping the dice swappable.
+
+New to this? Read [Swap behaviour](/lld/foundations/strategy-decorator) first.
+
+## Clarifying questions
+
+- What happens if the roll goes past the last square: stay, finish, or bounce?
+- Do jumps chain, so a ladder can end on a snake?
+- Does a six give another turn? Is there a limit?
+- How many players, and how big is the board?
+- Real dice only, or fixed rolls for tests and demos?
+
+## Public interface
+
+| Call | Returns | Notes |
+|---|---|---|
+| `new Board(size, jumps)` | A board | Refuses a bad layout |
+| `new Game(board, players, dice, rule, sixAgain)` | A game | Everyone starts at 0 |
+| `game.play()` | A move result, or nothing | One roll by whoever is next |
+| `game.on(listener)` | | Called after every move |
+| `game.winner` | Name or nothing | Set when someone reaches the end |
+
+## What it remembers
+
+- `board.size` and `board.jumps`: square → square. Never changes after setup.
+- `position`: player → square, with 0 meaning off the board.
+- `turn`: an index into the players. `winner`: set once, and never cleared.
+
+A move result is `player, roll, from, to` and an event: move, ladder, snake, stay or win.
+
+## Build the design in stages
+
+Step through: a game with a board and players, then the dice, then the ending rule, then results and listeners. Green marks what the latest stage added.
+
+<ClassDiagram spec={classes} />
+
+## One turn, step by step
+
+Pick a branch: a plain move, a jump, a refused overshoot, and the winning move.
+
+<SequenceDiagram spec={turn} />
+
+## Patterns, and when to skip them
+
+**Strategy** twice. The **dice** decide where a roll comes from. The **ending rule** decides what happens at the last square. Both are small and both change in real life. **Observer** lets a UI watch without the game knowing.
+
+**Skip the rest.** A `Snake` class and a `Ladder` class with a shared base add nothing: a jump from 17 to 7 is a snake because 7 is less than 17. No `GameFactory`, no `BoardBuilder` for two numbers, no `Cell` object for every square.
+
+## Rules to settle out loud
+
+- **Overshoot**: *exact* (must land on the last square, else stay), *finish* (any roll that reaches it wins), or *bounce* (extra steps walk back).
+- **Chains**: allow them and you need a loop check. The simpler rule is to refuse any layout where a jump lands on another jump's start.
+- **Last square**: no jump may start there, or the winner could slide away.
+- **Six**: the same player rolls again. State whether a refused move still earns it.
+
+## Concurrency
+
+One game has one writer at a time. Make `play` a single critical section: a lock around the whole turn, so two threads calling at once take turns and the same player never moves twice by accident. Different games share nothing and never wait for each other. For a server, give each game an owner (one thread, or one queue), and tell listeners after the turn is complete.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify the rules">
+    Overshoot, chains, sixes, player count.
+  </Step>
+  <Step title="Name the nouns">
+    Game, Board, Player, Dice, Jump.
+  </Step>
+  <Step title="Write play()">
+    Roll, apply the rule, apply a jump, check the win.
+  </Step>
+  <Step title="Pull out the two strategies">
+    Dice and ending rule.
+  </Step>
+  <Step title="Validate and test">
+    Bad boards refused, fixed dice for every case.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="One map for both jumps">
+    `jumps` goes from square to square. Higher means a ladder, lower means a snake.
+  </Step>
+  <Step title="Validate at construction">
+    A jump must start on 1 to size minus 1, end on the board, and move. No jump may land on another jump's start, which rules out chains and so loops.
+  </Step>
+  <Step title="A turn is five small steps">
+
+Roll, ask the rule for the landing square, apply the jump, check for the win, pass the turn.
+
+```js
+const landed = this.rule(from, roll, this.board.size);   // null: refused
+const to = landed === null ? from : this.board.land(landed);
+if (to === this.board.size) this.winner = player;
+```
+
+  </Step>
+  <Step title="Dice are injected">
+    The real game gets random dice with a seedable source. Tests get a fixed list of rolls that repeats.
+  </Step>
+  <Step title="Tests">
+    Each event, each ending rule, the six, a ladder onto the last square, play after a win, and every invalid board.
+  </Step>
+</Steps>
+
+## Implementation
+
+The same design in **JavaScript, Java or Python**. Java and Python add a real lock around `play`.
+
+<CodeTabs
+  files={['snippets/models.js', 'snippets/game.js', 'snippets/game.test.js']}
+  java={['snippets/java/Models.java', 'snippets/java/Game.java', 'snippets/java/GameTest.java']}
+  python={['snippets/python/models.py', 'snippets/python/game.py', 'snippets/python/test_game.py']}
+/>
+
+- A rule returns the landing square, or nothing when the move is refused. The game turns that into a `stay`.
+- A win is any move that ends on the last square, even by ladder.
+
+## Code it yourself
+
+Try the [Snake and Ladder exercise](/lld/exercises/snake-and-ladder): jumps, three ending rules, sixes and invalid boards, all driven by fixed dice.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Jumps form a loop | A turn never ends | Refuse chains at construction |
+| Jump from the last square | The winner slides back | Refuse it up front |
+| Overshoot unspecified | Players argue, tests flake | Pick a rule and test it |
+| Two threads call play | A player moves twice | One lock around the turn |
+| Unseeded dice in tests | Failures that never repeat | Inject fixed or seeded dice |
+
+## Trade-offs
+
+| Choice | Pros | Cons |
+|---|---|---|
+| One jump type vs Snake and Ladder classes | Less code, no duplicates | A little less literal |
+| Rule as a strategy vs an enum and switch | New rules need no edits | An extra interface |
+| Refuse chains vs follow them | No loops possible | Rules out fun layouts |
+| Lock per game vs a global lock | Games run in parallel | A lock object per game |
+
+<Callout kind="interview" title="What interviewers listen for">
+"A snake and a ladder are the same thing." The overshoot rule asked about before coding. Dice injected for tests. A loop check or a ban on chains. No class per square.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would you add a loaded dice?">
+    A new `Dice` class that skews its roll. The game is unchanged, which is the point of passing the dice in.
+  </FollowUp>
+  <FollowUp q="How would you let a jump chain safely?">
+    Follow jumps in a loop and keep the squares you have visited. If you see one twice, the layout loops, so refuse it at construction.
+  </FollowUp>
+  <FollowUp q="How would you support undo or replay?">
+    Keep the list of move results. Replay by feeding the same rolls to a fresh game. Undo means going back one result.
+  </FollowUp>
+  <FollowUp q="How would you run thousands of games on a server?">
+    Give each game one owner, a single thread or queue, so no locks are needed. Store only the rolls and the setup, and rebuild a game from them.
+  </FollowUp>
+  <FollowUp q="How would you test it?">
+    Fixed dice for every rule and event, a seeded random game that must finish, and a table of invalid boards that must all be refused.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

@@ -1,0 +1,28 @@
+{
+  "title": "Subtree of Another Tree",
+  "difficulty": "Easy",
+  "patterns": ["tree-dfs"],
+  "js": ["recursion","linked-list-tree-nodes"],
+  "order": 4,
+  "summary": "Check whether one binary tree appears, whole, as a subtree inside another.",
+  "fn": "isSubtree",
+  "params": ["root","subRoot"],
+  "types": {"params":["TreeNode","TreeNode"],"returns":"boolean"},
+  "io": {"args":["tree","tree"]},
+  "tests": [
+    {"args":[[3,4,5,1,2],[4,1,2]],"expected":true,"explain":"The subtree rooted at 4 is exactly 4 with children 1 and 2."},
+    {"args":[[3,4,5,1,2,null,null,null,null,0],[4,1,2]],"expected":false,"explain":"The node 4 has the right values, but its child 2 has an extra child 0 below it. A subtree must include all descendants, so this does not match."},
+    {"args":[[1,1],[1]],"expected":true,"explain":"A single node 1 is the subtree rooted at the left child (which has no children)."},
+    {"args":[[1],[1]],"expected":true},
+    {"args":[[1],[2]],"expected":false},
+    {"args":[[],[1]],"expected":false},
+    {"args":[[1,2,3],[1,2]],"expected":false},
+    {"args":[[1,2,3],[3]],"expected":true},
+    {"args":[[1,null,1,null,1,null,1,null,2],[1,null,1,null,2]],"expected":true},
+    {"args":[[1,2,4,null,null,3,3,null,5,1,null,null,4,null,6,null,null,5,1,2,4,4,4,null,null,null,null,null,1,2,null,5,5,4,4,null,3,null,null,null,null,6,5,null,null,3,null,6,2,null,null,6,null,null,null,1,5,2],[5,null,3]],"expected":true},
+    {"args":[[1,2,4,null,null,3,3,null,5,1,null,null,4,null,6,null,null,5,1,2,4,4,4,null,null,null,null,null,1,2,null,5,5,4,4,null,3,null,null,null,null,6,5,null,null,3,null,6,2,null,null,6,null,null,null,1,5,2],[5,null,99]],"expected":false},
+    {"args":[[1,2,4,null,null,3,3,null,5,1,null,null,4,null,6,null,null,5,1,2,4,4,4,null,null,null,null,null,1,2,null,5,5,4,4,null,3,null,null,null,null,6,5,null,null,3,null,6,2,null,null,6,null,null,null,1,5,2],[1,2,4,null,null,3,3,null,5,1,null,null,4,null,6,null,null,5,1,2,4,4,4,null,null,null,null,null,1,2,null,5,5,4,4,null,3,null,null,null,null,6,5,null,null,3,null,6,2,null,null,6,null,null,null,1,5,2]],"expected":true}
+  ],
+  "hints": ["If you already had a function that says whether two trees are identical, how would you use it to scan root for subRoot?","A match can start at any node of root. At each node, test 'is the tree rooted here identical to subRoot?'. If not, recurse into the left and right children.","Write sameTree(a, b) first. Then isSubtree(root, sub) is: root is not null and (sameTree(root, sub) or isSubtree(root.left, sub) or isSubtree(root.right, sub)). An empty root contains no subtree."],
+  "complexity": {"time":"O(n * m): up to n starting points, each compared against at most m nodes","space":"O(h) for the recursion"}
+}

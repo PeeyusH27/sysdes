@@ -1,0 +1,26 @@
+{
+  "title": "Palindromic Substrings",
+  "difficulty": "Medium",
+  "patterns": ["dp-1d"],
+  "js": ["strings"],
+  "order": 5,
+  "summary": "Count how many contiguous substrings of a string are palindromes.",
+  "fn": "countSubstrings",
+  "params": ["s"],
+  "types": {"params":["string"],"returns":"number"},
+  "tests": [
+    {"args":["abc"],"expected":3,"explain":"Only the three single letters are palindromes."},
+    {"args":["aaa"],"expected":6,"explain":"Six substrings: a (three times), aa (twice) and aaa."},
+    {"args":["abba"],"expected":6,"explain":"a, b, b, a, then \"bb\" and \"abba\": 6."},
+    {"args":["a"],"expected":1},
+    {"args":["ab"],"expected":2},
+    {"args":["aa"],"expected":3},
+    {"args":["abcba"],"expected":7},
+    {"args":["abababab"],"expected":20},
+    {"args":["zzzzzzzzzzzzzzzzzzzz"],"expected":210},
+    {"args":["baaaabbbabbbaababbaababbbbbaababbbbaabba"],"expected":97},
+    {"args":["caabcbaababaacbaccccbaabccbabbaaabbaaaaaacaacbcccabccaa"],"expected":118}
+  ],
+  "hints": ["Substrings at different positions count separately even when their text is equal, so \"aaa\" has 6: three single letters, two \"aa\" and one \"aaa\".","Every palindrome has a center (a character, or the gap between two characters). Each palindrome is counted exactly once if you count it from its center.","For each of the 2n - 1 centers, expand outward while the two ends match, and add one to the count for every successful expansion step. The total is the answer."],
+  "complexity": {"time":"O(n²): each center expands up to n / 2 steps","space":"O(1)"}
+}

@@ -1,0 +1,753 @@
+{
+  "title": "Eviction Cache",
+  "difficulty": "Medium",
+  "patterns": [
+    "strategy-decorator"
+  ],
+  "js": [],
+  "order": 8,
+  "summary": "Build a fixed-size cache whose eviction rule (LRU, FIFO or LFU) is chosen by name, without any policy branching inside the cache.",
+  "kind": "design",
+  "className": "EvictionCache",
+  "samples": 3,
+  "tests": [
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "get",
+        "put",
+        "get",
+        "keys"
+      ],
+      "args": [
+        [
+          2,
+          "lru"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "a"
+        ],
+        [
+          "c",
+          3
+        ],
+        [
+          "b"
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        1,
+        "b",
+        -1,
+        [
+          "a",
+          "c"
+        ]
+      ],
+      "explain": "Reading a made it newer than b, so adding c evicts b. LRU order from next victim to safest is a, c."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "get",
+        "put",
+        "keys"
+      ],
+      "args": [
+        [
+          2,
+          "fifo"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "a"
+        ],
+        [
+          "c",
+          3
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        1,
+        "a",
+        [
+          "b",
+          "c"
+        ]
+      ],
+      "explain": "FIFO ignores the read of a, so a is still the oldest insertion and goes first."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "get",
+        "put",
+        "keys"
+      ],
+      "args": [
+        [
+          2,
+          "lfu"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "a"
+        ],
+        [
+          "c",
+          3
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        1,
+        "b",
+        [
+          "c",
+          "a"
+        ]
+      ],
+      "explain": "a has been used twice and b once, so b is evicted. The new key c has a count of 1, so it is the next victim, ahead of a."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "get",
+        "keys",
+        "remove",
+        "peek",
+        "resize"
+      ],
+      "args": [
+        [
+          3,
+          "lru"
+        ],
+        [
+          "x"
+        ],
+        [],
+        [
+          "x"
+        ],
+        [
+          "x"
+        ],
+        [
+          1
+        ]
+      ],
+      "expected": [
+        null,
+        -1,
+        [],
+        false,
+        -1,
+        []
+      ],
+      "explain": "Nothing is stored yet: a miss is -1, there are no keys, and resizing an empty cache evicts nothing."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "put",
+        "put",
+        "get",
+        "get"
+      ],
+      "args": [
+        [
+          2,
+          "lru"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "c",
+          3
+        ],
+        [
+          "a"
+        ],
+        [
+          "b"
+        ]
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        "",
+        "b",
+        10,
+        -1
+      ],
+      "explain": "Replacing a refreshes it and evicts nothing, even on a full cache. Only the later put of c evicts, and b is oldest."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "peek",
+        "put",
+        "remove",
+        "remove",
+        "keys"
+      ],
+      "args": [
+        [
+          2,
+          "lru"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "a"
+        ],
+        [
+          "c",
+          3
+        ],
+        [
+          "b"
+        ],
+        [
+          "b"
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        1,
+        "a",
+        true,
+        false,
+        [
+          "c"
+        ]
+      ],
+      "explain": "peek is not a use, so a is still the oldest when c arrives. Removing an absent key returns false."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "put",
+        "put",
+        "keys",
+        "peek"
+      ],
+      "args": [
+        [
+          2,
+          "fifo"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "a",
+          9
+        ],
+        [
+          "c",
+          3
+        ],
+        [],
+        [
+          "a"
+        ]
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        "",
+        "a",
+        [
+          "b",
+          "c"
+        ],
+        -1
+      ],
+      "explain": "Replacing a under FIFO keeps its place, so it is still the first out."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "remove",
+        "put",
+        "put",
+        "keys"
+      ],
+      "args": [
+        [
+          2,
+          "fifo"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "a"
+        ],
+        [
+          "a",
+          5
+        ],
+        [
+          "c",
+          3
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        true,
+        "",
+        "b",
+        [
+          "a",
+          "c"
+        ]
+      ],
+      "explain": "A removed key that returns is a new insertion at the back, so b is now the oldest."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "put",
+        "get",
+        "get",
+        "put",
+        "keys"
+      ],
+      "args": [
+        [
+          3,
+          "lfu"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "c",
+          3
+        ],
+        [
+          "c"
+        ],
+        [
+          "a"
+        ],
+        [
+          "d",
+          4
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        "",
+        3,
+        1,
+        "b",
+        [
+          "d",
+          "c",
+          "a"
+        ]
+      ],
+      "explain": "Counts are a 2, b 1, c 2. b has the lowest, so it goes. d enters at 1; c reached 2 before a did, so c is evicted before a."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "put",
+        "get",
+        "put",
+        "keys"
+      ],
+      "args": [
+        [
+          2,
+          "lfu"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "c",
+          3
+        ],
+        [
+          "b"
+        ],
+        [
+          "d",
+          4
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        "a",
+        2,
+        "c",
+        [
+          "d",
+          "b"
+        ]
+      ],
+      "explain": "Putting c evicts a, because a and b tie at 1 and a was used less recently. Then b has 2 and c has 1, so d evicts c."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "get",
+        "get",
+        "put",
+        "get",
+        "remove",
+        "put",
+        "keys"
+      ],
+      "args": [
+        [
+          2,
+          "lfu"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a"
+        ],
+        [
+          "a"
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "b"
+        ],
+        [
+          "a"
+        ],
+        [
+          "a",
+          5
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        1,
+        1,
+        "",
+        2,
+        true,
+        "",
+        [
+          "a",
+          "b"
+        ]
+      ],
+      "explain": "a had a count of 3 but remove forgets it, so the new a starts at 1 and is evicted before b, which has 2."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "put",
+        "put",
+        "get"
+      ],
+      "args": [
+        [
+          2,
+          "lfu"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "a",
+          7
+        ],
+        [
+          "c",
+          3
+        ],
+        [
+          "a"
+        ]
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        "",
+        "b",
+        7
+      ],
+      "explain": "Replacing a counts as a use, so a has 2 and b has 1. Adding c evicts b and a keeps its new value."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "put",
+        "put",
+        "put",
+        "get",
+        "resize",
+        "keys",
+        "resize",
+        "put",
+        "put",
+        "put",
+        "put",
+        "keys"
+      ],
+      "args": [
+        [
+          4,
+          "lru"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "c",
+          3
+        ],
+        [
+          "d",
+          4
+        ],
+        [
+          "a"
+        ],
+        [
+          2
+        ],
+        [],
+        [
+          5
+        ],
+        [
+          "e",
+          5
+        ],
+        [
+          "f",
+          6
+        ],
+        [
+          "g",
+          7
+        ],
+        [
+          "h",
+          8
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        "",
+        "",
+        "",
+        1,
+        [
+          "b",
+          "c"
+        ],
+        [
+          "d",
+          "a"
+        ],
+        [],
+        "",
+        "",
+        "",
+        "d",
+        [
+          "a",
+          "e",
+          "f",
+          "g",
+          "h"
+        ]
+      ],
+      "explain": "Shrinking from 4 to 2 evicts the two least recent keys, b then c. Growing evicts nothing, so three new keys fit, and the fourth evicts d."
+    },
+    {
+      "ops": [
+        "EvictionCache",
+        "put",
+        "get",
+        "put",
+        "get",
+        "get",
+        "keys"
+      ],
+      "args": [
+        [
+          1,
+          "lfu"
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a"
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "a"
+        ],
+        [
+          "b"
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        "",
+        1,
+        "a",
+        -1,
+        2,
+        [
+          "b"
+        ]
+      ],
+      "explain": "With room for one key, the new key always replaces the old one, however popular the old one was."
+    }
+  ],
+  "hints": [
+    "Split the job in two: the cache owns the key-to-value map, and a policy object owns only the order. What four things must a policy be told about a key?",
+    "Give each policy the same small interface (insert, use, forget, ranked). LRU can be an insertion-ordered map where a use is delete-then-set; LFU needs a count and a last-use stamp per key.",
+    "put evicts ranked()[0] only for a new key on a full cache, and always forgets the victim in the policy too. resize is the same eviction in a loop. Look the policy up in a table by name instead of an if ladder."
+  ],
+  "complexity": {
+    "time": "O(1) per call for LRU and FIFO; this reference LFU ranks in O(n log n), and O(1) LFU exists with count buckets",
+    "space": "O(capacity)"
+  }
+}

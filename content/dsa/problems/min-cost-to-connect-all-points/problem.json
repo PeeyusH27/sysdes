@@ -1,0 +1,27 @@
+{
+  "title": "Min Cost to Connect All Points",
+  "difficulty": "Medium",
+  "patterns": ["union-find"],
+  "js": ["classes","sorting"],
+  "order": 6,
+  "summary": "Connect points on a plane with the least total Manhattan distance so that every point is reachable from every other.",
+  "fn": "minCostConnectPoints",
+  "params": ["points"],
+  "types": {"params":["number[][]"],"returns":"number"},
+  "tests": [
+    {"args":[[[0,0],[2,2],[3,10],[5,2],[7,0]]],"expected":20,"explain":"Connect (0,0)-(2,2) for 4, (2,2)-(5,2) for 3, (5,2)-(7,0) for 4, and (2,2)-(3,10) for 9. The total is 20."},
+    {"args":[[[3,12],[-2,5],[-4,1]]],"expected":18,"explain":"(-4,1)-(-2,5) costs 6 and (-2,5)-(3,12) costs 12: total 18."},
+    {"args":[[[0,0]]],"expected":0,"explain":"One point is already connected: cost 0."},
+    {"args":[[[0,0],[1,1]]],"expected":2},
+    {"args":[[[0,0],[0,1],[0,2],[0,3]]],"expected":3},
+    {"args":[[[0,0],[1,0],[0,1],[1,1]]],"expected":3},
+    {"args":[[[-1000000,-1000000],[1000000,1000000]]],"expected":4000000},
+    {"args":[[[2,2],[3,10],[5,2],[7,0],[0,0],[-4,-3]]],"expected":27},
+    {"args":[[[0,0],[10,0],[0,10],[10,10],[5,5]]],"expected":40},
+    {"args":[[[3,3],[10,15],[0,13],[-2,6],[0,-13],[7,12],[11,9],[-15,0],[0,-1],[1,4],[4,2],[12,-9],[-12,-14],[-13,-10],[1,-5],[-2,-1],[10,10],[12,-7],[2,12],[-9,15]]],"expected":117},
+    {"args":[[[6,-91],[-31,-21],[-20,22],[73,1],[44,48],[-63,62],[3,-49],[71,-15],[-46,2],[71,-80],[-37,-95],[-94,39],[-34,50],[62,88],[42,9],[-90,-10],[-20,35],[-49,-52],[-49,17],[-48,-80],[25,95],[-35,14],[14,71],[61,-46],[-22,47],[-79,67],[-100,-34],[-28,-31],[-41,81],[65,58],[98,61],[-60,-66],[-26,3],[-94,-34],[92,31]]],"expected":1061},
+    {"args":[[[-837,-53],[843,143],[-207,633],[-951,-734],[-567,-995],[764,171],[169,430],[185,-223],[-459,403],[-283,-396],[460,647],[9,859],[-253,-313],[-690,104],[315,672],[808,361],[637,-489],[2,515],[-270,109],[493,529],[-800,-889],[712,162],[-204,-582],[123,-23],[654,725],[-524,-426],[-496,558],[-362,-589],[-137,-403],[177,37],[-413,-323],[-651,-670],[-946,-673],[670,247],[-886,-936],[-780,69],[529,-528],[-24,369],[841,310],[-450,-869]]],"expected":9645}
+  ],
+  "hints": ["You are asked for the cheapest set of connections that links every point into one network. Such a cheapest connected network never contains a cycle: it is a minimum spanning tree.","Build every possible edge with cost |x1 - x2| + |y1 - y2|, sort the edges by cost, and add them cheapest first (Kruskal). An edge is only useful if its two endpoints are not yet connected.","Track connectivity with union-find. For each edge in sorted order, if find(a) !== find(b) then union them and add the cost. Stop after n - 1 edges have been added."],
+  "complexity": {"time":"O(n² log n): n² edges are generated and sorted","space":"O(n²) for the edge list plus O(n) for union-find"}
+}

@@ -50,6 +50,7 @@ const SECTIONS = {
     { href: "/deep-dives", label: "Deep dives" },
     { href: "/questions", label: "Questions" },
     { href: "/lld", label: "LLD" },
+    { href: "/cs", label: "CS fundamentals" },
     { href: "/architecture", label: "Architecture lab" },
     { href: "/playground", label: "Playground" },
     { href: "/cheatsheet", label: "Cheatsheet" },

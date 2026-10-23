@@ -68,6 +68,12 @@ export const TRACE_LOADERS: Record<string, Loader> = {
   "xor-accumulate": () => import("@content/dsa/patterns/22-bit-manipulation/viz").then((m) => m.xorAccumulate),
   "popcount-kernighan": () => import("@content/dsa/patterns/22-bit-manipulation/viz").then((m) => m.popcountKernighan),
   "subset-masks": () => import("@content/dsa/patterns/22-bit-manipulation/viz").then((m) => m.subsetMasks),
+  "lru-map-order": () => import("@content/dsa/patterns/23-design-data-structures/viz").then((m) => m.lruCache),
+  "swap-and-pop": () => import("@content/dsa/patterns/23-design-data-structures/viz").then((m) => m.swapAndPop),
+  "history-binary-search": () => import("@content/dsa/patterns/23-design-data-structures/viz").then((m) => m.historyLookup),
+  "rotate-transpose-reverse": () => import("@content/dsa/patterns/24-matrix/viz").then((m) => m.rotateImage),
+  "spiral-boundaries": () => import("@content/dsa/patterns/24-matrix/viz").then((m) => m.spiralBounds),
+  "life-state-encoding": () => import("@content/dsa/patterns/24-matrix/viz").then((m) => m.lifeEncoding),
 };
 
 export const hasTrace = (id: string) => Object.hasOwn(TRACE_LOADERS, id);

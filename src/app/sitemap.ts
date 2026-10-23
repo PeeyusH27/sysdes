@@ -13,6 +13,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/deep-dives",
     "/questions",
     "/lld",
+    "/cs",
     "/plan",
     "/architecture",
     "/mock",

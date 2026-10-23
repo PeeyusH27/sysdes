@@ -4,7 +4,7 @@ import { m, useInView, useReducedMotionConfig } from "motion/react";
 import { cn } from "@/lib/cn";
 import { useBoxWidth } from "@/lib/hooks";
 import { KIND_META } from "./kinds";
-import { ArrowMarker, Legend, Packet, StepControls } from "./parts";
+import { ArrowMarker, Legend, Packet, StepBanner, StepControls } from "./parts";
 import type { SeqAlt, SeqItem, SeqMessage, SeqNote, SequenceSpec } from "./types";
 import { useStepper } from "./useStepper";
 
@@ -122,28 +122,32 @@ export function SequenceDiagram({ spec }: { spec: SequenceSpec }) {
 
   return (
     <figure ref={box} className={cn("flow seq", !inView && "is-paused")}>
-      {blocks.length > 0 && (
-        <div className="branch-pickers">
-          {blocks.map((b) => (
-            <div key={b.key} role="radiogroup" aria-label="Branch" className="scenario-tabs">
-              {b.alt.map((br, i) => (
-                <button
-                  key={br.when}
-                  type="button"
-                  role="radio"
-                  aria-checked={(choice[b.key] ?? 0) === i}
-                  onClick={() => {
-                    setChoice((c) => ({ ...c, [b.key]: i }));
-                    stepper.reset();
-                  }}
-                >
-                  {br.when}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="flow-head">
+        {blocks.length > 0 && (
+          <div className="branch-pickers">
+            {blocks.map((b) => (
+              <div key={b.key} role="radiogroup" aria-label="Branch" className="scenario-tabs">
+                {b.alt.map((br, i) => (
+                  <button
+                    key={br.when}
+                    type="button"
+                    role="radio"
+                    aria-checked={(choice[b.key] ?? 0) === i}
+                    onClick={() => {
+                      setChoice((c) => ({ ...c, [b.key]: i }));
+                      stepper.reset();
+                    }}
+                  >
+                    {br.when}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+        <StepControls stepper={stepper} />
+        <StepBanner index={currentRow >= 0 ? stepper.index : -1} total={stepper.total} text={caption} />
+      </div>
       <div ref={scroller} className="flow-scroll seq-scroll" tabIndex={0} aria-keyshortcuts="Space ArrowLeft ArrowRight Home" onKeyDown={stepper.handleKey}>
         {/* Actor header: pinned while the messages scroll under it. Same viewBox width as the body, so both scale alike. */}
         <svg className="seq-head" viewBox={`0 0 ${width} ${HEAD}`} aria-hidden style={{ width: "100%", maxWidth: width, minWidth }}>
@@ -242,11 +246,6 @@ export function SequenceDiagram({ spec }: { spec: SequenceSpec }) {
         </svg>
       </div>
       <figcaption>
-        <StepControls stepper={stepper} />
-        <p className="flow-caption" aria-live="polite">
-          {currentRow >= 0 && <span className="step-no">{stepper.index + 1}</span>}
-          {caption}
-        </p>
         <div className="flow-foot">
           <Legend kinds={[...new Set(spec.actors.map((a) => a.kind))]} />
           <details className="text-desc">

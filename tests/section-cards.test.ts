@@ -5,6 +5,8 @@ import { compile } from "@mdx-js/mdx";
 import remarkGfm from "remark-gfm";
 import rehypeSlug from "rehype-slug";
 import rehypeSectionCards from "../src/lib/mdx/rehype-section-cards.mjs";
+import { foldStats } from "../scripts/fold-report.mjs";
+import { pages } from "../scripts/readability.mjs";
 
 const run = async (src: string) =>
   String(await compile(src, { remarkPlugins: [remarkGfm], rehypePlugins: [rehypeSlug, rehypeSectionCards], outputFormat: "function-body" }));
@@ -41,6 +43,8 @@ const shape = (n: Node): unknown => {
     expect(fit.properties?.className).toEqual(["sec-fit"]);
     return { "sec-stage": kids(fit).map(shape) };
   }
+  // The "Read more" fold is one block of the body: show it as `details`.
+  if (n.type === "element" && cls === "sec-more") return "details";
   if (n.type === "element" && cls?.startsWith("sec-")) return { [cls]: kids(n).map(shape) };
   return label(n);
 };
@@ -131,6 +135,51 @@ describe("rehype-section-cards", () => {
   it("keeps one row when only one subsection has visuals", async () => {
     const [card] = await cards(["## WebSockets", "Intro.", "### Handshake", "<FlowDiagram />", "- step", "### Scaling", "Words."].join("\n\n"));
     expect(card).toEqual({ layout: "split", children: [{ "sec-row": [{ "sec-body": ["h2", "p", "h3", "ul", "h3", "p"] }, { "sec-stage": ["FlowDiagram"] }] }] });
+  });
+
+  const long = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(" ") + ".";
+
+  it("folds everything after the first block of words into Read more, keeping the picture and the key line out", async () => {
+    const [card] = await cards(["## Caching", "The key line.", "<FlowDiagram />", long(30), "- a list item", "| a | b |\n|---|---|\n| 1 | 2 |"].join("\n\n"));
+    expect(card).toEqual({ layout: "split", children: [{ "sec-row": [{ "sec-body": ["h2", "p", "details"] }, { "sec-stage": ["FlowDiagram"] }] }] });
+  });
+
+  it("shows how many words are folded and keeps interview Q&A outside the fold", async () => {
+    const js = await run(["## Questions", "Lead.", long(40), "<FollowUps><FollowUp q='Why?'>Because.</FollowUp></FollowUps>"].join("\n\n"));
+    expect(js).toMatch(/Read more · 4\d words/);
+    // the Q&A comes after the fold, not inside it
+    expect(js.search(/_jsxs?\(FollowUps,/)).toBeGreaterThan(js.search(/Read more/));
+    const [card] = await cards(["## Questions", "Lead.", long(40), "<FollowUps><FollowUp q='Why?'>Because.</FollowUp></FollowUps>"].join("\n\n"));
+    expect(card.children).toEqual([{ "sec-body": ["h2", "p", "details", "FollowUps"] }]);
+  });
+
+  it("does not fold a sentence or two", async () => {
+    const [card] = await cards(["## Short", "Lead.", "<FlowDiagram />", "Just a few more words here."].join("\n\n"));
+    expect(card.children).toEqual([{ "sec-row": [{ "sec-body": ["h2", "p", "p"] }, { "sec-stage": ["FlowDiagram"] }] }]);
+  });
+
+  it("folds each ### row on its own", async () => {
+    const [card] = await cards(["## Code", "### Read path", "Explain the read.", long(30), "<CodeBlock />", "### Write path", "Explain the write.", "<CodeBlock />"].join("\n\n"));
+    expect(card.children).toEqual([
+      { "sec-row": [{ "sec-body": ["h2", "h3", "p", "details"] }, { "sec-stage": ["CodeBlock"] }] },
+      { "sec-row": [{ "sec-body": ["h3", "p"] }, { "sec-stage": ["CodeBlock"] }] },
+    ]);
+  });
+
+  it("leaves about a quarter of the prose showing across every detail page", async () => {
+    const files = pages().filter((p: { file: string }) => p.file.endsWith("page.mdx"));
+    let shown = 0;
+    let all = 0;
+    const heavy: string[] = [];
+    for (const p of files) {
+      const s = await foldStats(path.join(__dirname, "../content", p.file));
+      shown += s.shown;
+      all += s.shown + s.folded;
+      if (s.shown / (s.shown + s.folded) > 0.5) heavy.push(`${p.file} (${s.shown} of ${s.shown + s.folded})`);
+    }
+    // Run `node scripts/fold-report.mjs` to see each page.
+    expect(shown / all).toBeLessThan(0.33);
+    expect(heavy, `pages showing over half their words: ${heavy.join(", ")}`).toEqual([]);
   });
 
   it("arranges every section of a real deep dive", async () => {

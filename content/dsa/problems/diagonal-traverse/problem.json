@@ -1,0 +1,41 @@
+{
+  "title": "Diagonal Traverse",
+  "difficulty": "Medium",
+  "patterns": [
+    "matrix"
+  ],
+  "js": [
+    "arrays"
+  ],
+  "order": 5,
+  "summary": "Read a grid along its anti-diagonals, zig-zagging up-right then down-left, starting at the top-left cell.",
+  "fn": "findDiagonalOrder",
+  "params": [
+    "matrix"
+  ],
+  "types": {
+    "params": [
+      "number[][]"
+    ],
+    "returns": "number[]"
+  },
+  "tests": [
+    {"args":[[[1,2,3],[4,5,6],[7,8,9]]],"expected":[1,2,4,7,5,3,6,8,9],"explain":"The path is 1, then 2 4 going down-left, then 7 5 3 going up-right, then 6 8, then 9."},
+    {"args":[[[1,2,3],[4,5,6]]],"expected":[1,2,4,5,3,6],"explain":"A 2 x 3 grid has four diagonals: 1 | 2 4 | 5 3 | 6."},
+    {"args":[[[1,2],[3,4],[5,6]]],"expected":[1,2,3,5,4,6],"explain":"A 3 x 2 grid also has four diagonals: 1 | 2 3 | 5 4 | 6."},
+    {"args":[[[9]]],"expected":[9]},
+    {"args":[[[1,2,3,4]]],"expected":[1,2,3,4]},
+    {"args":[[[1],[2],[3]]],"expected":[1,2,3]},
+    {"args":[[[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]]],"expected":[1,2,5,9,6,3,4,7,10,13,14,11,8,12,15,16]},
+    {"args":[[[1,2,3,4,5],[6,7,8,9,10]]],"expected":[1,2,6,7,3,4,8,9,5,10]},
+    {"args":[[[1,2,3],[4,5,6],[7,8,9],[10,11,12],[13,14,15],[16,17,18]]],"expected":[1,2,4,7,5,3,6,8,10,13,11,9,12,14,16,17,15,18]},
+    {"args":[[[1,2,3,4,5,6,7],[8,9,10,11,12,13,14],[15,16,17,18,19,20,21],[22,23,24,25,26,27,28],[29,30,31,32,33,34,35],[36,37,38,39,40,41,42],[43,44,45,46,47,48,49]]],"expected":[1,2,8,15,9,3,4,10,16,22,29,23,17,11,5,6,12,18,24,30,36,43,37,31,25,19,13,7,14,20,26,32,38,44,45,39,33,27,21,28,34,40,46,47,41,35,42,48,49]},
+    {"args":[[[1,2,3,4,5,6,7,8,9,10,11],[12,13,14,15,16,17,18,19,20,21,22],[23,24,25,26,27,28,29,30,31,32,33],[34,35,36,37,38,39,40,41,42,43,44],[45,46,47,48,49,50,51,52,53,54,55],[56,57,58,59,60,61,62,63,64,65,66],[67,68,69,70,71,72,73,74,75,76,77],[78,79,80,81,82,83,84,85,86,87,88],[89,90,91,92,93,94,95,96,97,98,99]]],"expected":[1,2,12,23,13,3,4,14,24,34,45,35,25,15,5,6,16,26,36,46,56,67,57,47,37,27,17,7,8,18,28,38,48,58,68,78,89,79,69,59,49,39,29,19,9,10,20,30,40,50,60,70,80,90,91,81,71,61,51,41,31,21,11,22,32,42,52,62,72,82,92,93,83,73,63,53,43,33,44,54,64,74,84,94,95,85,75,65,55,66,76,86,96,97,87,77,88,98,99]}
+  ],
+  "hints": [
+    "All cells on the same anti-diagonal share the same value of row + column. Walk the diagonals in order of that sum.",
+    "The direction alternates: even sums run up-right (row decreasing), odd sums run down-left (row increasing).",
+    "Either collect each diagonal and reverse every other one, or simulate: step by (-1, +1) or (+1, -1) and, when you leave the grid, move to the next diagonal's start and flip the direction."
+  ],
+  "complexity": {"time":"O(rows * columns)","space":"O(1) beyond the output (O(min(rows, columns)) if you collect each diagonal)"}
+}

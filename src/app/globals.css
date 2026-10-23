@@ -307,18 +307,18 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .flow-scroll { overflow-x: auto; border-radius: 10px; }
 .flow-scroll:focus-visible { outline-offset: -2px; }
 .flow svg { display: block; margin: 0 auto; }
-.flow svg text { font: 12px var(--font-sans); fill: var(--fg); }
+.flow svg text { font: 13px var(--font-sans); fill: var(--fg); }
 .flow .node rect { fill: var(--card-2); stroke-width: 1.8; }
 .flow .node { cursor: default; transition: opacity .2s; }
 .flow .node:focus-visible { outline: none; }
 .flow .node:focus-visible rect { stroke-width: 3; }
 .flow .node .node-label, .flow .actor .node-label { font-weight: 600; }
-.flow .node-sub { font-size: 10.5px !important; fill: var(--muted) !important; }
+.flow .node-sub { font-size: 11.5px !important; fill: var(--muted) !important; }
 .flow .node[data-state=down] rect { stroke-dasharray: 4 3; opacity: .55; }
 .flow .node[data-state=busy] rect { animation: busy-pulse 1s ease-in-out infinite; }
 @keyframes busy-pulse { 50% { stroke-width: 4; } }
 .state-badge rect { fill: var(--card); stroke: currentColor; stroke-width: 1.2; }
-.state-badge text { font-size: 10.5px !important; font-weight: 700; fill: currentColor !important; }
+.state-badge text { font-size: 11.5px !important; font-weight: 700; fill: currentColor !important; }
 .state-badge { color: var(--muted); }
 .state-badge[data-state=hit], .state-badge[data-state=ok] { color: var(--good-ink); }
 .state-badge[data-state=miss], .state-badge[data-state=busy] { color: var(--warning-ink); }
@@ -330,7 +330,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .flow .edge-flow[data-style=replication] { stroke-dasharray: 10 4 2 4; animation: dash-20 1.4s linear infinite; }
 .flow .edge-trace { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; }
 .flow .edge[data-active] .edge-flow { stroke: var(--accent); stroke-width: 2.6; opacity: 1; }
-.flow .edge-label { font-size: 10.5px !important; fill: var(--muted) !important; paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
+.flow .edge-label { font-size: 12px !important; font-weight: 500; fill: var(--muted) !important; paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
 .flow [data-dim] { opacity: .22; transition: opacity .2s; }
 .flow.is-paused .edge-flow, .flow.is-paused .node[data-state=busy] rect { animation-play-state: paused; }
 @keyframes dash-12 { to { stroke-dashoffset: -12; } }
@@ -343,8 +343,49 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .packet--miss { fill: var(--accent-2); }
 .packet--error { fill: var(--critical); }
 .flow figcaption { margin-top: 8px; }
-.flow-caption { margin: 10px 4px 4px; font-size: 14.5px; color: var(--fg); min-height: 1.6em; display: flex; gap: 10px; align-items: baseline; }
+.flow-caption { margin: 10px 4px 4px; font-size: 16px; color: var(--fg); min-height: 1.6em; display: flex; gap: 10px; align-items: baseline; }
 .flow-caption .step-no { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; }
+/* Build-it-in-stages (class diagrams): numbered stage chips, labelled buttons, then the banner for the current stage. */
+.uml-stages { display: contents; }
+.uml-stages .step-banner { margin: 10px 0 12px; }
+/* sticky, so Next stage stays in reach while you scroll the (tall) diagram */
+.uml-stage-nav { position: sticky; top: 118px; box-shadow: 0 -14px 0 var(--card); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 8px 0; background: var(--card); border-bottom: 1px solid var(--border); }
+.uml-stage-dots { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0 !important; padding: 0 !important; }
+.uml-stage-dots li { margin: 0 !important; }
+.uml-stage-dots button { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--border-strong); background: var(--card); color: var(--muted); font: 650 13.5px var(--font-sans); cursor: pointer; }
+.uml-stage-dots button:hover { border-color: var(--accent); color: var(--fg); }
+.uml-stage-dots button[data-done] { background: color-mix(in srgb, var(--accent) 12%, var(--card)); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent); }
+.uml-stage-dots button[aria-current=step] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.uml-stage-buttons { display: flex; gap: 8px; }
+.uml-stage-count { display: none; font: 600 13px var(--font-mono); color: var(--muted); }
+@media (min-width: 1080px) { .uml-stage-nav { top: 58px; } }
+/* phones: one slim sticky row, Back / 2 of 5 / Next stage, instead of chips plus buttons */
+@media (max-width: 1079px) {
+  .uml-stage-dots { display: none; }
+  .uml-stage-buttons { width: 100%; align-items: center; justify-content: space-between; }
+  .uml-stage-count { display: inline; }
+}
+.uml-stage-buttons .btn { padding: 8px 14px; font-size: 14px; }
+.step-banner-title { margin: 0 0 3px; font-size: clamp(18px, 1.9vw, 22px); line-height: 1.3; font-weight: 700; }
+.step-banner-title + .step-banner-text { font-size: clamp(16px, 1.5vw, 17.5px); font-weight: 400; color: color-mix(in srgb, var(--fg) 88%, var(--muted)); animation: none; }
+.uml .step-banner { min-height: 0; }
+
+/* The step banner: what is happening right now, above the picture and large enough to read at a glance. */
+.flow-head { display: grid; gap: 10px; margin-bottom: 12px; }
+.flow-head .step-controls { margin: 0; }
+.step-banner { display: flex; align-items: flex-start; gap: 14px; min-height: 4.9em; padding: 14px 18px; border-radius: var(--radius); background: color-mix(in srgb, var(--hl) 15%, var(--card)); box-shadow: inset 4px 0 0 var(--hl); }
+.step-banner[data-idle] { background: var(--card-2); box-shadow: inset 4px 0 0 var(--border-strong); }
+.step-banner .step-no { flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; margin-top: 2px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 16px; font-weight: 700; }
+.step-banner[data-idle] .step-no { background: var(--border-strong); color: var(--card); }
+.step-banner-body { min-width: 0; }
+.step-banner-meta { margin: 0 0 2px; font: 600 13px var(--font-sans); color: var(--accent-2); }
+.step-banner[data-idle] .step-banner-meta { color: var(--muted); }
+.step-banner-text { margin: 0; font-size: clamp(17px, 1.7vw, 20px); line-height: 1.45; font-weight: 500; color: var(--fg); text-wrap: pretty; animation: banner-in .35s var(--ease-out); }
+.step-banner[data-idle] .step-banner-text { font-weight: 400; color: var(--muted); }
+@keyframes banner-in { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .step-banner-text { animation: none; } }
+:root[data-motion=reduce] .step-banner-text { animation: none; }
+@media (max-width: 560px) { .step-banner { padding: 12px 14px; gap: 10px; min-height: 5.6em; } .step-banner .step-no { width: 28px; height: 28px; font-size: 14px; } }
 .flow-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 6px 16px; margin: 4px 4px 0; }
 .flow--compact { background: transparent; border: 0; padding: 0; margin: 0; }
 .flow .open-pg { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px !important; line-height: 1.6; color: var(--muted) !important; text-decoration: none; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
@@ -374,7 +415,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .seq .seq-msg[data-type=reply] .seq-line { stroke-dasharray: 5 4; }
 .seq .seq-msg[data-type=async] .seq-line { stroke-dasharray: 2 4; }
 .seq .seq-msg[data-active] .seq-line { stroke: var(--accent); stroke-width: 2.4; }
-.seq .seq-label { font-size: 12px !important; paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
+.seq .seq-label { font-size: 13.5px !important; paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
 /* the message area scrolls under a pinned actor header and follows the current step */
 /* The whole figure is capped; the message area takes what the pickers, controls and caption leave and scrolls. */
 .flow.seq { display: flex; flex-direction: column; max-height: min(610px, 88vh); }
@@ -384,11 +425,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .seq .branch-pickers .scenario-tabs { padding: 2px; }
 .seq .branch-pickers .scenario-tabs button { padding: 4px 9px; font-size: 12.5px; }
 .seq .seq-head { position: sticky; top: 0; z-index: 1; background: var(--card); }
-.seq .seq-actor2 { font-size: 11px !important; }
+.seq .seq-actor2 { font-size: 12px !important; }
 .seq .seq-frame rect { fill: color-mix(in srgb, var(--accent-2) 5%, transparent); stroke: color-mix(in srgb, var(--accent-2) 55%, var(--border)); stroke-dasharray: 5 4; }
-.seq .frame-label { font-size: 11px !important; font-weight: 700; fill: var(--accent-2) !important; }
+.seq .frame-label { font-size: 12px !important; font-weight: 700; fill: var(--accent-2) !important; }
 .seq .seq-note rect { fill: color-mix(in srgb, var(--k-client) 8%, var(--card)); stroke: color-mix(in srgb, var(--k-client) 40%, var(--border)); }
-.seq .seq-note text { font-size: 11.5px !important; fill: var(--muted) !important; }
+.seq .seq-note text { font-size: 12.5px !important; fill: var(--muted) !important; }
 .seq [data-dim] { opacity: .16; }
 
 /* uml */
@@ -411,11 +452,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .uml .uml-class:focus-visible rect { stroke-width: 3; }
 .uml .uml-class[data-selected] rect { stroke: var(--accent); stroke-width: 2.6; fill: color-mix(in srgb, var(--accent) 8%, var(--card-2)); }
 .uml .uml-class[data-new] rect { stroke: var(--good); stroke-width: 2.4; }
-.uml-stages { padding: 0 0 8px; }
-.uml-stage-bar { display: flex; align-items: center; gap: 8px; }
-.uml-stage-title { flex: 1; display: flex; flex-direction: column; font-size: 14px; line-height: 1.3; }
-.uml-stage-title b { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 650; }
-.uml-stage-note { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 .uml .uml-rel[data-lit] path { stroke: var(--accent); stroke-width: 2; }
 .uml .uml-rel[data-lit] :is(.uml-filled) { fill: var(--accent); }
 .uml [data-dim] { opacity: .35; transition: opacity .2s; }

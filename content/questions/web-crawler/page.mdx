@@ -1,0 +1,240 @@
+import { architecture, fetchSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Pull URLs from a **frontier** that keeps one queue per host, fetch and parse them, and push only unseen links back, checked with a **Bloom filter**. The hard parts are being polite to every site and never crawling the same page twice.
+</TLDR>
+
+<Requirements
+  functional={["Start from seed URLs and follow links", "Download each page and store it for the indexer", "Obey robots.txt and a per-host request rate", "Skip URLs and near-duplicate pages already seen", "Re-crawl pages on a schedule based on how often they change"]}
+  nonFunctional={["About 1 billion pages a month (roughly 400 a second)", "Polite: at most one request in flight per host, with a delay", "Survives slow servers, bad HTML and spider traps", "Scales by adding workers; a crash loses no queued URLs", "Extensible: new content types plug in after the fetch"]}
+  outOfScope={["Indexing and ranking the pages", "Running JavaScript to render pages (a follow-up)", "Images and video"]}
+/>
+
+## Clarifying questions
+
+- **Why crawl?** A search index needs the whole web; a price tracker needs ten sites, often.
+- **Scale and freshness?** Pages a month, and how stale may a page be?
+- **Content?** HTML only? Do we render JavaScript?
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Fetch rate | 1B pages ÷ (30 × 86,400 s) | **≈ 386/s**, ~800/s at 2x peak |
+| Raw HTML | 1B × 100 KB | 100 TB a month |
+| Download bandwidth | 386/s × 100 KB | ≈ 39 MB/s ≈ 310 Mbps |
+| Fetches in flight | 386/s × 0.5 s per fetch | ≈ 200 at a time |
+| Hosts needed | 386/s × 10 s gap between hits on one host | **≥ 3,860 hosts** in play |
+| Distinct URLs | assume 5B tracked | to remember |
+| Seen set, exact | 5B × 8 B hash | 40 GB |
+| Seen set, Bloom at 1% | 5B × 9.6 bits ÷ 8 | **≈ 6 GB** |
+
+Bandwidth and CPU are modest. The **seen set** and the **per-host delay** drive the design. At a 10 s gap, one host gives only 0.1 page a second, so a fast crawl needs thousands of hosts active at once.
+
+## API
+
+A crawler is mostly a pipeline, so the interfaces are internal. Operators see a small admin API.
+
+| Interface | Call | Notes |
+|---|---|---|
+| Frontier | `add(url, priority)` | Rejects when the host's budget is full |
+| Frontier | `next(now)` | One ready URL, or how long to wait |
+| Frontier | `done(url, delayMs)` | Starts the host's delay; the URL may retry |
+| Store | `put(url, html)` | Returns a key from the content hash |
+| Admin | `POST /crawl/seeds` | `urls[]` with a priority |
+| Admin | `GET /crawl/stats` | Rate, queue depth, errors by host |
+| Admin | `POST /crawl/blocklist` | Stop a host that complains |
+
+## Data model
+
+Pages and hosts live in a wide-column store (Bigtable or Cassandra style), keyed by host so one site's rows sit together. The HTML bodies go to object storage.
+
+```sql
+-- logical schema; 5B rows, so this is not a single Postgres table
+CREATE TABLE pages (
+  host         text,
+  url_hash     bytea,                 -- first 8 bytes of SHA-256 of the normalized URL
+  url          text    NOT NULL,
+  content_hash bytea,                 -- key of the body in object storage
+  simhash      bigint,                -- near-duplicate fingerprint
+  etag         text,                  -- for conditional GETs
+  last_fetched timestamptz,
+  change_score real,                  -- how often it changed on the last visits
+  next_fetch   timestamptz,           -- when to visit again
+  PRIMARY KEY (host, url_hash)
+);
+CREATE TABLE hosts (
+  host           text PRIMARY KEY,
+  robots_txt     text,
+  robots_fetched timestamptz,         -- re-read after 24 h
+  delay_ms       int  NOT NULL DEFAULT 1000,
+  url_budget     int  NOT NULL DEFAULT 10000
+);
+```
+
+## Architecture
+
+The loop is: pick a URL, fetch it, store it, parse it, and send new links back to the start. Everything else protects that loop. Play **One page, end to end**, **Politeness**, **Duplicate page** and **Spider trap**.
+
+<FlowDiagram spec={architecture} />
+
+The same fetch as a sequence. Pick a branch: the page loads, the host is overloaded, or robots.txt says no.
+
+<SequenceDiagram spec={fetchSequence} />
+
+## The URL frontier
+
+<Doodle name="queue" size={150} caption />
+
+A plain queue would hand one site's 5,000 URLs to 200 workers in the same second. So the frontier has two layers.
+
+| Layer | Job | How |
+|---|---|---|
+| Front queues | Which URLs matter most | A few priority levels, filled by the prioritizer |
+| Back queues | Be polite to each host | One queue per host, plus a heap of "ready at" times |
+
+The heap says which host is ready, and that host's best URL comes out. The host leaves the heap until the fetch finishes, then returns after its delay. No two workers hit one host together, and a slow host never blocks a fast one.
+
+## Seen URLs and duplicate pages
+
+<Doodle name="bloom-filter" size={150} caption />
+
+**URLs.** Normalize first, or one page arrives under five spellings. Then ask a **Bloom filter**: "definitely new" or "probably seen". At 1% error it needs 9.6 bits a URL: about 6 GB for 5 billion, against 40 GB exact. It wrongly drops about 1 new URL in 100.
+
+**Content.** Mirrors repeat text at new URLs. An exact hash catches identical pages. A **simhash** catches near-copies: their fingerprints differ in only a few bits.
+
+## Politeness, robots and traps
+
+Good manners are part of the spec, not polish.
+
+- **robots.txt:** fetch it first for every host, cache it for 24 hours, obey `Disallow` and `Crawl-delay`.
+- **Delay:** wait the larger of Crawl-delay and ten times the last fetch time. On a 429 or 503, double it.
+- **Identity:** a clear user agent with a contact URL, so owners can reach you.
+- **Traps:** calendars, session ids in URLs and endless redirects. Cap URLs per host, cap depth, cap URL length and redirect chains.
+- **DNS:** cache lookups; a blocking resolver is the usual hidden bottleneck.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Why crawl, how fast, how fresh, which content.
+  </Step>
+  <Step title="Estimate">
+    386 pages a second, 6 GB for the seen set, 3,860 hosts in play.
+  </Step>
+  <Step title="Draw the loop">
+    Frontier, fetch, store, parse, filter, back to the frontier.
+  </Step>
+  <Step title="Go deep on two parts">
+    The frontier's politeness, and dedupe at scale.
+  </Step>
+  <Step title="Failure and scale">
+    Traps, slow hosts, crashes, partitioning by host.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="Name the two hard parts">
+
+"Being polite to millions of different servers, and not repeating work across billions of URLs." Everything else is plumbing.
+
+</Step>
+<Step title="Build the frontier from two layers">
+
+Priority queues in front, one queue per host behind, and a heap of next-allowed times. This is the part to draw.
+
+</Step>
+<Step title="Fetch defensively">
+
+Resolve through a DNS cache, check cached robots.txt, set a connect and read timeout, cap the body size, and treat redirects as new URLs that go back through the frontier.
+
+</Step>
+<Step title="Store, then parse off the critical path">
+
+Write the body to object storage under its content hash and queue a parse job. A slow parser never holds a fetcher.
+
+</Step>
+<Step title="Normalize and filter links">
+
+Resolve relative links, lower-case the host, drop fragments and tracking parameters, sort the query. Then the Bloom filter. Only unseen URLs reach the prioritizer.
+
+</Step>
+<Step title="Fingerprint the content">
+
+Exact hash first, then simhash. A near-duplicate is stored once, and its outgoing links are not trusted to be new.
+
+</Step>
+<Step title="Decide when to come back">
+
+Use conditional GETs (`ETag`, `If-Modified-Since`): a 304 costs no body. If a page was unchanged on the last visits, double its interval; if it changed, halve it, within bounds like one hour to thirty days.
+
+</Step>
+<Step title="Scale out by host">
+
+Hash the host to pick the crawler node that owns it. Its queue, delay timer, robots cache and slice of the Bloom filter all live there, so politeness needs no cross-node lock. A link to another node's host goes through a Kafka topic partitioned by host. When a node dies, consistent hashing moves only its hosts.
+
+</Step>
+<Step title="Say what you would watch">
+
+Pages a second, queue depth by priority, error rate by host, the share of 429s, and the duplicate rate. A rising duplicate rate usually means a trap.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Tabs: URL normalizer, Bloom filter with sizing, the frontier, a robots.txt parser, simhash, and the fetch worker that ties them together.
+
+<CodeTabs files={['snippets/normalize.js', 'snippets/bloom.js', 'snippets/frontier.js', 'snippets/robots.js', 'snippets/simhash.js', 'snippets/fetch-worker.js']} />
+
+- `bloomSize(5e9, 0.01)` gives the 6 GB figure; the test checks it, and the measured false-positive rate.
+- The frontier test proves one host is never handed out twice inside its delay.
+- `simhash` tests show a page with an ad added is within 3 bits, an unrelated page is far.
+- The worker is display-only: it needs the network and a store.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| A host answers slowly or hangs | Workers pile up on it | Timeouts; one in flight per host; back off |
+| A spider trap | Frontier fills with junk | Per-host budget; depth and URL length caps |
+| A crawler node dies | Its hosts stop being fetched | Persist the frontier; reassign hosts by consistent hashing |
+| DNS resolver is slow | Throughput collapses | Local DNS cache; async resolver |
+| Bloom filter fills up | False-positive rate climbs | Size for growth; rebuild by epoch from the page table |
+| A site complains | Legal and reputation risk | Honor blocklists; contact page in the user agent |
+| The parser falls behind | Pages wait in storage | Queue depth alert; scale parsers; fetchers keep going |
+
+## Trade-offs
+
+| Choice | Gain | Cost |
+|---|---|---|
+| Bloom filter for seen URLs | 6x smaller than exact hashes | Drops about 1% of new URLs |
+| Partition by host | Politeness and state stay local | A hot host cannot be split |
+| BFS-like order | Finds important pages early | Needs a prioritizer, not plain FIFO |
+| Simhash dedupe | Catches near-copies | Tuning; false matches on templates |
+
+<Callout kind="interview" title="What interviewers listen for">
+Per-host queues for politeness, the seen-set arithmetic (**6 GB Bloom against 40 GB exact**), URL normalization, spider-trap limits, and partitioning by host.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How do you crawl JavaScript-heavy pages?">
+    Send them to a separate pool running a headless browser. It is far slower, so use it only for hosts that need it.
+  </FollowUp>
+  <FollowUp q="How do you keep the index fresh?">
+    Estimate each page's change rate from past visits and schedule the next visit from it. Conditional GETs make an unchanged revisit cheap.
+  </FollowUp>
+  <FollowUp q="What if the Bloom filter says seen for a page that is new?">
+    That is the 1% false positive: the page is skipped. Another inbound link usually brings it in later. Seeds bypass the filter.
+  </FollowUp>
+  <FollowUp q="How do you shard the frontier?">
+    By host, with consistent hashing, so queues and timers stay on one node. Links to other hosts travel on a Kafka topic keyed by host ([sharding strategies](/deep-dives/sharding-strategies)).
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

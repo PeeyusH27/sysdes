@@ -80,6 +80,7 @@ export const extras: Record<string, PageExtras> = {
       "how-to-approach-it",
       "step-by-step-answer",
       "implementation",
+      "code-it-yourself",
       "capacity-estimate",
       "failure-modes",
     ],

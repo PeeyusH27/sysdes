@@ -1,0 +1,26 @@
+{
+  "title": "House Robber II",
+  "difficulty": "Medium",
+  "patterns": ["dp-1d"],
+  "js": ["arrays","numbers-math"],
+  "order": 3,
+  "summary": "Rob houses arranged in a circle, never two neighbours, for the largest total.",
+  "fn": "robCircle",
+  "params": ["nums"],
+  "types": {"params":["number[]"],"returns":"number"},
+  "tests": [
+    {"args":[[2,3,2]],"expected":3,"explain":"The 2s are neighbours in the circle, so you cannot take both. Robbing the middle house gives 3, better than a single 2."},
+    {"args":[[1,2,3,1]],"expected":4,"explain":"Rob houses 1 and 3 (values 1 and 3) for 4, or houses 2 and 4 (2 and 1) for 3. The first and last cannot both be used."},
+    {"args":[[1,2,3]],"expected":3,"explain":"Every house touches the other two in a ring of three, so only one can be robbed: take 3."},
+    {"args":[[5]],"expected":5},
+    {"args":[[4,9]],"expected":9},
+    {"args":[[0,0,0]],"expected":0},
+    {"args":[[6,1,1,6]],"expected":7},
+    {"args":[[10,1,1,10,1,1]],"expected":20},
+    {"args":[[19,40,19,22,25,4,36,4,2,13,8,15,5,15,4,24]],"expected":168},
+    {"args":[[17,37,62,69,45,58,94,5,39,0,72,46,1,24,43,76,86,90,72,58,34,74,13,34,83,59,18,45,42,47,95,14,99,88,5,41,46,47,93,66]],"expected":1132},
+    {"args":[[81,166,177,282,174,322,62,102,15,6,102,199,238,368,279,183,273,82,2,97,318,394,17,336,279,204,120,334,74,108,336,337,125,208,12,151,324,240,346,59,345,90,50,203,78,44,59,101,287,168,126,142,62,378,261]],"expected":5866}
+  ],
+  "hints": ["If the houses were in a line you would use the classic house-robber DP. The circle adds exactly one new rule: the first and last houses are neighbours.","You can never rob both the first and the last house. So the best plan either skips the first house or skips the last house (or both).","Run the linear house-robber DP twice: once on nums[0..n-2] and once on nums[1..n-1], and return the larger. Handle n = 1 separately, where there is only one house to rob."],
+  "complexity": {"time":"O(n): two linear passes","space":"O(1): two rolling variables per pass"}
+}

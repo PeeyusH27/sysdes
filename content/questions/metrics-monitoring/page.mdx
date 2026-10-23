@@ -1,0 +1,195 @@
+import { architecture, alertSequence } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Agents push batches through Kafka into a **time-series database** that compresses a sample to about 1.4 bytes. Keep recent data raw and old data in **rollups**, and evaluate alert rules as small state machines with a **for-duration**. The two risks are too many distinct series and noisy pages.
+</TLDR>
+
+<Requirements
+  functional={["Collect metrics (cpu, memory, requests, latency) from every host and service", "Store them with labels such as host and service", "Query ranges and aggregate for dashboards", "Define alert rules and notify on-call", "Keep long-term history at lower resolution"]}
+  nonFunctional={["1M samples a second from 100K hosts", "Dashboards load in under a second", "Alerts fire within about a minute of a real problem", "Monitoring must stay up when the system it watches is down", "Cost: keep a year of history without a petabyte"]}
+  outOfScope={["Logs and traces (separate pipelines)", "Anomaly detection with machine learning", "Per-request tracing"]}
+/>
+
+## Clarifying questions
+
+- **Push or pull?** Agents push here.
+- **Resolution and retention?** 10 seconds for how long, then what?
+- **Cardinality?** Distinct label combinations set the cost.
+
+## Capacity estimate
+
+| Quantity | Calculation | Result |
+|---|---|---|
+| Series | 100K hosts × 100 metrics | **10M** |
+| Samples | 10M ÷ 10 s | **1M/s** |
+| Raw size | 1M × 16 B × 86,400 s | 1.38 TB/day |
+| Compressed | 1M × 1.37 B × 86,400 s | ≈ 118 GB/day |
+| Raw, 15 days | 118 GB × 15 | 1.8 TB |
+| 1-minute rollups, 90 days | 10M × 1,440 × 6 B × 90 | 7.8 TB |
+| 1-hour rollups, 2 years | 10M × 24 × 6 B × 730 | 1.05 TB |
+| Dashboard queries | 10K open × 10 panels ÷ 30 s | ≈ 3,300/s |
+| Alert queries | 10K rules ÷ 30 s | ≈ 333/s |
+
+About 10.6 TB holds two years of history. The 1.37 bytes a sample is the average reported in Facebook's Gorilla paper; your data will differ. Writes dominate: queries are few and hit small, recent or pre-aggregated data.
+
+## API
+
+| Call | Notes |
+|---|---|
+| `POST /v1/write` | Batch of `{ labels, samples: [{ t, v }] }`, compressed |
+| `GET /v1/query_range` | `query`, `start`, `end`, `step` → series of points |
+| `PUT /v1/rules` | Alert rule: query, threshold, `for`, labels, route |
+| `GET /v1/alerts` | Pending and firing alerts |
+
+A **series** is one metric name plus one set of labels, such as `cpu{host="web-17", dc="eu"}`. Every distinct label set is a new series.
+
+## Data model
+
+| Store | Holds | Notes |
+|---|---|---|
+| Series index | label to series ids (an inverted index) | `host="web-17"` finds its series fast |
+| Head | Newest 2 hours of samples per series, in memory | Backed by a write-ahead log |
+| Blocks | Immutable compressed chunks per 2 hours | Timestamps as delta of deltas, values XORed |
+| Rollups | min, max, sum, count per minute or hour | Same layout, coarser |
+
+Never put an unbounded value in a label. `user_id` or `request_id` multiplies series by millions and breaks the index, memory and bill.
+
+## Architecture
+
+Samples flow left to right into storage; reads and alerts pull from storage. Kafka in the middle decouples the two speeds. Play **A sample's journey**, **Dashboard query**, **Alert fires** and **Ingest burst**.
+
+<FlowDiagram spec={architecture} />
+
+## Ingest and storage
+
+Each agent batches about 100 samples every 10 seconds, with a bounded buffer that drops the **oldest** samples if the backend is down. Kafka, partitioned by series, absorbs bursts. Writers append to a write-ahead log and an in-memory head.
+
+Neighbouring samples look alike. Timestamps follow a schedule, so the delta of deltas is nearly always 0: about 1 bit. Values change slowly, so XOR leaves few set bits. A 16-byte sample shrinks to about 1.4 bytes.
+
+## Rollups and queries
+
+Nobody needs 10-second data from last year. Keep raw samples for 15 days, then 1-minute and 1-hour buckets of **min, max, sum, count**: the max shows a spike an average would hide. Queries use the coarsest tier that fits the chart.
+
+Percentiles cannot be averaged. Store a **histogram** per bucket and add histograms to get any window's p99.
+
+## Alerting
+
+An alert rule is a small state machine: **inactive**, **pending**, **firing** once the condition has held for the whole for-duration, then **resolved**. A blip never fires. Missing data counts as bad, so a dead host cannot look healthy. The notifier groups alerts, so 30 hosts make one page.
+
+<SequenceDiagram spec={alertSequence} />
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Push or pull, resolution, retention, cardinality.
+  </Step>
+  <Step title="Estimate">
+    10M series, 1M samples a second, 118 GB a day compressed.
+  </Step>
+  <Step title="Ingest path">
+    Agents, gateway, Kafka, writers, time-series database.
+  </Step>
+  <Step title="Storage and queries">
+    Head and blocks, compression, rollups, tiers.
+  </Step>
+  <Step title="Alerting and reliability">
+    State machine, grouping, monitoring the monitor.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+<Step title="Define the data">
+
+A sample is a timestamp, a value and a series identity (name plus labels). Everything else follows from series count and sample rate.
+
+</Step>
+<Step title="Size it">
+
+10M series every 10 seconds is 1M samples a second: 1.38 TB a day raw, about 118 GB compressed. Say which dominates: writes.
+
+</Step>
+<Step title="Make ingestion durable and elastic">
+
+Batching agents with bounded buffers, a stateless gateway, Kafka partitioned by series. Writers can lag or restart without losing data.
+
+</Step>
+<Step title="Store for time">
+
+An in-memory head with a write-ahead log, flushed to immutable compressed blocks. Delta-of-delta timestamps and XOR values.
+
+</Step>
+<Step title="Control cardinality">
+
+Quotas per team, limits on label values, alerts when series counts jump. Cardinality is the real cost driver.
+
+</Step>
+<Step title="Downsample for long retention">
+
+Raw for 15 days, then min, max, sum and count per minute and per hour. Histograms for latency percentiles.
+
+</Step>
+<Step title="Alert without noise">
+
+State machine with a for-duration, grouped pages, repeat suppression, silences for maintenance, missing-data rules.
+
+</Step>
+<Step title="Monitor the monitor">
+
+A small independent system watches the pipeline: consumer lag, ingest rate, and a canary alert that must always fire.
+
+</Step>
+</Steps>
+
+## Implementation
+
+Tabs: the agent's batching exporter, compression bit counters, rollups with histograms, and the alert state machine with a notifier.
+
+<CodeTabs files={['snippets/batcher.js', 'snippets/gorilla.js', 'snippets/rollup.js', 'snippets/alert-rule.js']} />
+
+- The batcher test covers size and time flushes, retry backoff, and dropping the oldest samples when the buffer is full.
+- The Gorilla test shows a regular schedule costs about 1 bit a timestamp, and reproduces the 1.38 TB and 10.6 TB sums.
+- The rollup test shows averaging two p99 values is wrong, and adding histograms is right.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Backend unreachable | Agents buffer, then drop | Bounded buffer, drop oldest, retry with backoff |
+| Burst after an outage | Writers lag | Kafka absorbs; autoscale writers; alert on lag |
+| Cardinality explosion | Memory and cost spike | Per-team series quotas; reject unbounded labels |
+| Writer or head node crash | Recent data at risk | Write-ahead log replay; replicate the head |
+| Alert evaluator dies | Silent failures | Two evaluators; a canary alert that must fire |
+| The monitor is down with the system | Blind during an outage | Separate infrastructure and a second basic monitor |
+
+## Trade-offs
+
+| Choice | Gain | Cost |
+|---|---|---|
+| Push | Works for short-lived jobs and NAT | Backend must protect itself from floods |
+| Pull | Easy health view and control | Needs service discovery; hard for batch jobs |
+| Rollups | Years of history cheaply | Lose raw detail; percentiles need histograms |
+| Long for-duration | Fewer false pages | Slower detection |
+
+<Callout kind="interview" title="What interviewers listen for">
+The **series and sample arithmetic**, why time-series data compresses, rollups that keep min and max, **cardinality control**, and alerts with a for-duration, grouping and a monitored monitor.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="Why Kafka in the middle?">
+    Bursts queue instead of dropping, and writers can restart safely.
+  </FollowUp>
+  <FollowUp q="How do you shard the time-series database?">
+    By series hash across writers; queries fan out and merge. Time blocks let old data drop cheaply.
+  </FollowUp>
+  <FollowUp q="How do you monitor the monitoring system?">
+    A small separate stack elsewhere, alerting on lag and a heartbeat canary.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

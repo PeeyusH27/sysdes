@@ -1,0 +1,101 @@
+import { concurrencyChoice } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Concurrency is structuring work as tasks that overlap; parallelism is running them at the same instant on several cores. Use a **bounded pool** to cap work, a **bounded queue** for backpressure, **atomics** for single counters, and an **event loop** when the work mostly waits.
+</TLDR>
+
+## Concurrency is not parallelism
+
+Concurrency is **dealing** with many things at once: one cook switching between pots. Parallelism is **doing** many at once: several cooks.
+
+More workers do not scale forever, because some work is serial. **Amdahl's law**: if a fraction p is parallel, n workers give a speedup of 1 / (1 - p + p/n).
+
+<LineChart title="Speedup by number of workers" x={[1, 2, 4, 8, 16, 32, 64]} series={[{ id: "p99", name: "99% parallel", values: [1, 1.98, 3.88, 7.48, 13.91, 24.43, 39.26] }, { id: "p90", name: "90% parallel", values: [1, 1.82, 3.08, 4.71, 6.4, 7.8, 8.77] }, { id: "p50", name: "50% parallel", values: [1, 1.33, 1.6, 1.78, 1.88, 1.94, 1.97] }]} xLabel="Workers" yUnit="x" xFormat="number" />
+
+At 90% parallel, 8 workers give 4.7x and no number of workers beats 10x.
+
+<CodeTabs files={['snippets/amdahl.js', 'snippets/amdahl.test.js']} />
+
+<Callout kind="interview" title="What interviewers listen for">
+You separate the two words, you mention that the serial part and lock contention cap the speedup, and you size a pool from the workload (CPU-bound or waiting) instead of picking a number.
+</Callout>
+
+## Thread pools
+
+A thread per task is slow and unbounded. A **thread pool** keeps a fixed set of workers and a queue of tasks.
+
+Size it from the work: about one worker per core for CPU-bound tasks, and cores × (1 + wait / compute) for tasks that wait. Eight cores with 90 ms of waiting per 10 ms of compute allow about 80.
+
+<CodeTabs files={['snippets/thread-pool.js', 'snippets/thread-pool.test.js']} />
+
+Bound the queue too. An unbounded one hides overload until memory runs out; a bounded one forces a choice: reject, block the caller, or run on the caller's thread. The same sizing applies to [database connection pools](/deep-dives/connections-pooling).
+
+## Producer-consumer
+
+Producers add work, consumers take it, and a **bounded buffer** sits between them. A full buffer makes the producer wait (**backpressure**); an empty one makes the consumer wait.
+
+<QueueSim />
+
+Push the producer rate above the consumer rate and watch the backlog grow. Then add consumers.
+
+<CodeTabs files={['snippets/bounded-buffer.js', 'snippets/bounded-buffer.test.js']} />
+
+In threaded code this is a mutex plus two condition variables, or two semaphores. Message queues are the same idea across machines.
+
+## Atomics and compare-and-swap
+
+For one shared number, a lock is heavy. An **atomic** operation runs as one indivisible step in hardware. The building block is **compare-and-swap** (CAS): write a new value only if the cell still holds the value you read, otherwise retry.
+
+<CodeTabs files={['snippets/cas.js', 'snippets/cas.test.js']} />
+
+The test runs four real threads doing 5,000 increments each and always ends at 20,000. This is **lock-free**: a stalled thread cannot block the others. The costs: heavy contention means many retries, and CAS protects one word, so two fields still need a lock.
+
+## Async versus threads, and the event loop
+
+An **event loop** runs one thread that takes callbacks from a queue. While a request waits for the network, the loop runs something else, so one thread serves thousands of connections. Promise callbacks (microtasks) run before the next timer or I/O callback.
+
+<CodeTabs files={['snippets/event-loop.js', 'snippets/event-loop.test.js']} />
+
+The price is that anything that blocks the thread blocks everyone. The test shows a 0 ms timer arriving 40 ms late because of one busy loop. Async is the right model for waiting, threads or processes for computing.
+
+<DecisionTree spec={concurrencyChoice} />
+
+## Memory visibility and ordering
+
+Locks do more than exclude: they also make writes visible. Each core has its own caches, and compilers and CPUs reorder operations, so without synchronisation one thread may not see another's write, or may see writes in a different order.
+
+- A **memory model** (Java's, C++'s) defines which writes a read must see. A lock release happens-before the next acquire.
+- `volatile` in Java guarantees visibility and ordering of one variable, not atomic read-modify-write.
+- **False sharing**: two threads write different variables on the same cache line, so the line bounces between cores. Padding fixes it.
+- Double-checked locking without `volatile` is the classic broken pattern.
+
+## Common failures
+
+<Callout kind="warning" title="A pool that waits on itself">
+If every worker in a pool is blocked waiting for a task that is queued in the same pool, nothing can finish. Use separate pools for tasks that depend on each other, or never block a worker on a sibling task.
+</Callout>
+
+- **Unbounded queue.** The service looks healthy until it runs out of memory under load.
+- **Blocking the event loop.** One synchronous parse of a large JSON body stalls every request.
+- **Swallowed exceptions.** An error in a pool task vanishes unless you read the returned future.
+- **Thread leaks.** Pools created per request and never shut down.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="What is the difference between concurrency and parallelism?">
+    Concurrency is structuring tasks so they can overlap in time, even on one core. Parallelism is running them simultaneously on several cores.
+  </FollowUp>
+  <FollowUp q="How would you size a thread pool?">
+    CPU-bound: about the number of cores. Blocking I/O: cores × (1 + wait / compute). Bound the queue and measure.
+  </FollowUp>
+  <FollowUp q="What is backpressure?">
+    A signal that slows a fast producer when the consumer cannot keep up, such as a full bounded buffer. Without it queues grow until memory runs out.
+  </FollowUp>
+  <FollowUp q="What is compare-and-swap, and what is the ABA problem?">
+    CAS writes only if the value is still what you read. ABA is a value that changes A to B and back to A, so CAS succeeds although state changed. Version counters avoid it.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

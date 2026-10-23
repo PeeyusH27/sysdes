@@ -1,0 +1,27 @@
+{
+  "title": "Decode Ways",
+  "difficulty": "Medium",
+  "patterns": ["dp-1d"],
+  "js": ["strings","numbers-math"],
+  "order": 4,
+  "summary": "Count the ways a string of digits can be read as letters when A = 1 through Z = 26.",
+  "fn": "numDecodings",
+  "params": ["s"],
+  "types": {"params":["string"],"returns":"number"},
+  "tests": [
+    {"args":["12"],"expected":2,"explain":"It can be read as 1, 2 (\"AB\") or as 12 (\"L\"): two ways."},
+    {"args":["226"],"expected":3,"explain":"2 2 6, 22 6 and 2 26 are all valid: three ways."},
+    {"args":["06"],"expected":0,"explain":"A leading 0 cannot be decoded, and \"06\" is not allowed as a two-digit code: zero ways."},
+    {"args":["0"],"expected":0},
+    {"args":["1"],"expected":1},
+    {"args":["10"],"expected":1},
+    {"args":["100"],"expected":0},
+    {"args":["27"],"expected":1},
+    {"args":["2101"],"expected":1},
+    {"args":["11106"],"expected":2},
+    {"args":["21312112121221111133"],"expected":4791},
+    {"args":["662222621121121111622111122116"],"expected":268416}
+  ],
+  "hints": ["Letters map to the numbers 1 to 26. A digit can be read alone (1 to 9), or two digits together can be read as one letter (10 to 26). A 0 can never stand alone.","Let ways[i] be the number of ways to decode the first i characters. The last letter is either one digit or two digits, so ways[i] combines ways[i - 1] and ways[i - 2] when those readings are valid.","ways[0] = 1 (empty string). For position i: if s[i-1] is not '0', add ways[i-1]. If the two-digit number s[i-2..i-1] is between 10 and 26, add ways[i-2]. Return ways[n]; only the last two values are needed."],
+  "complexity": {"time":"O(n): one pass","space":"O(1) with two rolling variables"}
+}

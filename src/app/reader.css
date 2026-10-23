@@ -68,6 +68,40 @@
 .sec-row > .sec-stage { order: 1; margin: 14px 0 22px; }
 .sec-row > .sec-body > :nth-child(2) { margin-top: 0; }
 .sec-row + .sec-row { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--border); }
+/* the key line under the picture reads a little larger: it is most of what the section says before "Read more" */
+.sec-row > .sec-body > h2 + :is(p, ul, ol), .sec-body > h2:first-child + :is(p, ul, ol) { font-size: 1.06em; }
+
+/* "Read more · N words": the rest of a section's words, folded (rehype-section-cards `fold`). Native <details>, so it
+   works without JS and with find-in-page; Reader.tsx opens it for #anchor links and printing. */
+.sec-more { border-top: 1px dashed var(--border); padding-top: 4px; }
+.sec-more > summary { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px 6px 8px; margin-top: 4px; border-radius: 999px; cursor: pointer; list-style: none; font: 600 14px var(--font-sans); color: var(--kind); transition: background .15s; }
+.sec-more > summary::-webkit-details-marker { display: none; }
+.sec-more > summary::before { content: ""; width: 7px; height: 7px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(-45deg); transition: transform .2s var(--ease-out); }
+.sec-more[open] > summary::before { transform: rotate(45deg) translate(-2px, -2px); }
+.sec-more > summary:hover { background: color-mix(in srgb, var(--kind) 9%, transparent); }
+.sec-more > summary:focus-visible { outline: 2px solid var(--kind); outline-offset: 2px; }
+.sec-more[open] > summary { margin-bottom: 4px; }
+.sec-more-body > * + * { margin-top: 1em; }
+.sec-more-body > :is(p, ul, ol, blockquote) { max-width: 64ch; }
+.sec-more[open] .sec-more-body { animation: more-in .3s var(--ease-out) both; }
+@keyframes more-in { from { opacity: 0; transform: translateY(-4px); } }
+:root[data-motion=reduce] .sec-more[open] .sec-more-body { animation: none; }
+@media print { .sec-more > summary { display: none; } .sec-more { border: 0; } }
+
+/* Steps as an outline (<Steps compact>): titles show, each step opens its words on a tap. */
+.steps[data-compact] { gap: 8px; }
+.steps[data-compact] .step::before { margin-top: 2px; }
+.steps[data-compact] details.step-body > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 0; border-radius: 8px; }
+.steps[data-compact] details.step-body > summary::-webkit-details-marker { display: none; }
+.steps[data-compact] details.step-body > summary h4 { margin: 0 !important; }
+.steps[data-compact] details.step-body > summary::after { content: "+"; margin-left: auto; padding-left: 8px; font: 700 16px var(--font-mono); color: var(--kind, var(--accent)); }
+.steps[data-compact] details.step-body[open] > summary::after { content: "\2013"; }
+.steps[data-compact] details.step-body > summary:hover h4 { color: var(--kind, var(--accent)); }
+.steps[data-compact] details.step-body > summary:focus-visible { outline: 2px solid var(--kind, var(--accent)); outline-offset: 2px; }
+.steps[data-compact] .step-more { padding: 4px 0 6px; animation: more-in .3s var(--ease-out) both; }
+.steps[data-compact] .step-more > * + * { margin-top: .7em; }
+:root[data-motion=reduce] .steps[data-compact] .step-more { animation: none; }
+@media print { .steps[data-compact] details.step-body > summary::after { display: none; } }
 
 /* things that are already cards, inside a card: flatter, so they read as part of it */
 .sec-card :is(.flow:not(.flow--compact), .widget, .chart, .quiz, .followups, .table-wrap, .callout, .code-block, .code-tabs, .req-grid section) { box-shadow: none; }

@@ -1,0 +1,96 @@
+import { sessionLogin, corsFlow, reverseProxy } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+HTTP is stateless, so identity travels in a **cookie** (an ID for a server-side session) or a signed **JWT**. **CORS** is the browser deciding whether a page may read a cross-origin reply, and **balancers and proxies** route by IP and port (L4) or by what the request says (L7).
+</TLDR>
+
+## Cookies and sessions
+
+The server cannot remember you between requests, so it hands the browser a **cookie** to send back every time. In a **session**, the cookie is only a random ID and the data stays on the server, often in Redis.
+
+<SequenceDiagram spec={sessionLogin} />
+
+| Attribute | What it does |
+|---|---|
+| HttpOnly | JavaScript cannot read the cookie, so an XSS bug cannot steal it |
+| Secure | Sent only over HTTPS |
+| SameSite=Lax | Not sent on cross-site requests, which blocks most CSRF |
+| Max-Age | When the browser drops it |
+
+<Callout kind="interview" title="What interviewers listen for">
+You name where state lives (server store or token), what revoking costs, and the attributes that matter: HttpOnly, Secure, SameSite. CSRF next to cookies and XSS next to tokens shows you know the attack each choice invites.
+</Callout>
+
+## JWT versus server sessions
+
+A **JWT** is a self-contained token: header, payload of claims (who, until when) and signature. Any server with the key can verify it with no lookup, which suits many services sharing one login.
+
+<CodeTabs files={['snippets/jwt.js', 'snippets/jwt.test.js']} />
+
+The payload is signed, not encrypted, so keep secrets out. The cost is **revocation**: until `exp` passes the token is valid, so banning someone needs a deny-list or a lifetime of minutes plus a refresh token. A session is the opposite: one lookup per request, ended instantly.
+
+## CORS
+
+Browsers apply the **same-origin policy**: a script cannot read replies from another origin (scheme, host, port). **CORS** is how a server opts in, through `Access-Control-Allow-*` headers. For a PUT, a JSON body or an Authorization header, the browser first sends an **OPTIONS preflight** and continues only if allowed.
+
+<SequenceDiagram spec={corsFlow} />
+
+<CodeTabs files={['snippets/cors.js', 'snippets/cors.test.js']} />
+
+CORS is enforced by the browser only. `curl` and other servers ignore it, so it protects users, not your API. With cookies the server must echo a specific origin and send `Allow-Credentials`; `*` is not allowed.
+
+## Load balancing: L4 versus L7
+
+An **L4** balancer picks a backend from IP addresses and ports and forwards packets without reading them: fast and protocol-agnostic. An **L7** balancer terminates the connection and reads the HTTP request, so it can route by path or header, retry, set cookies and terminate TLS, at the cost of CPU.
+
+<LoadBalancerSim />
+
+Algorithms and health checks are in [the HLD path](/learn/api-load-balancing).
+
+## Proxies: forward and reverse
+
+A **forward proxy** acts for clients, such as a corporate gateway filtering outbound traffic. A **reverse proxy** acts for servers: clients talk to it as if it were the site, and it terminates TLS, caches, rate limits and routes.
+
+<FlowDiagram spec={reverseProxy} />
+
+nginx, Envoy and HAProxy are reverse proxies; a CDN is one spread across the world; an API gateway adds auth and quotas. The proxy passes the real client address in `X-Forwarded-For`; trust it only when your own proxy set it.
+
+## Sticky sessions and where state lives
+
+**Sticky sessions** pin a user to one backend (by cookie or IP hash) so in-memory state keeps working. The costs: load spreads unevenly, and when that server dies the sessions on it die too.
+
+The cleaner design is stateless servers with sessions in a shared store such as Redis, or in a JWT. Then any server can answer any request, and a deploy or a crash costs nothing.
+
+## TLS termination and trust boundaries
+
+Terminating TLS at the proxy keeps certificates in one place and offloads the crypto, but traffic behind it is plain unless you re-encrypt it. Inside a shared network use TLS or mutual TLS (mTLS) between services so a compromised host cannot read the rest. The proxy tells the app which scheme was used (`X-Forwarded-Proto`) and adds `Strict-Transport-Security` so browsers insist on HTTPS.
+
+## Auth mistakes to avoid
+
+<Callout kind="warning" title="Convenient is not the same as safe">
+A JWT in `localStorage` can be read by any XSS bug; prefer an HttpOnly cookie. `Access-Control-Allow-Origin: *` with sensitive data lets any site read it. Long-lived tokens that cannot be revoked turn a leak into a lasting breach.
+</Callout>
+
+- **Trusting the token's `alg`.** Always verify with the algorithm you chose, never the one the token names.
+- **Trusting forwarded headers** from the open internet instead of only from your proxy.
+- **OAuth is delegation, not login.** OAuth 2.0 lets an app act for you at another service; OpenID Connect adds identity on top.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="Sessions or JWT?">
+    Sessions keep state on the server: easy to revoke, one lookup per request. JWTs are stateless and verified by any service holding the key, but hard to revoke before they expire, so keep them short-lived.
+  </FollowUp>
+  <FollowUp q="What is CORS and what is a preflight?">
+    Browsers block scripts from reading cross-origin replies unless the server opts in with Access-Control headers. For non-simple requests the browser first sends an OPTIONS preflight to check the method and headers are allowed.
+  </FollowUp>
+  <FollowUp q="What is the difference between L4 and L7 load balancing?">
+    L4 forwards connections by IP and port without reading the payload, so it is fast. L7 reads the HTTP request, so it can route by path or header, terminate TLS and retry, using more CPU.
+  </FollowUp>
+  <FollowUp q="Forward proxy versus reverse proxy?">
+    A forward proxy represents clients to the internet. A reverse proxy represents servers to clients, handling TLS, caching, routing and rate limiting in front of them.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

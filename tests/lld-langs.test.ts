@@ -37,6 +37,13 @@ const LLD = [
   { slug: "parking-lot", javaMain: "ParkingLotTest" },
   { slug: "elevator", javaMain: "ElevatorTest" },
   { slug: "vending-machine", javaMain: "VendingMachineTest" },
+  { slug: "lru-cache-lld", javaMain: "CacheTest" },
+  { slug: "tic-tac-toe", javaMain: "GameTest" },
+  { slug: "library-management", javaMain: "LibraryTest" },
+  { slug: "atm", javaMain: "AtmTest" },
+  { slug: "splitwise", javaMain: "SplitwiseTest" },
+  { slug: "logger", javaMain: "LoggerTest" },
+  { slug: "snake-and-ladder", javaMain: "GameTest" },
 ];
 
 /** How many tests the JavaScript suite has: the other languages must cover at least as many. */

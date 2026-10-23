@@ -1,0 +1,27 @@
+{
+  "title": "Task Scheduler",
+  "difficulty": "Medium",
+  "patterns": ["heaps","greedy"],
+  "js": ["heap","map-set"],
+  "order": 4,
+  "summary": "Find the least time to finish all tasks when equal tasks must be separated by a cooldown.",
+  "fn": "leastInterval",
+  "params": ["tasks","n"],
+  "types": {"params":["string[]","number"],"returns":"number"},
+  "tests": [
+    {"args":[["A","A","A","B","B","B"],2],"expected":8,"explain":"One valid schedule is A B idle A B idle A B: 8 time units. Each A and each B must wait two units before repeating."},
+    {"args":[["A","A","A","B","B","B"],0],"expected":6,"explain":"No cooldown, so tasks run back to back: 6 units."},
+    {"args":[["A","A","A","A","A","A","B","C","D","E","F","G"],2],"expected":16,"explain":"A is the bottleneck: A _ _ A _ _ A _ _ A _ _ A _ _ A needs 16 units, and the six other tasks fill 6 of the 10 gap slots, so 4 slots stay idle."},
+    {"args":[["A"],5],"expected":1},
+    {"args":[["A","A"],2],"expected":4},
+    {"args":[["A","B","C","D"],3],"expected":4},
+    {"args":[["A","A","B","B","C","C"],1],"expected":6},
+    {"args":[["A","A","A","B","B","B","C","C","C","D","D","E"],2],"expected":12},
+    {"args":[["A","A","A","B","B","B","C","C","C","D","D","D"],1],"expected":12},
+    {"args":[["B","C","C","C","A","C","A","A","C","B","C","C","B","B","A","C","B","C","B","A","A","C","C","B","C","C","C","B","C","C","C","A","B","B","C","A","B","A","B","C"],4],"expected":91},
+    {"args":[["H","H","H","F","A","F","F","H","A","E","D","D","E","H","C","G","D","F","C","A","G","G","C","E","D","F","B","C","H","F","F","F","B","E","G","G","F","D","G","D","B","F","G","A","A","H","F","H","H","A","A","D","E","A","F","A","B","G","E","D"],3],"expected":60},
+    {"args":[["B","A","B","B","B","A","B","A","A","B","B","A","A","B","B","B","A","B","B","B","B","B","B","B","A","A","A","A","B","B","B","B","A","B","B","B","B","B","B","B","B","A","B","A","B","B","A","A","A","B"],10],"expected":353}
+  ],
+  "hints": ["Each time unit you run one task or sit idle. Two equal tasks need at least n other time units between them. Which task type is the bottleneck?","The most frequent task sets the schedule's skeleton: its copies are spaced n + 1 apart. Everything else can be dropped into the gaps, and if there are too few other tasks, the leftover gaps become idle time.","With maxCount the highest frequency and k the number of task types that share that frequency, the answer is max(tasks.length, (maxCount - 1) * (n + 1) + k). Alternatively, simulate with a max-heap of remaining counts and a queue of tasks cooling down."],
+  "complexity": {"time":"O(T) with the counting formula (T tasks, at most 26 types); O(T log 26) with the heap simulation","space":"O(1): at most 26 counters"}
+}

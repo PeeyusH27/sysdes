@@ -1,0 +1,104 @@
+import { writeSkew, isolationChoice } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+A **transaction** groups changes so they happen all or nothing, and **isolation levels** say how much concurrent transactions may see of each other. Databases mostly use **MVCC** (keep old versions so readers never block writers) plus locks, and the anomaly that survives snapshot isolation is **write skew**.
+</TLDR>
+
+## ACID, one letter at a time
+
+| Property | Meaning | Provided by |
+|---|---|---|
+| Atomicity | All the changes happen, or none | Undo information and the log |
+| Consistency | Rules (constraints) hold before and after | Constraints, plus your code |
+| Isolation | Concurrent transactions do not trip over each other | Locks or MVCC |
+| Durability | A committed change survives a crash | Write-ahead log, flushed to disk |
+
+Consistency is the odd one: the database enforces only the rules you declared (keys, uniqueness, checks). The rest is your code's job. More in [the HLD path](/learn/databases-scaling).
+
+<Callout kind="interview" title="What interviewers listen for">
+You do not recite ACID as four words. You say which mechanism gives each one, that isolation is a dial and not a switch, and you name a concrete anomaly (lost update, write skew) with the fix.
+</Callout>
+
+## The anomalies
+
+Isolation is about which of these your transaction may see.
+
+- **Dirty read.** You read another transaction's uncommitted change, which may be rolled back.
+- **Non-repeatable read.** A row you read twice changed in between.
+- **Phantom.** The same range query returns new rows the second time.
+- **Lost update.** Two transactions read a value, both write, and one write vanishes.
+- **Write skew.** Two transactions read the same data, then change different rows so that together they break a rule.
+
+## MVCC: readers do not block writers
+
+With **multi-version concurrency control**, a write does not overwrite a row. It adds a new version, and every transaction reads the newest version committed before its **snapshot**. So a long report can run while updates continue, and neither waits.
+
+<CodeTabs files={['snippets/mvcc.js', 'snippets/mvcc.test.js']} />
+
+The tests show it: a reader keeps its old view, uncommitted writes are invisible, and two transactions changing one row conflict (**first committer wins**). Old versions are cleaned up later (vacuum in Postgres), and long transactions hold that back.
+
+## Locks
+
+Writes still take **row locks**, so the second writer of a row waits or fails. `SELECT ... FOR UPDATE` locks the rows you read. Under **two-phase locking** a transaction takes locks as it goes and releases them all at commit.
+
+Locks bring **deadlock**: two transactions wait on each other's rows. The database finds the cycle, aborts one, and the application retries. When conflicts are rare, **optimistic** concurrency (a version column checked at update time) holds no locks at all.
+
+## Write skew and serializable
+
+Two doctors are on call, and at least one must be. Each transaction sees a count of 2 and takes its doctor off. They write different rows, so snapshot isolation sees no conflict.
+
+<SequenceDiagram spec={writeSkew} />
+
+**Serializable** isolation prevents it: the database behaves as if transactions ran one at a time and aborts one of two that conflict. The code must retry. Cheaper options are to lock the rows you read, or make both transactions write one shared row so they collide.
+
+## Choosing an isolation level
+
+<DecisionTree spec={isolationChoice} />
+
+The default differs by database: Postgres and Oracle use read committed, MySQL InnoDB uses repeatable read. Check yours before you rely on it.
+
+## The isolation level matrix
+
+| Level | Prevents | Still allows |
+|---|---|---|
+| Read uncommitted | Nothing reliably | Dirty reads |
+| Read committed | Dirty reads | Non-repeatable reads, phantoms, write skew |
+| Repeatable read | Plus non-repeatable reads | Write skew (and phantoms in some systems) |
+| Serializable | All of them | Aborts you must retry |
+
+Names are standardised but implementations differ. Postgres repeatable read is snapshot isolation and does prevent phantoms; InnoDB uses next-key locks to cover gaps.
+
+## Distributed transactions
+
+One database gives you a transaction. Across services you do not have one. **Two-phase commit** asks every participant to prepare and then commit, but a failed coordinator leaves participants blocked holding locks. Most systems use a **saga** instead: a series of local transactions with compensating actions (refund the charge) if a later step fails. See [the payment system question](/questions/payment-system).
+
+## Practical habits
+
+<Callout kind="warning" title="Long transactions hurt everyone">
+A transaction that waits on a user, a network call or a slow report holds locks, pins old versions and blocks cleanup. Keep transactions short and do slow work outside them.
+</Callout>
+
+- **Retry** on deadlock and serialization failures, with the whole transaction in the loop and idempotent side effects.
+- **Lock in a consistent order** across code paths.
+- **Use constraints** (unique, foreign key, check) so the database enforces what it can.
+- **Prefer atomic updates**: `UPDATE accounts SET balance = balance - 50 WHERE id = 1` instead of read, compute, write.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="Explain ACID and which mechanism provides each part.">
+    Atomicity via undo and the log, consistency via constraints plus application logic, isolation via locks or MVCC, durability via a write-ahead log flushed to disk before commit is acknowledged.
+  </FollowUp>
+  <FollowUp q="What anomalies exist and which isolation level stops each?">
+    Read committed stops dirty reads. Repeatable read also stops non-repeatable reads. Only serializable stops write skew, and phantoms depend on the database.
+  </FollowUp>
+  <FollowUp q="How does MVCC work and what does it cost?">
+    Each write creates a new row version and readers use the newest version from their snapshot, so readers and writers do not block each other. The cost is storage for old versions and the cleanup of them.
+  </FollowUp>
+  <FollowUp q="What should application code do when a transaction fails with a deadlock or serialization error?">
+    Retry the whole transaction, a bounded number of times with backoff, and make side effects outside the database idempotent.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

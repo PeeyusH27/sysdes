@@ -40,6 +40,33 @@ const lock: FlowSpec = {
 };
 
 export const story: Story | undefined = {
+  learn: [
+    {
+      head: "Many copies, one truth",
+      body: "Big systems keep several copies of the same data, often in different places, so one failure loses nothing. Every change must then reach every copy.",
+      eg: "Two shop branches, one stock list",
+      example: "A bookshop has a branch in each city. Both track how many copies of a new novel are left, and every sale must update both lists.",
+      doodle: "cap",
+    },
+    {
+      head: "When copies cannot talk",
+      body: "Sometimes the network between copies breaks. That is called a partition. Each side can still hear from users, but not from the other side.",
+      eg: "The phone line goes down",
+      example: "The line between the two branches drops at noon. Each shop can still serve customers, but neither knows what the other sold.",
+    },
+    {
+      head: "The choice you are forced into",
+      body: "During a split, a copy either refuses some requests to avoid being wrong, or answers with data that may be stale. You cannot have both. That trade is CAP.",
+      eg: "Selling the last copy",
+      example: "With one novel left and the line down, a branch either says come back later or sells it and risks the other branch selling it too.",
+    },
+    {
+      head: "Pick per feature, not per app",
+      body: "Money and stock need the safe choice: refuse rather than be wrong. Likes and view counts can be a little off, so they keep answering and catch up later.",
+      eg: "A bank and a video site",
+      example: "Your balance must never let you spend twice. A view count showing 1,203 instead of 1,205 harms nobody.",
+    },
+  ],
   steps: [
     {
       tag: "pain",

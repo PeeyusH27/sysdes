@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 import { deepDives, learnSteps, questions } from "@content/registry";
 import { patterns } from "@content/dsa/registry";
 import { lldLessons } from "@content/lld/registry";
+import { csLessons } from "@content/cs/registry";
 import { allExtras, EXPLAIN_STEPS, type ExtrasSection } from "@content/extras";
 import { DOODLE_NAMES } from "@/components/doodle/names";
 import { getHeadings } from "@/lib/content";
@@ -15,6 +16,7 @@ const pages: Record<ExtrasSection, { slug: string; file: string }[]> = {
   questions: questions.map((q) => ({ slug: q.slug, file: `questions/${q.slug}/page.mdx` })),
   patterns: patterns.map((p) => ({ slug: p.slug, file: `dsa/patterns/${p.dir}/page.mdx` })),
   lld: lldLessons.map((l) => ({ slug: l.slug, file: `lld/foundations/${l.dir}/page.mdx` })),
+  cs: csLessons.map((l) => ({ slug: l.slug, file: `cs/lessons/${l.dir}/page.mdx` })),
 };
 const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
 

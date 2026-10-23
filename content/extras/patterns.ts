@@ -1,4 +1,4 @@
-// Page extras for the 22 DSA patterns (content/dsa/patterns/<dir>/page.mdx), keyed by pattern slug.
+// Page extras for the 24 DSA patterns (content/dsa/patterns/<dir>/page.mdx), keyed by pattern slug.
 // Contract: docs/AUTHORING-EXTRAS.md. Every number and trade-off below is taken from the page it belongs to.
 import type { PageExtras } from "./types";
 
@@ -629,6 +629,64 @@ export const extras: Record<string, PageExtras> = {
       ],
       mention:
         "JavaScript bitwise operators are signed 32-bit, so use >>> 0 when bit 31 may be set, and add parentheses: (n & 1) === 0, because & binds more loosely than ===.",
+    },
+  },
+
+  "design-data-structures": {
+    doodle: "hash-map",
+    // Core: the signals, the pairing idea (animated LRU), the LRU template, the history template (binary search), complexity, practice.
+    detail: [
+      "play-with-it",
+      "step-by-step",
+      "template-2-frequency-buckets-lfu",
+      "template-4-array-plus-map-for-o1-random",
+      "template-5-auxiliary-state-on-a-stack",
+      "javascript-youll-use",
+    ],
+    sayIt: {
+      answer:
+        "When a problem says design a class with O(1) methods, I list what each method needs and pair structures to cover it. A hash map finds the entry, and a doubly linked list, count buckets, a sorted history or an array keeps the order I need. LRU is map plus list, and every call is O(1).",
+      numbers: [
+        { value: "O(1)", label: "LRU and LFU get and put" },
+        { value: "O(log m)", label: "Time-based get: binary search over m writes" },
+        { value: "O(capacity)", label: "Cache space: one entry and node per key" },
+      ],
+      tradeoffs: [
+        "Hand-built list vs Map insertion order: the list shows the mechanism in any language; Map order is ten lines but leans on a built-in.",
+        "LRU vs LFU: LRU is simpler and adapts to shifts; LFU protects popular keys but can guard cold ones.",
+        "Swap and pop vs splice: swap and pop removes in O(1) and loses order, which a set ignores; splice keeps order at O(n).",
+      ],
+      mention:
+        "A put on an existing key is also a use, and after swap and pop the moved element's index in the map must be updated.",
+    },
+  },
+
+  matrix: {
+    // No doodle: nothing in the set draws a grid of numbers.
+    // Core: the signals, coordinates as the idea (rotation animation), the rotate template, the spiral template, complexity, practice.
+    detail: [
+      "play-with-it",
+      "step-by-step",
+      "template-3-marker-row-and-column",
+      "template-4-simulation-with-state-encoding",
+      "template-5-binary-search-and-diagonals",
+      "javascript-youll-use",
+    ],
+    sayIt: {
+      answer:
+        "With a grid, I first write the coordinate rule: where does cell (i, j) go, or which cells share a property. Rotation is a transpose plus reversing each row, a spiral is four walls moving inward, and flags can live in the grid's first row and column. That is O(rows times columns) time and O(1) space.",
+      numbers: [
+        { value: "O(n²)", label: "Rotate an n by n grid in place" },
+        { value: "O(1)", label: "Extra space with in-place markers" },
+        { value: "(j, n-1-i)", label: "Where a clockwise turn sends cell (i, j)" },
+      ],
+      tradeoffs: [
+        "Copy vs encode in place: a copy is simple and safe; encoding saves a whole grid of space but needs a cleanup pass.",
+        "Flag arrays vs first row and column as flags: arrays are easier and use O(rows + columns); in-place needs two booleans.",
+        "Transpose and reverse vs ring rotation: both are O(n²) time and O(1) space; the two-step version is easier to get right.",
+      ],
+      mention:
+        "Try 1 by n, n by 1 and 1 by 1 grids, and never write new Array(rows).fill(new Array(cols)): every row would be the same array.",
     },
   },
 };

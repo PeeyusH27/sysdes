@@ -90,6 +90,13 @@ What makes a good exercise:
 | 5 | `vending-machine` | `state-observer` | Medium |
 | 6 | `event-bus` (done) | `state-observer` | Medium |
 | 7 | `text-editor` | `creation-and-commands` | Medium |
+| 8 | `eviction-cache` | `strategy-decorator` | Medium |
+| 9 | `atm-machine` | `state-observer` | Medium |
+| 10 | `expense-splitter` | `strategy-decorator` | Medium |
+| 11 | `logger-framework` | `strategy-decorator` | Medium |
+| 12 | `snake-and-ladder` | `strategy-decorator` | Medium |
+| 13 | `elevator-scheduler` | `state-observer` | Medium |
+| 14 | `library-system` | `state-observer` | Medium |
 
 ### Check
 

@@ -6,6 +6,39 @@ const lb = getPrimer("load-balancer")!.flow;
 const idem = getPrimer("idempotency")!.flow;
 
 export const story: Story | undefined = {
+  learn: [
+    {
+      head: "What a load balancer is",
+      body: "A load balancer sits in front of several copies of your app. Every request reaches it first, and it passes each one to a server that has room.",
+      eg: "A restaurant host",
+      example: "A host at the door walks each new group to a table with a free waiter. No waiter gets every guest, and the guests never pick a waiter themselves.",
+      doodle: "load-balancer",
+    },
+    {
+      head: "Why one server is not enough",
+      body: "One server is a single point of failure. A crash or a deploy takes the whole site down. With two or more behind a balancer, one can stop and users never notice.",
+      eg: "Supermarket checkouts",
+      example: "With one till open, a broken scanner stops every shopper. With four open, a broken till closes one lane and the queue moves to the rest.",
+    },
+    {
+      head: "Skipping a sick server",
+      body: "The balancer asks each server am I healthy every few seconds. After three failed checks it stops sending traffic there, and after two passes it starts again.",
+      eg: "A taxi rank dispatcher",
+      example: "A dispatcher stops sending fares to a cab that does not answer the radio. When the driver checks back in, fares go to that cab again.",
+    },
+    {
+      head: "Keep servers interchangeable",
+      body: "Any server must be able to serve any user. Keep logins and uploads in a shared store, not in one server's memory. That is called stateless.",
+      eg: "A coat check with tickets",
+      example: "Your ticket number finds your coat whichever attendant is on shift. If coats were kept by one person, you would have to wait for them to return.",
+    },
+    {
+      head: "Retries must be harmless",
+      body: "Networks drop answers after the work is done, so clients retry. Send the same idempotency key with each retry, and the server does the work only once.",
+      eg: "A parcel tracking number",
+      example: "If the courier scans the same tracking number twice, the system knows it is one parcel. It does not book a second delivery.",
+    },
+  ],
   steps: [
     {
       tag: "pain",

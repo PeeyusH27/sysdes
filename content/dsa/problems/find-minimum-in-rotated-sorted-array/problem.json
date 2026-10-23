@@ -1,0 +1,27 @@
+{
+  "title": "Find Minimum in Rotated Sorted Array",
+  "difficulty": "Medium",
+  "patterns": ["binary-search"],
+  "js": ["arrays","numbers-math"],
+  "order": 4,
+  "summary": "Find the smallest value in a sorted array of distinct numbers that has been rotated by an unknown amount.",
+  "fn": "findMin",
+  "params": ["nums"],
+  "types": {"params":["number[]"],"returns":"number"},
+  "tests": [
+    {"args":[[4,5,6,7,0,1,2]],"expected":0,"explain":"The array drops from 7 to 0, so the minimum is 0."},
+    {"args":[[3,4,5,1,2]],"expected":1,"explain":"Rotated by 3: the second run starts at 1."},
+    {"args":[[11,13,15,17]],"expected":11,"explain":"Rotating by 0 (or by a full lap) leaves the array sorted, so the minimum is the first element."},
+    {"args":[[1]],"expected":1},
+    {"args":[[2,1]],"expected":1},
+    {"args":[[1,2]],"expected":1},
+    {"args":[[2,3,1]],"expected":1},
+    {"args":[[-5,-3,-10,-8]],"expected":-10},
+    {"args":[[-3,1,2,4,8,-25,-23,-21,-18,-13,-8,-6]],"expected":-25},
+    {"args":[[46,49,50,52,53,54,57,59,63,65,66,69,73,74,75,76,77,80,84,86,90,-32,-28,-27,-24,-20,-19,-17,-16,-13,-11,-10,-7,-3,1,4,7,8,10,12,14,17,19,21,25,28,32,34,38,42]],"expected":-32},
+    {"args":[[-28,-26,-24,-23,-22,-17,-12,-7,-4,-2,0,3,8,10,13,14,18,21,22,26,32,35,38,43,46,48,53,59,63,69,72,73,-34]],"expected":-34},
+    {"args":[[90,-32,-28,-27,-24,-20,-19,-17,-16,-13,-11,-10,-7,-3,1,4,7,8,10,12,14,17,19,21,25,28,32,34,38,42,46,49,50,52,53,54,57,59,63,65,66,69,73,74,75,76,77,80,84,86]],"expected":-32}
+  ],
+  "hints": ["A rotated sorted array is two sorted runs glued together. The minimum is the first element of the second run, the one place where the array drops.","Compare nums[mid] with nums[right]. If nums[mid] > nums[right], the drop must be to the right of mid, so the minimum is in (mid, right]. Otherwise the minimum is at mid or to its left.","Loop while left < right with mid = (left + right) >> 1. Set left = mid + 1 when nums[mid] > nums[right], else right = mid (not mid - 1: mid itself could be the answer). Return nums[left]."],
+  "complexity": {"time":"O(log n): the search range halves each step","space":"O(1)"}
+}

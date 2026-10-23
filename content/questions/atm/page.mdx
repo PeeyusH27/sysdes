@@ -1,0 +1,219 @@
+import { classes, withdrawFlow, pinFlow } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+An ATM is a **state machine** (card out, card in, PIN passed) with one table that gives every event one outcome in every state. Cash comes from a **chain of note handlers**, and the account is debited only after a note plan exists.
+</TLDR>
+
+<Requirements
+  functional={['Insert a card, enter a PIN, then check balance or withdraw', 'Three wrong PINs lock the account and the machine keeps the card', 'Dispense exact amounts from limited stock of 100, 50, 20 and 10 notes', 'Eject the card to end the session', 'Out-of-cash and out-of-service handling', 'An audit trail of every event']}
+  nonFunctional={['Never dispense without a matching debit, and never debit without cash', 'Two machines cannot overspend one account', 'Exactly one outcome per event in each state', 'A new note value needs no change to existing handlers', 'Deterministic tests: the cash unit is injected']}
+  outOfScope={['Card reader and PIN pad hardware', 'The bank network and settlement (an HLD follow-up)', 'Fraud detection']} />
+
+A **low-level design** (LLD) question with three tests: spot the state machine, make change from limited notes, and keep money and cash consistent.
+
+New to this? Read [State machines and observers](/lld/foundations/state-observer) first.
+
+## Clarifying questions
+
+- Withdraw only, or deposit and transfer too?
+- Which note values, and can the machine run out of one?
+- What happens after three wrong PINs?
+- Does a jammed cash unit still charge the customer?
+- Does one account ever use two machines at once?
+
+## Public interface
+
+| Call | Accepted in | Outcome |
+|---|---|---|
+| `insertCard(id)` | Idle | Card in, or rejected if unknown or locked |
+| `enterPin(pin)` | CardIn | Authenticated, try again, or locked |
+| `withdraw(amount)` | Authenticated | Notes and new balance, or a reason |
+| `balance()` | Authenticated | Current balance |
+| `eject()` | CardIn, Authenticated | Back to Idle |
+
+Every call returns a result with `ok`. A rejection never throws and never changes anything.
+
+## What it remembers
+
+- `state`: Idle, CardIn or Authenticated.
+- `card`: the account of the current session, or none.
+- `stock`: how many notes of each value are left.
+- On each `Account`: balance, PIN, failed tries and a locked flag.
+
+The PIN counter belongs to the account so it is shared by every machine.
+
+## State transition table
+
+Three states and five events, one outcome per cell. ✕ means **rejected**: nothing changes.
+
+| Event | Idle | CardIn | Authenticated |
+|---|---|---|---|
+| **insertCard** | → CardIn¹ | ✕ | ✕ |
+| **enterPin** | ✕ | → Authenticated, stay², or → Idle³ | ✕ |
+| **withdraw** | ✕ | ✕ | stay: notes out, or ✕ with a reason |
+| **balance** | ✕ | ✕ | stay |
+| **eject** | ✕ | → Idle | → Idle |
+
+¹ Rejected for an unknown or locked card. ² A wrong PIN with tries left. ³ The third wrong PIN: lock and keep the card.
+
+**Is a table worth it?** Here, yes: a flag like `pinOk` is easy to forget to clear on eject, and the next customer inherits the session. A table has no flags to forget, and a test can loop over every unlisted cell.
+
+## Build the design in stages
+
+Step through: the machine and account, then states, then the note chain, then the injected hardware, then observers. Green marks what the latest stage added.
+
+<ClassDiagram spec={classes} />
+
+## Cash is a chain
+
+Each handler owns one note value. It takes the most notes it can, passes the remainder to the next, and if the rest cannot be paid it tries one note fewer. That backtrack matters: with one 50 and three 20s, a greedy 60 takes the 50 and strands 10, but the chain finds three 20s.
+
+```js
+plan(amount, stock) {              // one handler: its own note value
+  const most = Math.min(Math.floor(amount / this.denom), stock[this.denom] ?? 0);
+  for (let n = most; n >= 0; n--) {
+    const tail = this.next.plan(amount - n * this.denom, stock);
+    if (tail) return n ? { [this.denom]: n, ...tail } : tail;
+  }
+  return null;
+}
+```
+
+**When it is over-engineering.** Four fixed notes are a plain loop over an array, with the same backtracking. The chain earns its place when handlers differ in more than a number: a limit per transaction, a handler that only runs in one region, or rules that change per machine. Offer it, then say the loop is enough.
+
+## Withdraw, step by step
+
+Play it and open each branch: dispensed, no exact notes, insufficient funds, and a cash jam. Then the PIN diagram.
+
+<SequenceDiagram spec={withdrawFlow} />
+
+<SequenceDiagram spec={pinFlow} />
+
+## Money, threads and failures
+
+Plan the notes first, since a plan changes nothing. Then debit in one locked step, then dispense. If the cash unit fails, credit the debit back.
+
+Two machines share one account, so `debit` checks and subtracts inside the account's lock. Without that, both can read 50 and each pay 50. One machine serves one person at a time and needs no lock.
+
+Money is whole dollars in an `int`. Never use a float.
+
+## How to approach it
+
+<Steps>
+  <Step title="Clarify">
+    Services, notes, lockout, jams.
+  </Step>
+  <Step title="Draw the states">
+    Three states, five events.
+  </Step>
+  <Step title="Fill in the table">
+    Unlisted means rejected.
+  </Step>
+  <Step title="Design the cash path">
+    Plan, debit, dispense, undo.
+  </Step>
+  <Step title="Break it">
+    Wrong PINs, jam, two machines, low stock.
+  </Step>
+</Steps>
+
+## Step-by-step answer
+
+<Steps>
+  <Step title="Events and states">
+    Five events. The states are Idle, CardIn and Authenticated. Locking is a flag on the account, not a state.
+  </Step>
+  <Step title="The State pattern as a table">
+
+Each state maps the events it accepts to a handler that returns the next state. A rejection is returned before anything changes.
+
+```js
+cardIn: {
+  enterPin: (atm, { pin }) => {
+    const result = atm.card.tryPin(pin);
+    if (result === 'ok') return to('authenticated', { authenticated: true });
+    if (result === 'locked') { atm.card = null; return to('idle', { retained: true }); }
+    return to('cardIn', { attemptsLeft: atm.card.attemptsLeft });
+  },
+  eject: atm => { atm.card = null; return to('idle'); },
+},
+```
+
+  </Step>
+  <Step title="Withdraw in four moves">
+    Validate the amount, plan the notes, debit under the account lock, then dispense. Each move can fail without leaving a mess behind it.
+  </Step>
+  <Step title="Why plan first">
+    A plan is pure. Failing there costs nothing. Failing after a debit costs an undo.
+  </Step>
+  <Step title="Add a deposit">
+    One more event in Authenticated. The table gains a cell and no other state changes.
+  </Step>
+  <Step title="Tests">
+    Loop over every unlisted pair. Add the greedy counterexample, the lockout, the jam, and a thread test on one account.
+  </Step>
+</Steps>
+
+## Implementation
+
+The same design in **JavaScript, Java or Python**. Java and Python add real locks on the account.
+
+<CodeTabs
+  files={['snippets/models.js', 'snippets/dispenser.js', 'snippets/states.js', 'snippets/atm.js', 'snippets/atm.test.js']}
+  java={['snippets/java/Models.java', 'snippets/java/Dispenser.java', 'snippets/java/States.java', 'snippets/java/Atm.java', 'snippets/java/AtmTest.java']}
+  python={['snippets/python/models.py', 'snippets/python/dispenser.py', 'snippets/python/states.py', 'snippets/python/atm.py', 'snippets/python/test_atm.py']}
+/>
+
+- `plan` reads the stock but never changes it. Notes leave the stock only after the cash unit says yes.
+- The test walks every unlisted (state, event) pair and checks that nothing changed.
+
+## Code it yourself
+
+Try the [ATM exercise](/lld/exercises/atm-machine): it checks the lockout, the exact-note planning and the order of debit and dispense.
+
+## Failure modes
+
+| What breaks | Effect | Mitigation |
+|---|---|---|
+| Cash jams after the debit | Charged, no cash | Credit back; in production, hold then commit |
+| Power cut mid-withdraw | Unknown outcome | Write the intent first; reconcile on boot |
+| Two machines, one account | Overspend | Check and subtract under the account lock |
+| PIN counter per session | Unlimited guesses | Keep it on the account |
+| A note cassette runs low | Valid requests fail | Backtracking plan; alert at low stock |
+| Card left behind | Next user inherits a session | Timeout, then eject and clear state |
+
+## Trade-offs
+
+| Choice | Pros | Cons |
+|---|---|---|
+| Table vs flags | Every cell visible | More structure |
+| Chain vs loop | Open for new rules | An object per note value |
+| Plan first vs debit first | Most failures cost nothing | Stock can change in between |
+| Undo vs hold and commit | Simple | A crash between the steps needs a log |
+
+<Callout kind="interview" title="What interviewers listen for">
+"This is a state machine" early, with one outcome in every cell. Plan before debit. The greedy counterexample. A lock on the account, not on the machine. A chain only if you can say what a loop would lack.
+</Callout>
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How would you add deposits?">
+    A `deposit` event in Authenticated. Count the notes, credit after the machine verifies them, and keep them in a separate bin.
+  </FollowUp>
+  <FollowUp q="How would you add a daily limit?">
+    Track spent-today on the account and check it inside `debit`, in the same lock as the balance check.
+  </FollowUp>
+  <FollowUp q="How would you add a 200 note?">
+    Add one handler at the front of the chain, or one number in the list. No existing handler changes.
+  </FollowUp>
+  <FollowUp q="What if the machine loses power mid-withdraw?">
+    Log the intent before the debit and the result after the dispense. On boot, reconcile any open entry with the bank.
+  </FollowUp>
+  <FollowUp q="How do you test the cash unit failing?">
+    Inject a fake `CashUnit` that returns false, then check the balance and stock did not change.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

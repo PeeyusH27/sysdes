@@ -52,7 +52,7 @@ const WEIGHT: Record<Track, number> = { dsa: 0.5, hld: 0.3, lld: 0.2 };
 const SHORT_TIMELINE_ORDER = [
   "hashing", "two-pointers", "sliding-window", "binary-search", "tree-dfs", "tree-bfs", "graph-traversal", "dp-1d", "heaps", "stack",
   "backtracking", "intervals", "linked-list-reversal", "fast-slow-pointers", "prefix-sum", "trie", "union-find", "topological-sort",
-  "shortest-paths", "dp-2d", "greedy", "bit-manipulation",
+  "shortest-paths", "dp-2d", "greedy", "bit-manipulation", "design-data-structures", "matrix",
 ];
 
 const easiestFirst = <T extends { difficulty: string }>(xs: T[]) => [...xs].sort((a, b) => ["Easy", "Medium", "Hard"].indexOf(a.difficulty) - ["Easy", "Medium", "Hard"].indexOf(b.difficulty));

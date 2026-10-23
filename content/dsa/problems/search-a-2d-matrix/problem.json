@@ -1,0 +1,46 @@
+{
+  "title": "Search a 2D Matrix",
+  "difficulty": "Medium",
+  "patterns": [
+    "matrix",
+    "binary-search"
+  ],
+  "js": [
+    "arrays",
+    "numbers-math"
+  ],
+  "order": 6,
+  "summary": "Find a value in a grid whose rows are sorted and where each row starts above the end of the previous row.",
+  "fn": "searchMatrix",
+  "params": [
+    "matrix",
+    "target"
+  ],
+  "types": {
+    "params": [
+      "number[][]",
+      "number"
+    ],
+    "returns": "boolean"
+  },
+  "tests": [
+    {"args":[[[1,3,5,7],[10,11,16,20],[23,30,34,60]],3],"expected":true,"explain":"3 sits in the first row."},
+    {"args":[[[1,3,5,7],[10,11,16,20],[23,30,34,60]],13],"expected":false,"explain":"13 would fall between 11 and 16 in the second row, but it is not there."},
+    {"args":[[[1,3,5,7],[10,11,16,20],[23,30,34,60]],60],"expected":true,"explain":"The last cell is a valid target; treating the grid as one sorted list of 12 values makes this a normal binary search."},
+    {"args":[[[1]],1],"expected":true},
+    {"args":[[[1]],2],"expected":false},
+    {"args":[[[1,3]],3],"expected":true},
+    {"args":[[[1],[3]],3],"expected":true},
+    {"args":[[[1],[3],[5]],0],"expected":false},
+    {"args":[[[1,3,5]],4],"expected":false},
+    {"args":[[[-8,-5,-1,1],[3,4,5,6],[10,14,15,17],[19,21,25,27],[31,35,36,38]],16],"expected":false},
+    {"args":[[[-11,-9,-7,-4,-3,0],[1,2,3,4,5,6],[10,12,14,17,21,22],[24,28,29,33,36,37],[40,44,47,48,51,54],[57,61,64,66,68,72],[73,75,76,77,81,83],[85,86,90,92,96,100]],-4],"expected":true},
+    {"args":[[[-23,-19,-15,-12,-11,-10,-8,-5],[-1,3,7,9,10,12,16,20],[23,27,30,32,33,35,38,40],[44,45,48,52,56,59,61,65],[69,71,72,74,75,79,81,84],[87,90,92,94,96,99,101,104],[106,109,113,116,117,118,119,123],[125,128,131,135,136,139,141,144],[145,147,148,152,156,160,162,163],[165,169,173,174,175,177,179,182],[186,187,189,190,194,198,201,205]],0],"expected":false}
+  ],
+  "hints": [
+    "Read the grid row by row in your head. Because each row starts above the last value of the row before, the whole thing is one long sorted list.",
+    "Binary search over the positions 0 to rows * columns - 1 without building that list.",
+    "Convert a position mid into a cell with row = Math.floor(mid / cols) and col = mid % cols, then compare matrix[row][col] to the target as in a normal binary search."
+  ],
+  "complexity": {"time":"O(log(rows * columns))","space":"O(1)"}
+}

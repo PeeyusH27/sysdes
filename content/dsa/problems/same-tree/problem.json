@@ -1,0 +1,28 @@
+{
+  "title": "Same Tree",
+  "difficulty": "Easy",
+  "patterns": ["tree-dfs"],
+  "js": ["recursion","linked-list-tree-nodes"],
+  "order": 2,
+  "summary": "Check whether two binary trees have the same shape and the same values at every position.",
+  "fn": "isSameTree",
+  "params": ["p","q"],
+  "types": {"params":["TreeNode","TreeNode"],"returns":"boolean"},
+  "io": {"args":["tree","tree"]},
+  "tests": [
+    {"args":[[1,2,3],[1,2,3]],"expected":true,"explain":"Same shape and same value at every position."},
+    {"args":[[1,2],[1,null,2]],"expected":false,"explain":"Both trees hold 1 and 2, but 2 is the left child in one and the right child in the other: different shapes."},
+    {"args":[[1,2,1],[1,1,2]],"expected":false,"explain":"The shapes match but the values at the two child positions are swapped."},
+    {"args":[[],[]],"expected":true},
+    {"args":[[],[0]],"expected":false},
+    {"args":[[7],[7]],"expected":true},
+    {"args":[[7],[8]],"expected":false},
+    {"args":[[1,2,3,4,null,null,5],[1,2,3,4,null,null,5]],"expected":true},
+    {"args":[[1,2,3,4,null,null,5],[1,2,3,4,null,null,6]],"expected":false},
+    {"args":[[3,17,-4,null,5,2,27,-2,1,22,26,15,null,12,null,null,null,null,25,8,19,0,-1,null,null,null,28,23,-10,16,13,-5,null,18,null,null,null,null,null,null,-3,-7,null,null,6,null,null,null,null,-6,-8,null,null,29],[3,17,-4,null,5,2,27,-2,1,22,26,15,null,12,null,null,null,null,25,8,19,0,-1,null,null,null,28,23,-10,16,13,-5,null,18,null,null,null,null,null,null,-3,-7,null,null,6,null,null,null,null,-6,-8,null,null,29]],"expected":true},
+    {"args":[[3,17,-4,null,5,2,27,-2,1,22,26,15,null,12,null,null,null,null,25,8,19,0,-1,null,null,null,28,23,-10,16,13,-5,null,18,null,null,null,null,null,null,-3,-7,null,null,6,null,null,null,null,-6,-8,null,null,29],[3,17,-4,null,5,2,127,-2,1,22,26,15,null,12,null,null,null,null,25,8,19,0,-1,null,null,null,28,23,-10,16,13,-5,null,18,null,null,null,null,null,null,-3,-7,null,null,6,null,null,null,null,-6,-8,null,null,29]],"expected":false},
+    {"args":[[1,null,2,null,3],[1,null,2,null,3,4]],"expected":false}
+  ],
+  "hints": ["Two trees are the same when their roots match and their left subtrees match and their right subtrees match. That is a recursive definition: use it directly.","Handle the empty cases first. Both null means these two positions agree. Exactly one null means the shapes differ.","If either node is null, return p === q. Otherwise return p.val === q.val && isSameTree(p.left, q.left) && isSameTree(p.right, q.right)."],
+  "complexity": {"time":"O(min(n, m)): you stop at the first mismatch, and never go beyond the smaller tree","space":"O(h) for the recursion, where h is the smaller tree's height"}
+}

@@ -7,7 +7,7 @@ import { playgroundHref } from "@/components/playground/share";
 import { Hammer } from "lucide-react";
 import { KIND_META } from "./kinds";
 import { FLOOR_FLOW_SCALE, layoutFlow, NODE, pickOrientation, type LaidOutEdge, type Orientation, type Pt } from "./layout";
-import { ArrowMarker, Legend, Packet, StateBadge, StepControls } from "./parts";
+import { ArrowMarker, Legend, Packet, StateBadge, StepBanner, StepControls } from "./parts";
 import type { FlowNode, FlowSpec, NodeState, ScenarioStep } from "./types";
 import { useStepper } from "./useStepper";
 
@@ -82,6 +82,31 @@ export function FlowDiagram({
 
   return (
     <figure ref={box} className={cn("flow", !inView && "is-paused", compact && "flow--compact")}>
+      {!compact && scenario && (
+        <div className="flow-head">
+          <StepControls stepper={stepper}>
+            {spec.scenarios!.length > 1 && (
+              <div className="scenario-tabs" role="radiogroup" aria-label="Scenario">
+                {spec.scenarios!.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={s.id === scenarioId}
+                    onClick={() => {
+                      setScenarioId(s.id);
+                      stepper.reset();
+                    }}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </StepControls>
+          <StepBanner index={stepper.index} total={steps.length} text={caption} />
+        </div>
+      )}
       <div
         ref={scrollBox}
         className="flow-scroll"
@@ -136,32 +161,7 @@ export function FlowDiagram({
       </div>
       {!compact && (
         <figcaption>
-          {scenario && (
-            <StepControls stepper={stepper}>
-              {spec.scenarios!.length > 1 && (
-                <div className="scenario-tabs" role="radiogroup" aria-label="Scenario">
-                  {spec.scenarios!.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={s.id === scenarioId}
-                      onClick={() => {
-                        setScenarioId(s.id);
-                        stepper.reset();
-                      }}
-                    >
-                      {s.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </StepControls>
-          )}
-          <p className="flow-caption" aria-live="polite">
-            {step && <span className="step-no">{stepper.index + 1}</span>}
-            {caption}
-          </p>
+          {!scenario && <p className="flow-caption">{caption}</p>}
           <div className="flow-foot">
             <Legend kinds={[...new Set(spec.nodes.map((n) => n.kind))]} />
             <a className="open-pg" href={playgroundHref(spec)}>

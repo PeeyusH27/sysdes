@@ -90,6 +90,7 @@ export default function Home() {
             <Stop href="/deep-dives" title={`${deepDives.length} deep dives`} note="Caching, sharding, real-time and more" />
             <Stop href="/questions" title={`${questions.length} interview questions`} note="Parking lot to Uber, with full answers" />
             <Stop href="/lld" title="Low-level design" note="Foundations, classics and coding exercises" />
+            <Stop href="/cs" title="CS fundamentals" note="OS, networking and database internals" />
             <Stop href="/playground" title="Playground" note="Build a design and get it graded" />
           </ol>
           <TrackMeter track="sd" />

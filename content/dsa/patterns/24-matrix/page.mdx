@@ -1,0 +1,165 @@
+import { rotateImage, spiralBounds, lifeEncoding } from './viz'
+import { quiz } from './quiz'
+
+<TLDR>
+A grid problem is usually **index arithmetic in disguise**: rotate with two swaps, walk a spiral with four moving walls, mark rows inside the grid itself. Get the coordinates right and most of these are O(rows × columns) time with O(1) extra space.
+</TLDR>
+
+## When to reach for it
+
+<Callout kind="tip" title="Spot it in the problem statement">
+
+- You **rotate, flip or transpose** a grid, or read it in a **spiral** or along **diagonals**.
+- The statement says **"in place"** or "with O(1) extra space" on a 2D array.
+- Every cell updates **at the same time** (a generation, a flood).
+- Rows and columns are **sorted**, and you must search it fast.
+
+</Callout>
+
+| Variant | Key move | Classic problems |
+|---|---|---|
+| Rotate / transpose | swap `(i, j)` with `(j, i)`, reverse rows | rotate image |
+| Layers and boundaries | four walls that move inward | spiral matrix |
+| Marker row and column | store flags in the grid itself | set matrix zeroes |
+| Simulation | encode old and new state in one cell | game of life |
+| Sorted grid / diagonals | position to (row, column), or `r + c` | search a 2D matrix, diagonal traverse |
+
+## The core idea: a grid is a set of coordinates
+
+A grid is not a picture, it is an array of arrays, and each cell has a row and a column you can compute with. A clockwise turn sends `(i, j)` to `(j, n - 1 - i)`. A diagonal is every cell with the same `r + c`. A position in a sorted grid read row by row is `r = Math.floor(p / cols)` and `c = p % cols`.
+
+Rotation is the clearest example. Do it as two easy moves, each done in place:
+
+<AlgoViz trace={rotateImage} />
+
+Before coding, write the formula for where one cell goes, and check it on a 2 × 2 grid.
+
+## Play with it
+
+Step through the rotation, then switch to **Spiral** and watch the four walls move in. Try the 2×5 shape: a single row is where spiral code breaks.
+
+<MatrixLab />
+
+## Step by step
+
+<Steps>
+  <Step title="Write the coordinate rule">
+    Where does the cell at `(i, j)` go, or which cells share a property? Test it on a 2 × 2 or 3 × 3 grid.
+  </Step>
+  <Step title="Pick the loop bounds">
+    Is it all cells, only above the diagonal (`j > i`), or the inner cells `1..n-1`? Off-by-one errors live here.
+  </Step>
+  <Step title="Decide where the new state goes">
+    In place needs a trick (swaps, flags in the grid, an encoding). A copy is fine if the statement allows it.
+  </Step>
+  <Step title="Never mix old and new">
+    If every cell must see the old grid, mark changes without applying them until the scan is done.
+  </Step>
+  <Step title="Try the thin shapes">
+    Run it on 1 × n, n × 1 and 1 × 1 grids. Spiral and zeroes bugs show up there first.
+  </Step>
+</Steps>
+
+## Template 1: rotate and transpose
+
+**Transpose** then **reverse each row** rotates a square grid clockwise in place. A rectangle cannot be transposed in place (the shape changes), so build a new grid.
+
+<CodeTabs files={['snippets/rotate.js']} java={['snippets/java/Rotate.java']} python={['snippets/python/rotate.py']} />
+
+This is <ProblemLink slug="rotate-image" />, and <ProblemLink slug="transpose-matrix" /> is the same swap on a new grid. For the other direction, reverse the rows first, or transpose and reverse the columns.
+
+## Template 2: layers and boundaries
+
+A spiral is a series of laps round a shrinking rectangle. Keep `top`, `bottom`, `left` and `right`, read a side, and move that wall inward.
+
+<AlgoViz trace={spiralBounds} />
+
+<CodeTabs files={['snippets/spiral.js']} java={['snippets/java/Spiral.java']} python={['snippets/python/spiral.py']} />
+
+This reads <ProblemLink slug="spiral-matrix" />. The two `if` checks stop a leftover single row or column from being read twice. The file also fills a grid with 1 to n² using a **direction array** and a turn when blocked, the shape of the "Spiral Matrix II" problem.
+
+## Template 3: marker row and column
+
+Zeroing a row the moment you see a `0` is wrong: new zeroes look like old ones. Decide first, change later, and keep the flags in the grid's own first row and first column.
+
+<CodeTabs files={['snippets/markers.js']} java={['snippets/java/Markers.java']} python={['snippets/python/markers.py']} />
+
+This solves <ProblemLink slug="set-matrix-zeroes" />. The first row and column hold flags **and** real data, so two booleans remember whether they started with a zero.
+
+## Template 4: simulation with state encoding
+
+When all cells change at once, a decision must read the old grid. Store old and new state in one number: 2 means alive now and dead next, 3 means dead now and alive next. Count neighbours with a **direction array** of eight steps.
+
+<AlgoViz trace={lifeEncoding} />
+
+<CodeTabs files={['snippets/life.js']} java={['snippets/java/Life.java']} python={['snippets/python/life.py']} />
+
+This is <ProblemLink slug="game-of-life" />. A flood fill or a rotting spread uses the same direction array; see [Graph BFS and DFS](/dsa/patterns/graph-traversal).
+
+## Template 5: binary search and diagonals
+
+If each row starts above the previous row's end, the grid is one sorted list. Search positions and convert with `/` and `%`. If only rows and columns are sorted, walk a staircase from the top-right corner. Diagonals group by `r + c`.
+
+<CodeTabs files={['snippets/sorted-matrix.js', 'snippets/diagonals.js']} java={['snippets/java/SortedMatrix.java', 'snippets/java/Diagonals.java']} python={['snippets/python/sorted_matrix.py', 'snippets/python/diagonals.py']} />
+
+These solve <ProblemLink slug="search-a-2d-matrix" /> and <ProblemLink slug="diagonal-traverse" />. For <ProblemLink slug="valid-sudoku" /> use one set per row, column and box, with box index `Math.floor(r / 3) * 3 + Math.floor(c / 3)`. <ProblemLink slug="maximal-rectangle" /> turns each row into a histogram, then uses a [monotonic stack](/dsa/patterns/stack).
+
+## Try it
+
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />
+
+## Complexity
+
+| Variant | Time | Extra space |
+|---|---|---|
+| Rotate in place | O(n²) | O(1) |
+| Spiral, diagonals | O(rows × columns) | O(1) beyond the output |
+| Marker row and column | O(rows × columns) | O(1) |
+| Game of life, encoded | O(rows × columns) | O(1) |
+| Sorted grid search | O(log(rows × columns)) | O(1) |
+
+## JavaScript you'll use
+
+<JsRef to={["arrays", "gotchas", "destructuring-spread"]} />
+
+```js
+const grid = Array.from({ length: rows }, () => new Array(cols).fill(0)); // each row separate
+[m[i][j], m[j][i]] = [m[j][i], m[i][j]];                                  // swap two cells
+for (const row of m) row.reverse();                                       // reverse in place
+const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];                          // right, down, left, up
+const inside = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols;
+```
+
+The classic trap is `new Array(rows).fill(new Array(cols).fill(0))`: every row is the **same** array.
+
+<Callout kind="warning">
+
+- Sharing one row across the grid with `fill`.
+- Looping `j` over the whole row when transposing, which swaps every pair twice and undoes it.
+- Reading `matrix[0].length` on an empty grid.
+- Spiral without the `top <= bottom` and `left <= right` checks.
+- Updating cells in place while neighbours still need the old values.
+
+</Callout>
+
+## Interview questions
+
+<FollowUps>
+  <FollowUp q="How do you rotate a non-square grid?">
+    You cannot do it in place, because the shape changes from m × n to n × m. Allocate the new grid and copy each `(i, j)` to `(j, m - 1 - i)`.
+  </FollowUp>
+  <FollowUp q="How would you rotate 90 degrees without transposing?">
+    Rotate in rings: for each layer and offset, cycle four cells (top, right, bottom, left). Same O(n²) time and O(1) space, but the index arithmetic is easier to get wrong.
+  </FollowUp>
+  <FollowUp q="Game of Life on an unbounded board?">
+    Store only the live cells in a set. Count neighbours for live cells and their neighbours, so the cost depends on the number of live cells, not the board size.
+  </FollowUp>
+  <FollowUp q="What if rows and columns are sorted, but rows do not chain?">
+    Start at the top-right corner: if the value is too big go left, if too small go down. That is O(rows + columns), and a binary search per row costs O(rows × log columns).
+  </FollowUp>
+  <FollowUp q="How would you store a huge sparse matrix?">
+    Keep a map from `(row, column)` to value, or compressed rows. Memory scales with the non-zero cells, and transposing becomes swapping the key pair.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

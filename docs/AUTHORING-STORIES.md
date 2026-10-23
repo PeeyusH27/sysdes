@@ -2,7 +2,7 @@
 
 A detail page opens on a **story**: 6 to 9 steps, each one picture and one short line, with a guess now and then. It replaces reading as the first thing a learner does; the written lesson is one click away ("Full lesson"). The reader should be able to get the idea from the pictures alone. Words only say what to notice.
 
-Files: `content/stories/<section>/<slug>.ts`, one per page (`learn`, `deep-dives`, `questions`, `patterns`, `lld`; slugs are in `content/registry.ts`, `content/dsa/registry.ts` and `content/lld/registry.ts`). Each exports `export const story: Story | undefined = {...}` (currently `undefined`). Types: `content/stories/types.ts`. Model to copy: `content/stories/deep-dives/sharding-strategies.ts`. The last step ("Say it in 30 seconds") is added automatically from the page's `sayIt` in `content/extras`, so do not write it.
+Files: `content/stories/<section>/<slug>.ts`, one per page (`learn`, `deep-dives`, `questions`, `patterns`, `lld`, `cs`; slugs are in `content/registry.ts`, `content/dsa/registry.ts` and `content/lld/registry.ts`). Each exports `export const story: Story | undefined = {...}` (currently `undefined`). Types: `content/stories/types.ts`. Model to copy: `content/stories/deep-dives/sharding-strategies.ts`. The last step ("Say it in 30 seconds") is added automatically from the page's `sayIt` in `content/extras`, so do not write it.
 
 Check with `npx vitest run tests/stories.test.ts -t "<section>/<slug>"`, then `npx tsc --noEmit`. Do not run `next build` or `next dev`.
 

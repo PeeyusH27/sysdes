@@ -42,6 +42,8 @@ import { GreedyLab } from "../GreedyLab";
 import { Dp1dLab } from "../Dp1dLab";
 import { Dp2dLab } from "../Dp2dLab";
 import { BitLab } from "../BitLab";
+import { DesignLab } from "../DesignLab";
+import { MatrixLab } from "../MatrixLab";
 import { Base62Playground } from "../Base62Playground";
 import { CapacityCalculator } from "../CapacityCalculator";
 import { ChatSim } from "../ChatSim";
@@ -59,7 +61,7 @@ import { ReplicationLag } from "../ReplicationLag";
 import { TraceWaterfall } from "../TraceWaterfall";
 import { VirtualListViz } from "../VirtualListViz";
 
-const WIDGETS = { TokenBucketViz, FixedVsSliding, QuorumPlayground, PollingRace, QueueSim, SeatRace, DebounceViz, LRUViz, CircuitBreakerSim, AvailabilityCalc, RetryStorm, KafkaPartitions, ParkingLotSim, ElevatorSim, VendingMachineSim, LeaderboardRace, PaymentFlowSim, RideMatchSim, HashingLab, TwoPointersLab, SlidingWindowLab, PrefixSumLab, BinarySearchLab, StackLab, IntervalsLab, FastSlowLab, ListReversalLab, TreeDfsLab, TreeBfsLab, TrieLab, HeapLab, GraphTraversalLab, TopoSortLab, UnionFindLab, ShortestPathLab, BacktrackingLab, GreedyLab, Dp1dLab, Dp2dLab, BitLab };
+const WIDGETS = { TokenBucketViz, FixedVsSliding, QuorumPlayground, PollingRace, QueueSim, SeatRace, DebounceViz, LRUViz, CircuitBreakerSim, AvailabilityCalc, RetryStorm, KafkaPartitions, ParkingLotSim, ElevatorSim, VendingMachineSim, LeaderboardRace, PaymentFlowSim, RideMatchSim, HashingLab, TwoPointersLab, SlidingWindowLab, PrefixSumLab, BinarySearchLab, StackLab, IntervalsLab, FastSlowLab, ListReversalLab, TreeDfsLab, TreeBfsLab, TrieLab, HeapLab, GraphTraversalLab, TopoSortLab, UnionFindLab, ShortestPathLab, BacktrackingLab, GreedyLab, Dp1dLab, Dp2dLab, BitLab, DesignLab, MatrixLab };
 
 beforeAll(() => {
   // jsdom lacks these browser APIs; widgets only need them to exist.

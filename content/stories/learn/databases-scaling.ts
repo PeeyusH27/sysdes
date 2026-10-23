@@ -6,6 +6,40 @@ import type { Story } from "../types";
 const copies = getPrimer("replication")!.flow;
 
 export const story: Story | undefined = {
+  learn: [
+    {
+      head: "Why the database is the bottleneck",
+      body: "Your app servers are easy to copy, but they all share one database. Every read and every write lands on that one machine, so it is the first thing to slow down.",
+      eg: "A single front desk",
+      example: "A hotel can hire more porters and cleaners, but if one receptionist handles every check-in and every question, the lobby queue still grows.",
+      doodle: "database",
+    },
+    {
+      head: "Try the cheap fix first",
+      body: "A slow page is usually a missing index, not a full database. An index lets a query jump straight to its rows instead of scanning every one.",
+      eg: "A book's index",
+      example: "To find every mention of Paris, you turn to the index and get page numbers. Without it, you would read the whole book from page one.",
+    },
+    {
+      head: "Copies take the reads",
+      body: "A replica is a live copy of the database that answers reads. Writes still go to the main one, called the primary, which streams every change to its copies.",
+      eg: "A teacher and printed handouts",
+      example: "The teacher writes the notes once. Students read photocopies, so nobody crowds the teacher's desk. A correction reaches the copies at the next print run.",
+      doodle: "replica",
+    },
+    {
+      head: "A copy can be a moment behind",
+      body: "Changes take a little time to reach each replica. Read your own fresh save from the primary, or you may see the old value right after saving.",
+      eg: "A noticeboard in another building",
+      example: "You pin a new notice in the main office. Someone checking the copy in the other building sees yesterday's notice until it is carried over.",
+    },
+    {
+      head: "Split the data last",
+      body: "Sharding splits the data across several databases by a key, like user id. It is the last step, because moving data between shards later is very hard.",
+      eg: "Phone books by surname",
+      example: "A city prints A to M in one book and N to Z in another. Each is thinner, but changing the split means reprinting both.",
+    },
+  ],
   steps: [
     {
       tag: "pain",
