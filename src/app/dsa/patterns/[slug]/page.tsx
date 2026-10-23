@@ -7,6 +7,7 @@ import { boundComponents } from "@/components/content/bound";
 import { PatternProblems } from "@/components/dsa/PatternProblems";
 import { PatternInSystems } from "@/components/content/Bridges";
 import { systemsFor } from "@content/bridges";
+import { getExtras } from "@content/extras";
 import { getHeadings } from "@/lib/content";
 
 export const dynamicParams = false;
@@ -61,6 +62,7 @@ export default async function PatternPage({ params }: PageProps<"/dsa/patterns/[
       prev={prev && { href: `/dsa/patterns/${prev.slug}`, title: prev.title }}
       next={next && { href: `/dsa/patterns/${next.slug}`, title: next.title }}
       nextNote={p.next}
+      extras={getExtras("patterns", p.slug)}
     >
       <Body components={boundComponents(`dsa/patterns/${p.dir}`)} />
       <PatternProblems slug={p.slug} />

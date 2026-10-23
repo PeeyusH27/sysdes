@@ -2,74 +2,72 @@ import { interviewPlan, interviewFramework } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Use the same structure every time: **requirements, numbers, API and data model, high-level design, two deep dives, trade-offs and a summary**, in about 45 minutes. Say every choice as "X because Y, at the cost of Z", and when stuck, return to requirements and numbers.
+Use the same steps every time: **requirements, numbers, API and data model, design, two deep dives, trade-offs**, in about 45 minutes. Say every choice as "X because Y, at the cost of Z". When stuck, go back to requirements and numbers.
 </TLDR>
 
 ## Why it matters
 
-Knowing the pieces is half the job. A repeatable structure shows seniority.
-
-Interviewers score a rubric: scope, numbers, a design that works end to end, depth where it's risky, trade-offs. A fixed structure hits every row even when you're nervous, and frees your head for the problem.
+Knowing the pieces is half the job. Interviewers score scope, numbers, a working design, depth and trade-offs. Fixed steps cover every row even when you are nervous.
 
 ## The 45-minute plan
 
-Five phases: **5, 5, 15, 15 and 5 minutes**. Press play to fill them in. Checkpoints: scope agreed by minute 5, numbers and API by 10, a working end-to-end design by 25, two deep dives by 40, wrap-up by 45.
+Five phases: **5, 5, 15, 15 and 5 minutes**. Press play to fill them in.
+
+Behind? Say so and move on: "I'll keep the data model brief so we have time for the deep dives."
 
 <Timeline spec={interviewPlan} />
 
-Behind at a checkpoint? Say so and move on: "I'll keep the data model brief so we have time for the deep dives." Managing the clock out loud is a senior signal.
-
 ## The framework as a checklist
 
-Each step leaves something on the board for the next. Play **Getting unstuck** in the diagram to see how to rescue a stalled answer.
+Each step leaves something on the board for the next. Play **Getting unstuck** to see how to rescue a stalled answer.
 
 <FlowDiagram spec={interviewFramework} />
 
 <Steps>
   <Step title="Requirements">
-    Who uses it, for what, and what matters most? Write **functional** requirements (3–5 features), **non-functional** ones **with numbers** (latency, availability, consistency, scale), and **out of scope**. Confirm, then draw.
+    3 to 5 features, **numbers** for speed, uptime and scale, and what is out of scope.
   </Step>
   <Step title="Estimation">
-    Average and peak QPS, read:write ratio, storage over retention. Then say what they **imply**: "4,000 reads/s and 40 writes/s: read-heavy, so caching matters more than write throughput."
+    Peak requests a second and storage. Then say what it **implies**: "read-heavy, so cache."
   </Step>
   <Step title="API">
-    The 3–5 endpoints that matter: methods, key parameters, status codes. Idempotency keys for writes, cursor pagination for lists.
+    The 3 to 5 endpoints that matter.
   </Step>
   <Step title="Data model">
-    Tables or keys, and the access pattern that picks the store: "every read is a lookup by `code`, so a key-value table keyed by code".
+    Tables or keys, picked by how you read them.
   </Step>
   <Step title="High-level design">
-    The simplest boxes and arrows that meet the requirements. Number the flow; walk one request end to end. Everything works before anything is optimised.
+    The simplest boxes that work. Walk one request end to end.
   </Step>
   <Step title="Deep dives">
-    The two riskiest areas (or where you're steered): algorithm, data structure, numbers, and **what happens when it fails**.
+    The two riskiest areas, and **what happens when they fail**.
   </Step>
   <Step title="Trade-offs and wrap-up">
-    What you chose and what it cost, the next bottleneck, what you'd do with more time. Then a 30-second summary.
+    What each choice cost, then a 30-second summary.
   </Step>
 </Steps>
 
-Estimation is four formulas, in `back-of-envelope.js`. Practise them out loud with round numbers.
+Estimation is four formulas, in `back-of-envelope.js`. Practise them aloud.
 
 <CodeTabs files={['snippets/back-of-envelope.js']} />
 
 ## Frontend variant: RADIO
 
-Frontend rounds (an autocomplete, a news feed client, a chat UI) use the same idea with five stages:
+Frontend rounds use the same idea in five stages.
 
 | Letter | Stage | What to cover |
 |---|---|---|
-| R | Requirements | Features, devices, offline, accessibility, performance targets |
-| A | Architecture | Component tree, where state lives, server vs client rendering |
-| D | Data model | Client state shape, normalised entities, what's cached or persisted |
-| I | Interface | Props and events between components; endpoints, pagination |
-| O | Optimizations | Virtualisation, code splitting, network, accessibility, i18n, security |
+| R | Requirements | Features, devices, offline, speed targets |
+| A | Architecture | Component tree, where state lives |
+| D | Data model | Client state shape, what is cached |
+| I | Interface | Props, events, endpoints |
+| O | Optimizations | Virtualisation, splitting, accessibility |
 
 Try it on the [typeahead](/questions/typeahead) and [infinite feed](/questions/infinite-feed) questions.
 
 ## Practise with a timer
 
-Pick a question and run the clock: the timer prompts each phase and shows what should be done by then.
+Pick a question and run the clock. The timer shows what should be done by each minute.
 
 <InterviewTimer />
 
@@ -79,56 +77,58 @@ Every level gets the same question. The bar is what moves.
 
 | Signal | Mid | Senior | Staff |
 |---|---|---|---|
-| Requirements | Asks some questions | Drives scope; non-functional numbers | Reframes the problem; finds hidden requirements |
-| Design | A working design | Clean components, data flow, scaling | Evolution path; org and operational concerns |
-| Deep dive | One area | Two areas, with failure modes | The riskiest area, quantified |
-| Trade-offs | Names some | Justifies each, and when to switch | Cost, complexity, team impact |
+| Requirements | Asks some questions | Drives scope, adds numbers | Reframes the problem |
+| Design | A working design | Clean data flow, scaling | Evolution path, operations |
+| Deep dive | One area | Two areas, with failures | The riskiest area, quantified |
+| Trade-offs | Names some | Justifies each | Cost and team impact |
 
 ## Talking through trade-offs
 
-Interviewers score reasoning, not a perfect answer. Two templates cover almost every decision:
+Interviewers score reasoning, not a perfect answer. Use this shape:
 
-- "I'll use **X** because **Y**. The cost is **Z**. If **W** changes, I'd switch to **V**."
-- "We could do **A** or **B**. A is simpler, B scales further. At our 4K QPS, A is enough for now."
+"I'll use **X** because **Y**. The cost is **Z**. If **W** changes, I'd switch to **V**."
 
-Filled in from the case studies:
+For example: "I'll return a **302** because we promised click analytics. The cost: every click reaches our servers."
 
-- "I'll return a **302** because we promised click analytics. The cost: every click reaches our servers. Drop analytics and I'd switch to a 301."
-- "**One counter** or **range allocation**? One is simpler; ranges remove the hot spot. At 40 writes/s either works, and ranges are a few lines more."
-- "I'll put SMS on **separate priority queues** so an OTP never waits behind a campaign. The cost: more queues and workers. For transactional-only traffic, one queue per channel would do."
+Let the numbers pick the moment to stop. 40 writes a second: "One Postgres is enough, so no sharding." Roughly 40,000: "Now I'd shard by a hash of the code."
+
+| When | Say |
+|---|---|
+| The prompt is vague | "Who uses it, and how many?" |
+| Your numbers come out small | "One database is enough. I'll skip sharding." |
+| You are asked about failure | "If this box dies, X takes over, detected by Y." |
+| You are behind | "I'll keep this brief so we reach the deep dives." |
 
 ## Drawing conventions
 
-Your board is how the interviewer follows your thinking.
+Your board is how the interviewer follows you.
 
-- **Consistent shapes**: one each for services, data stores and queues.
-- **Label every arrow** with what flows (`GET /:code`, "click event", "replication").
-- **Number the request flow** (1, 2, 3…), so you both say "step 4" instead of pointing.
-- **Assumptions in a corner box**: numbers you'll refer back to (4K QPS, 100:1 reads, 7-character codes).
-- Request path left to right, data stores at the bottom or right, as in this site's diagrams.
+- One shape each for services, data stores and queues.
+- **Label every arrow** with what flows.
+- **Number the request flow**, so you can say "step 4".
+- Keep your assumptions in a corner box.
 
 ## Common mistakes
 
 <Callout kind="warning">
-- Jumping to tools ("Kafka, Cassandra, Kubernetes") before the requirements.
-- Over-engineering: sharding and multi-region for 40 writes/s.
-- Ignoring failure: every box can die, every network call can time out.
+- Jumping to tools ("Kafka, Cassandra") before the requirements.
+- Over-engineering: multi-region for 40 writes a second.
+- Ignoring failure: every box can die, every call can time out.
 </Callout>
 
-Prepare three lines:
+Prepare two lines:
 
-- **Pushback**: "Good point. If that matters, I'd change…" It's a hint, not an attack.
-- **A knowledge gap**: "I don't know X in detail, but here's how I'd reason about it…" First principles beat bluffing.
-- **Getting stuck**: back to requirements and numbers, simplify (one region, one server), then scale step by step out loud.
+- **Pushback**: "Good point. If that matters, I'd change..." It is a hint, not an attack.
+- **A gap**: "I don't know X in detail, but here is how I'd reason about it."
 
 ## Practice plan
 
 Work in this order, aloud and on a timer: [URL shortener](/learn/case-url-shortener), [rate limiter](/questions/rate-limiter), [notification system](/learn/case-notification-system), [chat](/questions/chat), [news feed](/questions/news-feed), then payments.
 
-- **Spaced repetition.** Redo each after **3, 7 and 21 days**: the second attempt shows what you remember, the third makes it stick.
-- **Record yourself.** Playback exposes silences, filler words and skipped numbers.
-- **Practise with the [playground](/playground/url-shortener)**: build on a canvas and get graded before seeing the reference.
-- **Score every run** 1–4 per rubric dimension. Watch the trend, not single scores.
+- **Redo each after 3, 7 and 21 days.**
+- **Record yourself.** Playback exposes silences and skipped numbers.
+- **Use the [playground](/playground/url-shortener)** to get graded.
+- **Score every run** 1 to 4 per row below.
 
 | Dimension | 1: needs work | 4: strong |
 |---|---|---|
@@ -137,13 +137,13 @@ Work in this order, aloud and on a timer: [URL shortener](/learn/case-url-shorte
 | API and data model | Vague endpoints | Clear endpoints, keys, access patterns |
 | High-level design | Boxes, no flow | A numbered flow, end to end |
 | Deep dives | Stays on the surface | Two areas in depth |
-| Failure modes | Not mentioned | What breaks, how it's detected and recovers |
+| Failure modes | Not mentioned | What breaks, how it is detected and recovers |
 | Trade-offs | Choices stated as facts | Each choice's cost, and when to switch |
-| Communication | Draws in silence | Thinks aloud, checks in, manages the clock |
+| Communication | Draws in silence | Thinks aloud, manages the clock |
 
 ## Printable checklist
 
-Keep it beside you while practising. It's also on the [cheatsheet](/cheatsheet).
+It is also on the [cheatsheet](/cheatsheet).
 
 - [ ] Requirements, with numbers and an out-of-scope list
 - [ ] Average and peak QPS, storage, read:write ratio
@@ -159,13 +159,13 @@ Keep it beside you while practising. It's also on the [cheatsheet](/cheatsheet).
 
 <FollowUps>
   <FollowUp q="How do you handle an ambiguous problem?">
-    Ask clarifying questions, write down functional and non-functional requirements, state assumptions, and confirm before designing. The ambiguity is deliberate: they want to see you narrow scope.
+    Ask questions, state assumptions, and confirm before designing. They want to see you narrow scope.
   </FollowUp>
   <FollowUp q="The interviewer pushes back on your choice. What do you do?">
-    Treat it as a hint: restate the concern, weigh it against the requirements, then defend with numbers or adapt explicitly.
+    Treat it as a hint: restate the concern, then defend with numbers or adapt.
   </FollowUp>
   <FollowUp q="How deep should you go?">
-    Breadth first until the design works end to end; then deep where risk is highest, or where you're steered.
+    Broad until the design works end to end; then deep where the risk is highest.
   </FollowUp>
   <FollowUp q="What if you get stuck?">
     Back to requirements and numbers, simplify, then scale step by step out loud.

@@ -2,15 +2,15 @@ import { trieInsert, trieLookup, wildcardSearch } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-A trie stores strings **character by character along paths from the root**, so words with a shared prefix share nodes. Insert, lookup and prefix checks cost **O(L)** for a string of length L, however many words are stored, and a search driven by other input can **stop the moment it leaves the trie**.
+A trie stores words **letter by letter along paths from the root**, so words with the same start share nodes. Insert, lookup and prefix checks cost **O(L)** for a word of length L, however many words are stored.
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- Many **prefix** questions: "does any word start with…", autocomplete, prefix counts.
-- A **dictionary** matched against a sentence, a grid or a stream, giving up as soon as no word can match.
+- Many **prefix** questions: "does any word start with…", autocomplete.
+- A **dictionary** matched against a sentence, a grid or a stream, giving up when no word can match.
 - **Wildcards** such as `.` for "any letter".
 
 </Callout>
@@ -24,17 +24,15 @@ A trie stores strings **character by character along paths from the root**, so w
 
 ## The core idea: a prefix is a path
 
-Every node **stands for a prefix**: the characters on the edges from the root down to it. Inserting "car" creates (or reuses) root → c → a → r and **marks** the last node as a word end. After inserting "cart", the "car" node exists either way; only the flag says whether "car" is a word.
+Think of the thumb tabs on a paper dictionary: every word starting with "ca" sits behind the same two tabs. A trie works the same way. Each node **stands for a prefix**, the letters on the path from the root. Inserting "car" makes (or reuses) root → c → a → r, and **marks** the last node as a word end.
 
-A lookup follows one edge per character: O(L), whether the trie holds ten words or a million. A hash set checks a whole word in O(L) too, but it can't answer "does any word start with `ca`?" without scanning every word.
+A lookup follows one edge per letter: O(L) whether the trie holds ten words or a million. A hash set is also O(L) per word, but can't answer "does any word start with `ca`?" without scanning them all.
 
 <AlgoViz trace={trieInsert} />
 
-Try your own words with Edit input.
-
 ## Play with it
 
-Watch new words reuse shared prefixes and grow only the nodes they need. Then type a prefix to light its path and list completions, or try a wildcard such as `c.t`.
+Watch new words reuse shared prefixes. Then type a prefix to light its path, or try a wildcard such as `c.t`.
 
 <TrieLab />
 
@@ -42,19 +40,19 @@ Watch new words reuse shared prefixes and grow only the nodes they need. Then ty
 
 <Steps>
   <Step title="Pick a node shape">
-    Children keyed by character, plus an end flag (or, for grid problems, the whole word).
+    Children by letter, plus an end flag.
   </Step>
   <Step title="Insert every word">
-    Create missing children, mark the last node: O(total characters) to build.
+    Create missing children, mark the end.
   </Step>
   <Step title="Decide what a query needs at the end">
-    A word needs the end flag, a prefix only the path, autocomplete a DFS below it, counting a per-node counter.
+    A word needs the flag; a prefix needs only the path.
   </Step>
   <Step title="Walk the query and stop early">
-    One edge per character; return the moment an edge is missing.
+    Stop when an edge is missing.
   </Step>
   <Step title="Let the trie steer other searches">
-    When characters come from a sentence or a grid path, carry a trie node along and abandon dead prefixes.
+    Carry a trie node along; drop dead prefixes.
   </Step>
 </Steps>
 
@@ -66,7 +64,7 @@ Watch new words reuse shared prefixes and grow only the nodes they need. Then ty
 
 <AlgoViz trace={trieLookup} />
 
-This class is <ProblemLink slug="implement-trie" />. For <ProblemLink slug="longest-common-prefix" />, insert every word and walk down while the node has one child and isn't a word end.
+This class is <ProblemLink slug="implement-trie" />. For <ProblemLink slug="longest-common-prefix" />, walk down while the node has one child and isn't a word end.
 
 ## Choosing the node shape
 
@@ -76,30 +74,30 @@ This class is <ProblemLink slug="implement-trie" />. For <ProblemLink slug="long
 | plain object | `children[ch]` | only existing children, any character | use `Object.create(null)` against inherited keys |
 | array of 26 | `next[code - 97]`, no hashing | always 26 slots, `a` to `z` only | other characters index out of range |
 
-The array is fastest for a small known alphabet; a `Map` is the safe default. Either way each step is O(1).
+An array is fastest; a `Map` is the safe default.
 
 <CodeTabs files={['snippets/trie-array.js']} java={['snippets/java/TrieArray.java']} python={['snippets/python/trie_array.py']} />
 
 ## Template 2: wildcard search with DFS
 
-At a `.` (any one letter) there are several edges to follow, so the walk becomes a DFS on `(node, index in pattern)`. A letter follows one edge; a dot tries every child and returns `true` at the first branch that matches.
+A `.` has several edges to follow, so the walk becomes a DFS: a letter follows one edge, a dot tries every child.
 
 <AlgoViz trace={wildcardSearch} />
 
 <CodeTabs files={['snippets/wildcard.js']} java={['snippets/java/Wildcard.java']} python={['snippets/python/wildcard.py']} />
 
-This is <ProblemLink slug="design-add-and-search-words" />. No dots costs O(L); mostly dots can visit every node down to depth L.
+This is <ProblemLink slug="design-add-and-search-words" />.
 
 ## Template 3: prune a search with the trie
 
-The big wins come when **another search** produces the characters: scan a text from each start, or walk grid paths, moving a trie pointer along. At each step:
+The big win: let **another search** (a text scan, a grid walk) move a trie pointer. At each step:
 
-- **no child** for the next character: no word continues, so stop this branch;
-- the node **ends a word**: record a match, and keep going for longer words.
+- **no child** for the next letter: stop this branch;
+- the node **ends a word**: record it, and keep going.
 
 <CodeTabs files={['snippets/scan.js']} java={['snippets/java/Scan.java']} python={['snippets/python/scan.py']} />
 
-<ProblemLink slug="replace-words" /> stops at the **first** end flag, the shortest root. <ProblemLink slug="word-search-ii" /> runs a [backtracking](/dsa/patterns/backtracking) DFS from every cell with the trie pointer in step, checking every word in one pass. Store each word on its end node and clear it once found, so it is reported once.
+<ProblemLink slug="replace-words" /> stops at the **first** end flag. <ProblemLink slug="word-search-ii" /> runs a [backtracking](/dsa/patterns/backtracking) DFS from every cell.
 
 ## Try it
 
@@ -107,13 +105,11 @@ The big wins come when **another search** produces the characters: scan a text f
 
 ## Complexity
 
-N is the number of words, S their total length, L the length of one query.
-
 | Operation | Time | Extra space |
 |---|---|---|
 | Insert one word | O(L) | up to L new nodes |
 | `search`, `startsWith` | O(L) | O(1) |
-| Build from N words | O(S) | O(S) nodes (each with 26 slots for arrays) |
+| Build from all words | O(total letters) | O(total letters) nodes (each with 26 slots for arrays) |
 | Autocomplete below a prefix | O(L + size of that subtree) | O(depth) for the DFS |
 | Wildcard search | O(L) without dots; with many, every node to depth L | O(L) recursion |
 | Text scan from every position | O(n · longest word) at most, far less with pruning | O(1) besides the trie |
@@ -133,13 +129,11 @@ for (const [ch, next] of node.children) {}  // DFS over the children that exist
 const kids = Object.create(null);           // an object with no inherited keys
 ```
 
-`path + ch` in a hot DFS creates a string per node: fine for autocomplete, but in a grid search read the word from its end node.
-
 <Callout kind="warning">
 
-- `search` returning `true` because the path exists, without checking the end flag.
+- `search` returning `true` without checking the end flag.
 - In wildcard DFS, `return dfs(child, i + 1)` inside the loop: it gives up after the first child.
-- In a grid DFS, not marking a cell as visited, or not restoring it when backtracking.
+- In a grid DFS, not marking or restoring a cell.
 
 </Callout>
 
@@ -147,16 +141,16 @@ const kids = Object.create(null);           // an object with no inherited keys
 
 <FollowUps>
   <FollowUp q="Trie or hash set?">
-    For exact words, a `Set` is simpler, smaller and also O(L). Pick a trie for prefixes, wildcards or early stopping, and say the cost: per-node overhead can make it many times larger than the strings.
+    For exact words, a `Set` is simpler. Pick a trie for prefixes, wildcards or early stopping.
   </FollowUp>
   <FollowUp q="How would you return the top 3 autocomplete suggestions quickly?">
-    DFS below the prefix node alphabetically and stop after three, or keep the best k words on every node during inserts. The second makes queries O(L) for more memory and slower inserts: usually right for a search box.
+    DFS below the prefix and stop after three, or keep the best 3 on every node.
   </FollowUp>
   <FollowUp q="How do you delete a word?">
-    Clear the end flag, then prune on the way back up: remove a child with no children that isn't another word's end. Never remove nodes other words still pass through.
+    Clear the end flag, then prune childless nodes on the way back up.
   </FollowUp>
   <FollowUp q="How can you make a trie smaller?">
-    Compress single-child chains into one edge labelled with a substring (a radix tree). Or use a ternary search tree (three pointers per node, not 26 slots), or a DAWG that also shares suffixes, for static dictionaries.
+    Merge single-child chains into one edge (a radix tree), or use a ternary search tree.
   </FollowUp>
 </FollowUps>
 

@@ -2,20 +2,22 @@ import { cacheAside, cacheLayers } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Cache anything read far more often than it changes: **cache-aside** with a **jittered TTL**, delete (don't update) keys on write, and a per-key lock against stampedes. Measure the hit ratio: going from 90% to 99% cuts database load by 10×.
+Cache what you read far more than you change. Going from a 90% to a 99% hit ratio cuts database load 10×.
 </TLDR>
 
 ## Why it matters
 
-Your database is the slowest, hardest-to-scale box in the diagram. A cache answers from memory, about **50× faster**, and shields the database from most reads. The price: every cached value is a copy, and copies go stale.
+Your database is slow and far away. A **cache** keeps the answers you need most in fast memory, about **50× faster**. The price: each cached value is a copy, and copies go stale.
 
 Play **Cache hit**, then **Cache miss**: ~1 ms against ~50 ms.
+
+Skip the cache when the page already loads fast and the database sees 100 reads/s. Skip it for write-heavy or per-user data too: the hit ratio stays under 50%, and you pay for the copies.
 
 <FlowDiagram spec={cacheAside} />
 
 ## Where caches live
 
-The fastest query is the one that never reaches the database. Every layer on the way can answer and absorb a share of the traffic; play **A cold request** to watch a miss fall through all six.
+The fastest query never reaches the database. Play **A cold request** to watch a miss fall through all six layers.
 
 <FlowDiagram spec={cacheLayers} />
 
@@ -30,102 +32,106 @@ The fastest query is the one that never reaches the database. Every layer on the
 
 ## What to cache and how to name it
 
-Cache what is **read often, changes rarely and is expensive to compute**, and name it with care:
+Cache what is **read often and changes rarely**.
 
 - The key holds everything the value depends on: `product:42:v3:en-IN` (id, version, locale).
-- Per-user data never goes in a shared CDN cache; mark it `Cache-Control: private`.
-- Keep values small: a 2 MB value turns a 1 ms hit into a 20 ms one.
+- Per-user data never goes in a shared CDN cache.
+- Keep values small: a 2 MB value turns a 1 ms hit into 20 ms.
 
 ## Caching patterns
 
-Six patterns, one default.
+Six ways to fill a cache. One is the default.
 
 <Steps>
   <Step title="Cache-aside (lazy loading)">
-    Check the cache; on a miss, read the database and fill the cache with a TTL. If the cache dies you only get slower. **The default choice.**
+    Check the cache. On a miss, read the database and fill the cache. If the cache dies, you only get slower. **The default.**
   </Step>
   <Step title="Read-through">
-    Cache-aside, but the cache library or CDN loads from the origin itself. Less code in your app.
+    The same, but the cache loads from the origin itself.
   </Step>
   <Step title="Write-through">
-    Write the database and the cache together: always fresh, but writes cost double and rarely read data wastes memory.
+    Write the database and cache together. Always fresh, but writes cost double.
   </Step>
   <Step title="Write-behind (write-back)">
-    Write the cache now, flush to the database in batches. Very fast, but a crash loses unflushed data. Good for counters and metrics.
+    Write the cache now, the database later. Fast, but a crash loses data: fine for view counts, never for payments.
   </Step>
   <Step title="Write-around">
-    Writes skip the cache; the next read misses and loads. For data written once and rarely read.
+    Writes skip the cache. For data written once and rarely read.
   </Step>
   <Step title="Refresh-ahead">
-    Reload hot keys shortly before they expire, so readers never miss. For a handful of hot, predictable keys.
+    Reload hot keys before they expire.
   </Step>
 </Steps>
 
-The [caching techniques deep dive](/deep-dives/caching-techniques) compares all six with code.
+All six, with code: [caching techniques](/deep-dives/caching-techniques).
 
 ## Eviction and TTL
 
-Memory is full; something has to go. **LRU** drops the least recently used key, **LFU** the least frequently used. In Redis that's `maxmemory-policy`: `allkeys-lru` for a pure cache, `volatile-lru` if some keys must never be evicted.
+Memory is full; something has to go. **LRU** drops the least recently used key; **LFU**, the least often used.
 
-TTLs bound staleness. Set them by the cost of a stale read: seconds for prices and stock, minutes for product pages, hours for configuration. Add jitter so keys written together don't expire together.
+A TTL bounds staleness. Set it by the cost of a stale read: seconds for prices, hours for config. Add jitter so keys written together don't expire together.
 
-In the LRU simulator, fill the cache, touch the oldest key, then add a new one: watch which key is evicted.
+Try the simulator.
 
 <LRUViz />
 
 ## Invalidation and the classic race
 
-"There are only two hard things in computer science: cache invalidation and naming things." The safe default is **delete on write**: update the database, `DEL` the key, let the next read load the truth. Updating the cache instead can leave the older value last when two writers race.
+The safe default is **delete on write**: update the database, delete the cache key, and let the next read reload it. Updating the cache can leave the older value last when two writers race.
 
-Delete-on-write still has one race. Play **Write race**: a slow reader loads the old row, the writer updates and deletes, then the reader writes the old value back. Fixes:
+One race remains. Play **Write race**: a slow reader loads the old row, the writer updates and deletes, then the reader puts the old value back. Fixes:
 
-- A **short TTL** as a safety net, so staleness is bounded.
-- A **delayed second delete** (~1 s after the write).
+- A **short TTL** as a safety net.
+- A **second delete** about 1 s later.
 - **Versioned keys** (`user:42:v7`), so old entries are never read.
-- Invalidation from the database's change stream (CDC), not application code.
 
 <FlowDiagram spec={cacheAside} scenario="write-race" />
 
 ## Failure modes
 
-Four classic failures, all landing on your database.
+Four classic failures, all landing on your database. A Monday 9:00 stampede: the homepage key expires and 5,000 requests hit the database at once.
 
 | Failure | What happens | Fix |
 |---|---|---|
-| **Stampede** | A hot key expires; thousands of requests hit the database at once | Per-key lock (single flight), refresh-ahead |
-| **Penetration** | Lookups for ids that don't exist always miss | Cache "not found" briefly; a Bloom filter in front |
-| **Avalanche** | Many keys expire together (or the cache restarts) | Jittered TTLs, staggered warm-up |
-| **Hot key** | One key gets 100K+ reads/s and saturates a cache node | In-process L1 cache; replicate as `key#1…#N` |
+| **Stampede** | A hot key expires; thousands of requests hit the database | One request rebuilds, the rest wait (single flight) |
+| **Penetration** | Lookups for ids that don't exist always miss | Cache "not found" briefly; a Bloom filter |
+| **Avalanche** | Many keys expire together | Jittered TTLs |
+| **Hot key** | One key gets 100K+ reads/s | In-process cache; copies `key#1…#N` |
 
-Play **Stampede**: one request takes the lock and rebuilds; the rest wait, then hit.
+Play **Stampede** to see it.
 
 <FlowDiagram spec={cacheAside} scenario="stampede" />
 
 ## The numbers: hit ratio vs latency
 
-Average latency is h·c + (1−h)·(c+d): a hit costs the lookup, a miss the lookup **plus** the database. The curve is steeply non-linear, so most of the gain comes in the last few percent.
+A hit costs the lookup. A miss costs the lookup **plus** the database. Say hits take 1 ms, misses 51 ms, and 4,000 reads/s arrive:
+
+| Hit ratio | Average read | Database reads/s |
+|---|---|---|
+| 50% | 26 ms | 2,000 |
+| 90% | 6 ms | 400 |
+| 99% | 1.5 ms | 40 |
 
 <LatencyHitRatio />
 
 ## HTTP caching for frontend developers
 
-Browsers and CDNs are caches too, and they're free.
+Browsers and CDNs are caches too, and they are free.
 
-- `Cache-Control: public, max-age=60` lets browsers and CDNs reuse a response for 60 s; `private` keeps it out of shared caches; `no-store` disables caching.
-- `ETag` + `If-None-Match` gets `304 Not Modified` (no body) while the client's copy is valid.
-- Fingerprinted assets (`app.3f9a1c.js`) can be cached for a year with `immutable`: each build gets new names.
-- `stale-while-revalidate=300` serves a stale copy instantly while fetching a fresh one.
-- `Vary: Accept-Language` says the response differs per header value.
+- `Cache-Control: public, max-age=60` reuses a response for 60 s; `private` keeps it out of shared caches; `no-store` disables caching.
+- `ETag` + `If-None-Match` returns `304 Not Modified` (no body) while the copy is valid.
+- Fingerprinted assets (`app.3f9a1c.js`) can be cached for a year with `immutable`.
+- `stale-while-revalidate=300` serves a stale copy while fetching a fresh one.
 
 ## Code
 
 <CodeTabs files={['snippets/get-product.js', 'snippets/lru.js', 'snippets/swr.js', 'snippets/etag.js']} />
 
-`get-product.js` fixes three bugs in the classic version: it bounds retries while another request holds the lock, releases the lock with a compare-and-delete script, and caches "not found" briefly.
+`get-product.js` bounds retries while another request holds the lock, releases the lock safely, and caches "not found" briefly.
 
 ## Sizing and monitoring
 
-Size for the **working set**: often the hottest 20% of keys serve 80% of reads. Watch hit ratio, evictions per second, memory and p99 latency; a falling hit ratio with rising evictions means the cache is too small.
+Size for the **working set**: often 20% of keys serve 80% of reads. A falling hit ratio with rising evictions means the cache is too small.
 
 <Callout kind="warning">
 - Caching without a TTL.
@@ -137,19 +143,19 @@ Size for the **working set**: often the hottest 20% of keys serve 80% of reads. 
 
 <FollowUps>
   <FollowUp q="How do you prevent a cache stampede?">
-    A per-key lock (single flight) so one request rebuilds while the rest wait, plus jittered TTLs and refresh-ahead for the hottest keys.
+    A per-key lock, so one request rebuilds while the rest wait. Add jittered TTLs.
   </FollowUp>
   <FollowUp q="Do you delete or update the cache on write?">
-    Delete: with concurrent writers, updating can leave the older value last. A TTL bounds the rare races left.
+    Delete. Updating can leave the older value last.
   </FollowUp>
   <FollowUp q="How do you choose a TTL?">
-    By the cost of a stale read: seconds for prices, minutes for product pages, hours for config, plus jitter.
+    By the cost of a stale read: seconds for prices, hours for config.
   </FollowUp>
   <FollowUp q="Would you cache a write-heavy key?">
-    Rarely: the hit ratio collapses. Batch the writes (write-behind counters) or cache the read-heavy aggregate (the like **count**, not each like).
+    Rarely: the hit ratio collapses. Cache the aggregate instead (the like **count**, not each like).
   </FollowUp>
   <FollowUp q="A single key gets 200K reads/s. What do you do?">
-    An in-process L1 cache with a short TTL on every app server, N replicated copies read at random, and the CDN if the data is public.
+    An in-process cache with a short TTL on every app server, or N copies read at random.
   </FollowUp>
 </FollowUps>
 

@@ -2,7 +2,7 @@ import { frequencyBudget, pairCount, seenSet } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-A hash map or set **remembers what you've already seen**, so "is it there?", "how many?" and "where?" cost O(1) on average. One O(n) pass replaces an O(n²) nested loop, paid for with O(n) memory.
+A hash map is a **notebook of what you have seen**. One look costs one step, so a nested loop becomes one pass: O(n) time, O(n) memory.
 </TLDR>
 
 ## When to reach for it
@@ -17,91 +17,92 @@ A hash map or set **remembers what you've already seen**, so "is it there?", "ho
 
 | Variant | Remembers | Classic problems |
 |---|---|---|
-| Seen set (`Set`) | which values appeared | contains duplicate, longest consecutive sequence |
-| Frequency map | value → count | valid anagram, first unique character, top k frequent |
+| Seen set | which values appeared | contains duplicate |
+| Frequency map | value → count | valid anagram, top k frequent |
 | Complement map | value → index or count | two sum, subarray sum equals k |
-| Group by key | canonical key → members | group anagrams |
+| Group by key | key → members | group anagrams |
 
 ## The core idea: replace the inner search with a lookup
 
-Most brute forces here scan the other elements for a duplicate, a partner, a match: an O(n) search paid n times. A hash structure deletes that scan. Store what each element tells you as you pass, and later elements **ask the map** instead.
+<Doodle name="index" size={150} caption />
 
-The invariant: **the map holds exactly the elements before the current index.** So **look up, then insert**: the current element can't match itself, and every pair is found once, at its second element.
+Think of a book with edge tabs. Hunting for a chapter page by page is slow. Flipping to its tab is instant. A hash map is the tab.
 
-Watch a set catch the first repeat in one pass:
+A brute force scans the other elements for a match, again and again. Instead, write down what each element tells you as you pass. Later elements ask the notebook, not the list.
+
+One rule: **look up first, then write down.** An element can't pair with itself, and every pair is found at its second element. Watch a set catch the first repeat:
 
 <AlgoViz trace={seenSet} />
 
-The price: O(n) memory, and a string key costs time proportional to its length to hash. "O(1)" means *on average*.
+The price is O(n) memory. "O(1)" means on average.
 
 ## Play with it
 
-Two sum on a real hash table: each number asks its bucket for `target - x`, then drops in. Change the numbers under **Your numbers**, then drag Buckets down to 1 and watch "entries compared" climb towards the nested loop's pair checks.
+Two sum on a real hash table. Drag Buckets down to 1 and watch the comparisons climb toward the nested loop's.
 
 <HashingLab />
 
 ## Step by step
 
 <Steps>
-  <Step title="Write the brute force and find the inner search">
-    What does it look for? "An earlier `target - x`", "a word with the same letters": that is the map's question.
+  <Step title="Find the inner search in the brute force">
+    "An earlier `target - x`" is the map's question.
   </Step>
   <Step title="Choose what to remember">
-    Presence: a `Set`. How many: value → count. Where: value → index. Which group: key → list.
+    Presence: `Set`. Count or index: value → count or index. Group: key → list.
   </Step>
   <Step title="Choose the key">
-    Usually the value. Sometimes a **canonical form** that makes equivalent items collide: sorted letters, `` `${r},${c}` ``.
+    Usually the value, or a **canonical form** like sorted letters.
   </Step>
-  <Step title="Decide the order of operations">
-    Pairing with earlier elements: look up **before** inserting. Comparing two whole inputs (anagrams): count first, then check.
+  <Step title="Pick the order">
+    Pairing with earlier elements: look up **before** inserting.
   </Step>
   <Step title="Read off the answer">
-    Return on the first hit, or make a final pass, over the input (not the map) when **order** matters.
+    Return on the first hit, or rescan when **order** matters.
   </Step>
 </Steps>
 
 ## Template 1: seen set
 
-When only presence matters, a `Set` is the lightest tool: `has` and `add` are all you need.
+When only presence matters, a `Set` is enough.
 
 <CodeTabs files={['snippets/seen-set.js']} java={['snippets/java/SeenSet.java']} python={['snippets/python/seen_set.py']} />
 
-The same lines detect duplicates, mark visited nodes, or spot a cycle of states (Happy Number). <ProblemLink slug="longest-consecutive-sequence" /> loads **all** values first, then uses `set.has(x - 1)` to find where runs start.
+The same lines detect duplicates or visited nodes. <ProblemLink slug="longest-consecutive-sequence" /> starts counting only where `set.has(x - 1)` is false.
 
 ## Template 2: frequency map
 
-A frequency map answers "how many?" in O(1). It also works as a **budget**: count what you have, spend it, and fail when a count runs out.
+A frequency map answers "how many?". It is also a **budget**: spend counts until one runs out.
 
 <AlgoViz trace={frequencyBudget} />
 
 <CodeTabs files={['snippets/frequency.js']} java={['snippets/java/Frequency.java']} python={['snippets/python/frequency.py']} />
 
-<ProblemLink slug="valid-anagram" /> counts one word up and the other down; <ProblemLink slug="first-unique-character" /> counts, then rescans in order. For lowercase letters, an array of 26 indexed by `ch.charCodeAt(0) - 97` is a perfect hash: faster, and O(1) space.
+<ProblemLink slug="valid-anagram" /> counts one word up and the other down.
 
 ## Template 3: complement lookup
 
-Two elements must combine into a target? Fix the second and ask the map about the first. Stored counts handle duplicates: each `x` adds one pair per earlier copy of `target - x`.
+Two numbers must add up to a target? Fix the second and ask the notebook for the first. Stored counts handle repeats: each `x` adds one pair per earlier copy of `target - x`.
 
 <AlgoViz trace={pairCount} />
 
 <CodeTabs files={['snippets/complement.js']} java={['snippets/java/Complement.java']} python={['snippets/python/complement.py']} />
 
-<ProblemLink slug="two-sum" /> stores value → index and returns at the first hit. Store running totals and look up `total - k` instead, and you are in [Prefix Sums](/dsa/patterns/prefix-sum).
+<ProblemLink slug="two-sum" /> stores value → index and returns at the first hit. Store running totals instead and you are in [Prefix Sums](/dsa/patterns/prefix-sum).
 
 ## Template 4: group by a canonical key
 
-Grouping maps a key to a list. The thinking goes into the key: two items get the **same** key exactly when they belong together.
+Two items get the **same** key exactly when they belong together.
 
 <CodeTabs files={['snippets/group-by-key.js']} java={['snippets/java/GroupByKey.java']} python={['snippets/python/group_by_key.py']} />
 
 | To group… | Key | Cost per item |
 |---|---|---|
-| anagrams | letters sorted: `[...w].sort().join('')` | O(k log k) |
-| anagrams, long words | 26 counts joined: `counts.join('#')` | O(k) |
+| anagrams | letters sorted | O(k log k) |
+| anagrams, long words | 26 counts joined | O(k) |
 | grid cells, points | `` `${r},${c}` `` | O(1) |
-| strings equal up to a shift | gaps between letters: `"abd"` and `"bce"` both give `1,2` | O(k) |
 
-<ProblemLink slug="group-anagrams" /> is exactly this template plus the right key.
+<ProblemLink slug="group-anagrams" /> is this template plus the right key.
 
 ## Try it
 
@@ -111,12 +112,10 @@ Grouping maps a key to a list. The thinking goes into the key: two items get the
 
 | Template | Time | Extra space |
 |---|---|---|
-| Seen set, frequency map | O(n) | O(n), or O(k) for k symbols |
+| Seen set, frequency map | O(n) | O(n) |
 | Complement lookup | O(n) | O(n) |
-| Group by sorted key | O(n · k log k), strings of length k | O(n · k) |
+| Group by sorted key | O(n · k log k) | O(n · k) |
 | Group by count signature | O(n · k) | O(n · k) |
-
-The brute forces they replace: O(n²) pair checks, or O(n² · k) word-by-word comparisons.
 
 ## JavaScript you'll use
 
@@ -131,13 +130,12 @@ const key = [...word].sort().join('');           // canonical key for anagrams
 return [...groups.values()];                     // Map values → array of groups
 ```
 
-The trap: arrays and objects are keys **by reference**, so `seen.add([1, 2])` then `seen.has([1, 2])` is `false`. Encode composite keys as strings or numbers.
+Arrays are keys **by reference**: `seen.has([1, 2])` is `false` after adding `[1, 2]`. Use strings.
 
 <Callout kind="warning">
 
-- Inserting before looking up, so an element pairs with itself: `[3, 4]` with target 6 returns `[0, 0]`.
-- `if (map.get(k))` when the stored index or count can be `0`. Use `has`.
-- Counting with a plain object: `counts["constructor"]` already exists on `{}`, so the word "constructor" breaks `(counts[w] || 0) + 1`. Use a `Map`.
+- Inserting first: `[3, 4]` with target 6 returns `[0, 0]`.
+- `if (map.get(k))` when the stored value can be `0`. Use `has`.
 
 </Callout>
 
@@ -145,16 +143,16 @@ The trap: arrays and objects are keys **by reference**, so `seen.add([1, 2])` th
 
 <FollowUps>
   <FollowUp q="Hash map or sorting: which would you pick?">
-    Hashing: O(n) expected time, O(n) memory. Sorting: O(n log n), little memory and a predictable worst case, so pick it when memory is tight or the data arrives sorted.
+    Hashing: O(n) time, O(n) memory. Sorting: O(n log n), little memory. Pick sorting when memory is tight.
   </FollowUp>
-  <FollowUp q="What is the worst case of a hash map lookup, and does it matter?">
-    O(n) when many keys collide, and attackers can force that, which is why engines randomise string hashing. Say "O(1) on average" unless asked about adversarial input.
+  <FollowUp q="What is the worst case of a hash map lookup?">
+    O(n) when many keys collide. Say "O(1) on average" unless asked about attackers.
   </FollowUp>
   <FollowUp q="How do you group anagrams when the words are very long?">
-    Swap the O(k log k) sorted key for an O(k) count signature: 26 counts joined with a separator (`1#0#2#…`). Without the separator, counts 1, 11 and 11, 1 both give "111".
+    Use 26 counts joined with a separator (`1#0#2#…`) as the key: O(k). Without the separator, 1,11 and 11,1 look the same.
   </FollowUp>
-  <FollowUp q="The data doesn't fit in memory. Can you still count distinct items or find duplicates?">
-    Exactly: hash-partition into files that fit in memory, then map each file. Approximately: a Bloom filter (seen before?), HyperLogLog (distinct count in a few kilobytes) or a count-min sketch (frequencies).
+  <FollowUp q="The data doesn't fit in memory. Now what?">
+    Split it by hash into files that fit, then map each file. For estimates, use a Bloom filter or HyperLogLog.
   </FollowUp>
 </FollowUps>
 

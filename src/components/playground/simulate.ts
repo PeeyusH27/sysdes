@@ -94,6 +94,7 @@ export function simulate(nodes: HldNode[], edges: FlowEdgeT[], opts: SimOptions 
     for (const e of [...live, ...side]) {
       const t = byId.get(e.target)!;
       let l = splits && !side.includes(e) ? scale(fwd, e.data?.weight ?? 1 / live.length) : fwd;
+      if (e.data?.share !== undefined) l = scale(l, e.data.share); // only part of the traffic takes this edge
       if (sideCache && t.data.kind === "database") l = scale(l, 1 - cfg(sideCache).hitRatio, 1); // cache-aside
       edgeQps[e.id] = total(l);
       const acc = load.get(t.id)!;

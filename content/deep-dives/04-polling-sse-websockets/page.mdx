@@ -2,52 +2,59 @@ import { realtimeTechniques, wsScaling, webhookDelivery } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Pick by direction and frequency: **polling** for dashboards that can be seconds stale, **SSE** for one-way live updates, **WebSockets** when the client talks back often, **webhooks** server to server. Connections always drop, so reconnect with jittered backoff and design for resume.
+Pick by direction and frequency: **polling** for slightly stale dashboards, **SSE** for one-way live updates, **WebSockets** when the client talks back often. Connections drop, so reconnect with jitter.
 </TLDR>
 
 ## Why it matters
 
-HTTP waits to be asked. Live scores, chat, notifications and progress bars need the server to speak first. Each workaround trades **simplicity** against **latency** and **server cost**. Get it wrong and you show stale screens, or run a fleet holding millions of idle sockets.
+HTTP waits to be asked. Live scores and chat need the server to speak first. It is like checking your mailbox every five minutes versus a doorbell. Each workaround trades **simplicity** against **delay** and **server cost**.
 
-The diagram sends three events (at t = 1, 3 and 6 s) through each technique. Switch tabs: when does the client learn about event A, and after how many requests?
+The diagram sends three events through each technique. Switch tabs: when does the client learn about event A, and after how many requests?
 
 <SequenceDiagram spec={realtimeTechniques} />
 
 ## Side by side
 
-| | Short polling | Long polling | SSE | WebSocket |
-|---|---|---|---|---|
-| Direction | Client pulls | Client pulls (held) | Server → client | Both ways |
-| Latency | Up to the interval | Near real time | Real time | Real time |
-| Server cost | Many empty requests | One open request per client | One open stream per client | One socket per client, stateful |
-| Proxies and firewalls | Fine | Mostly fine | Watch for buffering | Needs Upgrade support |
-| Reconnect | n/a | Manual | **Built in** (`Last-Event-ID`) | Manual |
-| Best for | Dashboards | Legacy or simple setups | Feeds, scores, progress | Chat, games, collaboration |
+| | Short polling | SSE | WebSocket |
+|---|---|---|---|
+| Direction | Client asks | Server to client | Both ways |
+| Delay | Up to the interval | Real time | Real time |
+| Cost | Many empty requests | One open stream | One stateful socket |
+| Best for | Dashboards | Feeds, scores | Chat, games |
 
-Webhooks, server to server, have their own section.
+**Long polling** holds each request open until there is news. **Webhooks** are server to server and have their own section.
+
+Start with plain polling. Move only when users notice the delay, or the request count hurts. Pick by product:
+
+| Product | Pick | Why |
+|---|---|---|
+| Sales dashboard | Poll every 30 s | Seconds of delay are fine |
+| Order or score alerts | SSE | Server talks, client listens |
+| Chat | WebSocket | Both sides send often |
+| Live cursors | WebSocket | Many tiny messages both ways |
 
 ## Race them
 
-The race runs four techniques on one random event stream. Raise the poll interval: short polling's delay climbs (about **half the interval** on average) as its requests fall. Raise the event rate: long polling's requests climb too, one round trip per event.
+Four techniques race on one event stream. Raise the poll interval: short polling's delay climbs (about **half the interval**) as its requests fall.
 
 <PollingRace />
 
-A browser request with cookies often carries 500 bytes to 2 KB of headers; a WebSocket frame header is 2 to 14 bytes. And 100K clients polling every 5 s make **20,000 requests per second**, mostly empty.
+Do the sum. 1,000 dashboards polling every 30 s is about 33 requests per second: trivial, so keep polling. 100K clients polling every 5 s make **20,000 requests per second**, mostly empty, so switch to SSE. The cost moves to memory: each open stream holds a socket, and one node holds roughly 50K.
 
 ## Short and long polling
 
-**Short polling** is a timer and a `fetch`: schedule the next poll *after* the reply (`setInterval` stacks requests on a slow server), pause in hidden tabs, and answer unchanged data with `ETag` and `304 Not Modified`. Fine for a 30 s dashboard.
+**Short polling** is a timer and a `fetch`. Schedule the next poll *after* the reply, and answer unchanged data with `304 Not Modified`. Fine for a 30 s dashboard.
 
-**Long polling** holds the request until there's news or about 30 s pass (under proxy idle timeouts, often 60 s); the client re-asks with a cursor (`?since=41`). Two classic bugs:
+**Long polling** holds the request until there is news or about 30 s pass; the client re-asks with a cursor (`?since=41`). Two classic bugs:
 
-- **The gap:** subscribe *after* reading the backlog and an event in between is lost. Subscribe first, then read and merge.
-- **The tight loop:** instant re-polls after an error hit a down server with thousands of requests per second from every client. Back off with jitter.
+- **The gap:** subscribe *after* reading the backlog and an event in between is lost. Subscribe first, then read.
+- **The tight loop:** instant re-polls after an error flood a down server. Back off with jitter.
 
-Each waiting request holds a connection and memory, so use an async server (Node, Go, Netty), not a thread per request.
+Use an async server (Node, Go), not a thread per request.
 
 ## Server-Sent Events
 
-Plain HTTP: one long `Content-Type: text/event-stream` response, each event a few `field: value` lines and a blank line. `EventSource` parses it, reconnects by itself and sends the last `id:` it saw as `Last-Event-ID`, so the server replays what was missed.
+**SSE** is plain HTTP: one long response that streams events. The browser's `EventSource` parses it, reconnects by itself and sends the last `id:` it saw as `Last-Event-ID`, so the server replays what was missed.
 
 ```http
 id: 42
@@ -57,13 +64,14 @@ data: {"home":2,"away":1}
 : ping
 ```
 
-- **Connection limits.** HTTP/1.1 browsers allow about 6 connections per origin, one per stream, so a seventh tab hangs; HTTP/2 multiplexes them on one connection.
-- **Proxies.** Some buffer, so events arrive in bursts or never: send `X-Accel-Buffering: no` (nginx) and a `: ping` comment every 15 s, and check idle timeouts.
-- **Limits.** Text only (send JSON), one direction (the client sends plain `POST`s), and `EventSource` can't set custom headers, so authenticate with a cookie.
+- **Connection limits.** HTTP/1.1 allows about 6 connections per origin, so a seventh tab hangs. HTTP/2 shares one.
+- **Proxies.** Some buffer the stream. Send `X-Accel-Buffering: no` (nginx) and a `: ping` every 15 s.
 
 ## WebSockets
 
-An HTTP `GET` with `Upgrade: websocket` gets `101 Switching Protocols`, and the TCP connection becomes a two-way channel of small frames. Use it when the client sends often too: chat, multiplayer games, collaborative editing. The price is **state**: each socket lives on one server, and reconnect, resume, heartbeats and backpressure are yours to write.
+A **WebSocket** starts as an HTTP request, then upgrades the same connection into a two-way channel of small messages. Use it when the client sends often too, like chat. The price is **state**: each socket lives on one server, and reconnect and resume are yours to write.
+
+Picture a chat app on a train. The tunnel kills the connection silently, and without a heartbeat the server keeps writing to nobody. Messages with ids let the client resume where it stopped.
 
 ### Scaling WebSockets
 
@@ -71,55 +79,44 @@ Play the diagram's three stories: **Message across nodes**, **Dead peer** and **
 
 <FlowDiagram spec={wsScaling} />
 
-- **Pub/sub backplane.** Alice is on node 1, Bob on node 2: node 1 publishes to `user:bob` (Redis pub/sub, NATS, Kafka) and Bob's node delivers.
-- **No sticky sessions:** any node reaches any user, so reconnects land anywhere.
-- **File descriptors.** One per socket; many Linux systems default to a soft limit of 1,024. Raise `ulimit -n` (`LimitNOFILE` in systemd); then memory caps you at tens of thousands of idle sockets per Node process.
-- **Heartbeats.** Dead TCP peers are silent. Ping every ~30 s, kill sockets that miss a pong, stay under load balancer idle timeouts (AWS ALB default: 60 s).
-- **Drain on deploy.** Fail readiness, send close code `1001` (going away) and let clients reconnect elsewhere with **full jitter**, or 50K reconnects in one second flatten the other nodes.
+- **Pub/sub backplane.** Alice is on node 1, Bob on node 2. Node 1 publishes to `user:bob` and Bob's node delivers. Any node reaches any user.
+- **Heartbeats.** Dead peers are silent. Ping every ~30 s and close sockets that miss a pong.
+- **Drain on deploy.** Let clients reconnect elsewhere with **full jitter**, or 50K reconnects in one second flatten the other nodes.
 
 ### Authenticating sockets
 
-Browsers can't set an `Authorization` header on a WebSocket (or `EventSource`), so authenticate the **connect**:
+Browsers can't set an `Authorization` header on a WebSocket, so authenticate the **connect**:
 
-- A session **cookie** rides the upgrade; check `Origin` too, or any site can open a socket as your user (cross-site WebSocket hijacking).
-- Or a short-lived **token** in the first message (Socket.IO's `auth` payload), never in the query string, which lands in access logs.
-- **Re-auth on expiry.** Sockets outlive tokens: the client sends a fresh one before expiry, or the server closes with an app code (e.g. 4001). Re-check permissions on every room join.
+- A session **cookie** rides the upgrade. Check `Origin` too.
+- Or a short-lived **token** in the first message, never in the URL, which lands in logs.
+- Sockets outlive tokens, so re-authenticate before expiry.
 
 ## Webhooks
 
-Don't poll Stripe or GitHub: they `POST` to your public endpoint when something happens, sometimes twice or out of order, and retry until you answer `2xx`. Try all three branches in the diagram.
+Stripe and GitHub `POST` to your endpoint when something happens, sometimes twice, and retry until you answer `2xx`. Try all three branches.
 
 <SequenceDiagram spec={webhookDelivery} />
 
-- **HMAC signatures.** Recompute over the **raw** body (JSON parsing changes the bytes); compare with `timingSafeEqual`, in constant time.
-- **Timestamps against replay.** The provider signs one too; reject anything older than about 5 minutes.
-- **Acknowledge fast.** Enqueue durably, return `200` within a second or two. Providers time out (GitHub allows 10 s) and count slow as failed.
+- **Check the signature.** Recompute the HMAC over the **raw** body and compare in constant time.
+- **Reject old timestamps.** Anything older than about 5 minutes is a replay.
+- **Acknowledge fast.** Enqueue, then return `200` quickly.
 - **Process idempotently.** A unique constraint on the event id makes a duplicate a no-op.
-- **Expect retries**, and gaps: providers eventually give up, so reconcile through their API now and then.
 
 ## Code
 
 ### Short polling
 
-Pauses in hidden tabs and never overlaps requests (the source polled forever).
-
 <CodeBlock src="snippets/short-polling.js" />
 
 ### Long polling: client
-
-Backs off with full jitter after errors and aborts each request after 35 s.
 
 <CodeBlock src="snippets/long-poll-client.js" />
 
 ### Long polling: server
 
-Merges backlog and live events without duplicates, and cleans up when the client leaves.
-
 <CodeBlock src="snippets/long-poll-server.js" />
 
 ### Server-Sent Events
-
-Replays from `Last-Event-ID`, sends heartbeats, and gives each browser a jittered `retry:` delay.
 
 <CodeBlock src="snippets/sse.js" />
 
@@ -129,13 +126,9 @@ Replays from `Last-Event-ID`, sends heartbeats, and gives each browser a jittere
 
 ### WebSocket client with reconnect
 
-Reconnects with **full jitter** (a random delay between 0 and an exponentially growing cap), resets the backoff after a successful connect, and cancels a pending reconnect on `close()`.
-
 <CodeTabs files={['snippets/ws-client.js', 'snippets/backoff.js']} />
 
 ### Scaling Socket.IO across nodes
-
-The Redis adapter relays room broadcasts between servers, so `io.to('user:bob')` reaches Bob on any node. The middleware authenticates before accepting the connection.
 
 <CodeBlock src="snippets/socketio-redis.js" />
 
@@ -151,19 +144,19 @@ The Redis adapter relays room broadcasts between servers, so `io.to('user:bob')`
 
 <FollowUps>
   <FollowUp q="Live sports scores: which technique?">
-    SSE: one-way, plain HTTP that CDNs and proxies understand, resuming with `Last-Event-ID`. Fan out through pub/sub so every SSE server gets every score.
+    SSE: one-way, plain HTTP, and it resumes with `Last-Event-ID`. Fan out through pub/sub.
   </FollowUp>
   <FollowUp q="Why does SSE hang behind some proxies?">
-    The proxy buffers the stream; disable buffering (`X-Accel-Buffering: no` on nginx) and send `: ping` heartbeats so it never looks idle.
+    The proxy buffers the stream. Disable buffering and send `: ping` heartbeats.
   </FollowUp>
   <FollowUp q="How do you serve 1M concurrent WebSockets?">
-    At ~50K sockets per gateway node (memory and file descriptors decide), 20 nodes plus headroom. Route over pub/sub, and drain on deploy while clients reconnect with jitter.
+    At ~50K sockets per node, about 20 nodes plus headroom. Route over pub/sub, and drain on deploy.
   </FollowUp>
   <FollowUp q="SSE or WebSocket for a chat app?">
-    Usually WebSocket, since typing, receipts and messages flow both ways often; SSE plus `POST` suits low-volume chat. Either way, give messages ids so clients resume after a reconnect.
+    Usually WebSocket, since messages flow both ways. Give messages ids so clients can resume.
   </FollowUp>
   <FollowUp q="How do you notify a mobile user whose app is in the background?">
-    Push through APNs (iOS) or FCM (Android), because the OS kills a backgrounded app's sockets; on open, reconnect and sync from the last message id seen.
+    Use push (APNs or FCM), since the OS kills background sockets. On open, reconnect and sync.
   </FollowUp>
 </FollowUps>
 

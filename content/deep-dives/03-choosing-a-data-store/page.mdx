@@ -2,26 +2,35 @@ import { storeChooser, polyglotShop } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Start from the **access pattern**, not the product: how is data written and read, and what must never go wrong? Postgres for anything transactional; specialised stores only where it's the wrong shape, fed from **one source of truth** by CDC or the outbox.
+Start from the **access pattern**, not the product: how is data written and read, and what must never go wrong? Use Postgres for anything transactional. Add another store only where it is the wrong shape.
 </TLDR>
 
 ## Why one database isn't enough
 
-A B-tree database with transactions is superb at "move money correctly" and hopeless at "store a 2 GB video" or "rank 50M products by relevance to a typo". So at scale you run several stores (**polyglot**), and keeping them consistent is the hard part.
+A kitchen has a knife, a pot and a fridge, because no one tool does every job. A normal database is great at "move money correctly" and hopeless at "store a 2 GB video". So big systems use several stores, and keeping them in step is the hard part.
 
-Ask of each kind of data:
+For each kind of data, ask:
 
-- **Writes:** how many per second, single- or multi-row, atomic?
-- **Reads:** by key, range, text, or aggregated over millions of rows?
-- **Correctness:** is a lost or stale value an annoyance (a view count) or a bug (a balance)?
+- **Writes:** how many a second, and must they be atomic?
+- **Reads:** by key, by text, or summed over millions of rows?
+- **Correctness:** is a lost value an annoyance (a view count) or a bug (a balance)?
+
+**Do the sum first.** 10 million users at 1 KB each is 10 GB. That fits in memory on one Postgres machine, which serves thousands of simple queries a second. Plain Postgres is enough for most products. It starts to strain when writes reach tens of thousands a second, or when big scans share a machine with live traffic. Add a store only when the data has a different shape.
 
 ## Pick a store, step by step
 
-Walk the tree; each result says why it fits and where to read more.
+Walk the tree.
 
 <DecisionTree spec={storeChooser} />
 
-Transactions come first: they're the hardest property to bolt on later. Most paths end at Postgres, and that's fine.
+Transactions come first, since they are hard to add later. Most paths end at Postgres, and that is fine. Some real jobs:
+
+| Job | Store | Why |
+|---|---|---|
+| 10M profiles, 500 reads a second | Postgres | Small, needs joins and transactions |
+| Product search with typos and filters | Elasticsearch | Ranks results, forgives typos |
+| 200M click events a day, dashboards | ClickHouse | Scans a few columns fast |
+| 2 GB product videos | S3 | Blobs bloat a database and its backups |
 
 ## One shop, many stores
 
@@ -29,7 +38,7 @@ A typical shop runs six stores, each owning different facts. Step through a page
 
 <FlowDiagram spec={polyglotShop} />
 
-Postgres, MongoDB, Redis and S3 are written directly (S3 by the browser, via a presigned URL). Elasticsearch and ClickHouse are **derived** from the change stream: lose either, and you rebuild it by replaying Kafka or re-snapshotting the source.
+Postgres, MongoDB, Redis and S3 are written directly. Elasticsearch and ClickHouse are **derived** from the change stream. Lose either and you rebuild it from the source.
 
 ## Stores compared
 
@@ -48,16 +57,16 @@ Postgres, MongoDB, Redis and S3 are written directly (S3 by the browser, via a p
 
 <Steps>
   <Step title="Model by access pattern first">
-    List queries before tables: "latest 20 orders for a user" and "revenue per day" want different stores, keys and indexes. In key-value and wide-column stores the key **is** the query: a new access pattern needs a new table or index.
+    List the queries before the tables. "Latest orders for a user" and "revenue per day" want different stores.
   </Step>
   <Step title="One source of truth per fact">
-    Write each fact to one store; derived stores (search, analytics, caches) are fed by CDC or the outbox and can be rebuilt. Never write the database and the search index in one request: one write will eventually fail.
+    Write each fact to one store. Search, analytics and caches are copies you can rebuild. Never write the database and the search index in one request. If the index call times out, the order exists but never shows in search.
   </Step>
   <Step title="OLTP and OLAP don't share a database">
-    A dashboard scanning 100M rows starves checkout on the same primary; stream changes into a columnar store for analytics.
+    On Monday at 9 am, a report scans 100M rows and checkout times out. Stream changes into a separate store for analytics.
   </Step>
   <Step title="Boring by default">
-    Every store is one more thing to back up, monitor, secure and wake up for; add one only when an access pattern demands it.
+    Every store is one more thing to back up and wake up for. Picture a team that picks a key-value store "for scale", then finds its first report needs a join. Add a store only when an access pattern demands it.
   </Step>
 </Steps>
 
@@ -65,27 +74,17 @@ Postgres, MongoDB, Redis and S3 are written directly (S3 by the browser, via a p
 
 ### Relational (PostgreSQL)
 
-For money, orders and users. Index what you filter and sort by.
-
 <CodeBlock src="snippets/place-order.js" />
 
-The original decremented stock with `AND qty > 0` and ignored the result, so orders committed with nothing in stock. Here the `UPDATE` checks there's enough stock, and `rowCount === 0` rolls back the transaction (the test covers both paths).
-
 ### Document (MongoDB)
-
-For catalogs and profiles. Embed bounded children, reference unbounded ones.
 
 <CodeBlock src="snippets/document.js" />
 
 ### Key-value (Redis, DynamoDB)
 
-For sessions and counters. No joins, so model around access patterns: in DynamoDB a composite key (`pk = USER#42`, `sk = ORDER#2025-06-01…`) makes "latest orders for a user" one sorted range read.
-
 <CodeTabs files={['snippets/redis-kv.js', 'snippets/dynamodb-query.js']} titles={['Redis', 'DynamoDB']} />
 
 ### Wide-column (Cassandra)
-
-One table per query. The partition key picks the node; the clustering key sorts rows inside it.
 
 ```sql
 -- Wide-column (Cassandra CQL): partition by (sensor, day) so no partition grows without bound;
@@ -98,17 +97,11 @@ CREATE TABLE readings (
 
 ### Object storage (S3)
 
-Clients upload directly with presigned URLs; your DB keeps only the key.
-
 <CodeTabs files={['snippets/presign-server.js', 'snippets/presign-browser.js']} titles={['Server: sign the URL', 'Browser: upload']} />
 
 ### Search and time-series
 
-Elasticsearch (search) and ClickHouse or Timescale (metrics, events) are fed from the main DB through events.
-
 <CodeBlock src="snippets/search-events.js" />
-
-On the analytics side, the table is append-only and columnar:
 
 ```sql
 -- ClickHouse: append-only events, partitioned by month, sorted for the common filter
@@ -133,19 +126,19 @@ GROUP BY hour ORDER BY hour;
 
 <FollowUps>
   <FollowUp q="Where do chat messages live?">
-    Wide-column (Cassandra or Scylla), partitioned by conversation and sorted by sequence: write-heavy, read by recency. At moderate scale, MongoDB with a `{conversationId, seq}` index.
+    Wide-column (Cassandra), partitioned by conversation and sorted by sequence.
   </FollowUp>
   <FollowUp q="Why not store images in Postgres?">
-    Blobs bloat the database, backups and replication, and a CDN can't serve them; keep them in object storage, with the key and metadata in Postgres.
+    Blobs bloat the database and its backups. Use object storage, with the key in Postgres.
   </FollowUp>
   <FollowUp q="How do you keep Elasticsearch in sync?">
-    CDC (Debezium) or the outbox feeds an idempotent indexer, and periodic full reindexes rebuild it from the source of truth.
+    Change events feed an indexer, and a full reindex rebuilds it from the source of truth.
   </FollowUp>
   <FollowUp q="SQL or NoSQL?">
-    Let the access patterns decide: cross-row transactions, constraints or ad-hoc queries mean SQL; known-key access beyond one primary, or a per-record shape, means NoSQL.
+    Let the access patterns decide. Transactions or ad-hoc queries mean SQL. Known-key access at huge scale means NoSQL.
   </FollowUp>
   <FollowUp q="When would you pick DynamoDB over Postgres?">
-    When access patterns are few, known and key-based at large or spiky scale (carts, sessions, device state) and you want no servers to run; not for joins, ad-hoc reporting or multi-entity invariants.
+    When access is few, known and key-based at huge scale (carts, sessions). Not for joins or ad-hoc reports.
   </FollowUp>
 </FollowUps>
 

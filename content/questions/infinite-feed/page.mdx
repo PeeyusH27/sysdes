@@ -2,7 +2,7 @@ import { feedFlow } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-An IntersectionObserver on a sentinel fetches the next page by **cursor**, one request at a time, with Retry on errors. Pages live in an infinite-query cache and rows are **virtualized**, so the DOM holds about 20 rows and Back lands on the same post.
+A hidden marker at the bottom (a **sentinel**) asks for the next page by **cursor**, one request at a time. Only about 20 rows are ever on screen (**virtualized**), and Back lands on the same post.
 </TLDR>
 
 <Requirements
@@ -12,22 +12,24 @@ An IntersectionObserver on a sentinel fetches the next page by **cursor**, one r
 
 ## Clarifying questions
 
-- **Page size and ordering?** Newest first can use the last post id as cursor; a ranked feed needs an opaque server cursor pinning the ranking snapshot.
-- **Item height?** Variable heights mean measuring rows after render.
-- **Session length?** Hundreds of posts can stay in the DOM; thousands need virtualization.
-- **Back and real time?** Back should land on the same post, instantly, with no refetch. New posts: polling, SSE, or a banner?
-- **SEO?** If public, server-render page one and keep crawlable links to older pages.
+- **Order and page size?** Newest first, or ranked. About 20 per page.
+- **Item height?** Variable heights mean measuring each row.
+- **Session length?** Thousands of posts means you need to limit what is on screen.
+- **Back and new posts?** Back should land on the same post, with no refetch. New posts show as a banner.
+- **SEO?** Server-render page one.
 
 ## Answer with RADIO
 
-Structure a frontend answer as **R**equirements (done), **A**rchitecture, **D**ata model, **I**nterface and **O**ptimizations.
+<Doodle name="index" size={150} caption />
+
+Don't ask for "page 2". You read page 1, then 5 new posts arrive, and page 2 starts with 5 posts you already saw. Ask for "posts older than the last one I have", like a bookmark. That is a **cursor**. Offsets are fine for a small, static list where people jump to page 37. Structure a frontend answer as **R**equirements (done), **A**rchitecture, **D**ata model, **I**nterface and **O**ptimizations.
 
 ### Architecture
 
-- **FeedPage** (server component) fetches page one, for first paint and crawlers.
-- **Feed** (client) seeds the infinite query with it (`initialData`), continues from its `nextCursor`, and renders virtualized rows, a loader row (sentinel, Retry, or "You're all caught up") and a **NewPostsBanner**.
+- **FeedPage** (server) fetches page one for first paint and crawlers.
+- **Feed** (client) continues from `nextCursor`, and renders virtualized rows, a loader row and a **NewPostsBanner**.
 - **Post** is an `article` with its image box reserved by `width` and `height`.
-- **Data layer:** a TanStack Query infinite query (cache, dedupe, back navigation), or the dependency-free `useInfiniteFeed` hook.
+- **Data layer:** a TanStack Query infinite query, or the `useInfiniteFeed` hook.
 
 ### Data model
 
@@ -53,22 +55,21 @@ GET /api/feed/new-count?after=p_200
 → 200 { "count": 12 }
 ```
 
-`useInfiniteFeed(url, limit)` returns `{ items, status, loadMore, sentinel }`: `sentinel` is the loader row's ref, `loadMore` also drives Retry. The [API lesson](/learn/api-load-balancing) builds the cursor endpoint.
+`useInfiniteFeed(url, limit)` returns `{ items, status, loadMore, sentinel }`. The [API lesson](/learn/api-load-balancing) builds the cursor endpoint.
 
 ### Optimizations
 
-- **Prefetch:** `rootMargin: '600px 0px'` starts the next page about a screen early.
-- **No layout shift:** `width` and `height` (or `aspect-ratio`) on images, plus `loading="lazy"`, `decoding="async"` and skeleton rows.
-- **The cheap middle ground:** under a few hundred items, `content-visibility: auto` with `contain-intrinsic-size` skips off-screen rendering and keeps Ctrl+F working.
-- **Bounded DOM and memory:** virtualize with measured heights (`measureElement`); `maxPages` drops old pages in very long sessions.
+- **Prefetch:** `rootMargin: '600px 0px'` starts the next page a screen early.
+- **No layout shift:** reserve every image's box.
+- **Small DOM:** virtualize, and drop old pages in very long sessions.
 
 ## Architecture diagram
 
-In the flow diagram, play **Next page**, **Error and retry**, **End of list** and **Back navigation**.
+Play **Next page**, **Error and retry**, **End of list** and **Back navigation**.
 
 <FlowDiagram spec={feedFlow} />
 
-Then scroll the 10,000-row list with virtualization on and off, and watch the mounted-row count. That number is why scrolling stays smooth however long the session runs.
+Now scroll the 10,000-row list with virtualization on and off. Watch the mounted-row count: that number keeps scrolling smooth.
 
 <VirtualListViz />
 
@@ -96,13 +97,13 @@ Then scroll the 10,000-row list with virtualization on and off, and watch the mo
 
 <Steps>
   <Step title="Clarify">
-    Page size (20 is typical), ordering, item height, Back, real time. Then state the shape: "a sentinel triggers cursor fetches, pages go in a cache, rows are virtualized."
+    Then state the shape: a sentinel triggers cursor fetches, pages go in a cache, rows are virtualized.
   </Step>
   <Step title="Pick the trigger">
-    Observe a 1 px sentinel after the last post: unlike a scroll listener, an IntersectionObserver costs nothing per frame. It reports only **changes**, so if a short page leaves the sentinel on screen, re-observe after each page (`Feed.jsx` keys the sentinel on the item count).
+    Watch a 1 px sentinel after the last post. An IntersectionObserver costs nothing per frame. It reports only **changes**, so re-observe after each page in case a short page leaves the sentinel on screen.
   </Step>
   <Step title="Paginate with a cursor">
-    Ask for "posts older than my last one": `?cursor=p_160`. With page numbers, 5 new posts at the top shift everything 5 places, so the next page repeats 5; deletions make it skip. Deep offsets are slow too: the database walks every skipped row.
+    With page numbers, 5 new posts at the top shift everything down 5, so the next page repeats 5. Deep offsets are slow too: `OFFSET 10000` reads and drops 10,000 rows to return 20. A cursor reads 20.
 
 ```sql
 SELECT id, title, image, width, height
@@ -113,19 +114,19 @@ LIMIT 21;              -- one extra row says whether another page exists
 ```
   </Step>
   <Step title="Guard the fetch">
-    One request in flight, via a `busy` ref reset in `finally`. The original reset it only on success, so one failure froze the feed forever. Abort on unmount; on error, show Retry rather than looping against a struggling server.
+    One request in flight, reset in `finally` so one failure can't freeze the feed. On error, show Retry rather than looping against a struggling server.
   </Step>
   <Step title="Virtualize">
-    Render only the rows in view plus some overscan, in a container sized to the estimated total; measure each row after render and place it with `transform`. 10,000 posts loaded, about 20 in the DOM.
+    Render only the rows in view plus a few extra, in a container sized to the estimated total. 10,000 posts loaded, about 20 in the DOM.
   </Step>
   <Step title="Cache the pages">
-    An infinite query keyed `['feed']`: Back renders from memory with no request, and the saved anchor restores the same post. In very long sessions, `maxPages` caps the cache and `getPreviousPageParam` refetches dropped pages on the way back up.
+    Back renders from memory with no request, and the saved anchor restores the same post.
   </Step>
   <Step title="Keep the layout stable">
-    Reserve every image's box so late images don't shove content, and never insert posts above the reader: show "12 new posts ↑" instead (see the first follow-up).
+    Reserve every image's box. Never insert posts above the reader: show "12 new posts ↑" instead.
   </Step>
   <Step title="Make it accessible">
-    `role="feed"` with `aria-busy` while loading. Each post is a focusable `article` with `aria-posinset` and `aria-setsize` (-1 while the total is unknown). Announce the end with `role="status"`, and let keyboard users reach the footer, or offer a "Load more" button.
+    `role="feed"`, with each post a focusable `article` using `aria-posinset` and `aria-setsize` (-1 while the total is unknown). Let keyboard users reach the footer, or offer a "Load more" button.
   </Step>
 </Steps>
 
@@ -137,52 +138,51 @@ Don't virtualize a 50-item list: it breaks Ctrl+F and buys nothing.
 
 <CodeTabs files={['snippets/useInfiniteFeed.js', 'snippets/Feed.jsx', 'snippets/FeedVirtual.jsx', 'snippets/scroll-restore.js', 'snippets/NewPostsBanner.jsx']} />
 
-- `useInfiniteFeed.js`: source bug #6 fixed (`busy` resets in `finally`); the observer disconnects via the React 19 ref-callback cleanup; unmount aborts.
-- `Feed.jsx`: semantics and states. Fake-observer tests prove short pages keep loading and one 503 shows a working Retry, with no loop.
-- `FeedVirtual.jsx`: what you'd ship. TanStack Query caches pages; TanStack Virtual measures rows and spots the last one, so no observer.
-- `scroll-restore.js`: saves the first visible post and its offset for a plain list; a virtualized list saves the index and calls `scrollToIndex`.
+- `useInfiniteFeed.js`: `busy` resets in `finally`; unmount aborts.
+- `Feed.jsx`: states and semantics. Tests prove short pages keep loading and a 503 shows a working Retry.
+- `FeedVirtual.jsx`: what you'd ship, with TanStack Query and Virtual.
+- `scroll-restore.js`: saves the first visible post and its offset.
 
 ## Failure modes
 
 | What breaks | Effect | Mitigation |
 |---|---|---|
-| Fetch error | The feed stops (the source's bug) | `busy` reset in `finally`; a Retry button |
-| Page shorter than the viewport | Sentinel stays visible; observer never fires again | Re-observe after each page |
-| Fast scroll past the loader | Blank area | Overscan, skeleton rows, a larger `rootMargin` |
-| Images load late | Layout shift | `width`/`height` or `aspect-ratio`, plus skeletons |
-| Very long session | Memory grows | Virtualization; `maxPages` with bi-directional page params |
-| Unmount mid-request | setState on a dead component; wasted bandwidth | Abort in the unmount cleanup |
+| Fetch error | The feed stops | Reset `busy` in `finally`; a Retry button |
+| Page shorter than the screen | Observer never fires again | Re-observe after each page |
+| Fast scroll past the loader | Blank area | Extra rows, skeletons, bigger `rootMargin` |
+| Images load late | Layout shift | Reserve the box |
+| Very long session | Memory grows | Virtualize; `maxPages` |
+| Unmount mid-request | Wasted work | Abort in cleanup |
 
 ## Trade-offs
 
-| Choice | Pros | Cons | Choose when |
-|---|---|---|---|
-| Virtualization vs a plain list | Constant DOM size | Breaks Ctrl+F; needs measuring; harder accessibility | More than a few hundred items |
-| `content-visibility: auto` | Native; keeps find-in-page | Every node still in the DOM | Medium-length lists |
-| Infinite scroll vs "Load more" | Seamless | Footer unreachable; harder for keyboard users | Feeds vs search results or archives |
-| Larger vs smaller `rootMargin` | Next page ready sooner | Fetches data the user may never see | 1–2 screens ahead on fast networks |
-| Cursor vs offset pagination | Stable as items arrive; fast deep pages | No jumping to page 37 | Feeds always; offsets for numbered admin tables |
+| Choice | Gain | Cost |
+|---|---|---|
+| Virtualization, not a plain list | Constant DOM size | Breaks Ctrl+F; needs measuring |
+| Infinite scroll, not "Load more" | Seamless | Footer unreachable |
+| Cursor, not offset | Stable; fast deep pages | No jumping to page 37 |
+| Bigger `rootMargin` | Next page ready sooner | Fetches unseen data |
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="How do you show new posts at the top?">
-    Poll a cheap count endpoint every 30 s while the tab is visible (or use SSE) and show the banner; a tap scrolls to the top and refetches page one. Never shift content above the reader without consent.
+    Poll a cheap count endpoint every 30 s and show a banner. A tap scrolls up and refetches page one. Never shift content above the reader unasked.
   </FollowUp>
   <FollowUp q="How do you stop memory growing in a long session?">
-    Virtualize (about 20 DOM rows), cap cached pages with `maxPages` plus `getPreviousPageParam` for the way back up, and let off-screen images be garbage-collected.
+    Virtualize (about 20 rows), and cap cached pages with `maxPages`.
   </FollowUp>
   <FollowUp q="What about SEO?">
-    Server-render the first page and add real paginated links (`?cursor=…` inside a `nav`) so crawlers reach older content. Infinite scroll is a progressive enhancement on top.
+    Server-render the first page and add real links to older pages. Infinite scroll sits on top as an enhancement.
   </FollowUp>
   <FollowUp q="What if items are deleted while the user is paginating?">
-    Cursor-by-id stays stable: a deleted post isn't returned and nothing shifts. The server filters tombstoned items; the client drops an item from cache on a deletion event.
+    A cursor by id stays stable: a deleted post isn't returned and nothing shifts.
   </FollowUp>
-  <FollowUp q="What about bi-directional scrolling, like a chat history?">
-    Add `getPreviousPageParam` and a top sentinel. When prepending older items, add the change in scroll height to `scrollTop`, or the content jumps.
+  <FollowUp q="What about bi-directional scrolling, like chat history?">
+    Add a top sentinel. When adding older items above, add the change in height to `scrollTop`, or the content jumps.
   </FollowUp>
   <FollowUp q="How would you test the feed?">
-    Mock `fetch` and fake an IntersectionObserver that reports asynchronously, like the real one. Assert one request in flight, the page-2 cursor, Retry with no automatic loop, and the real `aria-setsize` at the end.
+    Mock `fetch` and fake the IntersectionObserver. Assert one request in flight, the right cursor, and Retry with no automatic loop.
   </FollowUp>
 </FollowUps>
 

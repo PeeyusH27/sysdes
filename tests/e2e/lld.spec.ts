@@ -40,7 +40,7 @@ test("a class diagram builds up stage by stage", async ({ page }) => {
 
 test("an exercise: a wrong submission unlocks the solution, the reference passes and ticks it on the hub", async ({ page }) => {
   await page.goto("/lld/exercises/event-bus");
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("sds-view", "read"); });
   await page.reload();
   await page.waitForSelector(".cm-content");
 

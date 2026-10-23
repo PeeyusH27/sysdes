@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { useTheme } from "next-themes";
-import { ArrowRight, Check, ChevronDown, Menu, Moon, Network, Search, Sun, Wind, X, Zap } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, ClipboardCheck, Menu, Moon, Pencil, Search, Sun, Wind, X, Zap } from "lucide-react";
 import { deepDives, learnSteps, type Level } from "@content/registry";
 import { jsTopics, PATTERN_GROUPS, patterns } from "@content/dsa/registry";
 import { questionGroups, questionLabel } from "@content/home";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/cn";
 import { useHydrated, useMediaQuery } from "@/lib/hooks";
 import { useProgress } from "@/lib/progress";
 import { CommandMenu } from "./CommandMenu";
+import { LogoMark } from "./LogoMark";
 
 /* ------------------------------------------------------------------ menu data (built from the registries) */
 
@@ -61,7 +62,7 @@ const TRACKS: Track[] = [
     id: "sd",
     label: "System Design",
     blurb: `${learnSteps.length} steps, deep dives, questions`,
-    match: ["/system-design", "/learn", "/deep-dives", "/questions", "/lld", "/playground", "/cheatsheet", "/glossary"],
+    match: ["/system-design", "/basics", "/learn", "/deep-dives", "/questions", "/lld", "/architecture", "/playground", "/cheatsheet", "/glossary"],
     columns: [
       {
         id: "sd-path",
@@ -92,6 +93,8 @@ const TRACKS: Track[] = [
         groups: [
           {
             items: [
+              { href: "/basics", label: "The basics", note: "What is a cache? A shard? One minute each" },
+              { href: "/architecture", label: "Architecture lab", note: "Grow it, click it, break it" },
               { href: "/lld", label: "LLD track", note: "Foundations and coding exercises" },
               { href: "/playground", label: "Playground", note: "Drag, connect, get graded" },
               { href: "/cheatsheet", label: "Cheatsheet", note: "Numbers worth memorising" },
@@ -119,7 +122,7 @@ function railFor(track: TrackId, path: string): Item[] {
     ];
   }
   const tool = under(path, "/cheatsheet") ? { href: "/cheatsheet", label: "Cheatsheet" } : under(path, "/glossary") ? { href: "/glossary", label: "Glossary" } : { href: "/playground", label: "Playground" };
-  return [{ href: "/learn", label: "HLD path" }, { href: "/deep-dives", label: "Deep dives" }, { href: "/questions", label: "Questions" }, { href: "/lld", label: "LLD" }, tool];
+  return [{ href: "/basics", label: "Basics" }, { href: "/learn", label: "HLD path" }, { href: "/deep-dives", label: "Deep dives" }, { href: "/questions", label: "Questions" }, { href: "/lld", label: "LLD" }, tool];
 }
 
 /* ------------------------------------------------------------------ menu pieces (shared by the mega menu and the drawer) */
@@ -195,6 +198,8 @@ function Drawer({
   const { resolvedTheme, setTheme } = useTheme();
   const reduceMotion = useProgress((s) => s.reduceMotion);
   const setReduceMotion = useProgress((s) => s.setReduceMotion);
+  const sketch = useProgress((s) => s.sketch);
+  const setSketch = useProgress((s) => s.setSketch);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -235,7 +240,7 @@ function Drawer({
         <div className="nav-drawer-head">
           <Link href="/" className="brand" onClick={navigate}>
             <span className="brand-mark" aria-hidden>
-              <Network size={16} />
+              <LogoMark size={28} />
             </span>
             <span className="brand-text">DSA &amp; System Design</span>
           </Link>
@@ -272,6 +277,16 @@ function Drawer({
               </div>
             </div>
           ))}
+          <Link href="/plan" className="nav-acc-link" aria-current={under(path, "/plan") || under(path, "/mock") ? "page" : undefined} onClick={navigate}>
+            <span className="nav-acc-zap" aria-hidden>
+              <ClipboardCheck size={16} />
+            </span>
+            <span>
+              Plan and mock rounds
+              <small>How ready are you, and what next</small>
+            </span>
+            <ArrowRight size={16} aria-hidden />
+          </Link>
           <Link href="/shorts" className="nav-acc-link" aria-current={under(path, "/shorts") ? "page" : undefined} onClick={navigate}>
             <span className="nav-acc-zap" aria-hidden>
               <Zap size={16} />
@@ -286,6 +301,9 @@ function Drawer({
         <div className="nav-drawer-foot">
           <button type="button" className="btn btn-sm" aria-pressed={reduceMotion} onClick={() => setReduceMotion(!reduceMotion)}>
             <Wind size={15} aria-hidden /> Reduce motion
+          </button>
+          <button type="button" className="btn btn-sm" aria-pressed={sketch} onClick={() => setSketch(!sketch)}>
+            <Pencil size={15} aria-hidden /> Sketch style
           </button>
           <button type="button" className="btn btn-sm" onClick={() => setTheme(dark ? "light" : "dark")}>
             {dark ? <Sun size={15} aria-hidden /> : <Moon size={15} aria-hidden />} {dark ? "Light theme" : "Dark theme"}
@@ -306,6 +324,8 @@ export function SiteNav() {
   const { resolvedTheme, setTheme } = useTheme();
   const reduceMotion = useProgress((s) => s.reduceMotion);
   const setReduceMotion = useProgress((s) => s.setReduceMotion);
+  const sketch = useProgress((s) => s.sketch);
+  const setSketch = useProgress((s) => s.setSketch);
   const done = useProgress((s) => s.done);
 
   // Menus remember the path they were opened on, so any navigation closes them without an effect.
@@ -441,7 +461,7 @@ export function SiteNav() {
       <div className="container nav-bar">
         <Link href="/" className="brand" onClick={hide}>
           <span className="brand-mark" aria-hidden>
-            <Network size={16} />
+            <LogoMark size={28} />
           </span>
           <span className="brand-text">DSA &amp; System Design</span>
         </Link>
@@ -472,7 +492,11 @@ export function SiteNav() {
               </li>
             ))}
           </ul>
-          <Link href="/shorts" className="nav-shorts" aria-current={under(pathname, "/shorts") ? "page" : undefined} onClick={hide}>
+          <Link href="/plan" className="nav-shorts" aria-label="Plan and mock rounds" aria-current={under(pathname, "/plan") || under(pathname, "/mock") ? "page" : undefined} onClick={hide}>
+            <ClipboardCheck size={14} aria-hidden />
+            <span>Plan</span>
+          </Link>
+          <Link href="/shorts" className="nav-shorts" aria-label="Shorts" aria-current={under(pathname, "/shorts") ? "page" : undefined} onClick={hide}>
             <Zap size={14} aria-hidden />
             <span>Shorts</span>
           </Link>
@@ -492,6 +516,16 @@ export function SiteNav() {
         <div className="nav-tools">
           <button type="button" className="search-btn" onClick={openSearch} aria-label="Search (Ctrl+K)">
             <Search size={15} aria-hidden /> <span className="label">Search</span> <kbd>⌘K</kbd>
+          </button>
+          <button
+            type="button"
+            className="icon-btn nav-desktop-only nav-sketch"
+            onClick={() => setSketch(!sketch)}
+            aria-pressed={hydrated ? sketch : false}
+            aria-label="Sketch style"
+            title={hydrated && sketch ? "Hand-drawn diagrams on (click to turn off)" : "Draw the diagrams by hand"}
+          >
+            <Pencil size={17} aria-hidden style={{ opacity: hydrated && sketch ? 1 : 0.55 }} />
           </button>
           <button
             type="button"

@@ -2,7 +2,7 @@ import { fixedWindow, longestWindow, windowMaxDeque } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-A sliding window keeps one contiguous range `[left, right]` and a running summary of it, **updated as the edges move** instead of recomputed. Each element enters once and leaves once, so O(n · k) or O(n²) becomes O(n).
+A sliding window is a frame over a row that **slides along instead of starting over**. Each element enters once and leaves once, so O(n · k) becomes O(n).
 </TLDR>
 
 ## When to reach for it
@@ -10,34 +10,34 @@ A sliding window keeps one contiguous range `[left, right]` and a running summar
 <Callout kind="tip" title="Spot it in the problem statement">
 
 - You want the longest, shortest or number of **contiguous** ranges that obey a rule.
-- The rule has a bound ("**at most** k distinct", "sum **at least** target", "**no** repeats") or a **fixed size** k.
-- The values are non-negative, so growing a range never shrinks its sum.
+- The rule has a bound ("**at most** k distinct", "**no** repeats") or a **fixed size** k.
+- The values are non-negative.
 
 </Callout>
 
 | Variant | How the edges move | Classic problems |
 |---|---|---|
-| Fixed size | together: one in, one out | maximum average subarray, permutation in string |
+| Fixed size | together: one in, one out | maximum average subarray |
 | Longest valid | grow `right`; **while invalid**, move `left` | longest substring without repeats |
-| Shortest valid | grow `right`; **while valid**, record, move `left` | minimum size subarray sum, minimum window substring |
+| Shortest valid | grow `right`; **while valid**, move `left` | minimum window substring |
 | Monotonic deque | a deque keeps max or min candidates | sliding window maximum |
 
 ## The core idea: update, don't recompute
 
-Neighbouring windows overlap almost completely: one element enters, one leaves. Two cheap updates replace re-adding all k values.
+Picture a frame over a row of boxes. Slide it one step: one box comes in, one goes out. Update the running total with those two changes instead of re-adding everything.
 
 <AlgoViz trace={fixedWindow} />
 
-Variable windows also need a rule that is **monotonic** in the window's size:
+A window that grows and shrinks needs a rule that only gets harder (or only easier) as the window grows.
 
-- **At most** rules (k distinct, no repeats): shrinking keeps a window valid. Once it turns invalid, every longer window from the same `left` is invalid too, so `left` moves on **for good**.
-- **At least** rules (sum at least target, contains all of t): growing keeps it valid. Once `[left, right]` is valid, longer windows from `left` can't beat it, so `left` is done.
+- **At most** rules (k distinct, no repeats): once a window breaks the rule, every longer one from the same `left` does too. So `left` moves on for good.
+- **At least** rules (sum at least target): once valid, longer windows can't beat it. So `left` is done.
 
 Neither pointer moves back: at most 2n moves, so O(n) despite the `while` inside the `for`.
 
 ## Play with it
 
-Open **Type your own letters** and type a word: the window stretches right and snaps left whenever a letter repeats, while the tray shows your code's counts. **Max sum of k** shows one add and one subtract per slide.
+Type a word into **Type your own letters**: the window stretches right and snaps left whenever a letter repeats.
 
 <SlidingWindowLab />
 
@@ -45,60 +45,55 @@ Open **Type your own letters** and type a word: the window stretches right and s
 
 <Steps>
   <Step title="Check that a window fits">
-    Contiguous answer, monotonic rule. Sums with negative numbers fail: use [Prefix Sums](/dsa/patterns/prefix-sum).
+    Negative numbers fail: use [Prefix Sums](/dsa/patterns/prefix-sum).
   </Step>
   <Step title="Choose the window's state">
-    The smallest summary that answers "valid?" in O(1): a running sum, a `Map` of counts, a `Set`, or a `missing` counter.
+    The smallest summary that answers "valid?" in O(1): a sum, or a `Map` of counts.
   </Step>
   <Step title="Write add(right) and remove(left)">
-    Mirror images: `remove` must undo `add`, deleting keys whose count reaches 0.
+    `remove` must undo `add`.
   </Step>
   <Step title="Decide when left moves">
-    Fixed: once the window is wider than k. Longest: **while** invalid. Shortest: **while** valid.
+    Longest: **while** invalid. Shortest: **while** valid.
   </Step>
   <Step title="Record at the right moment">
-    Fixed: once full (`right >= k - 1`). Longest: **after** the shrink loop. Shortest: **inside** it, before each `left++`.
+    Longest: **after** the shrink loop. Shortest: **inside** it.
   </Step>
 </Steps>
 
 ## Template 1: fixed-size window
 
-Build the first window of size `k`, then slide: add `nums[right]`, subtract `nums[right - k]`.
+Slide: add `nums[right]`, subtract `nums[right - k]`.
 
 <CodeTabs files={['snippets/fixed-window.js']} java={['snippets/java/FixedWindow.java']} python={['snippets/python/fixed_window.py']} />
 
-<ProblemLink slug="maximum-average-subarray" /> is this template divided by `k`. <ProblemLink slug="permutation-in-string" /> slides a window of `s1.length` with letter counts instead of a sum.
+<ProblemLink slug="maximum-average-subarray" /> is this template divided by `k`.
 
 ## Template 2: longest valid window
 
-Grow `right` every step; if the new element breaks the rule, move `left` until it holds. That leaves the longest valid window **ending at `right`**, and the best of those is the answer.
+Grow `right` every step. If the new element breaks the rule, move `left` until it holds. What is left is the longest valid window **ending at `right`**; keep the best.
 
 <AlgoViz trace={longestWindow} />
 
 <CodeTabs files={['snippets/longest-window.js']} java={['snippets/java/LongestWindow.java']} python={['snippets/python/longest_window.py']} />
 
-<ProblemLink slug="longest-substring-without-repeating-characters" /> uses "no character twice". <ProblemLink slug="longest-repeating-character-replacement" /> uses "window length minus the top letter count is at most k".
+<ProblemLink slug="longest-substring-without-repeating-characters" /> uses "no character twice". <ProblemLink slug="longest-repeating-character-replacement" /> uses "length minus top letter count is at most k".
 
 ## Template 3: shortest valid window
 
-Grow `right` until the window is valid. Then squeeze: **while** it stays valid, record its length and move `left`.
+Grow until valid. Then squeeze: **while** valid, record and move `left`.
 
 <CodeTabs files={['snippets/shortest-window.js']} java={['snippets/java/ShortestWindow.java']} python={['snippets/python/shortest_window.py']} />
 
-<ProblemLink slug="minimum-size-subarray-sum" /> is this template. <ProblemLink slug="minimum-window-substring" /> tracks validity with a `need` map and one `missing` counter, so "does the window contain all of t?" stays O(1).
+<ProblemLink slug="minimum-size-subarray-sum" /> is this template.
 
 ## Template 4: monotonic deque for window max or min
 
-A sum survives an element leaving; a **maximum** doesn't, because you don't know the runner-up. Keep a deque of indices whose values **decrease** from front to back:
-
-- Before pushing `i`, pop back indices with values not bigger than `nums[i]`: older **and** no bigger, they can never be the maximum again.
-- Drop the front index once it slides out. The front is always the window's maximum.
+A sum survives an element leaving; a **maximum** doesn't. Keep a deque of indices with **decreasing** values. Pop smaller or equal ones from the back before pushing, and drop the front once it slides out. The front is the maximum.
 
 <AlgoViz trace={windowMaxDeque} />
 
 <CodeTabs files={['snippets/window-max.js']} java={['snippets/java/WindowMax.java']} python={['snippets/python/window_max.py']} />
-
-Each index is pushed and popped at most once: O(n). Flip the comparison for a minimum. Over prefix sums, the same deque finds the shortest subarray with sum at least k, negatives included.
 
 ## Try it
 
@@ -108,10 +103,10 @@ Each index is pushed and popped at most once: O(n). Flip the comparison for a mi
 
 | Variant | Time | Extra space |
 |---|---|---|
-| Fixed window | O(n) | O(1) for a sum, O(k) for counts |
+| Fixed window | O(n) | O(1) for a sum |
 | Longest or shortest valid window | O(n) | O(a) for an alphabet of size a |
 | Monotonic deque | O(n) | O(k) |
-| Brute force, for comparison | O(n · k) fixed, O(n²) or worse variable | O(1) |
+| Brute force | O(n · k) or O(n²) | O(1) |
 
 ## JavaScript you'll use
 
@@ -127,30 +122,29 @@ counts[s.charCodeAt(i) - 97]++;
 let head = 0;                                 // deque front: dq[head++] instead of dq.shift()
 ```
 
-The trap: `count.size` counts **keys**, including those whose count dropped to 0, so always delete at zero.
+Always delete a key when its count hits zero, or `count.size` lies.
 
 <Callout kind="warning">
 
-- Off-by-one sizes: the length is `right - left + 1`, and the first full window of size k ends at index `k - 1`.
-- Shrinking with `if` instead of `while`, which leaves the window invalid when several elements must go.
-- Recomputing the summary every step (`slice`, `reduce`, a fresh `Set`), which quietly brings back O(n · k).
+- Off-by-one sizes: the length is `right - left + 1`.
+- Shrinking with `if` instead of `while`.
 
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
-  <FollowUp q="Why does the window break with negative numbers, and what replaces it?">
-    With negatives, adding an element can shrink the sum, so neither pointer has a safe move. Use prefix sums plus a hash map to count sum-k subarrays, or a monotonic deque of prefix sums for the shortest with sum at least k: both O(n).
+  <FollowUp q="Why does the window break with negative numbers?">
+    Adding an element can shrink the sum, so neither pointer has a safe move. Use prefix sums plus a hash map.
   </FollowUp>
   <FollowUp q="How do you count subarrays with exactly k distinct values?">
-    exactly(k) = atMost(k) - atMost(k - 1), because "at most" is monotonic. Count at-most windows by adding `right - left + 1` at each `right`: two O(n) passes.
+    exactly(k) = atMost(k) - atMost(k - 1). Two O(n) passes.
   </FollowUp>
   <FollowUp q="Sliding window maximum: why a deque instead of a heap?">
-    A max-heap of `[value, index]` that pops stale tops is O(n log n) and easy to explain. The deque is O(n): mention the heap, then give the deque.
+    A heap that pops stale tops is O(n log n). The deque is O(n).
   </FollowUp>
   <FollowUp q="How would you keep a moving average over a live stream?">
-    A ring buffer of the last k values plus a running sum: add the new value, subtract the one it overwrites, O(1) per update. Floats drift, so recompute the sum from the buffer now and then.
+    Keep the last k values and a running sum: add the new one, subtract the one it overwrites.
   </FollowUp>
 </FollowUps>
 

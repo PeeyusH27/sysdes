@@ -15,7 +15,7 @@ export default function DeepDivesIndex() {
           The techniques <span className="grad">that keep coming up</span>
         </h1>
         <p className="lede">
-          {deepDives.length} ideas interviewers circle back to. Each one plays out in a diagram, lets you push it in a widget, then boils down to a trade-off table.
+          {deepDives.length} ideas interviewers circle back to. Watch each one play out, push it in a widget, then keep the trade-offs.
         </p>
       </header>
       <HubTabs track="sd" />

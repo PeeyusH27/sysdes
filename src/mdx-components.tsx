@@ -17,6 +17,8 @@ import * as Widgets from "@/components/widgets";
 import { AlgoViz } from "@/components/algo/AlgoViz";
 import { JsRef, ProblemLink } from "@/components/dsa/ContentBits";
 import { RunCode } from "@/components/dsa/RunCode";
+import { Doodle } from "@/components/doodle/Doodle";
+import { Term } from "@/components/content/Term";
 
 const components = {
   a: ({ href = "", children, ...rest }) =>
@@ -57,6 +59,8 @@ const components = {
   BarChart,
   LineChart,
   FlowDiagram,
+  Doodle,
+  Term,
   SequenceDiagram,
   ClassDiagram,
   DecisionTree,

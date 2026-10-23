@@ -2,14 +2,14 @@ import { subtreeHeight, carryDown, inorderStack } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-A tree is a root plus two smaller trees, so most tree problems are solved by **solving both subtrees and combining the answers at the node**. Answers **return up** (heights, sums) or are **carried down** (running sums, BST bounds); paths that bend keep a **global best**. O(n) time, O(h) stack.
+A tree is a root plus two smaller trees, so **solve both subtrees, then combine at the node**. Answers **return up** or are **carried down**; paths that bend keep a **global best**. O(n) time, O(h) stack.
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- A **binary tree or BST** whose answer depends on whole subtrees: height, size, balance, mirror image.
+- A **binary tree or BST** whose answer depends on whole subtrees: height, size, balance.
 - **Root-to-leaf paths**: a path sum, every path.
 - The **longest path anywhere** (diameter, maximum path sum): it may bend at any node.
 - Where two nodes' paths from the root split (lowest common ancestor).
@@ -26,14 +26,16 @@ A tree is a root plus two smaller trees, so most tree problems are solved by **s
 
 ## The core idea: trust the recursive call
 
-Write `f(node)` for the subtree at `node`, and **assume** `f(node.left)` and `f(node.right)` already work: they are smaller trees, heading for `f(null)`. You write only two things:
+<Doodle name="stack" size={150} caption />
 
-- the **base case**: the answer for an empty tree (and for a leaf, if the problem talks about leaves);
-- the **combine step**: this node's answer, from the left and right answers.
+Picture a manager with two teams. Ask each team lead for their team's answer, then add your own part. You never ask how the leads got theirs. That is **trusting the recursive call**: assume `f(node.left)` and `f(node.right)` already work. You write only:
 
-Right for one node means right for the whole tree, by induction. Each node is entered once (O(n) time), and one call waits per level (O(h) stack, h = height).
+- the **base case**: the answer for an empty tree;
+- the **combine step**: this node's answer, from the two below.
 
-The three depth-first orders differ only in **when** the node does its work. For the BST `[8, 3, 10, 1, 6, null, 14]`:
+Each node is entered once (O(n)); one call waits per level (O(h) stack).
+
+The three depth-first orders differ in **when** the node works. For the BST `[8, 3, 10, 1, 6, null, 14]`:
 
 | Order | Work happens | Visits | Use it to |
 |---|---|---|---|
@@ -43,15 +45,13 @@ The three depth-first orders differ only in **when** the node does its work. For
 
 <CodeTabs files={['snippets/orders.js']} java={['snippets/java/Orders.java']} python={['snippets/python/orders.py']} />
 
-In post-order, each node waits while its subtrees answer, then returns its height (the badge) to its parent:
+In post-order, each node returns its height (the badge) to its parent:
 
 <AlgoViz trace={subtreeHeight} />
 
-Try a skewed tree of your own with Edit input: the stack grows to n.
-
 ## Play with it
 
-Watch the walker dive while the call stack grows and shrinks. Then pick Predict and click the nodes in order yourself, or try Path sum.
+Watch the walker dive while the call stack grows and shrinks. Then pick Predict and click the nodes in order yourself.
 
 <TreeDfsLab />
 
@@ -59,69 +59,66 @@ Watch the walker dive while the call stack grows and shrinks. Then pick Predict 
 
 <Steps>
   <Step title="Say what the function returns for one subtree">
-    One sentence, like "the height of the subtree at node". If parents can't build on the answer (a diameter), return a helper value and keep the answer outside.
+    One sentence, like "the height of the subtree at node".
   </Step>
   <Step title="Write the base case">
-    `if (node === null) return …`: 0 for sums, `true` for "valid", `-Infinity` for maximums.
+    `if (node === null) return …`: 0 for sums, `-Infinity` for maximums.
   </Step>
   <Step title="Decide what flows down and what flows up">
-    Ancestors' info (depth, remaining sum, bounds) goes down as parameters; descendants' info comes back as return values.
+    Ancestors' info goes down as parameters; descendants' info comes back as return values.
   </Step>
   <Step title="Write the combine step">
-    Build the answer from `left`, `right` and `node.val`. If it bends through the node, update the global best and return only the arm a parent can extend.
+    Build the answer from `left`, `right` and `node.val`.
   </Step>
   <Step title="Check the shapes that break trees">
-    Empty, one node, skewed (recursion depth n), negative values, one-child nodes.
+    Empty, one node, skewed, negative values.
   </Step>
 </Steps>
 
 ## Template 1: return a value up
 
-Ask both subtrees, then combine: `1 + Math.max(left, right)` for height, `left + right + 1` for size. Need two values, like a height and a balanced verdict? Squeeze them into one with a sentinel such as `-1`.
+Ask both subtrees, then combine: `1 + Math.max(left, right)` for height.
 
 <CodeTabs files={['snippets/return-up.js']} java={['snippets/java/ReturnUp.java']} python={['snippets/python/return_up.py']} />
 
-That's <ProblemLink slug="maximum-depth-of-binary-tree" />, and <ProblemLink slug="invert-binary-tree" /> with a combine that swaps the children. <ProblemLink slug="lowest-common-ancestor" /> returns what it found below; the first node to hear back from both sides is the answer.
+That's <ProblemLink slug="maximum-depth-of-binary-tree" />. <ProblemLink slug="invert-binary-tree" /> swaps the children in the combine. <ProblemLink slug="lowest-common-ancestor" />: the first node to hear from both sides is the answer.
 
 ## Template 2: carry state down
 
-Use what the ancestors passed in, then call the children with an updated copy. Numbers are copied, so there's nothing to undo; a shared array must be popped after the call (backtracking) and copied when stored.
+Use what the ancestors passed in, then call the children with an updated copy. A shared array must be popped after the call, and copied when stored.
 
 <AlgoViz trace={carryDown} />
 
 <CodeTabs files={['snippets/carry-down.js']} java={['snippets/java/CarryDown.java']} python={['snippets/python/carry_down.py']} />
 
-<ProblemLink slug="path-sum" /> carries the remaining sum down and checks it at each leaf. <ProblemLink slug="validate-binary-search-tree" /> carries the allowed range (Template 4).
+<ProblemLink slug="path-sum" /> carries the remaining sum down and checks it at each leaf. <ProblemLink slug="validate-binary-search-tree" /> carries the allowed range.
 
 ## Template 3: a global best updated at every node
 
-Some paths **bend**: up one subtree, through a node, down the other. Each path bends at exactly one highest node, so the answer is the best bend over all nodes. But a parent can only extend a **straight** arm, so the helper:
+Some paths **bend**: up one subtree, through a node, down the other. The answer is the best bend over all nodes, but a parent can only extend a **straight** arm. So at each node:
 
-- **record** `leftArm + rightArm` (plus the node's value, for sums) in an outer `best`;
+- **record** `leftArm + rightArm` in an outer `best`;
 - **return** only the longer arm.
 
 <CodeTabs files={['snippets/global-best.js']} java={['snippets/java/GlobalBest.java']} python={['snippets/python/global_best.py']} />
 
-<ProblemLink slug="diameter-of-binary-tree" /> uses heights as arms. <ProblemLink slug="binary-tree-maximum-path-sum" /> uses sums and treats a negative arm as 0, since no path has to take a branch that lowers its sum.
+<ProblemLink slug="diameter-of-binary-tree" /> uses heights as arms. <ProblemLink slug="binary-tree-maximum-path-sum" /> uses sums, and treats a negative arm as 0.
 
 ## Template 4: BST bounds and ordering
 
-In a BST, **every** value left of a node is smaller and every value right of it is larger. So:
+In a BST, one comparison rules out a whole subtree: search and insert walk one branch, O(h).
 
-- **One comparison rules out a whole subtree.** Search, insert and range queries walk one branch: O(h), not O(n).
-- **Each node lives inside a range set by all its ancestors.** Going left from v sets the upper bound to v; going right sets the lower bound. The root starts at (-∞, +∞).
-
-That makes validation subtle. In `[5, 4, 6, null, null, 3, 7]` each node suits its parent, yet 3 sits right of 5, where everything must exceed 5. Carry `(low, high)` down, or check that the in-order walk strictly increases.
+Validation is subtle. In `[5, 4, 6, null, null, 3, 7]` each node suits its parent, yet 3 sits right of 5. Carry `(low, high)` down, or check that the in-order walk strictly increases.
 
 <CodeTabs files={['snippets/bst.js']} java={['snippets/java/Bst.java']} python={['snippets/python/bst.py']} />
 
 ## Template 5: iterative DFS with an explicit stack
 
-V8 (Node and Chrome) holds roughly 10,000 frames, so a skewed tree of 10^5 nodes overflows it. An array stack does the same job on the heap, and some interviewers ask for it.
+An array stack avoids call-stack overflow on very deep trees.
 
-- **Pre-order**: pop, visit, push the **right** child, then the left, so the left pops next.
-- **In-order**: slide left pushing every node, pop and visit one, then step into its right subtree.
-- **Post-order**: pre-order with the pushes swapped (node, right, left), then reverse the output.
+- **Pre-order**: pop, visit, push the **right** child, then the left.
+- **In-order**: slide left pushing every node, pop and visit one, then step right.
+- **Post-order**: pre-order with the pushes swapped, then reverse the output.
 
 <AlgoViz trace={inorderStack} />
 
@@ -156,13 +153,11 @@ const isLeaf = !node.left && !node.right;    // a leaf has NO children, not "at 
 [node.left, node.right] = [node.right, node.left]; // swap children in one line
 ```
 
-Numbers are copied into each call, so keep a running best in an outer `let`. A `path` array is the opposite trap: one shared object.
-
 <Callout kind="warning">
 
-- Treating a node with one child as a leaf. In path sum and minimum depth, a leaf has **both** children null.
-- Starting a maximum at `0` when values can be negative: use `-Infinity`, or the root's value.
-- Pushing the shared `path` array into the results instead of a copy: every stored path ends up empty.
+- Treating a one-child node as a leaf. A leaf has **both** children null.
+- Starting a maximum at `0` when values can be negative: use `-Infinity`.
+- Pushing the shared `path` array into the results instead of a copy.
 
 </Callout>
 
@@ -170,19 +165,19 @@ Numbers are copied into each call, so keep a running best in an outer `let`. A `
 
 <FollowUps>
   <FollowUp q="Recursive or iterative DFS?">
-    Recursive first: shorter and easier to get right. Then name the risk: a skewed tree of 10^5 nodes overflows the stack (V8 has no tail-call elimination), and an explicit stack fixes it.
+    Recursive first. Then name the risk: a skewed tree of 10^5 nodes overflows the stack. An explicit stack fixes it.
   </FollowUp>
-  <FollowUp q="How does the lowest common ancestor change for a BST, or with parent pointers?">
-    In a BST, go left while both values are smaller and right while both are larger; where they split is the answer, in O(h). With parent pointers it is the intersection of two linked lists.
+  <FollowUp q="How does the lowest common ancestor change for a BST?">
+    Go left while both are smaller, right while both are larger. The split is the answer.
   </FollowUp>
   <FollowUp q="Why isn't the diameter always the path through the root?">
-    One subtree can be much deeper and wider, so the longest path may bend deep inside it and never touch the root.
+    The longest path may bend deep inside one subtree.
   </FollowUp>
   <FollowUp q="Can you traverse a tree in order with O(1) extra space?">
-    Yes, with Morris traversal: thread each node's in-order predecessor back to it and remove the thread on the way through. O(n) time, O(1) space, but the tree is modified while it runs.
+    Yes, with Morris traversal: temporary links back up the tree.
   </FollowUp>
   <FollowUp q="When should you switch from DFS to BFS on a tree?">
-    For levels or the nearest something: level averages, the right side view, minimum depth. BFS can stop at the first leaf; see [Tree BFS](/dsa/patterns/tree-bfs).
+    For levels or the nearest match: see [Tree BFS](/dsa/patterns/tree-bfs).
   </FollowUp>
 </FollowUps>
 

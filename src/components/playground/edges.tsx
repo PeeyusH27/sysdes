@@ -17,7 +17,12 @@ export function FlowEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
         id={id}
         path={path}
         markerEnd={markerEnd}
-        style={{ strokeDasharray: data?.async ? "5 5" : undefined, stroke: data?.flagged ? "var(--critical)" : undefined, strokeWidth: data?.flagged ? 2.6 : undefined }}
+        style={{
+          strokeDasharray: data?.async ? "5 5" : undefined,
+          stroke: data?.flagged ? "var(--critical)" : data?.tone === "active" ? "var(--accent)" : undefined,
+          strokeWidth: data?.flagged ? 2.6 : data?.tone === "active" ? 3.4 : undefined,
+          opacity: data?.tone === "dim" ? 0.25 : undefined,
+        }}
       />
       {Array.from({ length: dots }, (_, i) => (
         <circle key={`${i}-${dur}`} r={3.5} className="edge-packet">
@@ -27,9 +32,9 @@ export function FlowEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
       {(label || qps > 0 || selected) && (
         <EdgeLabelRenderer>
           <div className="edge-label-rf nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}>
-            {label ?? "HTTP"}
-            {data?.async ? " · async" : ""}
-            {qps > 0 && ` · ${compact(qps)}/s`}
+            {data?.quiet ? (qps > 0 ? `${compact(qps)}/s` : (label ?? "")) : (label ?? "HTTP")}
+            {data?.async && !data?.quiet ? " · async" : ""}
+            {!data?.quiet && qps > 0 && ` · ${compact(qps)}/s`}
           </div>
         </EdgeLabelRenderer>
       )}

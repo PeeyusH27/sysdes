@@ -7,7 +7,13 @@ export default defineConfig({
   timeout: 60_000,
   fullyParallel: true,
   reporter: [["list"]],
-  use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure" },
+  // Pages with a story open on the walkthrough; most specs read the written lesson, so they start in that view.
+  // tests/e2e/story.spec.ts starts from a clean browser instead.
+  use: {
+    baseURL: `http://localhost:${PORT}`,
+    trace: "retain-on-failure",
+    storageState: { cookies: [], origins: [{ origin: `http://localhost:${PORT}`, localStorage: [{ name: "sds-view", value: "read" }] }] },
+  },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: `npx next start -p ${PORT}`,

@@ -43,7 +43,7 @@ test("theme toggle switches and persists", async ({ page }) => {
 
 test("flow diagram steps through a scenario with buttons and keys", async ({ page }) => {
   await page.goto("/learn/caching");
-  const figure = page.locator("figure.flow").first();
+  const figure = page.locator("figure.flow").filter({ has: page.getByRole("radio", { name: "Cache miss" }) }).first();
   await figure.getByRole("radio", { name: "Cache miss" }).click();
   await figure.getByRole("button", { name: "Next step" }).click();
   await expect(figure.locator(".flow-caption")).toContainText("GET /products/42");
@@ -71,7 +71,7 @@ test("passing the quiz marks the lesson complete", async ({ page }) => {
 test("reduced motion renders no travelling packets", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/learn/caching");
-  const figure = page.locator("figure.flow").first();
+  const figure = page.locator(".prose figure.flow").first();
   await figure.getByRole("button", { name: /Play/ }).click();
   await page.waitForTimeout(800);
   await expect(page.locator(".packet")).toHaveCount(0);
@@ -80,9 +80,14 @@ test("reduced motion renders no travelling packets", async ({ page }) => {
 
 test("lesson sections are cards you can tick off and flip through", async ({ page }) => {
   await page.goto("/learn/caching");
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("sds-view", "read"); });
   await page.reload();
   const bar = page.locator(".rail");
+  // The page opens on its core: six sections, with the other six one click away.
+  await expect(page.locator(".sec-card:visible")).toHaveCount(6);
+  await expect(bar).toContainText("0/6 ticked");
+  await bar.getByRole("button", { name: /Everything/ }).click();
+  await expect(page.locator(".sec-card:visible")).toHaveCount(12);
   const first = page.locator(".sec-card").first();
   await expect(first.getByRole("heading", { level: 2 })).toHaveText("Why it matters");
   await first.getByRole("button", { name: "Got it" }).click();
@@ -115,7 +120,7 @@ test("arrow keys inside a diagram still drive the diagram in Cards mode", async 
   await expect(card).toHaveAttribute("data-sec", "why-it-matters");
 });
 
-const auditPaths = ["/", "/shorts", "/system-design", "/learn", "/questions", "/deep-dives", "/lld", "/lld/exercises/event-bus", "/playground", "/playground/sandbox", "/playground/url-shortener", "/playground/url-shortener/guided", "/playground/rate-limiter/guided", "/dsa", "/dsa/patterns", "/dsa/problems", "/dsa/problems/three-sum", ...allPages().map((p) => p.href.split("#")[0])];
+const auditPaths = ["/", "/shorts", "/system-design", "/learn", "/questions", "/deep-dives", "/plan", "/mock", "/architecture", "/doodles", "/explain/rate-limiter", "/lld", "/lld/exercises/event-bus", "/playground", "/playground/sandbox", "/playground/url-shortener", "/playground/url-shortener/guided", "/playground/rate-limiter/guided", "/dsa", "/dsa/patterns", "/dsa/problems", "/dsa/problems/three-sum", ...allPages().map((p) => p.href.split("#")[0])];
 for (const path of [...new Set(auditPaths)]) {
   test(`no serious accessibility violations on ${path}`, async ({ page }) => {
     await page.goto(path);

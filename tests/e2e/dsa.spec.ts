@@ -21,7 +21,7 @@ test("home offers both tracks", async ({ page }) => {
 
 test("solution unlocks after a wrong submission, and a correct one marks the problem solved", async ({ page }) => {
   await page.goto("/dsa/problems/move-zeroes");
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("sds-view", "read"); });
   await page.reload();
   await page.waitForSelector(".cm-content");
 

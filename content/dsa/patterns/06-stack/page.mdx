@@ -2,40 +2,39 @@ import { bracketMatch, nextGreater, smallerNeighbours } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-A stack hands back the **most recent** unfinished item first, which is exactly the order nested things close in. A **monotonic stack** keeps waiting items sorted, so each new element **resolves** every item it beats: every "next greater" answer in one O(n) pass instead of O(n²).
+A stack is a pile of plates: the **last one on is the first one off**, the order nested things close in. A **monotonic stack** answers every "next greater" question in one O(n) pass instead of O(n²).
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- Things **open and close** in a nested way: brackets, tags, function calls, `..` in a path.
-- You **undo** the most recent action (backspaces, collisions), or an operator takes the **latest** operands (postfix, calculators).
-- For each element, the **next (or previous) greater or smaller** element, or a span bounded by one (stock span, histograms).
+- Things **open and close** in a nested way: brackets, tags, `..` in a path.
+- You **undo** the latest action (backspaces), or an operator takes the **latest** operands.
+- For each element, the **next (or previous) greater or smaller** element.
 
 </Callout>
 
 | Variant | The stack holds | Classic problems |
 |---|---|---|
-| Matching and nesting | openers still waiting to close | valid parentheses, simplify path |
-| Expression evaluation | operands waiting for an operator | reverse Polish notation, basic calculator |
-| Monotonic decreasing | indices waiting for a **greater** value | next greater, daily temperatures |
+| Matching and nesting | openers still waiting | valid parentheses |
+| Expression evaluation | operands waiting | reverse Polish notation |
+| Monotonic decreasing | indices waiting for a **greater** value | daily temperatures |
 | Monotonic increasing | indices waiting for a **smaller** value | largest rectangle in histogram |
-| Stack with extra state | each value plus a summary of everything below | min stack, max stack |
 
 ## The core idea: the most recent open item closes first
 
-In `{ [ ( ) ] }` the last bracket opened is the first one closed. Whenever the newest unfinished thing finishes next, a stack keeps everything in the right order with O(1) `push` and `pop`. A closer never searches: it looks at the top.
+In `{ [ ( ) ] }` the last bracket opened is the first one closed. A stack keeps the newest on top and takes from the top, with O(1) `push` and `pop`. A closer never searches: it looks at the top.
 
-That is why counting isn't enough. `([)]` has one of each bracket, but when `)` arrives, the newest open bracket is `[`. The stack catches the crossing the moment it happens:
+Counting isn't enough. `([)]` has one of each bracket, but when `)` arrives the newest open bracket is `[`. The stack catches the crossing at once:
 
 <AlgoViz trace={bracketMatch} />
 
-The same shape covers postfix operators (they eat the two newest values) and `..` in a path. Always ask: **what is still open, and does the newest one resolve first?**
+Always ask: **what is still open, and does the newest one resolve first?**
 
 ## Play with it
 
-Tap brackets: each opener lands on the stack as a plate, each closer takes the top one off. Try `([)]`, which fools one counter per bracket type but not the stack. Then switch to **Next greater** and watch one big number clear a pile of smaller ones.
+Tap brackets: each opener lands on the stack, each closer takes the top one off. Try `([)]`. Then switch to **Next greater**.
 
 <StackLab />
 
@@ -43,35 +42,35 @@ Tap brackets: each opener lands on the stack as a plate, each closer takes the t
 
 <Steps>
   <Step title="Name what is waiting">
-    "Openers not yet closed", "indices without a greater value yet". That sentence is your invariant.
+    "Openers not yet closed", "indices without a greater value yet". That is your invariant.
   </Step>
   <Step title="Decide what resolves the top">
     A closer, an operator, or a value that beats the top. Use a `while` when one element can resolve several.
   </Step>
   <Step title="Do the work at pop time">
-    An item's answer is known the moment it is popped: a match, a next greater index, a rectangle width.
+    An item's answer is known the moment it is popped.
   </Step>
   <Step title="Push the new element">
-    Push an **index** if you'll need a position or distance later, a value otherwise.
+    Push an **index** if you need a position or distance later.
   </Step>
-  <Step title="Handle what is left at the end">
-    Leftovers never resolved: unclosed brackets (invalid), no greater value (-1), bars reaching the end (flush with a sentinel).
+  <Step title="Handle what is left">
+    Leftovers never resolved: unclosed brackets (invalid), no greater value (-1).
   </Step>
 </Steps>
 
 ## Template 1: matching and nesting
 
-Push what opens; when something closes, pop and check it against the top. `simplifyPath` uses the same loop to cancel the newest directory on `..`.
+Push what opens; when something closes, pop and check it against the top.
 
 <CodeTabs files={['snippets/matching.js']} java={['snippets/java/Matching.java']} python={['snippets/python/matching.py']} />
 
-This solves <ProblemLink slug="valid-parentheses" /> as written. With a stack of numbers it becomes <ProblemLink slug="evaluate-reverse-polish-notation" />: push operands and let each operator pop two. Mind the order: the first pop is the **right** operand.
+This solves <ProblemLink slug="valid-parentheses" />. With numbers it becomes <ProblemLink slug="evaluate-reverse-polish-notation" />: each operator pops two, and the first pop is the **right** operand.
 
 ## Template 2: monotonic decreasing stack (next greater)
 
-Brute force scans right from every index: O(n²) on a falling array. Instead, walk left to right and keep the indices that **haven't found their answer yet** on a stack.
+Brute force scans right from every index: O(n²). Instead, walk left to right and keep on a stack the indices that **have not found their answer yet**.
 
-Each push first pops everything smaller, so values on the stack never rise from bottom to top. Popping `j` because `nums[i] > nums[j]` means **i is j's next greater element**, and the first one: any bigger value in between would have popped `j` earlier. Try your own numbers with **Edit input**:
+Each new value pops everything smaller. A popped index `j` just found its answer: `i` is its next greater element, and the first, since any bigger value in between would have popped it earlier. Try your own numbers with **Edit input**:
 
 <AlgoViz trace={nextGreater} />
 
@@ -81,16 +80,13 @@ Store indices, not values. <ProblemLink slug="next-greater-element" /> records `
 
 ## Template 3: monotonic increasing stack (next smaller, both sides)
 
-Flip the comparison and the stack stays **increasing**. Each pop now answers "next **smaller**", and a second answer comes free:
-
-- Popping `j` because `nums[i] < nums[j]` means **i is the first smaller value right of j**.
-- After the pops, the top is the **nearest value left of i that is not larger**: everything between was larger and already popped.
+Flip the comparison and each pop answers "next **smaller**". A second answer comes free: after the pops, the top is the nearest value left of `i` that is not larger.
 
 <AlgoViz trace={smallerNeighbours} />
 
-Those two neighbours are all <ProblemLink slug="largest-rectangle-in-histogram" /> needs: the widest rectangle of height `heights[j]` has width `right - left - 1`. Measure it when `j` is popped, and let a final bar of height 0 flush the rest.
+Those two neighbours are all <ProblemLink slug="largest-rectangle-in-histogram" /> needs: the widest rectangle of height `heights[j]` has width `right - left - 1`.
 
-Strictness decides **ties**. With `<`, equal values wait together and the same larger value pops them all: right for "strictly greater". Read for "strictly" or "or equal" before choosing `<` or `<=`.
+Strictness decides **ties**. Read for "strictly" or "or equal" before choosing `<` or `<=`.
 
 ## Try it
 
@@ -100,9 +96,8 @@ Strictness decides **ties**. With `<`, equal values wait together and the same l
 
 | Variant | Time | Extra space |
 |---|---|---|
-| Matching / expression evaluation | O(n): each item pushed and popped once | O(n) worst case (all nested) |
-| Monotonic stack | O(n) amortised: n pushes, at most n pops | O(n) |
-| Stack with extra state (min stack) | O(1) per operation | O(n) |
+| Matching / expression evaluation | O(n) | O(n) worst case |
+| Monotonic stack | O(n) amortised | O(n) |
 | Brute-force next greater | O(n²) | O(1) |
 
 ## JavaScript you'll use
@@ -122,29 +117,28 @@ The top of a JavaScript stack is the **end** of the array; `shift` and `unshift`
 
 <Callout kind="warning">
 
-- Peeking at an empty stack: `stack.at(-1)` is `undefined`, and `nums[undefined] < x` is silently `false`. Check `stack.length` first.
-- Pushing values when you need indices, then having no way to compute a distance or a width.
-- Popping operands in the wrong order for `-` and `/`: the first pop is the right operand.
+- Peeking at an empty stack: `stack.at(-1)` is `undefined`. Check `stack.length` first.
+- Pushing values when you need indices.
 
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
-  <FollowUp q="Why is the monotonic stack O(n) when there is a while loop inside the for loop?">
-    Count pops, not loop iterations. Each index is pushed once and popped at most once, so all the `while` iterations together pop at most n items: O(n) amortised.
+  <FollowUp q="Why is the monotonic stack O(n) with a while loop inside a for loop?">
+    Each index is pushed once and popped at most once, so all the `while` iterations together pop at most n items.
   </FollowUp>
   <FollowUp q="How do you find the next greater element in a circular array?">
-    Walk it twice, reading `nums[i % n]` for `i` up to `2n - 1`. Push only in the first lap but pop in both, so the start can answer the end; still O(n).
+    Walk it twice, reading `nums[i % n]`. Still O(n).
   </FollowUp>
-  <FollowUp q="You only need the next greater element for a few query values, not every index. What changes?">
-    Run the monotonic stack once and store the answers in a `Map` from value to next greater value (this needs distinct values). Each query is then one lookup: O(n + q) in total.
+  <FollowUp q="You only need the answer for a few query values. What changes?">
+    Run the stack once, store answers in a `Map`, then each query is one lookup.
   </FollowUp>
   <FollowUp q="How do you build a queue from two stacks?">
-    Push onto `in`; pop from `out`, refilling it from `in` only when empty. The transfer reverses the order, and each item moves once: O(1) amortised.
+    Push onto `in`; pop from `out`, refilling it from `in` only when empty. O(1) amortised.
   </FollowUp>
-  <FollowUp q="When would you use an explicit stack instead of recursion?">
-    When nesting can be deep: 10^5 levels can throw "Maximum call stack size exceeded" in JavaScript. For small depths, like a balanced tree, recursion is often clearer.
+  <FollowUp q="When would you use a stack instead of recursion?">
+    When nesting can be very deep: 10^5 levels can overflow the call stack.
   </FollowUp>
 </FollowUps>
 

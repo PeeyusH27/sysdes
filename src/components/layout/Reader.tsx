@@ -1,9 +1,9 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, GalleryHorizontalEnd, PartyPopper, Rows3 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, GalleryHorizontalEnd, Layers, PartyPopper, Rows3 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { useHydrated } from "@/lib/hooks";
+import { useHydrated, useMediaQuery } from "@/lib/hooks";
 import { useProgress } from "@/lib/progress";
 
 /**
@@ -24,6 +24,10 @@ interface ReaderApi {
   activeIndex: number;
   mode: "scroll" | "cards";
   setMode: (mode: "scroll" | "cards") => void;
+  /** Sections folded away in the Core view (empty when the page has none). */
+  detail: string[];
+  depth: "core" | "all";
+  setDepth: (depth: "core" | "all") => void;
   go: (id: string) => void;
   step: (delta: 1 | -1) => void;
   isGot: (id: string) => boolean;
@@ -40,7 +44,9 @@ const KEY_OWNERS = "input, textarea, select, [contenteditable=true], .cm-editor,
 
 export const motionOk = () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches && document.documentElement.dataset.motion !== "reduce";
 
-export function Reader({ children }: { children: React.ReactNode }) {
+const NONE: ReadonlySet<string> = new Set();
+
+export function Reader({ children, detail = [] }: { children: React.ReactNode; detail?: string[] }) {
   const pathname = usePathname();
   const hydrated = useHydrated();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -53,21 +59,34 @@ export function Reader({ children }: { children: React.ReactNode }) {
   const ticks = useProgress((s) => s.sections);
   const toggleSection = useProgress((s) => s.toggleSection);
   const markDone = useProgress((s) => s.markDone);
-  const mode = hydrated ? storedMode : "scroll";
+  // "auto": one card at a time on a phone, where a long scroll is hardest to take in; the whole page elsewhere.
+  const phone = useMediaQuery("(max-width: 720px)");
+  const mode: "scroll" | "cards" = !hydrated ? "scroll" : storedMode === "auto" ? (phone ? "cards" : "scroll") : storedMode;
+  const storedDepth = useProgress((s) => s.readerDepth);
+  const setStoredDepth = useProgress((s) => s.setReaderDepth);
+  // Until the saved choice is known the page is in its Core view, which is also what the server rendered.
+  const depth = detail.length ? (hydrated ? storedDepth : "core") : "all";
+  const detailKey = detail.join(",");
+  // The sections folded away right now: only in the Core view.
+  const hidden = useMemo<ReadonlySet<string>>(() => (depth === "core" && detailKey ? new Set(detailKey.split(",")) : NONE), [depth, detailKey]);
 
-  const cards = useCallback(() => [...(rootRef.current?.querySelectorAll<HTMLElement>(".sec-card") ?? [])], []);
+  /** The cards a reader can reach: folded ones are not part of the page's flow. */
+  const cards = useCallback(() => [...(rootRef.current?.querySelectorAll<HTMLElement>(".sec-card") ?? [])].filter((el) => !hidden.has(el.dataset.sec ?? "")), [hidden]);
   const cardOf = useCallback((id: string) => cards().find((el) => el.dataset.sec === id), [cards]);
+  const setDepth = useCallback((d: "core" | "all") => setStoredDepth(d), [setStoredDepth]);
 
   // Find the section cards once the page is on screen.
   useEffect(() => {
     const found = cards().map((el) => ({ id: el.dataset.sec!, title: el.dataset.title ?? "" }));
     const fromHash = decodeURIComponent(window.location.hash.slice(1));
     const target = fromHash ? document.getElementById(fromHash)?.closest<HTMLElement>(".sec-card")?.dataset.sec : undefined;
+    // A link into a folded section shows everything first, so the link lands somewhere.
+    if (target && detailKey.split(",").includes(target) && depth === "core") setStoredDepth("all");
     // The DOM is the source of truth for which sections exist, so this has to run after render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSections(found);
     setActive(target ?? found[0]?.id ?? null);
-  }, [cards, pathname]);
+  }, [cards, pathname, depth, detailKey, setStoredDepth]);
 
   const index = sections.findIndex((s) => s.id === active);
   const isGot = useCallback((id: string) => hydrated && !!ticks[`${pathname}#${id}`], [hydrated, ticks, pathname]);
@@ -181,20 +200,21 @@ export function Reader({ children }: { children: React.ReactNode }) {
     const onHash = () => {
       const id = decodeURIComponent(window.location.hash.slice(1));
       const sec = id ? document.getElementById(id)?.closest<HTMLElement>(".sec-card")?.dataset.sec : undefined;
+      if (sec && detailKey.split(",").includes(sec)) setStoredDepth("all");
       if (sec) setActive(sec);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, []);
+  }, [detailKey, setStoredDepth]);
 
   const api = useMemo<ReaderApi>(
-    () => ({ sections, active, activeIndex: index, mode, setMode, go, step, isGot, gotCount, toggleGot, celebrating }),
-    [sections, active, index, mode, setMode, go, step, isGot, gotCount, toggleGot, celebrating],
+    () => ({ sections, active, activeIndex: index, mode, setMode, detail, depth, setDepth, go, step, isGot, gotCount, toggleGot, celebrating }),
+    [sections, active, index, mode, setMode, detail, depth, setDepth, go, step, isGot, gotCount, toggleGot, celebrating],
   );
 
   return (
     <ReaderContext.Provider value={api}>
-      <div ref={rootRef} className="reader" data-mode={mode} data-dir={dir}>
+      <div ref={rootRef} className="reader" data-mode={mode} data-dir={dir} data-depth={depth}>
         {children}
       </div>
     </ReaderContext.Provider>
@@ -261,7 +281,7 @@ export function ReaderBar({ lead, headings = [] }: { lead?: React.ReactNode; hea
   const { sections, activeIndex, mode, gotCount } = r;
   const current = sections[activeIndex];
   const known = new Set(sections.map((s) => s.id));
-  const h2s = headings.filter((h) => h.depth === 2);
+  const h2s = headings.filter((h) => h.depth === 2 && !(r.depth === "core" && r.detail.includes(h.id)));
   // Before the cards are found (server render, first paint) the headings stand in for them.
   const list: SectionRef[] = sections.length ? sections : h2s.map((h) => ({ id: h.id, title: h.text }));
   const extras = sections.length ? h2s.filter((h) => !known.has(h.id)) : [];
@@ -388,6 +408,7 @@ export function ReaderBar({ lead, headings = [] }: { lead?: React.ReactNode; hea
           </button>
         </div>
       )}
+      <DepthToggle className="rb-depth" />
       <div className="seg rb-mode" role="group" aria-label="Reading mode">
         <button type="button" aria-pressed={mode === "scroll"} onClick={() => r.setMode("scroll")} aria-label="Scroll" title="Read the whole page" disabled={!sections.length}>
           <Rows3 size={14} aria-hidden /> <span>Scroll</span>
@@ -409,7 +430,7 @@ export function SectionRail({ lead, headings = [] }: { lead?: React.ReactNode; h
   if (!r) return null;
   const { sections, activeIndex, mode, gotCount } = r;
   const known = new Set(sections.map((s) => s.id));
-  const h2s = headings.filter((h) => h.depth === 2);
+  const h2s = headings.filter((h) => h.depth === 2 && !(r.depth === "core" && r.detail.includes(h.id)));
   const list: SectionRef[] = sections.length ? sections : h2s.map((h) => ({ id: h.id, title: h.text }));
   const extras = sections.length ? h2s.filter((h) => !known.has(h.id)) : [];
   return (
@@ -443,6 +464,7 @@ export function SectionRail({ lead, headings = [] }: { lead?: React.ReactNode; h
           </li>
         ))}
       </ol>
+      <DepthToggle className="rail-depth" />
       <div className="seg rail-mode" role="group" aria-label="Reading mode">
         <button type="button" aria-pressed={mode === "scroll"} onClick={() => r.setMode("scroll")} disabled={!sections.length}>
           <Rows3 size={14} aria-hidden /> Scroll
@@ -452,6 +474,25 @@ export function SectionRail({ lead, headings = [] }: { lead?: React.ReactNode; h
         </button>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Core / Everything: on a page with folded sections, the spine you can read in a few minutes, or the whole page.
+ * Renders nothing on pages without folded sections.
+ */
+export function DepthToggle({ className }: { className?: string }) {
+  const r = useReader();
+  if (!r || !r.detail.length) return null;
+  return (
+    <div className={cn("seg", className)} role="group" aria-label="How much of the page to show">
+      <button type="button" aria-pressed={r.depth === "core"} onClick={() => r.setDepth("core")} title="The short version: the sections that carry the idea">
+        <Layers size={14} aria-hidden /> Core
+      </button>
+      <button type="button" aria-pressed={r.depth === "all"} onClick={() => r.setDepth("all")} title={`Show everything: ${r.detail.length} more sections`}>
+        Everything <span className="depth-more">+{r.detail.length}</span>
+      </button>
+    </div>
   );
 }
 

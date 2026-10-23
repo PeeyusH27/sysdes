@@ -23,6 +23,7 @@ import { edgeTypes } from "./edges";
 import { grade } from "./grader";
 import { lint, type Finding } from "./lint";
 import { MissionPanel, type MissionResult } from "./MissionPanel";
+import { useMock } from "@/lib/prep/mock-store";
 import { evaluateStep, getMission, scenarioOptions } from "./missions";
 import { nodeTypes } from "./nodes";
 import { DesignDoc, migrate } from "./schema";
@@ -112,6 +113,8 @@ function Editor({ challenge, guided }: { challenge?: Challenge; guided: boolean 
   }, [nodes, edges, sim]);
   const result = useMemo(() => (challenge ? grade(challenge.rubric, nodes, edges) : null), [challenge, nodes, edges]);
   const saveChallenge = useProgress((s) => s.saveChallenge);
+  // During a mock round the rubric hints and the reference answer stay closed.
+  const mockLocked = useMock((m) => !!challenge && !!m.active && m.active.items.some((i) => i.kind === "challenge" && i.slug === challenge.slug));
   const missionPassed = useProgress((s) => (mission ? s.mission[mission.slug] ?? 0 : 0));
   const setMission = useProgress((s) => s.setMission);
 
@@ -409,7 +412,7 @@ function Editor({ challenge, guided }: { challenge?: Challenge; guided: boolean 
               />
             )}
             {tab === "grade" && challenge && result && (
-              <GradePanel challenge={challenge} result={result} showRef={showRef} setShowRef={setShowRef} onLoadReference={() => loadTemplate(referenceDesign(challenge))} />
+              <GradePanel challenge={challenge} locked={mockLocked} result={result} showRef={showRef} setShowRef={setShowRef} onLoadReference={() => loadTemplate(referenceDesign(challenge))} />
             )}
             {tab === "outline" && <OutlinePanel />}
           </div>
@@ -551,9 +554,11 @@ function SimPanel({
 }
 
 function GradePanel({
-  challenge, result, showRef, setShowRef, onLoadReference,
+  challenge, locked, result, showRef, setShowRef, onLoadReference,
 }: {
   challenge: Challenge;
+  /** A mock round is running: no hints, no reference answer. */
+  locked: boolean;
   result: ReturnType<typeof grade>;
   showRef: boolean;
   setShowRef: (v: boolean) => void;
@@ -573,7 +578,7 @@ function GradePanel({
             <span>
               <span className="sr-only">{it.passed ? "Passed: " : "Not yet: "}</span>
               {it.label} <span className="muted">({it.points} pts)</span>
-              {!it.passed &&
+              {!it.passed && !locked &&
                 (hints.has(it.id) ? (
                   <span className="muted" style={{ display: "block", fontSize: 13 }}>Hint: {it.hint}</span>
                 ) : (
@@ -585,11 +590,15 @@ function GradePanel({
           </li>
         ))}
       </ul>
-      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-        <button type="button" className="wbtn" onClick={() => setShowRef(!showRef)}>{showRef ? "Hide" : "Show"} reference answer</button>
-        <Link className="wbtn" href={challenge.learn}>Read the lesson</Link>
-      </div>
-      {showRef && (
+      {locked ? (
+        <p className="muted" style={{ marginTop: 8 }}>Mock round: hints and the reference answer open when the round ends.</p>
+      ) : (
+        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+          <button type="button" className="wbtn" onClick={() => setShowRef(!showRef)}>{showRef ? "Hide" : "Show"} reference answer</button>
+          <Link className="wbtn" href={challenge.learn}>Read the lesson</Link>
+        </div>
+      )}
+      {showRef && !locked && (
         <div style={{ marginTop: 8 }}>
           <p className="muted" style={{ margin: "0 0 6px", fontSize: 13.5 }}>
             One good answer: {challenge.reference.nodes.map((n) => n.label + (n.sub ? ` ${n.sub}` : "")).join(", ")}.

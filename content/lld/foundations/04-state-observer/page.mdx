@@ -2,20 +2,20 @@ import { doorObservers, notifyFlow, tableOrObjects } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Write the state table first: every (state, event) pair has one outcome, and anything not listed is rejected without changing a thing. Then let the object announce each legal change to subscribers, and handle the three classic failures: unsubscribing during a notification, a throwing listener, and listeners that are never removed.
+Write the state table first: every state and event pair has one outcome, and anything unlisted is rejected with nothing changed. Then let the object announce each legal change, and guard against three Observer failures.
 </TLDR>
 
 ## The flags that rot
 
-A door can be open, closed or locked. The first version uses what is at hand: a flag for each thing you can say about it.
+A door can be open, closed or locked. The first version uses one flag per fact.
 
 <CodeTabs files={['snippets/door-flags.js', 'snippets/door-flags.test.js']} python={['snippets/python/door_flags.py', 'snippets/python/test_door_flags.py']} />
 
-Two booleans describe four doors, and only three exist. Nothing stops `open()` then `lock()`, which gives a door that is open and locked at once, as the second test shows. Add an "ajar" state and you have three flags and eight combinations to defend by hand, with an `if` in every method. Flags describe **facts**. A phase is one **state**, and a state is a single variable that can hold only the values you listed.
+Two booleans describe four doors, but only three exist. Nothing stops `open()` then `lock()`: open and locked at once. A phase is one **state**: a single variable that holds only listed values.
 
 ## Write the table first
 
-Before any code, list every state and every event, and give each pair one outcome. For a door with three states and four events (open, close, lock, unlock) the legal moves are:
+List every state and event, and give each pair one outcome. The door has 3 states and 4 events:
 
 | State | Event | Next state | Action |
 |---|---|---|---|
@@ -24,43 +24,44 @@ Before any code, list every state and every event, and give each pair one outcom
 | open | close | closed | latch |
 | locked | unlock | closed | retract bolt |
 
-That is 4 of the 12 pairs. The other 8 are **rejected**: nothing changes and the caller is told. The table is the specification. If you can fill it in during the interview, you can write the code, and the gaps (what happens when you press lock on an open door?) are exactly the questions an interviewer wants you to ask. The [vending machine](/questions/vending-machine) and the [elevator](/questions/elevator) are the same exercise with more rows.
+That is 4 of the 12 pairs. The other 8 are **rejected**: nothing changes. The gaps (what does lock do on an open door?) are the questions to ask. The [vending machine](/questions/vending-machine) is the same exercise with more rows.
 
 ## Two ways to code a table
 
-**As data.** The table is a map, and the machine is a few lines that look it up.
+**As data:** the table is a map and the machine looks it up.
 
 <CodeTabs files={['snippets/door-table.js', 'snippets/door-table.test.js']} python={['snippets/python/door_table.py', 'snippets/python/test_door_table.py']} />
 
-**As State objects.** Each state is a class that implements only the events it allows. The base class answers no to everything else.
+**As State objects:** each state is a class that implements only the events it allows.
 
 <CodeTabs files={['snippets/door-states.js', 'snippets/door-states.test.js']} python={['snippets/python/door_states.py', 'snippets/python/test_door_states.py']} />
 
-The two behave identically, and the tests are the same. The choice is about where the **per-state code** lives.
+Both behave the same. The choice is where the **per-state code** lives.
 
 <DecisionTree spec={tableOrObjects} />
 
-Start with the table. Move to State objects when a state grows its own fields or steps, not when you remember that the pattern exists.
+Start with the table. Move to State objects when a state grows its own fields or steps.
 
 ## Make illegal moves impossible
 
-You cannot test your way out of a state machine that allows bad states, so shape the code to refuse them:
+Shape the code to refuse bad states:
 
-- **One variable holds the state**, and only values you named can go in it. No flags to combine.
-- **One door in**: every change goes through `send(event)`. Nothing else assigns `state`.
-- **Decide before you mutate.** A rejected event returns a result and changes nothing, so no move is ever half applied.
-- **Test every pair.** The table test loops over all 12 and counts the 4 that succeed.
-- Even an event called `toString` is just an unknown event. A plain object lookup without `hasOwn` would find `Object.prototype.toString` and crash.
-
-In a typed language you can go further and make each state its own type, so a method that is illegal in that state does not exist.
+- **One variable holds the state.** No flags to combine.
+- **One door in:** every change goes through `send(event)`.
+- **Decide before you mutate.** A rejected event changes nothing.
+- **Test every pair.** Loop over all 12 and count the 4 that succeed.
 
 ## Observer: subscribe, unsubscribe, notify
 
-Now the door has to tell others. A log wants every change, an alarm wants only locks, a lamp wants open or closed. If `send` calls each of them, `Door` knows about all three and grows with every new one. **Observer** turns that around: the door keeps a list of callbacks and calls whoever signed up.
+<Doodle name="observer" size={150} caption />
+
+Think of a bell that everyone in the building hears. The ringer does not know who is listening. That is **Observer**.
+
+A log wants every change, an alarm wants locks. If `send` calls each, `Door` grows with every listener. Instead the door keeps a list of callbacks and calls whoever signed up.
 
 <CodeTabs files={['snippets/emitter.js', 'snippets/emitter.test.js']} python={['snippets/python/emitter.py', 'snippets/python/test_emitter.py']} />
 
-Three details carry most of the weight. `subscribe` **returns the way to unsubscribe**, so the caller cannot forget it. The listener collection ignores a duplicate subscription. And `emit` loops over a **copy**, and catches each listener's error, for reasons the pitfalls section explains.
+`subscribe` **returns the way to unsubscribe**. `emit` loops over a **copy** and catches each error. Why is next.
 
 ## Let the door announce itself
 
@@ -68,69 +69,57 @@ Combine the table door with the emitter. The door changes state first, then anno
 
 <CodeTabs files={['snippets/observable-door.js', 'snippets/observable-door.test.js']} python={['snippets/python/observable_door.py', 'snippets/python/test_observable_door.py']} />
 
-The event here is **pushed**: it carries `from`, `event` and `to`, so a listener needs no reference to the door. The alternative is **pull**: tell listeners only that something changed, and let them read the door. Pull gives them the newest state but loses what happened in between if several changes pile up. Push is the safer default.
+The event is **pushed**: it carries `from`, `event` and `to`, so a listener needs no reference to the door. **Pull** only says "something changed" and loses changes that pile up. Push is the safer default.
 
-Step through the diagram: the door comes first, and every later stage adds classes without editing the earlier ones.
+Step through: the door comes first, and each stage adds classes without editing earlier ones.
 
 <ClassDiagram spec={doorObservers} />
 
 ## Where Observer bites
 
-Play the sequence, then switch branches: one listener throws, or one unsubscribes itself while the emitter is looping.
+Play the sequence, then switch branches: one listener throws, or one unsubscribes itself mid-loop.
 
 <SequenceDiagram spec={notifyFlow} />
 
-- **Unsubscribing during a notification.** Removing from a collection while looping over it skips or breaks entries. The loop runs over a copy. The price is a rule: a listener removed mid-notification still hears that one event. Node's `EventEmitter` behaves the same way.
-- **A throwing listener.** Without a guard, one bad listener stops the rest and may leave the door locked while the alarm never heard. Catch per listener, and report the errors to the caller or a logger. The door has already changed, and it stays changed.
-- **Ordering.** Listeners run in subscription order, but do not build on it. If the alarm must run after the log, they are one listener.
-- **Memory leaks.** The door holds a reference to every listener. A short-lived listener on a long-lived door (a screen that opens and closes) leaks unless it calls the function `subscribe` returned. The `size` check in the tests is how you catch it.
-- **Re-entrancy.** A listener that sends another event during a notification starts a nested one, and listeners can see the two out of order. The vending machine question solves this with an event queue.
+- **Unsubscribing mid-notification.** Removing while looping skips entries, so loop over a copy. A listener removed mid-way still hears that one event.
+- **A throwing listener.** One bad listener must not stop the rest. Catch per listener.
+- **Memory leaks.** A short-lived listener on a long-lived door leaks unless it calls the function `subscribe` returned.
 
 <Callout kind="warning" title="Do not observe what you could just call">
-If exactly one thing reacts and it always will, call it. Observer adds hidden control flow: a reader of `send` can no longer see what happens next. Use it where the set of reactions really varies, or the door must not depend on them.
+If one thing always reacts, just call it.
 </Callout>
 
 ## Observer or an event bus
 
-An observer is attached to **one object**: you subscribe to this door, and you get its events. An **event bus** sits in the middle: publishers announce a topic such as `door.locked`, subscribers ask for topics or patterns, and neither knows the other.
+An observer is attached to **one object**: you subscribe to this door. An **event bus** sits in the middle: publishers announce a topic such as `door.locked`, subscribers ask for topics, and neither knows the other.
 
 | | Observer | Event bus |
 |---|---|---|
-| You subscribe to | One specific object | A topic or pattern |
-| Publisher knows subscribers | Holds them, does not know them | Does not even hold them |
-| Typical reach | One process, one object graph | Many objects, sometimes many processes |
+| You subscribe to | One object | A topic or pattern |
+| Typical reach | One process | Many objects, maybe many processes |
 
-Pick Observer for a few listeners on one object. Pick a bus when many parts of the system need the same events and you want to add or move them freely, and accept the cost: no direct call to follow, and questions about order and lost events. The [event bus exercise](/lld/exercises/event-bus) builds the topic router.
+Use Observer for a few listeners on one object. Use a bus when many parts need the same events, and accept no direct call to follow. The [event bus exercise](/lld/exercises/event-bus) builds one.
 
 <Callout kind="interview" title="What interviewers listen for">
-You draw the state table before the classes, name the rejected cells, and say that illegal transitions leave the state unchanged. For Observer, you volunteer the pitfalls (a throwing listener, unsubscribing mid-loop, leaks) before being asked, and you can say when a plain call is better.
+You draw the state table before the classes, name the rejected cells, and say illegal moves leave the state unchanged. For Observer, you raise the pitfalls before being asked.
 </Callout>
 
 ## Try it
 
-Run the cell. A table drives the machine and two subscribers react. Add `lock` to the open row and decide what the door should do, then add a state of your own, and watch the log change with no edit to the emitter.
+Add `lock` to the open row, then add a state of your own. The log changes with no edit to the emitter.
 
 <RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" />
 
-Then build the real thing: a [vending machine](/lld/exercises/vending-machine) as a state machine, and an [event bus](/lld/exercises/event-bus) with topic patterns. The classic questions are the [vending machine](/questions/vending-machine) and the [elevator](/questions/elevator). The next lesson covers how objects get created and how actions become objects you can undo.
+Next: a [vending machine](/lld/exercises/vending-machine) exercise.
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="How is State different from Strategy?">
-    A strategy is picked from outside and rarely changes itself. A state replaces itself as events arrive, and each state decides what comes next. The class shapes look alike, so the difference is who chooses.
-  </FollowUp>
-  <FollowUp q="How would you make a state machine survive a restart?">
-    Persist the state name (and any pending data) on every transition, before announcing it. On start, load it and rebuild the object. The table is code, so only the current state needs storing.
+    A strategy is picked from outside. A state replaces itself as events arrive. The shapes match, so the difference is who chooses.
   </FollowUp>
   <FollowUp q="What if a listener must be able to veto a change?">
-    That is not Observer. Observers hear about facts after the fact. A veto is a guard in the table, or a validator the door calls before it changes state.
-  </FollowUp>
-  <FollowUp q="How do you stop a slow listener from blocking the door?">
-    Hand the event to a queue or a worker and return at once, so a slow listener only delays itself. The price is that delivery becomes asynchronous, so ordering and failure handling need explicit design.
-  </FollowUp>
-  <FollowUp q="Where would you put guards, such as a keypad code to unlock?">
-    On the cell: the table entry holds a function that checks the condition, and the event is rejected when it returns false. The state diagram stays the same and the rule stays beside the move it protects.
+    That is not Observer, which reports facts after the fact. Use a guard in the table.
   </FollowUp>
 </FollowUps>
 

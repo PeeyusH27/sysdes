@@ -5,6 +5,7 @@ import { boundComponents } from "@/components/content/bound";
 import { getHeadings } from "@/lib/content";
 import { PatternsBehind } from "@/components/content/Bridges";
 import { patternsFor } from "@content/bridges";
+import { getExtras } from "@content/extras";
 
 export const dynamicParams = false;
 
@@ -38,6 +39,7 @@ export default async function DeepDivePage({ params }: PageProps<"/deep-dives/[s
       prev={prev && { href: `/deep-dives/${prev.slug}`, title: prev.title }}
       next={next && { href: `/deep-dives/${next.slug}`, title: next.title }}
       nextNote={dd.next}
+      extras={getExtras("deep-dives", dd.slug)}
     >
       <Body components={boundComponents(`deep-dives/${dd.dir}`)} />
       <PatternsBehind href={`/deep-dives/${dd.slug}`} />

@@ -21,8 +21,7 @@ export default function PatternsIndex() {
           {patterns.length} patterns, <span className="grad">most of the problems</span>
         </h1>
         <p className="lede">
-          Interview problems repeat a small set of ideas. Spot the pattern, watch it run, copy the template, then practise. First time through? Go in order:
-          each one builds on the last.
+          Interview problems repeat a small set of ideas. Spot the pattern, watch it run, then practise. New to this? Go in order: each one builds on the last.
         </p>
         <nav className="hub-jump" aria-label="Pattern groups">
           {PATTERN_GROUPS.map((g) => (

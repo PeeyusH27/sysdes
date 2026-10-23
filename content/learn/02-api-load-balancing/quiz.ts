@@ -5,7 +5,7 @@ export const quiz: QuizItem[] = [
     q: "Which algorithm adapts when one server becomes slow?",
     options: ["Round robin", "Least connections or P2C", "IP hash"],
     answer: 1,
-    explain: "A slow server holds requests longer, so its in-flight count rises and least-connections (or power of two choices) sends new work elsewhere. Round robin and IP hash keep sending it the same share.",
+    explain: "A slow server holds requests longer, so its count of open requests rises and new work goes elsewhere. Round robin and IP hash keep sending it the same share.",
   },
   {
     q: "\"Accepted, processing asynchronously\" returns which status?",
@@ -17,6 +17,6 @@ export const quiz: QuizItem[] = [
     q: "Why use cursor pagination for feeds?",
     options: ["Smaller payloads", "Stable pages while new items arrive, and fast deep pages", "Better caching"],
     answer: 1,
-    explain: "OFFSET counts rows, so new posts shift every page (duplicates and skips) and deep pages scan and discard rows. A cursor (WHERE id < last_seen) seeks straight into the index.",
+    explain: "OFFSET counts rows, so new posts shift every page and deep pages scan and discard rows. A cursor (WHERE id < last_seen) seeks straight into the index.",
   },
 ];

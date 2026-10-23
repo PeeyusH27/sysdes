@@ -2,7 +2,7 @@ import { findMiddle, floydCycle, implicitCycle } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Two pointers walk one list at different speeds: `slow` one step, `fast` two. When `fast` runs out, `slow` is at the **middle**; in a **loop**, `fast` laps `slow`, and a second walk from the head finds where the loop begins, all in **O(1) extra space**.
+Two runners on one list: `slow` takes one step, `fast` takes two. When `fast` runs out, `slow` is at the **middle**. In a **loop**, `fast` laps `slow` and they meet. All in **O(1) extra space**.
 </TLDR>
 
 ## When to reach for it
@@ -11,30 +11,29 @@ Two pointers walk one list at different speeds: `slow` one step, `fast` two. Whe
 
 - A **linked list** might have a **cycle**, or you need its **middle** without counting first.
 - A **sequence defined by a rule** (sum of digit squares, `i → nums[i]`) may repeat forever.
-- **O(1) extra space** is required where a visited `Set` would be the easy answer.
+- **O(1) extra space** is required, so a visited `Set` is out.
 
 </Callout>
 
 | Variant | Pointers | Classic problems |
 |---|---|---|
-| Find the middle | slow +1, fast +2 | middle of the list, palindrome list |
+| Find the middle | slow +1, fast +2 | middle of the list |
 | Cycle and its entry | +1 and +2 until they meet; then both +1 | linked list cycle I and II |
 | Implicit sequence | `x → f(x)` instead of `node.next` | happy number, find the duplicate |
-| Fixed gap | same speed, fast starts k ahead | remove the nth node from the end |
 
 ## The core idea: a faster runner laps a slower one
 
-Two runners, one track. On a straight road the fast one reaches the end having covered **twice** the distance, so the slow one is half way: the middle. If the road ends in a loop, both end up circling it, and the fast one gains **exactly one node per step**. A gap that shrinks by one can't jump from 1 to -1: it hits 0, and they meet.
+Two runners, one track. On a straight road the fast one finishes having run **twice** as far, so the slow one is half way: the middle.
 
-Watch both phases, or build your own list with **Edit input**:
+If the road ends in a loop, both circle it, and the fast one gains **exactly one node per step**. A gap that shrinks by one can't jump over zero, so they meet. Watch both phases, or build your own list with **Edit input**:
 
 <AlgoViz trace={floydCycle} />
 
-**Why the second walk finds the entry.** Let `F` be the steps from the head to the entry and `a` how far past the entry they met. Fast walked twice slow's `s` steps and stands on the same node, so the extra `s` steps are whole laps. Slow is `a` steps into the loop, so `F + a` is whole laps too: walk `F` more steps from the meeting point and you land on the entry, the moment a pointer from the head arrives.
+**Why the second walk finds the entry.** Let `F` be the steps from the head to the entry, and `a` how far past the entry they meet. Fast walked twice what slow did, so slow's steps are whole laps. Slow walked `F + a`, so `F + a` is whole laps, and `F` more steps from the meeting point land on the entry.
 
 ## Play with it
 
-Set the tail and the loop, press **Run**, and watch the hare lap the tortoise, then walk back from the head onto the entry. Set the loop to "none" and the tortoise stops on the middle. Try 3 hops per step with 1 node before a loop of 4: they still meet, but the second walk misses.
+Set the tail and the loop, press **Run**, and watch the hare lap the tortoise.
 
 <FastSlowLab />
 
@@ -42,19 +41,19 @@ Set the tail and the loop, press **Run**, and watch the hare lap the tortoise, t
 
 <Steps>
   <Step title="Find the hidden list">
-    What is `next`? `node.next`, the digit-square sum for Happy Number, or `i → nums[i]` for Find the Duplicate.
+    What is `next`? `node.next`, or `i → nums[i]`.
   </Step>
   <Step title="Pick the loop condition">
-    `while (fast && fast.next)` keeps `fast.next.next` safe; Template 1 shows which middle each condition gives.
+    `while (fast && fast.next)` keeps `fast.next.next` safe.
   </Step>
   <Step title="Move, then compare">
-    Both start on the head, so move first and compare after. Compare **nodes** (`slow === fast`), never values.
+    Both start on the head. Compare **nodes** (`slow === fast`), never values.
   </Step>
   <Step title="Decide what the meeting means">
-    `fast` hit null: no cycle. A meeting: a cycle, whose entry phase 2 finds.
+    `fast` hit null: no cycle. A meeting: a cycle.
   </Step>
   <Step title="Check the tiny cases">
-    Empty list, one node, two nodes, a node pointing to itself, and a loop covering the whole list (`F = 0`).
+    Empty list, one node.
   </Step>
 </Steps>
 
@@ -64,18 +63,18 @@ The two loop conditions differ only on even lengths:
 
 | Loop condition | 1 → 2 → 3 → 4 → 5 | 1 → 2 → 3 → 4 → 5 → 6 | Use it for |
 |---|---|---|---|
-| `fast && fast.next` | 3 | 4 (second middle) | the middle node, the start of the second half |
-| `fast.next && fast.next.next` | 3 | 3 (first middle) | the end of the first half, before cutting |
+| `fast && fast.next` | 3 | 4 (second middle) | the middle node |
+| `fast.next && fast.next.next` | 3 | 3 (first middle) | cutting the list |
 
 <AlgoViz trace={findMiddle} />
 
 <CodeTabs files={['snippets/middle.js']} java={['snippets/java/Middle.java']} python={['snippets/python/middle.py']} />
 
-<ProblemLink slug="middle-of-the-linked-list" /> is this template as written; <ProblemLink slug="palindrome-linked-list" /> starts with it.
+<ProblemLink slug="middle-of-the-linked-list" /> is this template; <ProblemLink slug="palindrome-linked-list" /> starts with it.
 
 ## Template 2: detect a cycle and find its entry
 
-Phase 1 moves the pointers at speeds 1 and 2 until they meet or `fast` runs out. Phase 2 restarts one at the head and steps both by one until they meet at the entry.
+Phase 1: move at speeds 1 and 2 until they meet or `fast` runs out. Phase 2: restart one at the head and step both by one until they meet at the entry.
 
 <CodeTabs files={['snippets/cycle.js']} java={['snippets/java/Cycle.java']} python={['snippets/python/cycle.py']} />
 
@@ -83,14 +82,14 @@ Phase 1 moves the pointers at speeds 1 and 2 until they meet or `fast` runs out.
 
 ## Template 3: cycles in implicit sequences
 
-Floyd's algorithm only needs "the next one". Any function `f` over a finite set gives a sequence `x0, f(x0), f(f(x0)), …` that must repeat, shaped like the letter ρ: a tail into a loop. Replace `node.next` with `f(x)` and the same two phases find the loop's start.
+Floyd's algorithm only needs "the next one". Any rule `f` over a finite set makes a sequence that must repeat: a tail into a loop. Replace `node.next` with `f(x)` and the same two phases work.
 
 <AlgoViz trace={implicitCycle} />
 
 <CodeTabs files={['snippets/sequence.js']} java={['snippets/java/Sequence.java']} python={['snippets/python/sequence.py']} />
 
-- <ProblemLink slug="happy-number" />: `f(x)` is the digit-square sum, and `n` is happy exactly when the loop is `1 → 1`.
-- <ProblemLink slug="find-the-duplicate-number" />: `f(i) = nums[i]` from index 0. Values are in `1..n`, so nothing points back to 0, and the loop's entry (two incoming arrows) is the duplicate.
+- <ProblemLink slug="happy-number" />: `f(x)` is the digit-square sum; `n` is happy when the loop is `1 → 1`.
+- <ProblemLink slug="find-the-duplicate-number" />: `f(i) = nums[i]`. The loop's entry has two incoming arrows: that is the duplicate.
 
 ## Try it
 
@@ -101,9 +100,8 @@ Floyd's algorithm only needs "the next one". Any function `f` over a finite set 
 | Variant | Time | Extra space |
 |---|---|---|
 | Find the middle | O(n) | O(1) |
-| Detect a cycle | O(n): slow is caught within its first lap | O(1) |
-| Find the cycle's entry | O(n): phase 2 adds F steps | O(1) |
-| Implicit sequence | O(tail + cycle length) calls to f | O(1) |
+| Detect a cycle and find its entry | O(n) | O(1) |
+| Implicit sequence | O(tail + cycle length) | O(1) |
 | Visited `Set`, for comparison | O(n) | O(n) |
 
 ## JavaScript you'll use
@@ -119,33 +117,32 @@ while (fast && fast.next) {       // check fast first: null.next throws
 const seen = new Set();           // the O(n)-space alternative: seen.has(node)
 ```
 
-`===` on objects is `true` only for the **same object**: exactly "same node". Comparing `.val` accepts two different nodes holding equal numbers.
+`===` on objects means the **same node**. Comparing `.val` does not.
 
 <Callout kind="warning">
 
-- Checking only `fast.next` in the loop condition: once `fast` is `null`, `fast.next` throws a TypeError.
-- Returning the phase 1 meeting point as the entry: it is somewhere inside the loop, not necessarily its start.
-- Starting both pointers on `x0` in an implicit sequence with a plain `while (slow !== fast)`: the loop never runs. Use `do … while`.
+- Checking only `fast.next`: once `fast` is `null`, it throws.
+- Returning the phase 1 meeting point as the entry.
 
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
-  <FollowUp q="Why does fast move two steps? Would three be faster?">
-    Starting together, any speed above 1 catches slow, at the latest once slow's step count is a multiple of the loop length. But only speed 2 makes slow's own distance whole laps, which phase 2 needs: with speed 3 the second walk can miss the entry.
+  <FollowUp q="Why does fast move two steps? Would three work?">
+    Three also meets, but only speed 2 makes phase 2 land on the entry. With 3 the second walk can miss.
   </FollowUp>
   <FollowUp q="How do you find the length of the cycle?">
-    After the meeting, hold one pointer and step the other around until it returns, counting the steps.
+    Hold one pointer, step the other around, count.
   </FollowUp>
-  <FollowUp q="Set of visited nodes or Floyd: which would you write first?">
-    The `Set`: simpler, also O(n) time, a fine first answer if you name its O(n) memory. Floyd answers the follow-up, "O(1) space?".
+  <FollowUp q="Visited Set or Floyd: which do you write first?">
+    The `Set`: simpler, O(n) memory. Floyd answers the follow-up, "O(1) space?".
   </FollowUp>
   <FollowUp q="How do you find where two linked lists intersect?">
-    Walk one pointer from each head; at the end, send each to the **other** list's head. Both travel A + B nodes and arrive at the intersection together, or at null together.
+    Walk a pointer from each head; at the end, switch each to the other head. They meet there.
   </FollowUp>
-  <FollowUp q="Can you check that a linked list is a palindrome in O(1) space?">
-    Find the middle, reverse the second half in place ([in-place list reversal](/dsa/patterns/linked-list-reversal)) and compare the halves node by node: O(n) time.
+  <FollowUp q="Can you check a linked list is a palindrome in O(1) space?">
+    Find the middle, reverse the second half ([list reversal](/dsa/patterns/linked-list-reversal)), compare.
   </FollowUp>
 </FollowUps>
 

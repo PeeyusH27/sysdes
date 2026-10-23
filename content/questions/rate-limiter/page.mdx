@@ -2,7 +2,7 @@ import { architecture } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-A **token bucket** per user, API key or IP, in Redis, updated by **one Lua script** on Redis's clock so the check is atomic across servers. The gateway answers `429` with `Retry-After`; if Redis dies, most endpoints fail open, login and OTP fail closed.
+Give each user a **token bucket** in Redis, updated by **one Lua script** so the check is atomic. Over the limit, the gateway answers `429`. If Redis dies, most endpoints keep working and login does not.
 </TLDR>
 
 <Requirements
@@ -10,15 +10,15 @@ A **token bucket** per user, API key or IP, in Redis, updated by **one Lua scrip
   nonFunctional={['Under 5 ms added p99', 'Consistent across N app servers', 'A limiter outage must not take the API down', 'Memory-bounded for millions of keys']}
   outOfScope={['Billing for overages', 'Volumetric DDoS (the CDN/WAF does that)']} />
 
-Two questions in one: **the algorithm**, and **the distributed system** (make it hold across 50 servers).
+Two questions in one: **which algorithm**, and **how to make it hold across 50 servers**.
 
 ## Clarifying questions
 
-- Limit the user, the API key or the IP?
+- Limit the user, the key or the IP?
 - Bursts allowed, or smooth traffic?
-- Hard limit (reject) or soft (log, alert, slow down)?
+- Reject, or just warn?
 - One region or global?
-- If the limiter fails, open or closed?
+- If the limiter fails, serve or block?
 
 ## Capacity estimate
 
@@ -28,31 +28,41 @@ Two questions in one: **the algorithm**, and **the distributed system** (make it
   { label: '1M active keys', value: '~200 MB', sub: 'two small fields each; idle keys expire' },
 ]} />
 
-One Redis primary handles this with room to spare; shard by key with Redis Cluster when it can't.
+One Redis primary handles this. Split by key with Redis Cluster when it can't.
 
 ## Choosing an algorithm
+
+<Doodle name="sliding-window" size={150} caption />
 
 Five algorithms, one real question: how much burst do you allow?
 
 | Algorithm | State per key | Behaviour |
 |---|---|---|
-| Fixed window | 1 counter | Simplest; bursts up to 2× the limit at window edges |
-| Sliding log | Every timestamp | Exact, no bursts; memory grows with traffic |
-| **Sliding window counter** | 2 counters | ~Exact, limited bursts; good for "N per minute" quotas |
-| **Token bucket** | Tokens + timestamp | Exact average rate, bursts up to capacity; the API default |
-| Leaky bucket | Queue | Smooth output, no bursts; adds queueing latency |
+| Fixed window | 1 counter | Simplest; 2× bursts at the edges |
+| Sliding log | Every timestamp | Exact; memory grows |
+| **Sliding window counter** | 2 counters | Nearly exact; good for quotas |
+| **Token bucket** | Tokens + time | Allows bursts; the API default |
+| Leaky bucket | Queue | Smooth; adds delay |
 
-A token bucket holds up to `capacity` tokens, refills at `rate` per second, and spends one per request: bursts pass, the average holds. Fire a burst at it.
+Match the traffic to the algorithm:
+
+| Traffic | Pick | Why |
+|---|---|---|
+| A page fires 20 calls at once | Token bucket | The burst passes, the average stays 5 a second |
+| Paid quota of 100 a minute | Sliding window counter | No edge doubling |
+| Calls to a fragile partner | Leaky bucket | Steady rate out |
+
+A bucket refills at a steady rate. Each request spends a token. Bursts pass, the average holds. Fire a burst at it.
 
 <TokenBucketViz />
 
-A fixed window resets on the minute, so a client can send the full limit just before the edge and again just after: **2× in a couple of seconds**. A sliding window counter weights the previous window by its overlap; burst on both sides of the boundary in the fixed-vs-sliding widget.
+A fixed window resets on the minute. At 100 a minute, a client sends 100 at 11:59:59 and 100 at 12:00:00: **200 in two seconds**. Try it here.
 
 <FixedVsSliding />
 
 ## API
 
-The contract is mostly headers, from the IETF RateLimit header fields draft; the example shows a `429`.
+The contract is mostly headers. Here is a `429`.
 
 | Header | When | Meaning |
 |---|---|---|
@@ -71,7 +81,7 @@ Content-Type: application/json
 {"error":"Too many requests"}
 ```
 
-Internally, the gateway calls `check(key, ratePerSec, capacity)` and gets `{ ok, remaining, retryAfterMs }`.
+The gateway calls `check(key, rate, capacity)` and gets `{ ok, remaining, retryAfterMs }`.
 
 ## Data model
 
@@ -80,7 +90,7 @@ Internally, the gateway calls `check(key, ratePerSec, capacity)` and gets `{ ok,
 | `rl:<rule>:<id>` | Hash: `tokens` (float), `ts` (ms, Redis time) | Time to refill completely |
 | `sw:<key>:<window>` | String: request count in that window | Two windows |
 
-Rules live in config (the JSON), cached in each process; `plans` multiplies rate and capacity per tier, so one rule serves every plan.
+Rules are cached config. `plans` scales them per tier.
 
 ```json
 {
@@ -92,7 +102,11 @@ Rules live in config (the JSON), cached in each process; `plans` multiplies rate
 
 ## Architecture
 
-Play the scenarios: **Allowed**, **Burst exhausted** (a 429 with a computed `Retry-After`), and **Redis down** (the per-instance fallback).
+<Doodle name="circuit-breaker" size={150} caption />
+
+One server can count in memory. Behind 50, each counting alone, a user capped at 100 a minute could send 5,000. Shared state fixes that.
+
+Play **Allowed**, **Burst exhausted** (a 429) and **Redis down** (the local fallback).
 
 <FlowDiagram spec={architecture} />
 
@@ -100,7 +114,7 @@ Play the scenarios: **Allowed**, **Burst exhausted** (a 429 with a computed `Ret
 
 <Steps>
   <Step title="Clarify">
-    Who, how hard, how many nodes.
+    Who, how hard.
   </Step>
   <Step title="Pick an algorithm">
     Bursts or strictness.
@@ -112,7 +126,7 @@ Play the scenarios: **Allowed**, **Burst exhausted** (a 429 with a computed `Ret
     One Lua script.
   </Step>
   <Step title="Failure and UX">
-    Open or closed; 429 with Retry-After.
+    Open or closed.
   </Step>
 </Steps>
 
@@ -120,20 +134,20 @@ Play the scenarios: **Allowed**, **Burst exhausted** (a 429 with a computed `Ret
 
 <Steps>
   <Step title="Identity">
-    The user or API key first; the IP only for anonymous traffic, and loosely, since one campus or carrier NAT can hide thousands of people.
+    The user or key first. The IP only for anonymous traffic.
   </Step>
   <Step title="Algorithm">
-    A token bucket (rate `r`, capacity `b`) by default; a sliding window counter for strict "100 per minute" billing quotas.
+    A token bucket by default. A sliding window counter for strict "100 per minute" quotas.
   </Step>
   <Step title="Where to enforce">
-    Global limits at the gateway, where rejecting is nearly free; expensive operations (search, exports) inside the service. Client-side throttling is UX, not security.
+    Global limits at the gateway, where rejecting is cheap.
   </Step>
   <Step title="State">
-    The `rl:<rule>:<id>` hash, expiring after the full-refill time (`capacity / rate`), when it's full anyway.
+    One hash per key, expiring once it is full.
   </Step>
   <Step title="Atomicity">
 
-One Lua script reads, refills, takes and writes. Separate `GET` and `SET` from 50 servers race: two read "1 token left" and both spend it.
+One Lua script reads, refills, takes and writes. A separate `GET` and `SET` would race: two servers read "1 token left" and both spend it.
 
 ```lua
 tokens = math.min(cap, tokens + math.max(0, now - ts) * rate / 1000)
@@ -143,23 +157,23 @@ redis.call('HSET', KEYS[1], 'tokens', tokens, 'ts', now)
 
 </Step>
   <Step title="Clock">
-    `redis.call('TIME')` in the script: a server clock running 2 seconds fast can't mint tokens.
+    Use Redis's own `TIME`, so a fast server clock can't mint tokens.
   </Step>
   <Step title="Response">
-    `429` with `Retry-After` = `(1 − tokens) / rate`, and quota headers on every response so polite clients slow down early.
+    `429` with `Retry-After`, plus quota headers on every response.
   </Step>
   <Step title="Failure policy">
 
-- Normal endpoints fail open, to a per-instance local bucket.
-- Login, OTP and payments fail closed (`503`).
-- ioredis must **fail fast** (no offline queue, no retries, a 50 ms timeout), or the limiter becomes the outage.
+- Normal endpoints **fail open**, to a local bucket.
+- Login, OTP and payments **fail closed** (`503`).
+- **Fail fast**: a 50 ms timeout, no retries, or the limiter becomes the outage.
 
 </Step>
   <Step title="Rules and regions">
-    Rules per plan and endpoint come from config, cached in process; regions are a follow-up.
+    Rules per plan come from cached config.
   </Step>
   <Step title="Observability">
-    Count allowed and limited per rule, watch script latency, alert on sudden 429 spikes (a client bug or an attack).
+    Count allowed and limited calls. Alert on 429 spikes.
   </Step>
 </Steps>
 
@@ -167,50 +181,50 @@ redis.call('HSET', KEYS[1], 'tokens', tokens, 'ts', now)
 
 <CodeTabs files={['snippets/token-bucket.js', 'snippets/token-bucket.test.js', 'snippets/token-bucket.lua', 'snippets/redis-limiter.js', 'snippets/sliding-window.js', 'snippets/middleware.js']} />
 
-- The in-memory `TokenBucket` is the single-server answer and the Redis fallback: 3 quick requests drain a capacity-3 bucket, and the 4th waits 500 ms at 2 tokens per second.
-- The Lua script fixes three classic bugs: Redis's clock, not the app server's; `HSET`, not the deprecated `HMSET`; a retry delay from the deficit, not a hard-coded 1.
-- `middleware.js` keeps fallback buckets in the bounded `LRU` from the [caching lesson](/learn/caching), so a flood of keys can't exhaust memory.
+- The in-memory `TokenBucket` is the single-server answer and the fallback.
+- The Lua script uses Redis's clock and works out the retry delay.
+- `middleware.js` keeps fallback buckets in the bounded `LRU` from the [caching lesson](/learn/caching).
 
 ## Failure modes
 
 | What breaks | Effect | Mitigation |
 |---|---|---|
-| Redis down | No shared state | Fail fast; local fallback (open) or 503 (closed), per rule |
-| Redis slow | Latency on every request | 50 ms timeout, then treat it as down |
-| One key sends huge traffic | A hot Redis shard | A local pre-limiter for keys already over |
-| App servers' clocks skewed | Wrong refills | Redis `TIME` inside the script |
-| Millions of idle keys | Memory growth | `PEXPIRE` at the full-refill time |
+| Redis down | No shared state | Fail fast; local bucket (open) or 503 (closed) |
+| Redis slow | Every request slows | 50 ms timeout, then treat as down |
+| One key floods | A hot Redis shard | A local pre-limiter |
+| Skewed clocks | Wrong refills | Redis `TIME` in the script |
+| Millions of idle keys | Memory growth | Expire them |
 
 ## Trade-offs
 
 | Choice | Pros | Cons |
 |---|---|---|
-| Central Redis vs local only | Accurate global limits | A hop and a dependency |
+| Central Redis vs local | Accurate global limits | A hop and a dependency |
 | Token bucket vs sliding window | Bursts, tiny state | Looser "per minute" |
-| Fail open vs closed | Availability | Abuse during outages |
-| Gateway vs in-service | Rejects early, cheaply | Blind to operation cost |
+| Fail open vs closed | Stays up | Abuse during outages |
+| Gateway vs in-service | Rejects early | Blind to cost |
 
 <Callout kind="tip" title="Build it">
-Draw this design in the [rate limiter playground challenge](/playground/rate-limiter): clients → gateway → service with replicas, the gateway using Redis, and a Redis replica so the limiter isn't a single point of failure.
+Draw it in the [rate limiter playground challenge](/playground/rate-limiter): clients, gateway, service, and Redis with a replica.
 </Callout>
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="Per-IP or per-user limits, and what about shared NATs?">
-    By user or key; per-IP only for anonymous traffic, and generous. For login, combine both.
+    By user or key. Per-IP only for anonymous traffic, and generous. For login, use both.
   </FollowUp>
   <FollowUp q="How do you handle 1M distinct keys?">
-    TTLs drop idle buckets at about two fields each; Redis Cluster scales it, since each single-key script lives in one slot.
+    Expiry drops idle buckets. Redis Cluster scales it, since each script touches one key.
   </FollowUp>
   <FollowUp q="How do you avoid clock skew between servers?">
-    Read the time from Redis (`TIME`) inside the script.
+    Read the time from Redis inside the script.
   </FollowUp>
   <FollowUp q="How do you rate-limit globally across regions?">
-    Give each region a fraction of the limit, or sync counters asynchronously and accept brief overshoot; strict global limits cost a cross-region round trip.
+    Give each region a share, or sync counters later and accept a brief overshoot.
   </FollowUp>
   <FollowUp q="Rate limiting or load shedding?">
-    Both: rate limiting is fairness per client; load shedding drops low-priority work from anyone when saturated.
+    Both. Rate limiting is fair per client. Load shedding drops low-priority work when overloaded.
   </FollowUp>
 </FollowUps>
 

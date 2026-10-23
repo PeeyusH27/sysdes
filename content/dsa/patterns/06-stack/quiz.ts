@@ -9,7 +9,7 @@ export const quiz: QuizItem[] = [
       "Counters would use O(n) memory",
     ],
     answer: 1,
-    explain: "Each counter ends at zero for \"([)]\", yet the pairs cross. Only the order of the open brackets reveals that ) arrives while [ is the newest open bracket, and a stack keeps exactly that order.",
+    explain: "Each counter ends at zero for \"([)]\", yet the pairs cross. Only the order of the open brackets shows that ) arrives while [ is newest, and a stack keeps that order.",
   },
   {
     q: "In a monotonic decreasing stack for \"next greater element\", index j is popped while processing index i. What has just been resolved?",
@@ -19,7 +19,7 @@ export const quiz: QuizItem[] = [
       "j is the previous greater element of i",
     ],
     answer: 1,
-    explain: "j waited on the stack until a bigger value arrived. Any bigger value between j and i would have popped it earlier, so i is j's next greater element. (The index left on top after the pops is i's previous greater-or-equal element.)",
+    explain: "j waited on the stack until a bigger value arrived. A bigger value between j and i would have popped it earlier, so i is j's next greater element.",
   },
   {
     q: "A while loop that pops is nested inside the for loop. What is the total running time of the monotonic stack?",
@@ -29,6 +29,6 @@ export const quiz: QuizItem[] = [
       "O(n²): the while loop can run n times for each i",
     ],
     answer: 0,
-    explain: "A single iteration may pop many items, but there are only n pushes, so there can be at most n pops in total across the whole scan. That makes the work O(n) amortised.",
+    explain: "One iteration may pop many items, but there are only n pushes, so at most n pops in total. That is O(n) amortised.",
   },
 ];

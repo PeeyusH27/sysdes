@@ -2,12 +2,12 @@ import { circuitBreaker, breakerStates } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Something is always failing, so contain it: a **timeout** on every call, jittered **backoff** for idempotent retries (one layer, within a budget), and **circuit breakers** and bulkheads with fallbacks. Set **SLOs** with error budgets and alert on what users feel, not CPU.
+Something is always failing, so contain it: a **timeout** on every call, jittered **backoff** for safe retries, and **circuit breakers** with fallbacks. Set **SLOs** and alert on what users feel, not CPU.
 </TLDR>
 
 ## Why it matters
 
-Chain 10 services at 99.9% each and only about 99% of requests succeed. At scale something is always broken, so contain failures, degrade gracefully, and notice before your users do.
+Chain 10 services at 99.9% each and only about 99% of requests succeed. At scale something is always broken. So contain failures, show something useful anyway, and notice before your users do.
 
 Play **Failure spike**, then **Half-open probe**: the breaker trips, a fallback answers, then it heals.
 
@@ -15,33 +15,33 @@ Play **Failure spike**, then **Half-open probe**: the breaker trips, a fallback 
 
 ## SLIs, SLOs, SLAs and error budgets
 
-"Reliable enough" needs a number.
+<Doodle name="monitoring" size={150} caption />
 
-- **SLI** (indicator): a measured ratio, like requests that succeed in under 300 ms.
-- **SLO** (objective): the internal target, like 99.9% over 30 days.
-- **SLA** (agreement): the customer contract with penalties (usually service credits), looser than the SLO.
-- **Error budget** = 100% − SLO: at 99.9% and 10M requests a month, 10,000 may fail. Budget left, ship faster; budget spent, freeze risky changes.
+"Reliable enough" needs a number. Measure something users feel (an **SLI**), like requests answered in under 300 ms. Set a target (an **SLO**), like 99.9% over 30 days. The customer contract, the SLA, is looser.
 
-| Availability | Downtime per 30 days | Per day |
-|---|---|---|
-| 99% ("two nines") | 7.2 h | 14.4 min |
-| 99.9% | 43.2 min | 1.44 min |
-| 99.99% | 4.32 min | 8.64 s |
-| 99.999% | 25.9 s | 0.86 s |
+The gap is your **error budget**. At 99.9% and 10M requests a month, 10,000 may fail. Budget left: ship faster. Budget spent: freeze risky changes.
 
-Each nine cuts downtime 10× and costs far more. At 99.99%, about 4 minutes a month won't even cover getting paged and logging in: four nines need automated detection and failover. The chart shows the yearly allowance.
+| Availability | Downtime per 30 days |
+|---|---|
+| 99% | 7.2 h |
+| 99.9% | 43.2 min |
+| 99.99% | 4.32 min |
+
+Each extra nine cuts downtime 10 times and costs far more. One 45-minute outage uses a whole 99.9% month. At 99.99% you get about 4 minutes, too fast for a human, so failover must be automatic.
 
 <BarChart title="Downtime per year by availability" unit="minutes" scale="log" data={[{ label: "99%", value: 5256, display: "3.65 days" }, { label: "99.9%", value: 525.6, display: "8.77 h" }, { label: "99.99%", value: 52.56, display: "52.6 min" }, { label: "99.999%", value: 5.26, display: "5.26 min" }]} />
 
 ## Timeouts, retries and jitter
 
-A hung call holds a thread, a connection and memory until the caller runs dry.
+<Doodle name="backoff" size={150} caption />
 
-- **Timeouts.** Always. Set from the dependency's p99 (80 ms → about 250 ms); pass a **deadline** downstream so inner calls quit with the caller (gRPC deadlines, `AbortSignal.timeout(ms)` on `fetch`).
-- **Backoff with full jitter.** Wait a random 0 to `base × 2^attempt`; without jitter, clients that failed together retry together.
-- **Retry only idempotent calls**: `GET`, `PUT`, `DELETE`, or `POST` with an idempotency key. Never a 400 or validation error.
-- **Retry amplification.** 3 layers × 3 attempts = **27 calls** on a struggling service. Retry at one layer, nearest the failure.
-- **Retry budgets.** Cap retries near 10% of requests: an outage adds 10% load, not 3×.
+A call that hangs holds a thread until the caller runs dry. So every call gets a **timeout**, set near the dependency's slow case (80 ms normally, so about 250 ms).
+
+A retry fixes a blip: one lost packet, and the second try works. It hurts when the service is overloaded: 1,000 requests a second with 3 tries each can become 3,000. So be careful:
+
+- Retry only calls that are safe to repeat (a card charge is not one).
+- Wait a random, growing time (**jitter**). Otherwise clients that failed together retry together.
+- Retry in one layer only. 3 layers with 3 tries each send **27 calls** at a struggling service.
 
 Switch **Retry policy** to **Exponential + full jitter** and watch the peak after recovery drop.
 
@@ -49,15 +49,15 @@ Switch **Retry policy** to **Exponential + full jitter** and watch the peak afte
 
 ## Circuit breakers and bulkheads
 
-A drowning dependency needs you to stop calling. A **circuit breaker** fails fast; a **bulkhead** gives each dependency its own pool, so one can't starve the rest.
+A drowning service needs you to stop calling it. A **circuit breaker** is a fuse: it trips, calls fail fast, and a fallback answers.
 
-- **Closed**: calls pass; consecutive failures (or the windowed error rate) are counted.
-- **Open**: after 5 failures, calls fail instantly for a cooldown (say 10 s) and a fallback answers. Threads stay free; the dependency gets room.
-- **Half-open**: exactly one trial call. Success closes; failure reopens for another cooldown.
+- **Closed**: calls pass; failures are counted.
+- **Open**: after 5 failures, calls fail instantly for about 10 s.
+- **Half-open**: one trial call. Success closes it; failure reopens it.
 
-Bulkheads are a ship's watertight compartments: 20 concurrent calls for payments, 10 for recommendations. If recommendations hangs, checkout still has its 20. Same idea for database pools: the [connection pooling deep dive](/deep-dives/connections-pooling).
+A **bulkhead** gives each dependency its own pool, like a ship's watertight rooms. If recommendations hangs, checkout still has its slots.
 
-Raise **Dependency error rate** until the breaker trips; lower it and watch one probe close it.
+Raise **Dependency error rate** until the breaker trips, then lower it.
 
 <FlowDiagram spec={breakerStates} />
 
@@ -65,56 +65,54 @@ Raise **Dependency error rate** until the breaker trips; lower it and watch one 
 
 ## Load shedding and prioritisation
 
-Overloaded, serving everyone means serving no one. Reject the excess fast; serve the rest well.
+Overloaded, serving everyone means serving no one. Reject the excess fast.
 
-- **Shed early and cheaply**: at the load balancer or on arrival, before parsing, auth or database work. Reply `503` with `Retry-After` (`429` for one client over its limit).
+- **Shed early and cheaply**, before parsing or database work. Reply `503` with `Retry-After` (`429` for one client over its limit).
 - **Drop abandoned work**: a request queued past its deadline has no one waiting.
-- **Prioritise**: critical (checkout, login), normal (browsing), sheddable (prefetch, analytics beacons, batch jobs). Shed from the bottom.
-- **Limit concurrency, not just rate**: an adaptive limit (like TCP congestion control) tracks a shifting request mix better than a fixed requests-per-second cap. Per-client limits: [rate limiter](/questions/rate-limiter).
+- **Shed from the bottom**: keep checkout and login; drop prefetch, analytics and batch jobs first.
+- Per-client limits: [rate limiter](/questions/rate-limiter).
 
 ## Graceful degradation
 
 Decide each page's fallback before the outage, not during it.
 
-| When this is down | Degrade to |
+| When this is down | Show instead |
 |---|---|
-| Recommendations | Bestsellers from a cached list |
-| Reviews service | Hide reviews; the product page still sells |
-| Search | Cached popular queries, category browsing |
-| Payment provider | Second provider, or charge later if risk allows |
-| Primary database writes | Read-only mode with a banner |
+| Recommendations | Cached bestsellers |
+| Reviews | Nothing; the page still sells |
+| Search | Cached popular queries |
+| Database writes | Read-only mode with a banner |
 
-**Kill switches** (feature flags) turn off extras like personalisation or live counters under load. Test fallbacks: one that never runs quietly breaks.
+**Kill switches** (feature flags) turn off extras under load. Test fallbacks: one that never runs quietly breaks.
 
 ## Redundancy and failover
 
-Two of everything helps only if they can't fail together: two app servers sharing a database, zone or bad deploy aren't redundant.
+Two of everything helps only if they cannot fail together. Two app servers on one database, zone or deploy are not redundant.
 
-- **N+1 and N+2.** One spare covers a failure or rolling deploy; two cover a failure during maintenance. Per zone too: if peak needs 6 across 3 zones, losing one must still leave 6, so run 3 per zone (9, or 150%).
-- **Zones vs regions.** Zones, milliseconds apart, replicate synchronously: the high-availability default. Regions, hundreds of kilometres apart, survive regional disasters but replicate async, since cross-region writes are slow.
-- **Active-passive vs active-active.** An idle standby is simpler but slower to fail over; serving everywhere fails over almost instantly but must handle conflicting writes ([Step 6](/learn/consistency-cap)).
-- **RPO** (recovery point objective): how much data you can lose. **RTO** (recovery time objective): how long you can be down.
+- **N+1.** One spare covers a failure or a rolling deploy. Across 3 zones, losing one must still leave full capacity, so run each zone below about 66% busy (the two survivors then carry everything).
+- **Zones vs regions.** Zones are milliseconds apart and replicate synchronously. Regions survive a disaster but replicate async.
+- **Active-passive vs active-active.** An idle standby fails over slower. Serving everywhere is fast but must handle conflicting writes ([Step 6](/learn/consistency-cap)).
+- **RPO** is how much data you can lose. **RTO** is how long you can be down.
 
-| Setup | RPO (data lost) | RTO (time down) | Cost |
-|---|---|---|---|
-| Nightly backups, manual restore | Up to 24 h | Hours | Low |
-| Async replica in another region, manual failover | Seconds to minutes | Tens of minutes | Medium |
-| Sync replica in another zone, auto failover | 0 | 1–2 min | Medium |
-| Active-active across regions | Near 0 | Near 0 | High |
+| Setup | RPO | RTO |
+|---|---|---|
+| Nightly backups | Up to 24 h | Hours |
+| Async replica, other region | Seconds to minutes | Tens of minutes |
+| Sync replica, other zone | 0 | 1 to 2 min |
+| Active-active regions | Near 0 | Near 0 |
 
-A payments ledger needs RPO 0 and an RTO of minutes; a marketing blog can live with RPO 24 h. In the calculator, add serial dependencies and watch availability fall; add a redundant pair and watch it climb.
+A payments ledger needs RPO 0. A blog can live with 24 h.
 
 <AvailabilityCalc />
 
 ## Safe deploys
 
-Most outages start with a change: a deploy, a config push, a migration. Keep changes small, observable, reversible.
+Most outages start with a change. Keep changes small, visible and reversible.
 
-- **Canary**: 1% of traffic (or one zone), compare errors and latency with the old version, then 10%, 50%, 100%.
-- **Blue/green**: new beside old, switch at the load balancer, switch back instantly.
-- **Feature flags**: deploy dark, enable for staff, 1% of users, everyone; turn off without a deploy.
-- **Automatic rollback** when the canary burns error budget faster than the baseline.
-- **Backward-compatible migrations** (expand, migrate, contract), so both versions run side by side.
+- **Canary**: send 1% of traffic to the new version, compare errors, then widen. At 10,000 requests a second, 1% is 100 a second: enough to spot a broken deploy in minutes, while 99% of users never see it.
+- **Blue/green**: new beside old; switch at the load balancer, and back instantly.
+- **Feature flags**: deploy dark, enable slowly, turn off without a deploy.
+- **Automatic rollback** when the canary burns error budget faster than the old version.
 
 ## Observability
 
@@ -122,13 +120,13 @@ At 3 a.m. you need three answers, fast:
 
 | Signal | Answers | Example |
 |---|---|---|
-| Metrics | Is something wrong, and how much? | Request rate, error ratio, p99 latency |
-| Logs | What happened in this one request? | Structured JSON: `reqId`, route, status, duration |
-| Traces | Where did the time go across services? | API 320 ms, of which the database took 250 ms |
+| Metrics | Is something wrong? | Error ratio, p99 latency |
+| Logs | What happened in this request? | JSON with `reqId`, status |
+| Traces | Where did the time go? | API 320 ms, database 250 ms |
 
-- **RED for services**: Rate, Errors, Duration (percentiles, never just the average). **USE for resources**: Utilisation, Saturation, Errors (CPUs, disks, pools, queues).
-- **Tracing with OpenTelemetry**: the W3C `traceparent` header carries trace context, so ten services join into one waterfall. Sample for cost; keep every error and slow trace.
-- **Alert on symptoms and burn rate, not CPU.** On a 99.9% SLO, burn rate 14.4 (1.44% errors) spends 2% of the month's budget in an hour: page. Rate 6 over six hours spends 5%: page. Rate 1 over three days spends 10%: ticket. Pair each long window with a short one (1 hour with 5 minutes) so alerts fire and clear fast.
+- For services, watch rate, errors and duration (use percentiles, not averages).
+- A trace header carries one id across services, so ten services join into one waterfall.
+- **Alert on symptoms and burn rate, not CPU.** On a 99.9% SLO, 1.44% errors spends 2% of the month's budget in an hour: page. A slow burn over three days: ticket.
 
 ## Incident basics
 
@@ -136,28 +134,28 @@ The pager fires. Stop the bleeding first.
 
 <Steps>
   <Step title="Detect">
-    A burn-rate alert pages on-call, ideally before customers notice.
+    A burn-rate alert pages on-call.
   </Step>
   <Step title="Triage and communicate">
-    Name an incident commander, open a channel, update the status page. One coordinates; others investigate.
+    Name one incident commander and update the status page.
   </Step>
   <Step title="Mitigate first">
     Roll back, fail over, shed load or flip a flag. Root cause can wait.
   </Step>
   <Step title="Resolve and learn">
-    A **blameless postmortem**: timeline, contributing causes, what went well, action items with owners. Blame hides information.
+    Write a **blameless postmortem**: timeline, causes, action items with owners.
   </Step>
 </Steps>
 
-Every alert links to a **runbook**: meaning, dashboards, first safe steps. Page only for urgent, actionable problems; fix or delete noisy alerts.
+Every alert links to a **runbook** of first safe steps.
 
 ## Code
 
-The breaker lets exactly one half-open probe through, and only the probe clears the in-flight flag. The bulkhead hands a freed slot straight to the next waiter, so no newcomer sneaks past the limit.
+The breaker lets exactly one half-open probe through.
 
 <CodeTabs files={['snippets/retry.js', 'snippets/retry-budget.js', 'snippets/circuit-breaker.js', 'snippets/bulkhead.js']} />
 
-`availability.js` and `slo.js` reproduce this page's numbers. `request-logging.js` tags log lines with a request id that crosses services; `tracing.js` turns on OpenTelemetry auto-instrumentation.
+`availability.js` and `slo.js` reproduce this page's numbers.
 
 <CodeTabs files={['snippets/availability.js', 'snippets/slo.js', 'snippets/request-logging.js', 'snippets/tracing.js']} />
 
@@ -171,19 +169,19 @@ The breaker lets exactly one half-open probe through, and only the probe clears 
 
 <FollowUps>
   <FollowUp q="Why add jitter to retries?">
-    Without it, clients retry in lockstep and knock a recovering service back down. Full jitter (a random wait up to the exponential cap) spreads them best.
+    Clients would retry in lockstep and knock a recovering service back down.
   </FollowUp>
   <FollowUp q="SLO vs SLA?">
-    The SLO is your internal target (99.9% under 300 ms), and its error budget sets how fast you ship. The SLA is the looser contract with penalties.
+    The SLO is your internal target, and its error budget sets how fast you ship. The SLA is the looser contract with penalties.
   </FollowUp>
   <FollowUp q="How do you survive a zone failure?">
-    3 zones with N+1 capacity, no zone-local state, and sync database replication with automatic failover. Drain a zone on purpose to prove it.
+    3 zones with spare capacity, and synchronous database replication with automatic failover.
   </FollowUp>
   <FollowUp q="What do you alert on?">
-    Burn rate on what users feel (errors, latency against the SLO) over a short and a long window. CPU and disk go on dashboards, unless a disk is 95% full.
+    Burn rate on what users feel (errors, latency against the SLO). CPU and disk go on dashboards.
   </FollowUp>
   <FollowUp q="How can retries make an outage worse?">
-    Synchronised retries at every layer multiply load on a struggling service (3 × 3 = 27 calls). Use jittered backoff, a retry budget, breakers and one retrying layer.
+    Retries at every layer multiply load (3 × 3 = 27 calls). Use jittered backoff, breakers and one retrying layer.
   </FollowUp>
 </FollowUps>
 

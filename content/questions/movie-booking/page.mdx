@@ -2,7 +2,7 @@ import { architecture, bookingSequence } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Seats go `available → held → booked`, and one **conditional UPDATE** holds all requested seats or none: Postgres row locks pick exactly one winner per seat. Payment carries an idempotency key; the webhook confirms only if the hold is still yours, and refunds otherwise.
+Seats go `available → held → booked`. One **conditional UPDATE** holds every seat or none, so row locks pick one winner. A late payment is refunded.
 </TLDR>
 
 <Requirements
@@ -10,29 +10,29 @@ Seats go `available → held → booked`, and one **conditional UPDATE** holds a
   nonFunctional={['Never double-book, ever', 'Seat maps fresh within about 1–2 s', 'Survive 100× spikes for big releases', 'Idempotent payments']}
   outOfScope={['Recommendations', 'Dynamic pricing', 'Refund policy details']} />
 
-The core test is **concurrency**: two people must never buy the same seat.
+The real test: two people must never buy the same seat.
 
 ## Clarifying questions
 
-- Maximum seats per booking? How long is a hold?
-- Payment confirmed synchronously, or by the provider's webhook?
-- Waitlists for sold-out shows?
-- Assigned seating, or general admission (a counter, not seats)?
+- How many seats per booking? How long is a hold?
+- Is payment confirmed at once, or by webhook?
+- Waitlists?
+- Assigned seats, or general admission?
 
 ## Capacity estimate
 
-The average is tiny; the **spike** is the design problem.
+The average is tiny. The **spike** is the problem.
 
 | Quantity | Estimate |
 |---|---|
-| Bookings | 10M per month ≈ **4 per second** on average |
-| Launch spike | 500K people in the first minutes of a blockbuster |
-| Seat-map reads, no CDN | 500K viewers refreshing every 5 s ≈ **100K requests/s** |
-| Seat-map reads, 1 s CDN cache | About 1 origin request per show per second, per edge |
-| Admitted shoppers | 200 per second per hot show, via the waiting room |
-| Hold writes | A few hundred conditional UPDATEs per second: easy for one primary |
+| Bookings | 10M a month ≈ **4 per second** |
+| Launch spike | 500K people in minutes |
+| Seat-map reads, no CDN | ≈ **100K requests/s** |
+| Seat-map reads, 1 s CDN cache | About 1 origin request per show per second |
+| Admitted shoppers | 200 per second per hot show |
+| Hold writes | A few hundred per second: easy |
 
-Seat maps are read far more than written, so cache the snapshot and push changes.
+Seat maps are mostly read, so cache them.
 
 ## API
 
@@ -45,32 +45,41 @@ Seat maps are read far more than written, so cache the snapshot and push changes
 | POST | `/webhooks/payments` | Provider confirms → booking confirmed or refunded |
 | DELETE | `/holds/:id` | Release early |
 
-During a launch, holds also need a waiting-room admission token.
+During a launch, holds also need a waiting-room token.
 
 ## Data model
 
 <CodeBlock src="snippets/schema.sql" title="schema.sql" />
 
-Beside it sits `shows(id, movie, screen, starts_at)`. Each seat is a state machine:
+Each seat is a small state machine:
 
-- `available → held`: a hold sets `held_by` and `held_until`.
-- `held → booked`: payment confirmed; sets `booking_id`, clears `held_until`.
+- `available → held`: sets `held_by` and `held_until`.
+- `held → booked`: payment confirmed.
 - `held → available`: expired, released, or payment failed.
-- `booked` is final unless cancelled.
 
-The primary key `(show_id, seat_no)` is one row per seat per show: exactly the unit Postgres locks.
+The key `(show_id, seat_no)` is one row per seat: exactly what Postgres locks.
 
 ## Architecture
 
+<Doodle name="queue" size={150} caption />
+
 Play **Hold, pay, confirm**, then **Seat taken**, **Late payment refunded** and **Launch-day spike**.
+
+Average load is about 4 bookings a second, so the UPDATE alone copes. Add the waiting room only for launches. The hold length is a sum too:
+
+| Hold | What happens |
+|---|---|
+| 1 minute | Too short to type a card |
+| 5 minutes | Enough to pay; abandoned seats return soon |
+| 15 minutes | 150 shoppers holding 2 seats each can lock a 300-seat show |
 
 <FlowDiagram spec={architecture} />
 
-The sequence tells the same story: pick **a seat taken**, or one of three payment outcomes.
+The sequence tells the same story. Pick **a seat taken** or a payment outcome.
 
 <SequenceDiagram spec={bookingSequence} />
 
-The seat race replays the moment that matters: Alice and Bob click A5 together, and exactly one wins.
+Alice and Bob click A5 in the same millisecond. With a `SELECT` then an `UPDATE`, both see "available" and both pay. One conditional UPDATE lets exactly one win.
 
 <SeatRace />
 
@@ -96,16 +105,18 @@ The seat race replays the moment that matters: Alice and Bob click A5 together, 
 
 ## Step-by-step answer
 
+<Doodle name="idempotency" size={150} caption />
+
 <Steps>
   <Step title="State the invariant aloud">
-    "A seat is booked at most once." Say it before you draw a single box.
+    "A seat is booked at most once." Say it before you draw.
   </Step>
   <Step title="Seat state machine">
-    `available → held → booked`, or back to `available` (the data model lists each transition).
+    `available → held → booked`, or back to `available`.
   </Step>
   <Step title="Hold atomically">
 
-One statement for every requested seat; if `rowCount` falls short, roll back.
+One statement for all seats. If `rowCount` falls short, roll back.
 
 ```sql
 UPDATE seats SET status = 'held', held_by = $1, held_until = now() + interval '5 minutes'
@@ -113,32 +124,32 @@ WHERE show_id = $2 AND seat_no = ANY($3)
   AND (status = 'available' OR (status = 'held' AND held_until < now()))
 ```
 
-Mind the brackets: without them, `status = 'available' OR held_until < now()` also matches **booked** seats with an old `held_until`.
+Mind the brackets, or **booked** seats with an old `held_until` match too.
 
 </Step>
   <Step title="Why it's safe">
-    Under READ COMMITTED, Bob's UPDATE waits on Alice's row lock, then **re-evaluates the WHERE clause** against her committed row and matches 0 rows. No application lock, no `SELECT … FOR UPDATE` round trip.
+    Bob's UPDATE waits on Alice's row lock, **re-checks the WHERE clause** and matches 0 rows.
   </Step>
   <Step title="Payment">
-    `Idempotency-Key = holdId` stops double charges. The verified webhook (maybe retried, maybe late) confirms, not the browser redirect.
+    `Idempotency-Key = holdId` stops double charges. The webhook confirms, not the browser.
   </Step>
   <Step title="Confirm">
-    Insert the booking `ON CONFLICT (payment_id) DO NOTHING`, then `UPDATE seats … WHERE status = 'held' AND held_by = me`. Hold lost? Roll back and refund, idempotently. A failed payment frees seats under the same guard.
+    Insert the booking once, then update seats only `WHERE held_by = me`. Hold lost? Refund.
   </Step>
   <Step title="Expiry">
-    Lazy: expired holds already count as free, so correctness never waits on a timer. A sweeper frees them every 30 s anyway, for honest seat maps.
+    Expired holds already count as free. A sweeper tidies up every 30 s.
   </Step>
   <Step title="Live seat map">
-    A 1–2 s CDN snapshot plus changes pushed over SSE via Redis, with **one** Redis subscription per API instance fanning out locally ([why SSE](/deep-dives/polling-sse-websockets)).
+    A CDN snapshot plus changes pushed over SSE ([why SSE](/deep-dives/polling-sse-websockets)).
   </Step>
   <Step title="Launch spikes">
 
-- A FIFO waiting room admits N users per second with admission tokens; holds without one are rejected.
-- CDN-cached seat maps, per-account [rate limits](/questions/rate-limiter), a CAPTCHA to join, pre-scaled API and database.
+- A waiting room admits N users a second. Holds without a token are rejected.
+- Cached seat maps, [rate limits](/questions/rate-limiter), a CAPTCHA.
 
 </Step>
   <Step title="Redis holds?">
-    `SET NX PX` per seat (Lua for several) is fast, but bookings need the database as truth: Redis is only a front-line filter for mega-launches.
+    Only as a front filter. The database stays the truth.
   </Step>
 </Steps>
 
@@ -146,52 +157,49 @@ Mind the brackets: without them, `status = 'available' OR held_until < now()` al
 
 <CodeTabs files={['snippets/hold-seats.js', 'snippets/confirm-booking.js', 'snippets/expiry-sweeper.js', 'snippets/seat-stream.js', 'snippets/waiting-room.js', 'snippets/hold-seats.lua']} />
 
-- `holdSeats` dedupes seats first (`['A5', 'A5']` could never match a `rowCount` of 2) and publishes only **after** `COMMIT`.
-- `confirmBooking` checks `held_by` but not `held_until`: a just-expired hold nobody reclaimed still books.
-- `joinQueue` uses `ZADD NX`, so a refresh keeps your place; positions are approximate, fine for a progress bar.
-- `hold-seats.lua` keeps a show's seat keys in one Redis Cluster slot with a hash tag, so the multi-key check stays atomic.
+- `holdSeats` removes duplicate seats and publishes only **after** `COMMIT`.
+- `confirmBooking` checks `held_by`, not `held_until`.
+- `joinQueue` uses `ZADD NX`, so a refresh keeps your place.
 
 ## Failure modes
 
 | What breaks | Effect | Mitigation |
 |---|---|---|
-| Webhook after the hold expired | Seat may be someone else's | Book if still held by me; else roll back and refund |
-| Webhook retried | Duplicate booking | `UNIQUE (payment_id)` + `ON CONFLICT DO NOTHING` |
-| Double-clicking Pay | Two charges | Idempotency key = holdId |
-| DB failover mid-hold | Transaction errors | Client retries: held again, or taken |
-| Launch-day herd | DB overwhelmed | Waiting room, cached seat map, limits, CAPTCHA |
-| Sweeper stops | Stale holds on seat maps | Harmless (expired holds count as free); alert on lag |
+| Late webhook | Seat may be taken | Book if still mine; else refund |
+| Webhook retried | Duplicate booking | `UNIQUE (payment_id)` |
+| Double-click on Pay | Two charges | Idempotency key |
+| Launch-day herd | DB overwhelmed | Waiting room, cache, limits |
 
 ## Trade-offs
 
 | Choice | Pros | Cons |
 |---|---|---|
-| Conditional UPDATE vs `SELECT … FOR UPDATE` | One round trip, short locks (the default) | Less flexible logic |
+| Conditional UPDATE vs `SELECT … FOR UPDATE` | One round trip, short locks | Less flexible |
 | DB holds vs Redis holds | One source of truth | More DB writes |
-| Countdown vs silently extending holds | Fair, predictable; extend only while payment is in flight | Some lost sales |
-| SSE vs polling seat maps | Fresh within a second for popular shows | A connection per viewer; poll the CDN for quiet ones |
+| Countdown vs extending holds | Fair and predictable | Some lost sales |
+| SSE vs polling | Fresh within a second | A connection per viewer |
 
 <Callout kind="tip" title="Build it">
-Draw this design in the [ticket booking playground challenge](/playground/ticket-booking): a waiting room before the booking service, a database with a replica, an SSE or pub/sub path for seat updates, and the payment provider as an external node with a webhook back.
+Draw it in the [ticket booking playground challenge](/playground/ticket-booking): waiting room, booking service, database with a replica, seat updates, and a payment provider with a webhook back.
 </Callout>
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="What if payment succeeds after the hold expires?">
-    Still yours? Book it. Taken? Roll back and refund automatically. A visible countdown keeps it rare.
+    Still yours? Book it. Taken? Refund automatically. A countdown keeps it rare.
   </FollowUp>
   <FollowUp q="Seat-level or show-level locking?">
-    Seat-level: row locks let thousands book at once, while a show-level lock serialises every booking.
+    Seat-level. A show-level lock would make every booking wait in line.
   </FollowUp>
   <FollowUp q="How do you survive a launch-day thundering herd?">
-    Waiting-room admission tokens, seat maps from the CDN and SSE, per-account limits and pre-scaling, with admission tuned from database metrics.
+    A waiting room, CDN seat maps, per-account limits and pre-scaling.
   </FollowUp>
   <FollowUp q="How do you stop bots from grabbing all the seats?">
-    A CAPTCHA or device attestation at the queue, per-account and per-card limits, velocity checks, delayed release of suspicious holds.
+    A CAPTCHA at the queue, per-account limits, and checks for suspiciously fast buyers.
   </FollowUp>
   <FollowUp q="How would you suggest the best available seats?">
-    Score seats by centre distance and row, find contiguous runs of N free seats in the cached map, and hold the best with the same conditional UPDATE.
+    Score seats by distance from the centre, find N free in a row, and hold them with the same UPDATE.
   </FollowUp>
 </FollowUps>
 

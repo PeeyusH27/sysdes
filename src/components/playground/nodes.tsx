@@ -27,6 +27,7 @@ export const ComponentNode = memo(function ComponentNode({ data, selected }: Nod
       data-selected={selected || undefined}
       data-load={load}
       data-flagged={data.flagged || undefined}
+      data-tone={data.tone}
       style={{ ["--kind" as string]: meta.color }}
       aria-label={`${data.label}, ${meta.label}${(data.replicas ?? 1) > 1 ? `, ${data.replicas} replicas` : ""}`}
     >

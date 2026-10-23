@@ -2,35 +2,37 @@ import { levelLoop, firstLeaf } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Breadth-first search reads a tree **level by level** with a first-in, first-out queue. **Snapshot the queue size** when a level starts and you know exactly where it ends; and because shallow nodes come first, BFS can **stop at the first match**. O(n) time, O(w) space for the widest level.
+Breadth-first search reads a tree **level by level** with a first-in, first-out queue. **Snapshot the queue size** when a level starts and you know where it ends. Shallow nodes come first, so BFS can **stop at the first match**. O(n) time.
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- The answer is **per level** or per row: averages, maximums, the values of each level.
-- What is visible **from one side**: the first or last node on every level.
-- The **nearest** or shallowest something: minimum depth, the closest leaf.
-- Output ordered **top to bottom, left to right**, or neighbours on the **same level** linked together.
+- The answer is **per level** or per row: averages, maximums, values of each level.
+- What you see **from one side**: the first or last node on each level.
+- The **nearest** or shallowest something: minimum depth, closest leaf.
+- Output **top to bottom, left to right**.
 
 </Callout>
 
 ## The core idea: a queue keeps the levels in order
 
-A queue hands nodes out in the order they went in. Take a node out, put its children in at the back: they join **behind** every node of the current level still waiting. So nodes come out in depth order, left to right within a level, and one invariant follows:
+<Doodle name="queue" size={150} caption />
 
-> When a level starts, the queue holds exactly the nodes of that level, and nothing else.
+Drop a stone in a pond: the ripples spread one ring at a time. A **queue** does the same to a tree. Take a node out of the front, put its children at the back. They wait **behind** every node of the current level, so nodes come out in depth order.
 
-So read `size` then and dequeue exactly `size` nodes; everything they add is the next level. Watch the shaded band (this level) and the new arrivals (the next):
+One rule follows:
+
+> When a level starts, the queue holds exactly that level, and nothing else.
+
+So read `size` then, and take out exactly `size` nodes. Whatever they add is the next level. Watch the shaded band (this level) and the new arrivals (the next):
 
 <AlgoViz trace={levelLoop} />
 
-Try your own tree with Edit input.
-
 ## Play with it
 
-Run the ripple and watch each level take its colour as the queue slides. Then switch to the live-length bug and see the levels run together. Click + to grow a node, or a node to prune it.
+Run the ripple and watch each level take its colour.
 
 <TreeBfsLab />
 
@@ -38,50 +40,46 @@ Run the ripple and watch each level take its colour as the queue slides. Then sw
 
 <Steps>
   <Step title="Handle the empty tree">
-    Return `[]` or `0` when `root` is `null`, never `[[]]`.
+    Return `[]` or `0` when `root` is `null`.
   </Step>
   <Step title="Seed the queue">
-    Put the root in an array and keep a `head` index: `queue[head++]` is an O(1) dequeue, `shift()` is not.
+    Root in an array, plus a `head` index.
   </Step>
   <Step title="Snapshot the level size">
-    At the top of the outer loop, `size = queue.length - head`: exactly this level's nodes.
+    `size = queue.length - head`.
   </Step>
   <Step title="Process the level">
-    Dequeue `size` nodes, do the per-level work, and enqueue each node's left child, then its right.
+    Dequeue `size` nodes, then enqueue their children.
   </Step>
   <Step title="Record or stop">
-    Push the level's answer after the inner loop. For "nearest" questions, return at the first match: nothing later is shallower.
+    Push the level's answer, or return at the first match.
   </Step>
 </Steps>
 
 ## Template 1: the level-size loop
 
-`levelMaxes` uses a head index; `levelValues` builds a `next` array while walking the current level, then swaps. Every level problem is a small edit of this loop:
+Every level problem is a small edit of this loop:
 
 <CodeTabs files={['snippets/level-loop.js']} java={['snippets/java/LevelLoop.java']} python={['snippets/python/level_loop.py']} />
 
-- <ProblemLink slug="average-of-levels" />: keep a running sum and push `sum / size`.
+- <ProblemLink slug="average-of-levels" />: keep a running sum.
 - <ProblemLink slug="binary-tree-level-order-traversal" />: push each value into a `level` array.
 - <ProblemLink slug="binary-tree-right-side-view" />: keep only the node at `i === size - 1`.
-- <ProblemLink slug="binary-tree-zigzag-level-order-traversal" />: enqueue as usual, but on every other level write each value at `size - 1 - i`.
+- <ProblemLink slug="binary-tree-zigzag-level-order-traversal" />: on every other level, write at `size - 1 - i`.
 
 ## Template 2: stop at the first match
 
-DFS must explore the whole tree to be sure of the shallowest leaf: one at depth 2 on the right only shows up after the entire left side. BFS meets every node at depth d before any at depth d + 1, so **the first match it dequeues is a shallowest one**.
+BFS meets every node at depth d before any at depth d + 1, so **the first match it dequeues is a shallowest one**. DFS would have to explore the whole tree.
 
 <AlgoViz trace={firstLeaf} />
 
 <CodeTabs files={['snippets/first-match.js']} java={['snippets/java/FirstMatch.java']} python={['snippets/python/first_match.py']} />
 
-<ProblemLink slug="minimum-depth-of-binary-tree" /> is `shallowestDepth(root, isLeaf)`. A leaf has **no** children; a one-child node is not where a path ends.
+<ProblemLink slug="minimum-depth-of-binary-tree" /> is `shallowestDepth(root, isLeaf)`. A leaf has **no** children.
 
 ## Template 3: a queue that never shifts
 
-`shift()` moves every remaining element down a slot, so on large queues BFS can turn O(n²). On Node, draining a 50,000-item array with `shift()` takes around 100 ms, and doubling the size roughly quadruples that; a head index takes a couple of milliseconds. Three fixes:
-
-- **Head index**: `queue[head++]`. Fine for one BFS over a tree.
-- **Swap arrays per level**: build `next` while walking `level`.
-- **A small Queue class** that occasionally slices off the used prefix, for long-running queues.
+`shift()` moves every element down a slot, so big queues can turn O(n²). Instead use a **head index** (`queue[head++]`), swap two arrays per level, or write a small Queue class.
 
 <CodeTabs files={['snippets/queue.js']} java={['snippets/java/ArrayQueue.java']} python={['snippets/python/array_queue.py']} />
 
@@ -114,9 +112,9 @@ const avg = sum / size;                 // / is always floating-point division i
 
 <Callout kind="warning">
 
-- Looping on the live `queue.length` inside a level instead of the snapshot: it grows as children join, and the levels run together.
-- Enqueuing `null` children, then reading `.val` from them.
-- For zigzag, reversing the order children are **enqueued**: that scrambles the levels below.
+- Looping on the live `queue.length` inside a level.
+- Enqueuing `null` children, then reading `.val`.
+- For zigzag, reversing the order children are **enqueued**.
 
 </Callout>
 
@@ -124,16 +122,16 @@ const avg = sum / size;                 // / is always floating-point division i
 
 <FollowUps>
   <FollowUp q="BFS or DFS for a level-based question?">
-    Both work (DFS passes the depth down into `levels[depth]`). BFS holds one level, about n / 2 for a complete tree, and can stop early; DFS holds one path, n for a skewed tree.
+    Both work. BFS holds one level and can stop early; DFS holds one path, which is n for a skewed tree.
   </FollowUp>
   <FollowUp q="How do you return the levels bottom-up?">
-    Run the normal BFS and reverse the list of levels once at the end, O(n), rather than calling `unshift` per level.
+    Run the normal BFS and reverse the list of levels once at the end.
   </FollowUp>
   <FollowUp q="How do you link every node to its right neighbour on the same level?">
-    In the level-size loop, link each node to the next unless it is last in its level. For O(1) space, walk each level through the next pointers already built on the level above.
+    In the level-size loop, link each node to the next one unless it is last in its level.
   </FollowUp>
-  <FollowUp q="How would you find the maximum width of a level, counting the gaps between nodes?">
-    Number positions like a heap (children of p at 2p + 1 and 2p + 2): width is last minus first plus one. Positions pass 2^53 on deep skewed trees, so subtract each level's first position as you go.
+  <FollowUp q="How would you find the maximum width of a level, counting the gaps?">
+    Number positions like a heap (children of p at 2p + 1 and 2p + 2). Width is last minus first plus one.
   </FollowUp>
 </FollowUps>
 

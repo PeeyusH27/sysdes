@@ -9,7 +9,7 @@ export const quiz: QuizItem[] = [
       "Because moving right would skip the answer",
     ],
     answer: 1,
-    explain: "nums[right] is the largest value still in play. If even that partner is too small for nums[left], every other partner is too, so nums[left] is ruled out for good.",
+    explain: "nums[right] is the biggest partner left. If even that is too small for nums[left], every other partner is too, so nums[left] is out for good.",
   },
   {
     q: "You must remove duplicates from a sorted array in place with O(1) extra space. Which pointer setup fits?",

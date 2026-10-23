@@ -2,51 +2,49 @@ import { recursionTree, fillTable, overAmount } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Dynamic programming is recursion that **never solves the same subproblem twice**. Define `dp[i]`, build it from smaller indices and fill in dependency order: an exponential brute force becomes O(states × choices), often with O(1) extra space.
+Dynamic programming is recursion that **never solves the same question twice**. Write each answer down once, build it from smaller answers, and a slow brute force becomes a quick loop.
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- It asks for **the number of ways**, or the **minimum or maximum** cost over a series of choices.
+- It asks for **the number of ways**, or the **minimum or maximum** over a series of choices.
 - It asks **"is it possible?"** when choices combine in many orders.
 - Your brute-force recursion keeps calling itself with the **same arguments**.
-- n (or an amount) is up to about 10^4, so O(n²) or O(n × amount) fits.
+- n (or an amount) is up to about 10^4.
 
 </Callout>
 
-Listing every solution is [Backtracking](/dsa/patterns/backtracking). One provably safe local rule is [Greedy](/dsa/patterns/greedy). DP is for when greedy has a counterexample.
+Listing every solution is [Backtracking](/dsa/patterns/backtracking). DP is for when [Greedy](/dsa/patterns/greedy) has a counterexample.
 
-| Variant | `dp[i]` means | Classic problems |
+| Variant | `dp[i]` means | Classic problem |
 |---|---|---|
-| Fixed look-back | the answer for step `i` (reads `i - 1`, `i - 2`) | Climbing Stairs, House Robber, Decode Ways |
-| Ending exactly at `i` | the best answer whose last element is `nums[i]` | Maximum Subarray, Longest Increasing Subsequence |
-| Over an amount | the answer for a total of `a` | Coin Change, Perfect Squares, Combination Sum IV |
-| Prefix with a cut | the answer for `s.slice(0, i)` | Word Break, Palindrome Partitioning II |
+| Fixed look-back | answer for step `i` | Climbing Stairs |
+| Ending at `i` | best answer ending at `nums[i]` | Longest Increasing Subsequence |
+| Over an amount | answer for total `a` | Coin Change |
+| Prefix with a cut | answer for `s.slice(0, i)` | Word Break |
 
 ## The core idea: solve each subproblem once
 
-Plain recursion asks the same question again and again. DP asks each one once.
-
-Take **Min Cost Climbing Stairs**: `cost[i]` is what you pay to leave step `i`, each move climbs one or two steps, you start free on step 0 or 1, and the top is step `n`. Think about the **last move**: you reached step `i` from `i - 1` or from `i - 2`.
+Picture a staircase with a toll on each step. You climb one or two steps at a time and want the cheapest way to the top. Ask only about the **last move**: you reached step `i` from `i - 1` or from `i - 2`. So the cheapest way to `i` is the cheaper of those two.
 
 ```js
 best(i) = Math.min(best(i - 1) + cost[i - 1], best(i - 2) + cost[i - 2]);   // best(0) = best(1) = 0
 ```
 
-Correct, and exponential: every call makes two more. But there are only `n + 1` different questions, so a **memo** (a Map from `i` to its answer) turns every repeat into an O(1) lookup. Compare both presets in the walkthrough, then try your own costs with Edit input:
+Correct, but slow: every call makes two more, repeating the same questions. There are only `n + 1` different ones. So write each answer on a **sticky note** (a **memo**) and look it up next time. Compare both presets, then try your own costs with Edit input:
 
 <AlgoViz trace={recursionTree} />
 
-DP needs two properties:
+Two things make a problem fit:
 
-- **Overlapping subproblems**: the same smaller question keeps coming up. Merge sort's halves never repeat, so a memo saves nothing there.
-- **Optimal substructure**: the best answer for `i` is built from best answers for smaller indices. Longest simple path fails: the best continuation depends on which nodes you already used.
+- **Repeated questions**: the same small question keeps coming back.
+- **Built from smaller answers**: the best answer for `i` comes from best answers for smaller indices.
 
 ## Play with it
 
-Same idea, new street. Rob houses for the most loot without hitting two neighbours: `dp[i]` is the best haul from houses 0 to `i`, and each cell picks **rob** (`loot[i] + dp[i - 2]`) or **skip** (`dp[i - 1]`). Tap houses to plan your own haul, then press Run and see whether the DP beats you.
+Rob houses for the most loot without hitting two neighbours. Each cell picks **rob** (`loot[i] + dp[i - 2]`) or **skip** (`dp[i - 1]`). Plan your own haul, then press Run.
 
 <Dp1dLab />
 
@@ -56,54 +54,54 @@ Six questions, in order, turn a brute force into a DP.
 
 <Steps>
   <Step title="Define the state in words">
-    "`dp[i]` = the cheapest total cost to stand on step `i`." Say what `i` is (index, length, amount) and whether element `i` must be used ("ending at `i`") or may be skipped ("the first `i` items"). Most wrong DPs start with a vague sentence here.
+    "`dp[i]` = the cheapest cost to stand on step `i`." Vague here means wrong later.
   </Step>
   <Step title="Write the recurrence from the last decision">
-    The last move came from `i - 1` or `i - 2`; the last coin was one of the coins. Combine with `min`, `max`, `+` (counting) or `||` (feasibility).
+    The last move came from `i - 1` or `i - 2`. Combine with `min`, `max`, `+` (counting) or `||` (feasibility).
   </Step>
   <Step title="Pin down the base cases">
-    Here `dp[0] = dp[1] = 0`. In counting, the empty choice is **one** way (`dp[0] = 1`); in minimums, unreachable states start at `Infinity`.
+    Here `dp[0] = dp[1] = 0`. When counting, doing nothing is **one** way (`dp[0] = 1`).
   </Step>
   <Step title="Choose the evaluation order">
-    Every cell after the cells it reads: smaller indices mean loop `i` upward. Top-down with a memo finds the order for you, at the price of a call stack.
+    Fill each cell after the cells it reads: loop `i` upward.
   </Step>
   <Step title="Read the answer cell">
-    `dp[n]` (the top, one past the last step), `dp[amount]`, or the **best over all cells** for "ending at `i`" states. `Infinity` usually becomes `-1` on the way out.
+    `dp[n]`, `dp[amount]`, or the **best over all cells**.
   </Step>
   <Step title="Optimise the space">
-    If `dp[i]` reads only the last one or two cells, keep two variables: O(n) space becomes O(1). If it reads arbitrary earlier cells (LIS, Word Break), keep the array.
+    If `dp[i]` reads only the last one or two cells, keep two variables.
   </Step>
 </Steps>
 
 ## Template 1: fixed look-back, four ways
 
-Same answers, four costs. Write the plain recursion first: it *is* the recurrence, and the memo, the table and the rolling variables are mechanical rewrites.
+Same answers, four costs. Write the plain recursion first. The memo, table and rolling variables are mechanical rewrites.
 
 <CodeTabs files={['snippets/stairs-recursive.js', 'snippets/stairs-memo.js', 'snippets/stairs-table.js', 'snippets/stairs-rolling.js']} titles={['1. recursion', '2. memo', '3. table', '4. rolling']} java={['snippets/java/StairsRecursive.java', 'snippets/java/StairsMemo.java', 'snippets/java/StairsTable.java', 'snippets/java/StairsRolling.java']} python={['snippets/python/stairs_recursive.py', 'snippets/python/stairs_memo.py', 'snippets/python/stairs_table.py', 'snippets/python/stairs_rolling.py']} />
 
-Bottom-up fills `dp` from the base cases upward, so the two cells each step reads are always ready. The walkthrough then reads the path back:
+Bottom-up fills `dp` from the base cases upward, so the cells each step reads are ready:
 
 <AlgoViz trace={fillTable} />
 
-This is the shape of <ProblemLink slug="climbing-stairs" /> (count instead of minimise) and <ProblemLink slug="house-robber" /> (rob house `i` or skip it).
+This is <ProblemLink slug="climbing-stairs" /> and <ProblemLink slug="house-robber" />.
 
 ## Template 2: DP over an amount
 
-A **target number** and reusable pieces? Index the table by amount. `dp[a]` tries every possible **last piece** and reads the cell for what's left; cells that can't be made stay at `Infinity`. Here, the fewest perfect squares that sum to `n`:
+A **target number** and reusable pieces? Index the table by amount. `dp[a]` tries every **last piece** and reads the cell for what is left. Here, the fewest perfect squares that sum to `n`:
 
 <AlgoViz trace={overAmount} />
 
 <CodeTabs files={['snippets/over-amount.js']} java={['snippets/java/OverAmount.java']} python={['snippets/python/over_amount.py']} />
 
-Swap squares for coins and you have <ProblemLink slug="coin-change" /> (`-1` when `dp[amount]` is still `Infinity`). Swap `min` for `+` with `dp[0] = 1` and you count **ordered** ways (Combination Sum IV); unordered combinations need the loop order from [2D DP](/dsa/patterns/dp-2d).
+Swap squares for coins and you have <ProblemLink slug="coin-change" />. Swap `min` for `+` with `dp[0] = 1` to count **ordered** ways. Unordered ways need [2D DP](/dsa/patterns/dp-2d).
 
 ## Template 3: ending at i, looking back at every earlier j
 
-For "best subsequence" problems, let `dp[i]` be the best answer **whose last element is `nums[i]`**: scan every earlier `j` that may come before `i` and extend the best. That's O(n²), and the answer is the best cell, because the winner can end anywhere.
+For "best subsequence" problems, let `dp[i]` be the best answer **ending at `nums[i]`**: scan every earlier `j` and extend the best. That is O(n²), and the answer is the best cell.
 
 <CodeTabs files={['snippets/ending-at.js']} java={['snippets/java/EndingAt.java']} python={['snippets/python/ending_at.py']} />
 
-Add 1 instead of `nums[i]` for <ProblemLink slug="longest-increasing-subsequence" />. <ProblemLink slug="maximum-subarray" /> is contiguous, so only `i - 1` can come before `i`: `dp[i] = Math.max(nums[i], dp[i - 1] + nums[i])` in one variable (Kadane's algorithm). <ProblemLink slug="word-break" /> uses a prefix state: `dp[i]` is true when some cut `j` has `dp[j]` true and `s.slice(j, i)` is a word.
+Add 1 instead of `nums[i]` for <ProblemLink slug="longest-increasing-subsequence" />. <ProblemLink slug="maximum-subarray" /> only looks at `i - 1`: `dp[i] = Math.max(nums[i], dp[i - 1] + nums[i])`. <ProblemLink slug="word-break" /> asks: is some cut `j` true, with `s.slice(j, i)` a word?
 
 ## Try it
 
@@ -111,15 +109,14 @@ Add 1 instead of `nums[i]` for <ProblemLink slug="longest-increasing-subsequence
 
 ## Complexity
 
-Time is **states × work per state**; space is the table (or kept variables) plus any call stack.
+Time is **states × work per state**.
 
-| Form or variant | Time | Extra space |
+| Form | Time | Space |
 |---|---|---|
-| Plain recursion (two branches) | O(2^n) | O(n) call stack |
-| Memoized recursion | O(n) | O(n) memo + O(n) call stack |
-| Bottom-up table, or rolling variables | O(n) | O(n), or O(1) |
-| Over an amount `A` with `k` choices | O(A × k) | O(A) |
-| Ending at `i`, every `j` before it | O(n²) | O(n) |
+| Plain recursion | O(2^n) | O(n) |
+| Memo or table | O(n) | O(n) |
+| Rolling variables | O(n) | O(1) |
+| Ending at `i`, every `j` | O(n²) | O(n) |
 
 ## JavaScript you'll use
 
@@ -134,12 +131,12 @@ const memo = new Map();                        // if (memo.has(key)) return memo
 return best[amount] === Infinity ? -1 : best[amount];
 ```
 
-The memo trap: `if (memo.get(i))` treats a cached `0` as missing and brings the blow-up back, so test `memo.has(i)`. The call stack holds roughly 10,000 frames, so memoized recursion on `n = 10^5` throws `RangeError: Maximum call stack size exceeded`: go bottom-up.
+The memo trap: `if (memo.get(i))` treats a cached `0` as missing, so test `memo.has(i)`. Memoized recursion on `n = 10^5` overflows the stack: go bottom-up.
 
 <Callout kind="warning">
 
-- Sizing the table `n` instead of `n + 1`, then reading `dp[n - 1]` instead of `dp[n]`.
-- `Math.max(...dp)` on 10^5+ cells can overflow the stack: track the best in the loop.
+- Sizing the table `n` instead of `n + 1`.
+- `Math.max(...dp)` on 10^5+ cells overflows the stack.
 
 </Callout>
 
@@ -147,19 +144,13 @@ The memo trap: `if (memo.get(i))` treats a cached `0` as missing and brings the 
 
 <FollowUps>
   <FollowUp q="Top-down or bottom-up: which should I write in an interview?">
-    Top-down when the recurrence is the hard part: it reads like the brute force plus a two-line memo, and wins when few states are reachable. Bottom-up for large inputs (no stack limit) or O(1) space, which needs an explicit order.
+    Top-down when the recurrence is the hard part: it is the brute force plus a two-line memo. Bottom-up for large inputs or O(1) space.
   </FollowUp>
   <FollowUp q="How do you know it's DP and not greedy?">
-    Try to break greedy on a small case: coins 1, 3 and 4 for amount 6 give 4 + 1 + 1 greedily, but 3 + 3 uses two coins. A counterexample means DP; an exchange argument that greedy never loses means greedy is enough.
+    Try to break greedy on a small case: coins 1, 3, 4 for amount 6. Greedy gives 4 + 1 + 1, but 3 + 3 is better. A counterexample means DP.
   </FollowUp>
-  <FollowUp q="The interviewer wants the actual choices, not just the optimal value. What changes?">
-    Keep the full table and walk from the answer cell to a base case, asking which option produced each cell (did `dp[i]` come from `i - 1` or `i - 2`?). O(n) extra time, and the O(n) table can't be dropped.
-  </FollowUp>
-  <FollowUp q="Can Longest Increasing Subsequence beat O(n²)?">
-    Yes, O(n log n). Keep `tails[k]` = the smallest last value of an increasing subsequence of length `k + 1`; binary-search each number's first tail at least as large and overwrite it (or append). The length of `tails` is the answer; the subsequence needs predecessor links.
-  </FollowUp>
-  <FollowUp q="How do you count ways modulo 10^9 + 7 in JavaScript?">
-    `% MOD` after every addition keeps values below 2 × 10^9 + 14, far under 2^53, so they stay exact. A product of two such values can exceed 2^53: use `BigInt` or split the multiplication.
+  <FollowUp q="The interviewer wants the actual choices, not just the value. What changes?">
+    Keep the full table. Walk back from the answer cell, asking which option produced each cell.
   </FollowUp>
 </FollowUps>
 

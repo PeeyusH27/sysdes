@@ -2,38 +2,37 @@ import { mergeSweep, roomsHeap, sweepCount } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Sort the intervals and most problems become one sweep: by start to merge or find clashes, by end to keep the most. To count overlaps, sweep **+1/-1 events** or keep a **min-heap of end times**: O(n log n) instead of comparing every pair in O(n²).
+Sort the intervals and most problems become one sweep. To count overlaps, sweep **+1/-1 events** or keep a **min-heap of end times**: O(n log n) instead of O(n²).
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- A list of **`[start, end]` pairs** (meetings, bookings, ranges) and a question about **overlap**: merge, clash, insert.
-- "Minimum number of **rooms**, platforms, arrows": you are counting or covering overlaps.
-- "Remove the fewest so none overlap" or "attend the most": a greedy choice after sorting by end.
+- A list of **`[start, end]` pairs** (meetings, bookings) and a question about **overlap**: merge, clash, insert.
+- "Minimum number of **rooms**, platforms, arrows": you are counting overlaps.
+- "Remove the fewest so none overlap" or "attend the most".
 
 </Callout>
 
 | Variant | Sort by | Classic problems |
 |---|---|---|
-| Merge or insert | start | merge intervals, insert interval |
-| Clash check | start | meeting rooms |
-| Count overlaps | event time, or start plus a min-heap | meeting rooms II, car pooling |
-| Keep the most | end | non-overlapping intervals, minimum arrows |
-| Two sorted lists | already sorted: two pointers | interval list intersections |
+| Merge, insert or clash check | start | merge intervals, meeting rooms |
+| Count overlaps | event time, or start plus a heap | meeting rooms II |
+| Keep the most | end | non-overlapping intervals |
+| Two sorted lists | already sorted | interval list intersections |
 
 ## The core idea: sorting makes overlap local
 
-Two intervals overlap when **each starts before the other ends**: `a.start <= b.end && b.start <= a.end` for closed intervals. Meetings are usually half-open (ending at 3 and starting at 3 don't clash), so both become `<`.
+Picture meetings as bars on a calendar. Two overlap when **each starts before the other ends**. A meeting ending at 3 and one starting at 3 do not clash.
 
-Testing every pair is O(n²). **Sort by start** and only neighbours matter: once an interval starts **after** the current group ends, every later one starts later still, so the group is final. One sweep closes each group at the first gap. Try your own intervals with **Edit input**:
+Checking every pair is O(n²). **Sort by start** and only neighbours matter: once an interval starts after the current group ends, every later one does too, so the group is final. Try your own intervals with **Edit input**:
 
 <AlgoViz trace={mergeSweep} />
 
 ## Play with it
 
-Drag meetings around the day, or stretch one by its right edge, and watch them re-pack into rooms while the busy blocks merge. Press **Run** to sweep a line across the day: +1 at each start, −1 at each end, and the peak is the number of rooms.
+Drag meetings around the day. Press **Run** to sweep a line across it: the peak is the number of rooms.
 
 <IntervalsLab />
 
@@ -41,41 +40,39 @@ Drag meetings around the day, or stretch one by its right edge, and watch them r
 
 <Steps>
   <Step title="Pin down the overlap rule">
-    Do `[1, 3]` and `[3, 5]` overlap? Write down `<=` or `<` before any loop.
+    Do `[1, 3]` and `[3, 5]` overlap? Decide before any loop.
   </Step>
   <Step title="Choose the sort key">
-    **Start** to merge or find clashes, **end** to keep the most. Already sorted? Don't sort again.
+    **Start** to merge or find clashes, **end** to keep the most.
   </Step>
   <Step title="Decide what the sweep remembers">
-    The open group, the last kept end, a running count, or a heap of end times.
+    The open group, a count, or a heap of end times.
   </Step>
   <Step title="Process each interval in one step">
-    Overlap: extend, count or drop it. Gap: close the group. Extend with `Math.max`, since a later interval can sit inside an earlier one.
+    Extend with `Math.max`: a later interval can sit inside an earlier one.
   </Step>
   <Step title="Flush and check the edges">
-    Push the last open group. Test empty, single, nested and back-to-back intervals.
+    Push the last open group. Test nested and back-to-back intervals.
   </Step>
 </Steps>
 
 ## Template 1: sort by start, then sweep
 
-Sort a copy by start, keep the last merged interval open, and stretch it or start a new one.
+Sort a copy by start, keep the last merged interval open, then stretch it or start a new one.
 
 <CodeTabs files={['snippets/merge.js', 'snippets/overlap.js']} java={['snippets/java/Merge.java', 'snippets/java/Overlap.java']} python={['snippets/python/merge.py', 'snippets/python/overlap.py']} />
 
-This is <ProblemLink slug="merge-intervals" />. With nothing to merge it answers <ProblemLink slug="meeting-rooms" />: after sorting, a clash shows up between neighbours, so return `false` the first time `start < previousEnd`. In <ProblemLink slug="insert-interval" /> the list is already sorted and disjoint, so skip the sort and walk it in three phases (before, overlapping, after): O(n).
+This is <ProblemLink slug="merge-intervals" />. With nothing to merge it answers <ProblemLink slug="meeting-rooms" />: after sorting, a clash shows between neighbours. For <ProblemLink slug="insert-interval" /> the list is already sorted, so skip the sort and walk it once.
 
 ## Template 2: count how many overlap at once
 
-"How many rooms?" means "how many meetings run at the busiest moment?" That count only changes at a start (+1) or an end (−1). Sort those **events** by time and keep a running sum: the **sweep line**. On ties put −1 first, so a meeting ending at `t` and one starting at `t` never count together.
+"How many rooms?" means "how many meetings run at the busiest moment?" That count only changes at a start (+1) or an end (−1). Sort these **events** by time and keep a running sum: the **sweep line**. On ties put −1 first.
 
 <AlgoViz trace={sweepCount} />
 
 <CodeTabs files={['snippets/sweep-line.js']} java={['snippets/java/SweepLine.java']} python={['snippets/python/sweep_line.py']} />
 
-The reference solution for <ProblemLink slug="meeting-rooms-ii" /> walks sorted starts and sorted ends with two pointers: which end belongs to which start never matters for counting.
-
-To know **which** room each meeting gets, take meetings in start order with a **min-heap of end times**, one per busy room. Reuse the room that frees up first if it's free by the next start; otherwise open one.
+To know **which** room each meeting gets, take meetings in start order with a **min-heap of end times**. Reuse the room that frees first if it's free by the next start; otherwise open one.
 
 <AlgoViz trace={roomsHeap} />
 
@@ -83,7 +80,7 @@ To know **which** room each meeting gets, take meetings in start order with a **
 
 ## Template 3: keep the most, remove the fewest
 
-Sort by **end** and keep every interval that starts at or after the last kept end. Ending first leaves the most room for the rest (the exchange argument in [Greedy](/dsa/patterns/greedy)).
+Sort by **end** and keep every interval that starts at or after the last kept end. Ending first leaves the most room ([Greedy](/dsa/patterns/greedy)).
 
 ```js
 intervals.sort((a, b) => a[1] - b[1]);       // earliest end first
@@ -94,11 +91,11 @@ for (const [start, end] of intervals) {
 // fewest removals = intervals.length - kept
 ```
 
-That is <ProblemLink slug="non-overlapping-intervals" />. "Minimum arrows to burst balloons" is the same loop: each kept end is where an arrow goes.
+That is <ProblemLink slug="non-overlapping-intervals" />. "Minimum arrows to burst balloons" is the same loop.
 
 ## Template 4: two sorted lists
 
-Both inputs sorted and disjoint? Walk them with one pointer each. Record each pair's intersection (`intersect` from `overlap.js`: later start to earlier end), then advance whichever interval **ends first**. See <ProblemLink slug="interval-list-intersections" /> and [Two Pointers](/dsa/patterns/two-pointers).
+Both lists sorted? One pointer each. Record the intersection, then advance whichever interval **ends first** ([Two Pointers](/dsa/patterns/two-pointers)). See <ProblemLink slug="interval-list-intersections" />.
 
 ## Try it
 
@@ -108,11 +105,9 @@ Both inputs sorted and disjoint? Walk them with one pointer each. Record each pa
 
 | Variant | Time | Extra space |
 |---|---|---|
-| Merge, clash check, keep the most | O(n log n) sort, then O(n) | O(n) output or sorted copy |
-| Insert into a sorted list | O(n) | O(n) output |
-| Sweep line over 2n events | O(n log n) | O(n) events |
-| Start order plus min-heap of ends | O(n log n) | O(n) heap |
-| Two sorted lists | O(n + m) | O(n + m) output |
+| Merge, clash check, keep the most | O(n log n) | O(n) |
+| Sweep line, or start order plus min-heap | O(n log n) | O(n) |
+| Two sorted lists | O(n + m) | O(n + m) |
 
 ## JavaScript you'll use
 
@@ -127,12 +122,10 @@ const last = merged.at(-1);                          // the open group
 last[1] = Math.max(last[1], end);                    // mutate it in place: it's the same array
 ```
 
-`merged.at(-1)` is the stored array itself, so mutating it updates `merged`; mutate the input's own arrays and you change the caller's data. Push `[start, end]` copies.
-
 <Callout kind="warning">
 
-- `intervals.sort()` with no comparator compares arrays as strings: `[10, 12]` lands before `[9, 10]`.
-- Processing a start before an end at the same time, which counts one room too many.
+- `intervals.sort()` with no comparator compares arrays as strings.
+- Processing a start before an end at the same time counts one room too many.
 - Sorting by start for "keep the most": `[1, 100]` then blocks everything.
 
 </Callout>
@@ -141,16 +134,16 @@ last[1] = Math.max(last[1], end);                    // mutate it in place: it's
 
 <FollowUps>
   <FollowUp q="Meeting rooms: sweep line or min-heap?">
-    Both are O(n log n). The sweep line is shorter for "how many rooms?"; the heap takes meetings one at a time, so it adapts to assigning rooms or streaming input.
+    Both O(n log n). The sweep line is shorter for "how many?"; the heap suits assigning rooms or streams.
   </FollowUp>
-  <FollowUp q="Intervals arrive one at a time and you must report the merged set after each insert. What changes?">
-    Keep merged intervals in a balanced search tree keyed by start, find the new one's neighbours in O(log n) and absorb what it overlaps: amortised O(log n) per insert. A sorted array plus binary search works too, at O(n) per splice.
+  <FollowUp q="Intervals arrive one at a time. What changes?">
+    Keep merged intervals in a balanced search tree by start: O(log n) per insert.
   </FollowUp>
-  <FollowUp q="How would you find the free time common to several people's calendars?">
-    Merge everyone's busy intervals (Template 1) and report the gaps. If each calendar is already sorted, a k-way heap merge avoids the full sort: O(n log k).
+  <FollowUp q="How would you find free time common to several calendars?">
+    Merge everyone's busy intervals, then report the gaps.
   </FollowUp>
-  <FollowUp q="The coordinates are small integers but there are millions of range updates. Is there something faster than sorting?">
-    A difference array: +1 at `start`, −1 at `end`, then a prefix sum, in O(n + range) with no sort. It's the sweep line bucketed by coordinate; see [Prefix Sums](/dsa/patterns/prefix-sum).
+  <FollowUp q="The coordinates are small integers. Is there something faster than sorting?">
+    A difference array: +1 at the start, −1 at the end, then a prefix sum. See [Prefix Sums](/dsa/patterns/prefix-sum).
   </FollowUp>
 </FollowUps>
 

@@ -2,38 +2,38 @@ import { interviewFlow, interviewTimeline } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Spend the first 10 minutes on **what** to build and **how big** it is: 3–5 core features, concrete targets for latency, availability and consistency, then round-number estimates (average QPS = `DAU × actions ÷ 86,400`, peak ≈ 3×). Every number should justify a design choice later.
+Spend the first 10 minutes on **what** to build and **how big** it is. Then round the numbers: average QPS = `DAU × actions ÷ 86,400`, peak ≈ 3×, and each number should justify a design choice.
 </TLDR>
 
 ## Why it matters
 
-One server or fifty? A cache or a shard? The numbers decide: "add a cache" is a guess until you know reads outnumber writes 100 to 1. Without requirements you solve the wrong problem, and interviewers grade this process as much as the final picture.
+One server or fifty? A cache or a shard? The numbers decide. "Add a cache" is a guess until you know reads outnumber writes 100 to 1.
 
-Written scope also protects you: when "and it should support video" arrives at minute 30, you reply "that changes the storage estimate".
+Written scope helps too. When "and video" arrives at minute 30, say "that changes the storage estimate".
 
 ## The interview flow
 
-45 minutes goes fast. Announce the plan up front ("five minutes on requirements, a quick estimate, then the design") so the interviewer sees you managing the clock.
+45 minutes goes fast. Say your plan out loud: requirements, a quick estimate, then the design.
 
 <Timeline spec={interviewTimeline} />
 
-In the flow diagram, play **Walkthrough** for what goes on the board at each stage, then **Numbers drive the design** to watch one estimate shape the architecture.
+Play **Walkthrough** to see what goes on the board at each stage.
 
 <FlowDiagram spec={interviewFlow} />
 
 <Callout kind="interview">
-"Before I draw anything, let me pin down the core features and the scale. I'll write my assumptions here so we can come back to them."
+"Before I draw anything, let me pin down the core features and the scale. I'll write my assumptions here."
 </Callout>
 
 ## Functional requirements
 
-"Design Twitter" is vague on purpose: the interviewer wants to watch you narrow it to **what users can do**. Ask three questions:
+"Design Twitter" is vague on purpose. Narrow it to **what users can do** by asking three things:
 
-- **Who are the users?** Readers, writers, admins? Internal teams? Mobile, web or both? On most social products a few write and almost everyone reads.
-- **What are the 3 core actions?** Name the verbs: post, follow, read the timeline.
-- **What can be cut?** "I'll leave out DMs, search and ads unless you'd like one of them." Cutting signals seniority.
+- **Who are the users?** Readers, writers, admins?
+- **What are the 3 core actions?** Post, follow, read the timeline.
+- **What can I cut?** "I'll skip DMs and ads unless you want them." Cutting shows seniority.
 
-Sort features into must (no product without them), should (likes, a user's own profile timeline) and won't today (each is a whole interview). The board for Twitter-lite:
+The board for Twitter-lite:
 
 <Requirements
   functional={["Post a tweet: 280 characters, optional image", "Follow and unfollow users", "Home timeline of followed accounts, newest first"]}
@@ -43,40 +43,37 @@ Sort features into must (no product without them), should (likes, a user's own p
 
 ## Non-functional requirements
 
-"Fast" isn't a requirement; "p99 under 200 ms" is. Non-functional requirements say **how well** the system works, each with a number. No number given? Propose one: "I'll assume 100M daily users; tell me if that's off."
+"Fast" is not a requirement. "p99 under 200 ms" is. These say **how well** the system works, each with a number. No number given? Propose one and say it out loud.
 
 | Requirement | Example target | What it forces |
 |---|---|---|
-| Latency | p99 under 200 ms for reads | Caches, CDN, precomputation |
-| Availability | 99.99% | Multi-zone redundancy, no single point of failure, graceful degradation |
-| Consistency | Strong for payments, eventual for likes | Different stores per feature |
-| Durability | Never lose an order | Replication, write-ahead log, backups |
-| Scale | 100M DAU | Sharding, queues, horizontal scale |
+| Latency | p99 under 200 ms | Caches, CDN |
+| Availability | 99.99% | No single point of failure |
+| Consistency | Strong for payments | Different stores per feature |
+| Durability | Never lose an order | Replication, backups |
 
-Quote **p99**, not averages: the slowest 1% are the requests users complain about. Translate nines into downtime: 99.9% allows about 8.8 hours a year, 99.99% about 53 minutes. And set targets **per feature**: the timeline can be eventually consistent while the follow button must be read-your-writes.
+**p99** is the slowest 1% of requests. A page that makes 10 calls hits a slow one about 1 time in 10, so p99 is what users feel. 99.99% means about 53 minutes of downtime a year. Set targets per feature: a timeline can be a little stale, a follow button cannot.
 
 ## Back-of-envelope math
 
-You want the right order of magnitude in under five minutes. Round hard (86,400 becomes 100,000; say "about") and fill in five quantities plus the server count:
+You want the right order of magnitude in five minutes. Round hard: 86,400 becomes 100,000.
 
-| Quantity | How | 10M DAU × 10 actions, 10:1 reads |
+| Quantity | How | 10M DAU, 10 actions each |
 |---|---|---|
-| Average QPS | `DAU × actions ÷ 86,400` | ~1,160/s (1,050 reads, 105 writes) |
-| Peak QPS | average × 3 (2–5×; 10× for events) | ~3,500/s |
-| Storage | write QPS × 86,400 × days × bytes × replicas | ~50 TB over 5 years at 1 KB, 3 replicas |
-| Bandwidth | QPS × bytes per request | in ~0.1 MB/s; out ~2 MB/s at 2 KB per read |
-| Cache memory | 20% of a day's reads × item size | ~18 GB: fits on one Redis node |
-| Servers | `peak ÷ (per-server QPS × 0.6)` | 6 at 1,000 req/s each, 60% busy |
+| Average QPS | `DAU × actions ÷ 86,400` | ~1,160/s |
+| Peak QPS | average × 3 | ~3,500/s |
+| Storage | writes/s × 86,400 × days × bytes × replicas | ~50 TB over 5 years |
+| Servers | `peak ÷ (per-server QPS × 0.6)` | 6 at 1,000 req/s each |
 
-Peak QPS grows linearly with users (10 actions a day, 3× peak), and roughly every 10× changes the architecture:
+Every 10× in users changes the architecture:
 
 <StatTiles items={[{ label: "1M DAU", value: "~350", sub: "peak QPS: one small server" }, { label: "10M DAU", value: "~3,500", sub: "peak QPS: a handful of servers" }, { label: "100M DAU", value: "~35,000", sub: "peak QPS: caches, replicas, maybe shards" }]} />
 
-Drag the daily-users slider in the [capacity calculator](#capacity-calculator) to watch every number move together.
+**Do the sum first.** At 350 peak QPS one server copes; a second is for failover, not load. At 3,500, a handful behind a balancer. At 35,000, one database can't serve every read, so add a cache and replicas. Size for the peak: 1,160/s looks calm until the evening spike. Don't shard at 350.
 
 ## Read vs write ratio
 
-Same QPS, different architecture: reads scale with caches and replicas, writes with sharding and queues. Always split them.
+Same QPS, different design. Reads scale with caches and replicas; writes with sharding and queues. So always split them.
 
 | Ratio (reads:writes) | Typical products | Consequence |
 |---|---|---|
@@ -87,29 +84,29 @@ Same QPS, different architecture: reads scale with caches and replicas, writes w
 
 ## Worked example: Instagram-lite
 
-Whiteboard style: **100M DAU**, 10% upload 2 photos a day, everyone opens the feed 10 times a day, peak is 3× average.
+**100M DAU**, 10% upload 2 photos a day, everyone opens the feed 10 times a day, peak is 3× average.
 
 <Steps>
   <Step title="Uploads per second">
-    100M × 10% × 2 = **20M uploads a day** ≈ **230/s**, ~**700/s** at peak. One primary handles the metadata writes.
+    100M × 10% × 2 = **20M uploads a day** ≈ **230/s**, ~**700/s** at peak. One primary handles the metadata.
   </Step>
   <Step title="Media storage">
-    20M × 500 KB = **10 TB a day**, ~**3.65 PB a year** before replication. Bytes go to **object storage** (S3); the database keeps metadata (~20 GB a day at 1 KB a row).
+    20M × 500 KB = **10 TB a day**, ~**3.65 PB a year**. Photos go to **object storage** (S3); the database keeps only metadata.
   </Step>
   <Step title="Feed reads">
-    100M × 10 views = **1B feed loads a day** ≈ **11.6K/s**, ~**35K/s** at peak: 50× the uploads, so cache and precompute this path.
+    100M × 10 views = **1B feed loads a day** ≈ **11.6K/s**, ~**35K/s** at peak. That is 50× the uploads, so cache and precompute this path.
   </Step>
   <Step title="Egress bandwidth">
-    10 thumbnails × 50 KB = 500 KB per view. 11.6K/s × 500 KB ≈ **5.8 GB/s** ≈ **46 Gbps** (bytes × 8). Serving that yourself is expensive and slow far from your region: a **CDN is non-negotiable**.
+    10 thumbnails × 50 KB = 500 KB per view, so 11.6K/s ≈ **5.8 GB/s** ≈ **46 Gbps** (bytes × 8). A **CDN is non-negotiable**.
   </Step>
   <Step title="Say what it means">
-    "Writes are small and steady, so one Postgres primary with replicas handles metadata. Photos go to object storage behind a CDN. The feed is the hot path at 35K reads/s, so I'll precompute feeds into a cache and spend the deep dive there."
+    "Writes are small: one Postgres primary with replicas. Photos go to object storage behind a CDN. The feed is the hot path at 35K reads/s, so I'll precompute feeds into a cache."
   </Step>
 </Steps>
 
 ## Numbers to remember
 
-Memory is about 1,000× faster than an SSD read, and one cross-continent round trip costs as much as 10 to 100 indexed database reads. Approximate values; the [cheatsheet](/cheatsheet) repeats them.
+Memory is about 1,000× faster than an SSD read. One cross-continent round trip costs as much as 10 to 100 indexed database reads. The [cheatsheet](/cheatsheet) repeats these.
 
 | Quantity | Value |
 |---|---|
@@ -126,7 +123,7 @@ Memory is about 1,000× faster than an SSD read, and one cross-continent round t
 
 ## Capacity calculator
 
-Pick a preset (Twitter-lite, Instagram-lite, URL shortener, chat) or drag the sliders. Daily users and actions move everything; bytes per write and replicas only move storage.
+Pick a preset or drag the sliders. Every number moves together.
 
 <CapacityCalculator />
 
@@ -134,7 +131,7 @@ Pick a preset (Twitter-lite, Instagram-lite, URL shortener, chat) or drag the sl
 
 <CodeTabs files={['snippets/estimate.js', 'snippets/instagram-lite.js']} />
 
-`estimate.js` replaces the original, which ignored replication: about **17 TB** for 10M DAU over 5 years instead of **49.8 TB** with 3 replicas. Forgetting replicas (and indexes, often tens of percent more) is the most common storage mistake. It also adds bandwidth, servers and cache size.
+`estimate.js` counts replicas: 10M DAU over 5 years is **17 TB** without them and **49.8 TB** with 3. Forgetting them is the most common storage mistake.
 
 <Callout kind="warning">
 - Spending 10 minutes on arithmetic. Round, state the result, move on.
@@ -146,19 +143,19 @@ Pick a preset (Twitter-lite, Instagram-lite, URL shortener, chat) or drag the sl
 
 <FollowUps>
   <FollowUp q="How do you estimate QPS?">
-    DAU × actions ÷ 86,400 for the average, 2–5× for peak, reads and writes split: 10M DAU × 10 actions ≈ 1,160/s, about 3,500/s at peak.
+    DAU × actions ÷ 86,400, then 2–5× for peak. 10M DAU × 10 actions ≈ 1,160/s, about 3,500/s at peak.
   </FollowUp>
   <FollowUp q="Estimate storage for 5 years of tweets.">
-    200M DAU × 2 tweets × ~1 KB = 400 GB a day, 146 TB a year, 730 TB over 5 years, ≈ 2.2 PB with 3 replicas. Estimate media separately: it lives in object storage.
+    200M DAU × 2 tweets × ~1 KB = 400 GB a day, 730 TB over 5 years, ≈ 2.2 PB with 3 replicas. Media goes in object storage.
   </FollowUp>
   <FollowUp q="Why split read and write QPS?">
-    They scale with different tools (caches and replicas vs sharding and queues), so a 100:1 and a 1:1 system at the same QPS get different architectures.
+    They scale with different tools: caches and replicas vs sharding and queues.
   </FollowUp>
   <FollowUp q="What peak factor do you use?">
-    2–5× average for daily traffic, 10× or more for events like sales and launches. Size for peak at 60–70% utilisation and autoscale the rest.
+    2–5× for daily traffic, 10× or more for events. Size for peak at 60–70% busy.
   </FollowUp>
   <FollowUp q="How many app servers for 3,500 peak QPS?">
-    At ~1,000 req/s each and 60% busy, 3,500 ÷ 600 → 6. Run 3 per zone in three zones (9 total) so losing a zone still leaves 6.
+    At ~1,000 req/s each and 60% busy: 3,500 ÷ 600 → 6. Run 9 across three zones, so losing a zone still leaves 6.
   </FollowUp>
 </FollowUps>
 

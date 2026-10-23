@@ -2,17 +2,17 @@ import { islandsDfs, bfsLevels, multiSourceBfs } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-A grid is a graph in disguise: every cell is a node joined to its neighbours. **DFS** dives deep, which is all you need to flood a region or count pieces; **BFS** spreads in rings, so it first reaches each node along the **fewest edges**. Both are O(V + E) if you mark nodes when you push them.
+A grid is a graph in disguise: every cell is a node joined to its neighbours. **DFS** dives deep (flood a region). **BFS** spreads in rings, so it finds the **fewest steps**. Both are O(V + E).
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- A **grid** of cells (land and water, walls and corridors, pixels) where you move up, down, left and right.
-- **Islands, regions, provinces, connected** groups to count, measure or fill.
-- The **fewest steps, moves or transformations** when every step costs the same.
-- Something **spreads** from several places at once: rot, fire, a signal, "how many minutes until…".
+- A **grid** of cells (land and water, walls and corridors) where you move up, down, left and right.
+- **Islands, regions, connected** groups to count, measure or fill.
+- The **fewest steps** when every step costs the same.
+- Something **spreads** from several places: rot, fire, "how many minutes until…".
 
 </Callout>
 
@@ -25,20 +25,20 @@ A grid is a graph in disguise: every cell is a node joined to its neighbours. **
 
 ## The core idea: visit every node once
 
-Every traversal is the same loop: keep the nodes **waiting to be visited**, take one out, add its unseen neighbours. The container decides the order:
+<Doodle name="queue" size={150} caption />
 
-- A **stack** (last in, first out) always continues from the newest node: **depth-first**.
-- A **queue** (first in, first out) finishes every node at distance d before any at d + 1: **breadth-first**.
+Exploring a maze, you keep a to-do list of places seen but not yet visited. Take one, add its unseen neighbours. The kind of list decides how you explore:
 
-Grids are full of cycles (any 2 × 2 block is a loop), so you need a **visited mark**. Mark a node **when you push it**, not when you pop it: nothing is pushed twice, each edge is examined once from each end, and the total is O(V + E). On a grid, V is rows × cols and E is at most 4V.
+- A **stack** (newest first) dives down one corridor: **depth-first**.
+- A **queue** (oldest first) spreads like ripples in a pond, finishing every node at distance d before d + 1: **breadth-first**.
 
-To count connected pieces, scan every node; each unmarked one starts a new component. Flood it all before moving on. Draw your own map with Edit input.
+Grids are full of loops, so you need a **visited mark**. Mark a node **when you push it**, so nothing is queued twice. To count pieces, scan every node: each unmarked one starts a new piece.
 
 <AlgoViz trace={islandsDfs} />
 
 ## Play with it
 
-Paint walls, move the start and goal, then race a queue against a stack. BFS floods out in rings and always finds the shortest path; DFS dives down one corridor and often returns a longer one. Each number is steps from the start.
+Paint walls, move the start and goal, then race a queue against a stack. BFS always finds the shortest path; DFS often does not.
 
 <GraphTraversalLab />
 
@@ -46,62 +46,62 @@ Paint walls, move the start and goal, then race a queue against a stack. BFS flo
 
 <Steps>
   <Step title="Name the nodes and the edges">
-    A grid node is `(r, c)`, joined by a directions array. An edge list becomes an adjacency list first.
+    A grid node is `(r, c)`.
   </Step>
   <Step title="Pick DFS or BFS">
-    Fewest steps or minutes: BFS. Reachable, how many, how big: either, but avoid recursion when a region can be huge.
+    Fewest steps: BFS. Reachable, how many, how big: either.
   </Step>
   <Step title="Choose the visited mark">
-    A `seen` grid or Set, a `dist` array with `-1` for unvisited, or the input itself when you may overwrite it.
+    A `seen` grid or Set, or a `dist` array with `-1` for unvisited.
   </Step>
   <Step title="Seed the search">
-    One start, every unmarked node in turn (components), or **all sources at once**. Mark the seeds too.
+    One start, every unmarked node, or **all sources at once**.
   </Step>
   <Step title="Expand neighbours behind guards">
-    Skip out-of-bounds, blocked or marked cells. Mark the rest, record a distance, size or parent, push.
+    Skip out-of-bounds, blocked or marked cells.
   </Step>
   <Step title="Read the answer off the traversal">
-    Searches started, flood sizes, the distance at the target, or levels until the queue runs dry.
+    Searches started, flood size, or distance.
   </Step>
 </Steps>
 
 ## Building the graph
 
-Graphs arrive as an **edge list** (`[[0, 1], [1, 2]]`), an **adjacency list** (`graph[i]` lists the neighbours of `i`), or an **implicit** graph (a grid, "words that differ by one letter"). Convert an edge list once, so finding a node's neighbours costs O(its degree), not a scan of every edge:
+Graphs arrive as an **edge list** (`[[0, 1], [1, 2]]`), an **adjacency list** (`graph[i]` lists the neighbours of `i`), or an **implicit** graph (a grid). Convert an edge list once, so finding neighbours is fast:
 
 <CodeTabs files={['snippets/adjacency.js']} java={['snippets/java/Adjacency.java']} python={['snippets/python/adjacency.py']} />
 
-For a grid, build nothing. The neighbours of `(r, c)` come from a **directions array**, `[[1, 0], [-1, 0], [0, 1], [0, -1]]`, behind a bounds check. Add the four diagonals when corners count as touching.
+For a grid, build nothing. Use a **directions array**, `[[1, 0], [-1, 0], [0, 1], [0, -1]]`, behind a bounds check.
 
 ## Template 1: DFS for regions
 
-Use DFS when the question is **what** can be reached, not **how far**: counting islands, measuring them, flood filling. The recursive version mirrors the definition ("this cell, plus everything reachable from its neighbours") and can return values up the stack, which is how <ProblemLink slug="max-area-of-island" /> adds up a size. The iterative version can't overflow: JavaScript allows around ten thousand nested calls, and a 300 × 300 grid of land would need 90,000.
+Use DFS when the question is **what** can be reached, not **how far**. The recursive version reads like the definition ("this cell, plus everything reachable from its neighbours") and can return values up, as <ProblemLink slug="max-area-of-island" /> does to add up a size. The iterative version can't overflow the call stack on a huge region.
 
 <CodeTabs files={['snippets/grid-dfs.js']} java={['snippets/java/GridDfs.java']} python={['snippets/python/grid_dfs.py']} />
 
-This template solves <ProblemLink slug="flood-fill" />, <ProblemLink slug="number-of-islands" /> and <ProblemLink slug="max-area-of-island" />.
+This solves <ProblemLink slug="flood-fill" />, <ProblemLink slug="number-of-islands" /> and <ProblemLink slug="max-area-of-island" />.
 
 ## Template 2: BFS for the fewest steps
 
-BFS spreads in rings: one edge away, then two, and so on. With equal-cost edges, a node is **first** discovered along a shortest path, so `dist[next] = dist[node] + 1` at that moment gives every distance in one pass.
+A node is **first** found along a shortest path. Set `dist[next] = dist[node] + 1` then, and every distance comes out in one pass.
 
 <AlgoViz trace={bfsLevels} />
 
-Use an array with a **head index** as the queue: `queue.shift()` moves every element down a slot, which can make BFS O(V²).
+Use a **head index**, not `queue.shift()`, which can make BFS O(V²).
 
 <CodeTabs files={['snippets/bfs.js']} java={['snippets/java/Bfs.java']} python={['snippets/python/bfs.py']} />
 
-For "how many steps", process one **level** at a time: note `levelEnd = queue.length`, pop up to it, count one step. That is how <ProblemLink slug="word-ladder" /> counts the words in the shortest sequence.
+For "how many steps", process one **level** at a time, as <ProblemLink slug="word-ladder" /> does.
 
 ## Template 3: multi-source BFS
 
-How far is each cell from the **nearest** source (rotten orange, exit, gate)? Don't run one BFS per source. Queue **all** of them at distance 0 and run once, as if from an imaginary super-source joined to each. One O(V + E) pass, however many sources.
+How far is each cell from the **nearest** source (rotten orange, exit)? Don't run one BFS per source. Queue **all** sources at distance 0 and run once, as if one imaginary source touched them all.
 
 <AlgoViz trace={multiSourceBfs} />
 
 <CodeTabs files={['snippets/multi-source-bfs.js']} java={['snippets/java/MultiSourceBfs.java']} python={['snippets/python/multi_source_bfs.py']} />
 
-Count the levels and you have the time until everything is reached: <ProblemLink slug="rotting-oranges" />. The trick also runs **backwards**: in <ProblemLink slug="pacific-atlantic-water-flow" />, start from every ocean-edge cell and climb uphill instead of asking each cell where its water goes.
+Count the levels to get the time until everything is reached: <ProblemLink slug="rotting-oranges" />. It also runs **backwards**: in <ProblemLink slug="pacific-atlantic-water-flow" />, start from the ocean edges and climb uphill.
 
 ## Try it
 
@@ -131,33 +131,33 @@ for (let head = 0; head < queue.length; head++) { const node = queue[head]; /* �
 const key = `${r},${c}`;                   // a cell as a Set or Map key (or r * cols + c)
 ```
 
-The classic trap: `new Array(rows).fill(new Array(cols).fill(false))` puts the **same** row in every slot, so one mark lands in every row. And `seen.has([r, c])` is always `false`: arrays compare by reference, so encode a cell as a string or number.
+`new Array(rows).fill(new Array(cols).fill(false))` puts the **same** row in every slot. And `seen.has([r, c])` is always `false`: use a string or number key.
 
 <Callout kind="warning">
 
-- Forgetting to mark the **start** node, or the sources, so a neighbour pushes it again.
-- Checking bounds after indexing: `grid[-1][0]` throws because `grid[-1]` is `undefined`.
-- Comparing `"1"` with `1`: grids of strings and of numbers look identical when printed.
+- Forgetting to mark the **start** node or the sources.
+- Checking bounds after indexing: `grid[-1][0]` throws.
+- Comparing `"1"` with `1`.
 
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
-  <FollowUp q="DFS or BFS: when does the choice actually matter?">
-    For **fewest steps** with equal costs only BFS is correct; with weights use Dijkstra (see [Shortest Paths](/dsa/patterns/shortest-paths)). For reachability or region sizes both are O(V + E), and DFS suits cycle detection, topological order and backtracking.
+  <FollowUp q="DFS or BFS: when does the choice matter?">
+    For **fewest steps** with equal costs, only BFS is correct (with weights, see [Shortest Paths](/dsa/patterns/shortest-paths)). For reachability, both work.
   </FollowUp>
-  <FollowUp q="Why mark a node visited when it is enqueued rather than when it is dequeued?">
-    Marked on dequeue, a node can be queued once per neighbour that sees it first, so the queue grows to O(E) and a later copy can overwrite a correct distance. Marking on enqueue guarantees one entry per node, at its shortest distance.
+  <FollowUp q="Why mark a node visited when it is enqueued, not dequeued?">
+    Otherwise a node can be queued once per neighbour, and the queue grows to O(E). Marking on enqueue gives one entry per node.
   </FollowUp>
-  <FollowUp q="You aren't allowed to modify the input grid. What changes?">
-    Keep a separate mark: a boolean grid, a `Uint8Array(rows * cols)` indexed by `r * cols + c`, or a Set of keys. Still O(m·n); the typed array beats a Set of strings.
+  <FollowUp q="You can't modify the input grid. What changes?">
+    Keep a separate mark: a boolean grid or a `Uint8Array(rows * cols)`.
   </FollowUp>
-  <FollowUp q="How would you return the shortest path itself, not just its length?">
-    Store `parent[next] = node` on discovery, then follow parents back from the target and reverse: O(V) extra space, no extra time. For **every** shortest path (Word Ladder II), keep all parents one level closer and backtrack through them.
+  <FollowUp q="How would you return the shortest path itself?">
+    Store `parent[next] = node`, then follow parents back from the target and reverse.
   </FollowUp>
   <FollowUp q="The graph is implicit and enormous. How can you make BFS faster?">
-    Bidirectional BFS searches from both ends, expanding the smaller frontier, until they meet: about 2·b^(d/2) nodes instead of b^d. A* does better with a good distance estimate, but interviews rarely expect it.
+    Bidirectional BFS: search from both ends until they meet, about 2·b^(d/2) nodes instead of b^d.
   </FollowUp>
 </FollowUps>
 

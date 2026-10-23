@@ -2,7 +2,7 @@ import { pairSum, removeDuplicates, sortedSquares } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Two indices replace an O(n²) nested loop with one O(n) pass, because **every step rules out an element for good**. Use opposite ends on sorted or mirrored input, read/write pointers to compact in place, and one pointer per input to merge.
+Two fingers on a row replace a nested loop with one pass, because **every step rules out an element for good**.
 </TLDR>
 
 ## When to reach for it
@@ -17,26 +17,26 @@ Two indices replace an O(n²) nested loop with one O(n) pass, because **every st
 
 | Variant | Which pointer moves | Classic problems |
 |---|---|---|
-| Opposite ends | the end that can't be in the answer | pair sum, palindrome, container with most water |
-| Read/write | `read` every step, `write` only when a value is kept | remove duplicates, move zeroes |
-| One per input | the one whose value was just used | merge sorted arrays, squares of a sorted array |
+| Opposite ends | the end that can't be in the answer | pair sum, palindrome |
+| Read/write | `read` always, `write` when a value is kept | remove duplicates |
+| One per input | the one just used | merge sorted arrays |
 
 ## The core idea: every step discards something
 
-Brute force checks all `n(n - 1) / 2` pairs. On a **sorted** array, the sum of the two ends tells you which end is useless:
+Picture a sorted row of numbers with one finger on each end. Add the two numbers you touch.
 
-- Too **small**? `nums[left]` plus the **largest** remaining value is still too small, so `nums[left]` is in no pair: `left++`.
-- Too **big**? `nums[right]` plus the **smallest** remaining value is still too big: `right--`.
+- Too **small**? The left number is too small even with the biggest partner left, so it fits no pair. Move the left finger in.
+- Too **big**? Same for the right number. Move the right finger in.
 
-Each comparison drops one index, so the scan ends within `n - 1` steps. Watch the discarded values fade:
+Each move throws one number away, so you finish in `n - 1` steps, not `n(n - 1) / 2` pair checks. Watch the discarded values fade:
 
 <AlgoViz trace={pairSum} />
 
-That argument, "this element can never be in an answer", makes every two-pointer solution correct. Can't state it for your problem? Then two pointers is the wrong tool.
+Can't say "this element can never be in an answer"? Then two pointers is the wrong tool.
 
 ## Play with it
 
-Watch the pattern squeeze the pair, then switch to **You play** and move the pointers yourself. The lab flags every move you can't justify.
+Watch the pattern squeeze the pair, then switch to **You play**. The lab flags every move you can't justify.
 
 <TwoPointersLab />
 
@@ -44,43 +44,41 @@ Watch the pattern squeeze the pair, then switch to **You play** and move the poi
 
 <Steps>
   <Step title="Decide what each pointer means">
-    One sentence, your invariant: "everything outside `left..right` is ruled out" or "everything before `write` is final".
+    Your invariant: "everything outside `left..right` is ruled out".
   </Step>
   <Step title="Pick the starting positions">
-    Opposite ends: `0` and `n - 1`. Read/write: both at the start. One per input: index 0 of each.
+    Opposite ends: `0` and `n - 1`.
   </Step>
   <Step title="Choose which pointer moves, and prove it">
-    Say which element each case rules out, and move exactly that pointer. Never "just in case".
+    Say which element each case rules out.
   </Step>
   <Step title="Handle a match">
-    Record it, then move a pointer so the loop progresses. Skip equal values here if duplicates matter.
+    Record it, then move a pointer.
   </Step>
   <Step title="Stop when the pointers meet">
-    Pairs need two indices: `while (left < right)`. Use `<=` only when each index is handled alone, as in Trapping Rain Water.
+    Pairs need two indices: `while (left < right)`.
   </Step>
 </Steps>
 
 ## Template 1: opposite ends
 
-For sorted or symmetric input. Sort first if allowed; need the **original indices** of unsorted input? Use a hash map ([Hash Maps and Sets](/dsa/patterns/hashing)).
+For sorted or symmetric input. Need the **original indices** of unsorted input? Use a hash map ([Hash Maps and Sets](/dsa/patterns/hashing)).
 
 <CodeTabs files={['snippets/opposite-ends.js']} java={['snippets/java/OppositeEnds.java']} python={['snippets/python/opposite_ends.py']} />
 
-Only the body changes for palindromes (compare `s[left]` with `s[right]`), in-place reversal (swap, move both) and Container With Most Water (move the shorter wall).
+Only the body changes for palindromes (compare the two ends) and Container With Most Water (move the shorter wall).
 
 ## Template 2: read and write pointers
 
-`read` visits every element once; `write` marks where the next kept one goes, so `nums[0 … write - 1]` is always final. Nothing is allocated or spliced.
+`read` visits every element; `write` marks where the next kept one goes.
 
 <AlgoViz trace={removeDuplicates} />
 
 <CodeTabs files={['snippets/read-write.js']} java={['snippets/java/ReadWrite.java']} python={['snippets/python/read_write.py']} />
 
-Change the condition to remove a value, move zeroes to the end, or keep at most two copies of each number (compare with `nums[write - 2]`).
-
 ## Template 3: one pointer per input
 
-Two sorted sequences, or both ends of one? Give each a pointer and always take the side that comes next: the merge step of merge sort.
+Two sorted sequences? Give each a pointer and take the side that comes next.
 
 <AlgoViz trace={sortedSquares} />
 
@@ -94,11 +92,10 @@ Two sorted sequences, or both ends of one? Give each a pointer and always take t
 
 | Variant | Time | Extra space |
 |---|---|---|
-| Opposite ends on sorted input | O(n) | O(1) |
-| Opposite ends after sorting | O(n log n) for the sort | O(1) to O(n), engine-dependent |
+| Opposite ends, sorted input | O(n) | O(1) |
 | Read/write compaction | O(n) | O(1) |
-| 3Sum: fix one, then opposite ends | O(n²) | O(1) besides the output |
-| Merge two sorted inputs | O(n + m) | O(n + m) output |
+| 3Sum: fix one, then opposite ends | O(n²) | O(1) |
+| Merge two sorted inputs | O(n + m) | O(n + m) |
 
 ## JavaScript you'll use
 
@@ -111,13 +108,10 @@ const last = nums.at(-1);                    // last element, same as nums[nums.
 s[i].toLowerCase() === s[j].toLowerCase();   // case-insensitive character compare
 ```
 
-"In place" means changing the array you were given; `nums = nums.filter(…)` only rebinds your local variable.
-
 <Callout kind="warning">
 
 - `nums.sort()` without a comparator: `[10, 9, 1]` sorts to `[1, 10, 9]`.
 - Recording a match without moving a pointer: the loop never ends.
-- Skipping duplicates by comparing with the **next** element before using the current one, which loses answers like `[-1, -1, 2]`.
 
 </Callout>
 
@@ -125,16 +119,16 @@ s[i].toLowerCase() === s[j].toLowerCase();   // case-insensitive character compa
 
 <FollowUps>
   <FollowUp q="Two Sum on an unsorted array: two pointers or a hash map?">
-    A hash map: one O(n) pass that keeps the original indices. Two pointers wins on sorted input or when O(1) space is required.
+    A hash map: one pass, and it keeps indices. Two pointers wins on sorted input or when O(1) space is required.
   </FollowUp>
-  <FollowUp q="How do you extend 3Sum to 4Sum, or to k numbers?">
-    Sort, fix numbers with nested loops until two remain, then walk the ends: O(n^(k-1)), skipping duplicates at every level. Sums stay exact up to 2^53.
+  <FollowUp q="How do you extend 3Sum to 4Sum?">
+    Fix numbers with nested loops until two remain, then walk the ends.
   </FollowUp>
-  <FollowUp q="How do you know moving the shorter wall is safe in Container With Most Water?">
-    Every container that keeps the shorter wall is narrower and no taller, so none beats the current area: the shorter wall is ruled out, as in pair sum.
+  <FollowUp q="Why is moving the shorter wall safe in Container With Most Water?">
+    Any container keeping the shorter wall is narrower and no taller, so that wall is ruled out.
   </FollowUp>
-  <FollowUp q="When does the two-pointer technique not apply?">
-    When no move safely discards anything: an unsorted sum target, or a question that needs every pair. Use hashing, a different window, or nested loops.
+  <FollowUp q="When does two pointers not apply?">
+    When no move safely discards anything, like an unsorted sum target. Use hashing instead.
   </FollowUp>
 </FollowUps>
 

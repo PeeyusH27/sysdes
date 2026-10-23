@@ -3,6 +3,11 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { PageActions, ReadingProgress } from "./PageChrome";
 import { PageDrawer, PageDrawerButton } from "./PageDrawer";
 import { DeckNav, Reader, ReaderBar, SectionRail } from "./Reader";
+import { Doodle } from "@/components/doodle/Doodle";
+import { SayItCard } from "@/components/content/SayIt";
+import { PrimerCard } from "@/components/content/PrimerCard";
+import { StoryShell } from "@/components/story/StoryShell";
+import type { PageExtras } from "@content/extras";
 
 export interface DocNavItem {
   href: string;
@@ -26,6 +31,7 @@ export function DocLayout({
   prev,
   next,
   nextNote,
+  extras,
   children,
 }: {
   side: DocNavItem[];
@@ -38,20 +44,35 @@ export function DocLayout({
   prev?: { href: string; title: string };
   next?: { href: string; title: string };
   nextNote?: string;
+  /** Folded sections, the 30-second card and the doodle (content/extras). */
+  extras?: PageExtras;
   children: React.ReactNode;
 }) {
+  const detail = (extras?.detail ?? []).filter((id) => /^[a-z0-9-]+$/.test(id));
   return (
     <div className="container container-doc">
       <ReadingProgress />
-      <Reader>
-        <article className="doc">
+      {detail.length > 0 && (
+        // Server-rendered, so a folded section never flashes before the reader's own state loads.
+        <style>{`${detail.map((id) => `.reader[data-depth="core"] .sec-card[data-sec="${id}"]`).join(",")}{display:none}`}</style>
+      )}
+      <Reader detail={detail}>
+        <article className="doc" data-view={extras?.story ? "story" : undefined}>
           <header className="page-head lesson-hero">
+            {extras?.doodle && (
+              <div className="hero-doodle">
+                <Doodle name={extras.doodle} size={150} />
+              </div>
+            )}
             <div className="eyebrow">{eyebrow}</div>
             <h1>{title}</h1>
             {lede && <p className="lede">{lede}</p>}
             {meta && <div className="meta-row">{meta}</div>}
             <PageActions />
           </header>
+          {extras?.story && <StoryShell story={extras.story} say={extras.sayIt} title={title} />}
+          {extras?.primer && <PrimerCard id={extras.primer} compact startClosed={!!extras.story} />}
+          {extras?.sayIt && <SayItCard title={title} say={extras.sayIt} />}
           <ReaderBar lead={<PageDrawerButton title={sideTitle} items={side} />} headings={headings} />
           <div className="doc-cols">
             <SectionRail lead={<PageDrawerButton title={sideTitle} items={side} />} headings={headings} />

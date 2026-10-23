@@ -45,8 +45,7 @@ export default function JsCheatsheet() {
             <span className="eyebrow">DSA · Step 0</span>
             <h1>JavaScript for DSA</h1>
             <p className="lede">
-              The parts of JavaScript you actually use to solve interview problems, with the costs and traps that decide whether a solution passes. Every
-              snippet runs: press <strong>Run</strong> to see its output, or <strong>Edit</strong> to experiment.
+              The parts of JavaScript you actually use in interviews, with the traps to avoid. Every snippet runs: press <strong>Run</strong>, or <strong>Edit</strong> to experiment.
             </p>
             <div className="meta-row no-print">
               <PrintButton />

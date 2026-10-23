@@ -9,7 +9,7 @@ export const quiz: QuizItem[] = [
       "Because intervals in the input never overlap more than one other interval",
     ],
     answer: 1,
-    explain: "Sorting by start means starts only grow as you sweep. Once one start is past the group's end, every later start is as well, so nothing can reach back and join the group.",
+    explain: "Starts only grow as you sweep. Once one start is past the group's end, every later start is too, so nothing can join the group.",
   },
   {
     q: "In a +1/-1 sweep line for meeting rooms, an end event and a start event happen at the same time t. Which should be processed first, and why?",
@@ -25,6 +25,6 @@ export const quiz: QuizItem[] = [
     q: "To keep the largest number of non-overlapping intervals, which interval should you keep first?",
     options: ["The one that starts first", "The shortest one", "The one that ends first"],
     answer: 2,
-    explain: "The earliest-ending interval leaves the most room for the rest, and an exchange argument shows some optimal answer starts with it. Earliest start fails on [1, 100] versus several short intervals inside it; shortest fails when a short interval straddles two others.",
+    explain: "The earliest-ending interval leaves the most room for the rest. Earliest start fails on [1, 100] versus several short intervals inside it; shortest fails when a short interval straddles two others.",
   },
 ];

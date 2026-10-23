@@ -2,20 +2,20 @@ import { queueWithDlq, outboxSequence, signupEmail } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Move slow, unreliable, spiky or fan-out work off the request path and onto a queue. Delivery is **at-least-once**, so make consumers **idempotent**, retry with backoff, park poison messages in a **dead letter queue**, and use a **transactional outbox** instead of "write the database, then publish".
+Move slow, flaky or spiky work onto a queue. Delivery is **at-least-once**, so make consumers **idempotent**, retry with backoff, and use a **transactional outbox** instead of "write the database, then publish".
 </TLDR>
 
 ## Why it matters
 
-Send the welcome email inline and signup is as slow as the email provider, and fails when it fails. Queue it instead: the API records the intent and answers in milliseconds, a worker retries until the email goes out, and spikes wait their turn.
+Send the welcome email inline and signup is as slow as the email provider (say 800 ms). Queue it instead: the API answers in tens of milliseconds and a worker sends the email, retrying if it fails. If the provider is down for an hour, inline signups fail; queued ones just wait.
 
-The price: work happens **later**, maybe **twice**, maybe **out of order**. Play **Normal consumption**, then **Burst absorbed**.
+The price: work happens **later**, maybe **twice**, maybe **out of order**. Skip the queue for fast work the user needs in the response: it adds a broker to run. Play **Burst absorbed**.
 
 <FlowDiagram spec={queueWithDlq} />
 
 ## Sync or async?
 
-If the user needs the answer to carry on (logging in, loading a page, "was my card accepted?"), keep it sync. Go async when work is **slow** (transcoding, PDFs, a 2 s third-party API), **unreliable** (email, SMS, push, webhooks), **spiky** (flash sales, month-end batches, a viral post) or **fans out** (one event: receipt, search index, analytics). Most flows split in two:
+If the user needs the answer to carry on ("was my card accepted?"), keep it sync. Go async when work is **slow**, **unreliable**, **spiky** or **fans out** to many reactions. Most flows split in two:
 
 | Request | Sync part (user waits) | Async part (worker) |
 |---|---|---|
@@ -24,51 +24,47 @@ If the user needs the answer to carry on (logging in, loading a page, "was my ca
 | Place an order | Reserve stock, authorise the card | Confirmation email, invoice PDF, analytics |
 | Publish a post | Save the post | Fan out to followers' feeds |
 
-Long jobs return `202 Accepted` and a job id; the client polls `GET /jobs/:id` or gets a push or webhook when it's done.
+Long jobs return `202 Accepted` and a job id to poll.
 
 ## Why queues
 
-With a queue in between, the consumer can be slow, mid-deploy or briefly down and nothing is lost. That's **decoupling**: bursts smooth out, and each side scales and fails on its own. "Queue" covers three tools:
+With a queue in between, the consumer can be slow, mid-deploy or briefly down and nothing is lost. That is **decoupling**: each side scales and fails on its own. "Queue" covers three tools:
 
-| | Work queue (SQS, RabbitMQ, BullMQ) | Pub/Sub (SNS, Redis Pub/Sub) | Log (Kafka, Redis Streams) |
-|---|---|---|---|
-| Each message goes to | One consumer | Every subscriber, right now | Every consumer group, replayable |
-| Retention | Until acked | None | Days, configurable |
-| Ordering | Best effort, or FIFO queues | None | Per partition |
-| Best for | Jobs, emails, image processing | Fire-and-forget fan-out | Event streams, analytics, CDC |
+| Tool | Each message goes to | Best for |
+|---|---|---|
+| Work queue (SQS, RabbitMQ) | One consumer | Jobs, emails, image processing |
+| Pub/Sub (SNS) | Every subscriber, right now | Fire-and-forget fan-out |
+| Log (Kafka) | Every consumer group, replayable | Event streams, analytics |
 
-A common pairing: SNS fans out to one SQS queue per subscriber, each a durable copy with retries.
-
-The quiz's signup flow lacks one component. Which lets signup succeed while the email provider is down?
+Which box lets signup succeed while the email provider is down?
 
 <DiagramQuiz spec={signupEmail} slot="queue" options={["cache", "queue", "lb", "database"]} answer="queue" explain="The email is slow and the provider can fail, so the API publishes a job and answers immediately. The worker sends it later and retries on failure. A cache or a load balancer doesn't hold work for later." />
 
 ## Kafka basics
 
-Kafka is a log, not a mailbox: reading doesn't delete. Topics split into **partitions**, append-only logs; the key's hash picks one, so a key always lands in the same partition, and order holds only within it. In a **consumer group** each partition has exactly one consumer, while other groups (billing, search, analytics) read the same topic independently.
+Kafka is a log, not a mailbox: reading doesn't delete. A topic splits into **partitions**; a key always lands in the same partition, and order holds only within it. In a **consumer group** each partition has one consumer. Other groups read the same topic independently.
 
-- **Offsets and replay.** Consumers commit their position (offset), so a group can rewind (say to "yesterday 09:00") after a bug fix, and a new service can read from the start.
-- **Retention.** A set time or size (7 days by default), read or not. Compacted topics keep the latest value per key indefinitely, for changelogs.
-- **Rebalancing.** A consumer joins, leaves or misses heartbeats, and partitions move: they pause briefly, and processed-but-uncommitted messages are redelivered. Cooperative rebalancing moves only what must move; static membership skips it on a quick restart.
-- **The parallelism cap.** 6 partitions and 8 consumers leave 2 idle. Size partitions for peak: adding them later remaps keys.
+- **Replay.** Consumers commit their position, so a group can rewind after a bug fix.
+- **Retention.** Messages stay for a set time (7 days by default), read or not.
+- **The parallelism cap.** 6 partitions and 8 consumers leave 2 idle.
 
-In the simulator, add consumers past the partition count and watch the extras idle.
+Add consumers past the partition count in the simulator.
 
 <KafkaPartitions />
 
 ## Delivery semantics
 
-Your consumer will see the same message twice. **At-least-once** is the practical default; "exactly once" really means at-least-once plus deduplication.
+<Doodle name="idempotency" size={150} caption />
+
+Your consumer will see the same message twice. Brokers redeliver after crashes: that is **at-least-once**, the default. "Exactly once" really means at-least-once plus **idempotent** work: doing it twice has the effect of doing it once.
 
 | Semantics | How | What goes wrong |
 |---|---|---|
-| At-most-once | Ack (commit the offset) before processing | A crash mid-work loses the message |
-| At-least-once | Ack after processing | A crash after the work, before the ack, delivers it again |
-| Effectively once | At-least-once + idempotent processing | Nothing, if every effect is deduplicated |
+| At-most-once | Ack before processing | A crash loses the message |
+| At-least-once | Ack after processing | A crash before the ack delivers it again |
+| Effectively once | At-least-once + idempotent work | Nothing |
 
-Kafka transactions give exactly-once only for Kafka-to-Kafka pipelines; an email, a card charge or a Postgres row needs its own idempotency. Two ways:
-
-**A dedupe table with a unique constraint**, in the same transaction as the business change:
+At-most-once is fine for a metrics ping, where one lost point costs nothing. An email or a card charge needs its own idempotency. Two ways. **A dedupe table**: record the message id under a unique constraint, in the same transaction.
 
 ```sql
 BEGIN;
@@ -79,48 +75,44 @@ UPDATE accounts SET balance = balance + $2 WHERE id = $3;
 COMMIT;
 ```
 
-**Idempotent writes**: `SET status = 'shipped'` is safe twice; `balance = balance + 10` isn't. Upsert by natural key, and pass the message id to external APIs as an idempotency key (most payment and email providers take one).
-
-`idempotent-consumer.js` (in [Code](#code)) fixes a classic bug: marking a message "done" **before** sending, so a failed email was skipped as a duplicate on every retry. The fix: short lock, do the work, mark done on success, release the lock in `finally`.
+**Idempotent writes**: `SET status = 'shipped'` is safe twice; `balance = balance + 10` isn't.
 
 ## Ordering
 
 "Order shipped" before "order paid" is a bug, and Kafka orders only within a partition. So:
 
-- **Key by the entity** that needs order (`userId`, `orderId`, `conversationId`): one partition, one consumer, in order.
-- **Retries can reorder**: message 1 goes to a retry queue, message 2 lands first. Where order matters, retry in place (pause that key) or queue the key's later messages behind it.
-- **Sequence numbers.** The producer stamps a per-key `seq`; the consumer drops anything older than the last one applied (a duplicate) and spots gaps (buffer, or fetch the missing event).
-- **Global order is rarely needed**: one partition, one consumer, no parallelism. You need one user's events in order, not two strangers'.
+- **Key by the entity** that needs order (`userId`, `orderId`): one partition, one consumer.
+- **Retries can reorder.** Where order matters, retry in place.
+- **Sequence numbers.** A per-key `seq` lets the consumer drop duplicates and spot gaps.
+- **Global order is rarely needed.** One user's events, not two strangers'.
 
 ## Retries and dead letter queues
 
-Some failures heal; some never will. Retry the first with backoff; park the second in a **dead letter queue (DLQ)**.
+<Doodle name="backoff" size={150} caption />
 
-- **Classify errors.** Transient ones (timeouts, 503s, deadlocks) get exponential backoff with jitter: 1 s, 2 s, 4 s, 8 s. Permanent ones (validation errors, malformed payloads, a 404 for a deleted user) go straight to the DLQ.
-- **Poison messages** always fail; without a DLQ they loop forever, burning worker time and, in Kafka, blocking the whole partition.
-- **Redrive after the fix**: SQS's redrive API, or replay the DLQ topic in Kafka. Idempotent consumers make it safe.
-- **Alert** on DLQ depth above zero and on the **age of the oldest message** (SQS's `ApproximateAgeOfOldestMessage`, Kafka consumer lag), which catches a stuck consumer even when depth looks normal.
+Some failures heal; some never will. Retry the first, waiting longer each time (**backoff**). Park the second in a **dead letter queue (DLQ)**.
 
-The diagram plays **Failure → retry with backoff**; switch to **Poison message → DLQ** for the other kind.
+- **Transient errors** (timeouts, 503s): backoff with jitter, 1 s, 2 s, 4 s, 8 s.
+- **Permanent errors** (bad payloads) go straight to the DLQ.
+- **Poison messages** always fail. Without a DLQ, one bad message retries forever and blocks the ones behind it.
+- **Alert** when the DLQ is not empty. Fix the bug, then redrive it.
 
 <FlowDiagram spec={queueWithDlq} scenario="retry" />
 
 ## Backpressure and Little's law
 
-1,000 messages arrive each second and workers handle 800, so the backlog grows to **720,000 after an hour**; a new arrival then waits 720,000 ÷ 800 = 900 s, a full 15 minutes.
+1,000 messages arrive each second and workers handle 800. The backlog grows to **720,000 after an hour**, and a new arrival waits 15 minutes.
 
-**Little's law** links it all: items in a system = arrival rate × time in it, `L = λ·W`. It sizes fleets too: 1,000 jobs/s × 200 ms = 200 jobs in progress, so at least 200 worker slots (about 286 at a healthy 70% utilisation).
+**Little's law**: items in a system = arrival rate × time in it. It sizes fleets: 1,000 jobs/s × 200 ms = 200 jobs in progress, so at least 200 worker slots.
 
 <StatTiles items={[{ label: "Arriving", value: "1,000/s" }, { label: "Processed", value: "800/s" }, { label: "Backlog growth", value: "+200/s" }, { label: "After 1 hour", value: "720K", sub: "messages waiting" }]} />
 
 **Backpressure** is your answer when consumers can't keep up:
 
-- **Bound the queue**: reject or slow producers when full, instead of buffering until memory runs out.
+- **Bound the queue**: slow producers when it is full.
 - **Push back** on callers: `429` or `503` with `Retry-After`.
-- **Autoscale consumers on queue depth or age** (KEDA, for example), not CPU.
-- **Drop or sample low-value work** (analytics events, previews) first.
-
-In the simulator, push the producer rate past the workers' capacity, then add workers.
+- **Autoscale consumers on queue depth**, not CPU.
+- **Drop low-value work** first.
 
 <QueueSim />
 
@@ -128,10 +120,10 @@ In the simulator, push the producer rate past the workers' capacity, then add wo
 
 "Save the order, then publish `order.created`" can't be atomic: the database and the broker share no transaction.
 
-- **Crash in between**: the order exists, the event is lost. Nobody sends the confirmation or ships the parcel.
-- **Publish first**: if the transaction then rolls back, consumers act on an order that doesn't exist.
+- **Crash in between**: the order exists, the event is lost.
+- **Publish first**: if the transaction rolls back, consumers act on an order that doesn't exist.
 
-The **transactional outbox** writes the order and an `outbox` row in one local transaction; a **relay** publishes unpublished rows and marks them. A crash in between sends a row twice, so consumers dedupe by event id. Pick **crash before publish** in the sequence diagram: nothing is lost.
+The **transactional outbox** writes the order and an `outbox` row in one local transaction. A **relay** then publishes unpublished rows. A crash can send a row twice, so consumers dedupe by event id.
 
 <SequenceDiagram spec={outboxSequence} />
 
@@ -150,11 +142,11 @@ INSERT INTO outbox (topic, payload) VALUES ('order.created', $4);
 COMMIT;
 ```
 
-**CDC is the alternative**: a tool like Debezium tails the write-ahead log and publishes every committed change, no polling. It's more infrastructure, and raw row changes leak your schema, so many teams point CDC at the outbox table itself.
+**CDC** (Debezium) is the alternative: it tails the write-ahead log instead of polling.
 
 ## Sagas: transactions across services
 
-A purchase spans orders, inventory, payments and shipping, each with its own database. A **saga** chains their local transactions, each paired with a **compensating action** that semantically undoes it:
+A purchase spans orders, inventory, payments and shipping, each with its own database. A **saga** chains local transactions, each with a **compensating action** that undoes it:
 
 <Steps>
   <Step title="Orders: create the order as PENDING">
@@ -164,10 +156,10 @@ A purchase spans orders, inventory, payments and shipping, each with its own dat
     Compensation: release the reservation.
   </Step>
   <Step title="Payments: charge the card">
-    Compensation: refund. If the charge fails, compensate in reverse: release the stock, cancel the order.
+    Compensation: refund. If the charge fails, undo in reverse.
   </Step>
   <Step title="Shipping: create the shipment">
-    If this fails, refund, release the stock and cancel. If it succeeds, mark the order CONFIRMED.
+    If this fails, refund, release and cancel. If it works, mark the order CONFIRMED.
   </Step>
 </Steps>
 
@@ -178,21 +170,21 @@ A purchase spans orders, inventory, payments and shipping, each with its own dat
 | Weakness | Flow is scattered and hard to follow | One more service to run |
 | Fits | 2–3 steps | Longer flows (Temporal, AWS Step Functions) |
 
-Compensations must be idempotent and retryable: a business undo (a refund), not a delete. Others can see intermediate states such as PENDING, so design the UI for them.
+Compensations must be idempotent: a business undo (a refund), not a delete.
 
 ## Delayed and scheduled jobs
 
-Cancel unpaid orders after 15 minutes. Remind a user 24 hours before an event. Retry after a backoff.
+Cancel unpaid orders after 15 minutes.
 
-- **Per-message delay**: SQS `DelaySeconds` (up to 15 minutes), BullMQ's `delay`, RabbitMQ's delayed-message plugin. Retry backoff works the same way.
-- **Long delays**: a `run_at` column polled with `WHERE run_at <= now() … FOR UPDATE SKIP LOCKED`, or a Redis sorted set scored by due time feeding the work queue.
-- **Cron-style schedules**: one node runs them (a lock or leader election); make the job idempotent (it will occasionally run twice) and record the last success so a missed run can catch up.
+- **Short delays**: SQS `DelaySeconds` (up to 15 minutes), BullMQ's `delay`.
+- **Long delays**: a `run_at` column polled with `FOR UPDATE SKIP LOCKED`, or a Redis sorted set.
+- **Cron-style schedules**: make the job idempotent, since it will sometimes run twice.
 
 ## Code
 
 <CodeTabs files={['snippets/idempotent-consumer.js', 'snippets/bullmq.js', 'snippets/kafka-ordering.js', 'snippets/outbox-relay.js', 'snippets/backlog.js']} />
 
-`bullmq.js` gets retries, backoff and enqueue-time dedupe from the library. `outbox-relay.js` uses `FOR UPDATE SKIP LOCKED`, so parallel relays never publish the same row at once. `kafka-ordering.js` and `backlog.js` put the [Ordering](#ordering) and [Little's law](#backpressure-and-littles-law) sections into code.
+`idempotent-consumer.js` fixes a classic bug: marking a message "done" **before** sending, so a failed email was skipped on every retry. `outbox-relay.js` uses `FOR UPDATE SKIP LOCKED`, so parallel relays never publish the same row.
 
 <Callout kind="warning">
 - One queue for everything, so a slow job type blocks the fast ones.
@@ -204,19 +196,19 @@ Cancel unpaid orders after 15 minutes. Remind a user 24 hours before an event. R
 
 <FollowUps>
   <FollowUp q="How do you avoid processing a message twice?">
-    Make the consumer idempotent: record the message id under a unique constraint in the same transaction as the effect, and mark it done only after success.
+    Make the consumer idempotent: record the message id under a unique constraint, in the same transaction.
   </FollowUp>
   <FollowUp q="How do you keep events for one user in order?">
-    Key by userId so one partition, and one consumer, holds them in order. A per-user sequence number catches duplicates and gaps, even after retries.
+    Key by userId, so one partition and one consumer hold them in order.
   </FollowUp>
   <FollowUp q="Kafka or RabbitMQ/SQS?">
-    Kafka for high-throughput streams that many consumer groups read and replay; RabbitMQ or SQS for task queues with per-message acks, delays and dead-lettering.
+    Kafka for streams that many groups read and replay; RabbitMQ or SQS for task queues.
   </FollowUp>
   <FollowUp q="What is backpressure?">
-    Slowing producers when consumers can't keep up: bounded queues, `429`/`503` with `Retry-After`, autoscaling on queue depth. Little's law tells you how fast the backlog grows.
+    Slowing producers when consumers can't keep up: bounded queues, `429`/`503`.
   </FollowUp>
   <FollowUp q="Why an outbox instead of “write the DB, then publish”?">
-    A crash in between loses the event, because the broker can't join the database transaction. The outbox commits the event with the data; a relay publishes it at least once.
+    A crash in between loses the event. The outbox commits it with the data.
   </FollowUp>
 </FollowUps>
 

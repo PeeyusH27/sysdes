@@ -33,8 +33,7 @@ export default function LldHub() {
           Design the classes, <span className="grad">then prove they work</span>
         </h1>
         <p className="lede">
-          Low-level design rounds ask for classes, interfaces and clean seams, not boxes and arrows. Learn the handful of ideas that carry every answer, read the
-          classics in full, then write the code yourself against hidden tests.
+          Low-level design is about classes and clean seams. Learn the few ideas behind every answer, read the classics, then write the code yourself.
         </p>
         <ul className="hub-facts">
           <li>

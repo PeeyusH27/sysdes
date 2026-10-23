@@ -10,7 +10,7 @@ export const quiz: QuizItem[] = [
     ],
     answer: 1,
     explain:
-      "A timeout says nothing about whether the card was charged. Marking it failed invites a second payment, and a fresh key lets the PSP charge twice. Keep the payment unknown and let the PSP's own record decide.",
+      "A timeout does not tell you if the card was charged. Calling it failed invites a second payment, and a fresh key lets the PSP charge twice. Keep it unknown and let the PSP's record decide.",
   },
   {
     q: "The PSP delivers webhook evt_9 twice, the second time after you already processed it. What keeps the ledger right?",
@@ -21,7 +21,7 @@ export const quiz: QuizItem[] = [
     ],
     answer: 1,
     explain:
-      "INSERT … ON CONFLICT DO NOTHING on the event id turns a redelivery into a no-op, even when two deliveries race. Forward-only transitions also make late, out-of-order events harmless. A check-then-insert in code races, and PSPs always retry.",
+      "ON CONFLICT DO NOTHING on the event id makes a repeat do nothing, even when two arrive at once. Forward-only moves make late events harmless. Checking in code races, and PSPs always retry.",
   },
   {
     q: "A customer pays $50.00. The PSP keeps a $1.75 fee and the platform a $5.00 commission. Which posting is right?",
@@ -32,6 +32,6 @@ export const quiz: QuizItem[] = [
     ],
     answer: 1,
     explain:
-      "Debits ($48.25 + $1.75) equal credits ($45.00 + $5.00), so the transaction sums to zero. The first option is unbalanced by $5.00, and the third has no debit side at all: money can't appear from nowhere.",
+      "Debits ($48.25 + $1.75) equal credits ($45.00 + $5.00), so it sums to zero. The first option is off by $5.00. The third has no debit side: money can't appear from nowhere.",
   },
 ];

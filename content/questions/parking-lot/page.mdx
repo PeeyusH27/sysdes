@@ -2,7 +2,7 @@ import { classes, parkAndExit } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Model **ParkingLot → Floor → Spot**, hide spot choice, pricing and payment behind small strategies, and keep a **free set per spot type on each floor** so nothing scans. One Node process allocates atomically for free; across gate servers, the database locks a spot with `FOR UPDATE SKIP LOCKED`.
+Model **ParkingLot → Floor → Spot**, put spot choice and pricing behind small swappable rules, and keep a **free list per spot type** so nothing scans. Across gate servers, the database locks the spot with `FOR UPDATE SKIP LOCKED`.
 </TLDR>
 
 <Requirements
@@ -10,21 +10,23 @@ Model **ParkingLot → Floor → Spot**, hide spot choice, pricing and payment b
   nonFunctional={['Never give a spot out twice, even with concurrent gates', 'No full scan to allocate', 'New vehicle types or pricing rules: no edits to core classes', 'Deterministic tests (injected clock)']}
   outOfScope={['Reservations (a follow-up)', 'Plate-recognition hardware', 'A chain of lots (an HLD follow-up)']} />
 
-A **low-level design** (LLD) question: classes and clean seams first, then where concurrency bites.
+A **low-level design** (LLD) question: pick the classes first, then find where two gates collide.
 
-New to low-level design? Start with [From requirements to classes](/lld/foundations/thinking-in-objects) and [SOLID](/lld/foundations/solid); the strategy and decorator in this answer are taught in [Swap behaviour](/lld/foundations/strategy-decorator).
+New to this? Read [From requirements to classes](/lld/foundations/thinking-in-objects), [SOLID](/lld/foundations/solid) and [Swap behaviour](/lld/foundations/strategy-decorator) first.
 
 ## Clarifying questions
 
-- How many floors and spots? (Decides whether a scan is fine.)
-- Which vehicles fit which spots: may a bike take a compact spot?
-- Pricing: hourly, flat, peak, a daily cap, a grace period?
-- Pay at the exit gate or a pay station; card, cash or wallet?
-- One lot (one process) or a chain (a distributed system)?
+- How many floors and spots?
+- Which vehicles fit which spots?
+- How is the fee worked out?
+- Where do drivers pay?
+- One lot, or a chain?
 
 ## Scale check
 
-Five floors of 200 spots is **1,000 spots** and about 500 entries an hour, under one per second even at peak. One small process could run the lot, so the hard part is **correctness**: two gates must never hand out the same spot.
+Five floors of 200 spots is **1,000 spots** and about 500 cars an hour. One small process can run it. The hard part is two gates never giving out the same spot.
+
+A scan of 1,000 spots takes microseconds, so speed alone does not justify free sets. They keep the smallest-first rule simple and the cost flat as lots grow past hundreds of spots.
 
 ## Public interface
 
@@ -38,27 +40,37 @@ Five floors of 200 spots is **1,000 spots** and about 500 entries an hour, under
 
 ## Build the design in stages
 
-Step through the stages the way you would build it on a whiteboard: nouns first, then each rule that will change moves behind an interface. A green outline marks what the latest stage added; click a class to see its members and relations.
+<Doodle name="decorator" size={150} caption />
+
+Build it like a whiteboard sketch: nouns first, then move each rule that will change behind an interface. Green marks what the latest stage added.
 
 <ClassDiagram spec={classes} />
 
+Not every rule needs a class. Do the sum on pricing, at 20 an hour for a car:
+
+| Rules today | Code |
+|---|---|
+| Hourly only | One function |
+| Plus a 150 daily cap | Borderline, one `if` reads fine |
+| Plus weekend rates, EV charging, monthly changes | Strategies, cap as a decorator |
+
+A car parked 8 hours owes 160 hourly, so the cap bites. The second rule is the tipping point. Until it exists, a function is enough.
+
 ## What it remembers
 
-Everything hangs off the lot:
-
-- `ParkingLot.floors`: floors indexed by level.
-- `Floor.free`: spot type → `Set` of free spots.
-- `ParkingLot.tickets`: open tickets, `Map<ticketId, Ticket>`; exit deletes the entry, so a ticket works once.
+- `ParkingLot.floors`: floors by level.
+- `Floor.free`: spot type → set of free spots.
+- `ParkingLot.tickets`: open tickets by id. Exit deletes the entry, so a ticket works once.
 
 ## Watch it run
 
-Add vehicles, then click a parked one to pay at the booth. The real test: **Two cars, one spot** under each gate setting. An atomic `take()` turns the second car away; check-then-take sends both to `0-C3`.
+Park a few cars, then click one to pay. Try **Two cars, one spot** on each gate setting: an atomic `take()` turns the second car away, but check-then-take sends both to `0-C3`.
 
 <ParkingLotSim />
 
 ## Park and exit, step by step
 
-Play the sequence, then switch branches: **lot full** on the way in, **payment failed** on the way out.
+Play it, then try the **lot full** and **payment failed** branches.
 
 <SequenceDiagram spec={parkAndExit} />
 
@@ -66,19 +78,19 @@ Play the sequence, then switch branches: **lot full** on the way in, **payment f
 
 <Steps>
   <Step title="Clarify">
-    Vehicles, floors, pricing; LLD or HLD.
+    Vehicles, floors, fees.
   </Step>
   <Step title="List the nouns">
-    Lot, Floor, Spot, Vehicle, Ticket, Payment.
+    Lot, Floor, Spot, Ticket.
   </Step>
   <Step title="Sketch methods">
-    `park()`, `exit()`, `fee()`, before any code.
+    `park()`, `exit()`, `fee()`.
   </Step>
   <Step title="Extract variation">
-    Spot choice and pricing become strategies.
+    Spot choice and fees become strategies.
   </Step>
   <Step title="Walk a scenario">
-    One entry and exit, then concurrency.
+    One car, then two at once.
   </Step>
 </Steps>
 
@@ -86,17 +98,17 @@ Play the sequence, then switch branches: **lot full** on the way in, **payment f
 
 <Steps>
   <Step title="Use cases first">
-    Park, quote, pay and exit, show availability. Every class must serve one.
+    Park, pay, exit, show free spots.
   </Step>
   <Step title="Nouns become classes, verbs become methods">
-    `Spot`, `Vehicle` and `Ticket` are thin data; behaviour lives in `ParkingLot`, `Floor` and the strategies. Fewer, sharper classes win: no `ParkingSpotManagerFactory`.
+    `Spot`, `Vehicle` and `Ticket` hold data. `ParkingLot`, `Floor` and the rules hold behaviour.
   </Step>
   <Step title="Relationships">
-    Lot owns floors, floors own spots (composition); a ticket only **references** a spot and a vehicle.
+    The lot owns floors, floors own spots. A ticket only points at a spot.
   </Step>
   <Step title="Allocation without a scan">
 
-`FITS` lists the spot types each vehicle may use, **smallest first**, so a bike never takes the large spot a truck needs:
+`FITS` lists the spots each vehicle may use, **smallest first**:
 
 ```js
 export const FITS = {
@@ -106,18 +118,18 @@ export const FITS = {
 };
 ```
 
-`take(types, accept)` pops the first free spot that passes `accept`. EV charging is a spot **feature** the selector filters on, not a subclass.
+`take(types, accept)` pops the first free spot that passes `accept`.
 
   </Step>
   <Step title="Pricing as a strategy">
-    `fee(durationMs, vehicle)` is the whole interface. A daily cap, peak hours or a discount is a **decorator** around it, so rules combine without edits (open/closed). Inject the clock.
+    `fee(durationMs, vehicle)` is the whole interface. A daily cap wraps it as a **decorator**. Pass in the clock.
   </Step>
   <Step title="Payment flow">
-    `quote(ticket)` → pay with any `PaymentMethod` → `exit(ticket, payment)`, which re-checks the amount, frees the spot and deletes the ticket. A failed payment changes nothing.
+    Quote, pay, then `exit` re-checks the amount and frees the spot. A failed payment changes nothing.
   </Step>
   <Step title="Concurrency">
 
-One Node process runs `take()` without interleaving: atomic for free. Several gate servers need one statement that picks **and** locks a free row:
+One Node process is atomic for free. Several servers need one statement that picks **and** locks a row:
 
 ```sql
 UPDATE spots SET ticket_id = $1, taken_at = now()
@@ -126,23 +138,23 @@ WHERE id = (SELECT id FROM spots WHERE ... AND ticket_id IS NULL
 RETURNING id, floor;
 ```
 
-Insert the ticket in the same transaction, or a crash leaks the spot.
+Insert the ticket in the same transaction, or a crash loses the spot.
 
   </Step>
   <Step title="Display boards">
-    Observer: the lot emits `changed(floor)` after every park and exit, and boards re-read `available(type)`. The lot never knows boards exist.
+    The lot announces `changed(floor)`. Boards listen (an **observer**).
   </Step>
   <Step title="Extensibility check">
-    A new vehicle type is an enum value plus its `FITS` row. Reservations and EV charging are in the follow-ups.
+    A new vehicle is one `FITS` row.
   </Step>
   <Step title="Tests">
-    Lot full, unknown ticket, grace period, exact hour boundaries, daily cap, observer firing: all deterministic with the injected clock.
+    Lot full, bad ticket, grace period, daily cap, all with a fake clock.
   </Step>
 </Steps>
 
 ## Implementation
 
-The same design in **JavaScript, Java or Python**: pick a language and every code block on the site follows. The Java and Python versions add real locks where the JavaScript leans on the single-threaded event loop.
+The same design in **JavaScript, Java or Python**. Java and Python add real locks.
 
 <CodeTabs
   files={['snippets/models.js', 'snippets/floor.js', 'snippets/strategies.js', 'snippets/parking-lot.js', 'snippets/parking-lot.test.js', 'snippets/allocate.sql']}
@@ -150,17 +162,17 @@ The same design in **JavaScript, Java or Python**: pick a language and every cod
   python={['snippets/python/models.py', 'snippets/python/floor.py', 'snippets/python/strategies.py', 'snippets/python/parking_lot.py', 'snippets/python/test_parking_lot.py', 'snippets/allocate.sql']}
 />
 
-- `HourlyPricing` charges every **started** hour: 61 minutes is 2 hours. The grace period is inclusive, so exactly 10 minutes is free.
-- `DailyCap` charges whole days at the cap, then caps the rest: 26 hours for a car is 150 + 40 = 190.
-- `LowestFloorFirst` prefers a lower floor to a smaller spot type; `allocate.sql` orders by type, then floor. Pick one policy for both.
+- `HourlyPricing` charges every started hour: 61 minutes is 2 hours.
+- `DailyCap`: 26 hours for a car is 150 + 40 = 190.
+- Pick one floor-versus-type policy and use it in both the code and `allocate.sql`.
 
 ## Code it yourself
 
-Write the allocator and the fee policies against hidden tests, in JavaScript or Python: the [Parking Lot exercise](/lld/exercises/parking-lot) adds a spot policy and a pricing policy you can switch at runtime, which is where a design that hard-codes them with if/else falls over.
+Try the [Parking Lot exercise](/lld/exercises/parking-lot): hidden tests, and both rules switch at runtime.
 
 ## Persistence across gate servers
 
-Only if the interviewer asks. Across gate servers the database is the truth: a spot is free while its `ticket_id` is NULL.
+Only if asked. The database is the truth: a spot is free while `ticket_id` is NULL.
 
 ```sql
 CREATE TABLE spots (
@@ -190,42 +202,42 @@ CREATE TABLE tickets (
 
 | What breaks | Effect | Mitigation |
 |---|---|---|
-| Two gates allocate at once | Same spot twice | Event loop (one process); `SKIP LOCKED` in a transaction (several) |
-| Gate crashes before printing the ticket | Spot leaked | Spot and ticket in one transaction; a reconciliation job frees orphans |
-| Lost ticket | Can't compute the fee | Find the open ticket by plate, or charge the daily maximum |
-| Gate loses its network | Can't reach the central DB | A local lot service works offline and syncs later |
-| Payment declined | Driver stuck at the barrier | Nothing changes until payment succeeds; offer another method |
+| Two gates allocate at once | Same spot twice | One process: atomic `take()`. Several: `SKIP LOCKED` |
+| Gate crashes before the ticket prints | Spot lost | Spot and ticket in one transaction; a cleanup job frees orphans |
+| Lost ticket | No fee | Find it by plate, or charge the daily maximum |
+| Gate loses its network | No central DB | A local service works offline and syncs later |
+| Payment declined | Driver stuck | Nothing changes until payment works; offer another method |
 
 ## Trade-offs
 
 | Choice | Pros | Cons |
 |---|---|---|
-| Free sets per type vs a scan | O(types) allocation; pays off past hundreds of spots | More state to keep consistent |
-| Strategy classes vs `if/else` | Swappable, testable rules (and rules change) | More files |
-| In-memory vs DB as source of truth | Simple and fast for one gate controller | One process only |
-| Decorators vs one pricing class | Independent rules compose freely | Wrapping order matters |
+| Free lists vs a scan | Fast, even with many spots | More state to keep right |
+| Strategy classes vs `if/else` | Rules swap and test easily | More files |
+| Memory vs database | Simple and fast | One process only |
+| Decorators vs one class | Rules combine freely | Wrapping order matters |
 
 <Callout kind="interview" title="What interviewers listen for">
-Strategy, decorator and observer **and** why; a concrete answer to "two gates, one spot"; tests with an injected clock. Over-modelling (a class per spot size, a manager per noun) costs points.
+Strategy, decorator and observer, and why. A clear answer to "two gates, one spot". Tests with an injected clock. Too many classes costs points.
 </Callout>
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="How would you scale to 500 lots?">
-    A local service per lot keeps gates running offline and syncs to a central service sharded by `lot_id`.
+    Run a local service per lot, offline-safe, syncing to a central one split by `lot_id`.
   </FollowUp>
   <FollowUp q="How do you handle a lost ticket?">
-    Find the open ticket by plate and charge from the real entry time; with no match, charge the daily maximum.
+    Find the open ticket by plate and charge from the real entry time. No match: charge the daily maximum.
   </FollowUp>
   <FollowUp q="How would you add reservations?">
-    Reserve a spot **type** per time window, not a specific spot, and release no-shows after a grace TTL (which needs an over-booking policy).
+    Reserve a spot **type** for a time window, not one spot. Release no-shows after a grace period.
   </FollowUp>
   <FollowUp q="How would you add EV charging?">
-    An `ev` spot feature, a `needsCharger` filter and an `EnergyFee` decorator: no existing class changes.
+    Add an `ev` spot feature, a `needsCharger` filter and an `EnergyFee` decorator. No existing class changes.
   </FollowUp>
   <FollowUp q="Is take() really atomic in Node?">
-    Within one process, yes; across threads or processes, allocate in the database (`SKIP LOCKED`) or Redis (`SET NX` per spot).
+    In one process, yes. Across processes, allocate in the database (`SKIP LOCKED`) or Redis (`SET NX`).
   </FollowUp>
 </FollowUps>
 

@@ -18,8 +18,7 @@ export default function ProblemsPage() {
           Solve it in the browser, <span className="grad">see what fails</span>
         </h1>
         <p className="lede">
-          {rows.length} problems grouped by pattern. Write JavaScript in the editor, run the examples, then submit against every test. Solved problems are ticked
-          automatically, and a step-by-step solution unlocks after your first wrong submission.
+          {rows.length} problems, grouped by pattern. Write code, run the examples, then submit. Stuck? A step-by-step solution unlocks after your first wrong try.
         </p>
       </header>
       <Suspense fallback={<p className="muted">Loading problems…</p>}>

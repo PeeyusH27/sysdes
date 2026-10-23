@@ -2,17 +2,17 @@ import { reverseList, reverseSegment, weaveHalves } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Linked list problems are solved by **rewiring `next` pointers**, not by copying values. **Save `curr.next`** before you overwrite it, put a **dummy** in front when the head can change, and fix the two end links after a splice: O(n) time, O(1) space.
+Linked list problems are solved by **rewiring `next` pointers**. **Save `curr.next`** before you overwrite it, and put a **dummy** node in front when the head can change. O(n) time, O(1) space.
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- **Reverse** a list, part of a list, or every group of k nodes.
-- **Merge**, **reorder** or **remove** nodes in place, where the head itself might go.
-- Pair the front of a list with its **back read backwards**: reorder, palindrome check, twin sums.
-- "O(1) extra memory", or "change only the links, not the values".
+- **Reverse** a list, part of it, or every group of k nodes.
+- **Merge**, **reorder** or **remove** nodes in place, where the head might go.
+- Pair the front with the **back read backwards**: reorder, palindrome.
+- "O(1) extra memory" or "change the links, not the values".
 
 </Callout>
 
@@ -26,17 +26,15 @@ Linked list problems are solved by **rewiring `next` pointers**, not by copying 
 
 ## The core idea: save the link before you cut it
 
-A node that nothing points at is gone for good. So every rewiring step runs in one order: **save** the link you still need, **overwrite** the pointer, then **advance**.
-
-Reversal is the purest case. `prev` heads the reversed part, `curr` is the node being flipped, and `next` keeps the rest reachable while `curr.next` turns around:
+Picture a train where each car is coupled only to the car behind it. Uncouple a car before you note who was behind it, and the rest of the train is lost. So: **save** the link, **overwrite** it, **advance**. Three pointers do it: `prev` (the flipped part), `curr` (the car being flipped) and `next` (the saved rest):
 
 <AlgoViz trace={reverseList} />
 
-`prev` starts as `null` because the old head becomes the tail; when `curr` runs off the end, `prev` is the new head. Swap the save and flip lines and the rest of the list is lost. Try your own list with Edit input.
+`prev` starts as `null`: the old head becomes the tail. At the end, `prev` is the new head.
 
 ## Play with it
 
-Press the four assignments in order to reverse the train. Then flip before you save and watch the rest derail, or pick "Cars m to n" to splice a segment.
+Press the four assignments in order to reverse the train. Then flip before you save and watch the rest derail.
 
 <ListReversalLab />
 
@@ -44,19 +42,19 @@ Press the four assignments in order to reverse the train. Then flip before you s
 
 <Steps>
   <Step title="Draw before and after">
-    Circle every arrow that changes: each one becomes one assignment.
+    Circle every arrow that changes.
   </Step>
   <Step title="Name a pointer for every node you touch">
-    `prev`, `curr`, `next` for a reversal; add `before` and `first` for a splice.
+    `prev`, `curr`, `next`.
   </Step>
   <Step title="Order the assignments so nothing is lost">
-    Save whatever `x.next` points to before you overwrite it.
+    Save `x.next` before you overwrite it.
   </Step>
   <Step title="Put a dummy in front when the head can change">
-    `const dummy = new ListNode(0, head)`, and return `dummy.next`, not `head`.
+    Return `dummy.next`, not `head`.
   </Step>
   <Step title="Test the tiny lists">
-    Empty, one node, two nodes, and the head or tail case: most `null.next` bugs live there.
+    Empty, one node, two nodes.
   </Step>
 </Steps>
 
@@ -64,44 +62,41 @@ Press the four assignments in order to reverse the train. Then flip before you s
 
 <CodeTabs files={['snippets/reverse.js']} java={['snippets/java/Reverse.java']} python={['snippets/python/reverse.py']} />
 
-This is <ProblemLink slug="reverse-linked-list" />, and the inner loop of every template that follows.
+This is <ProblemLink slug="reverse-linked-list" />, the loop inside every template below.
 
 ## Template 2: a dummy head
 
-Removing the head changes what you return, and a new list has nothing to append to. A **dummy** in front removes both special cases: stop one node **before** the one you care about, and return `dummy.next`.
+If the head can go, what you return changes. A **dummy** node in front gives the head a predecessor, so there is no special case. Stop one node **before** the target and return `dummy.next`.
 
 <CodeTabs files={['snippets/dummy-head.js']} java={['snippets/java/DummyHead.java']} python={['snippets/python/dummy_head.py']} />
 
-`mergeSorted` solves <ProblemLink slug="merge-two-sorted-lists" />: `tail` always sits on the last merged node. <ProblemLink slug="remove-nth-node-from-end" /> adds a fixed gap: from the dummy, move `fast` n + 1 steps ahead, then move both until `fast` is null. `slow` lands right before the node to remove, even the head.
+`mergeSorted` is <ProblemLink slug="merge-two-sorted-lists" />. For <ProblemLink slug="remove-nth-node-from-end" />, start `fast` n + 1 steps ahead, then move both until `fast` is null: `slow` stops just before the node to remove.
 
 ## Template 3: reverse a sublist and splice it back
 
-Stand on `before`, the node in front of the part, and reverse k nodes with the trio. Two ends are now broken: `before` still points at `first` (now the last node), and `first` points at `null`. Fix them with `before.next = prev` and `first.next = curr`:
+Stand on `before`, the node in front of the part, and reverse k nodes. Two links are now wrong. Fix them: `before.next = prev` and `first.next = curr`:
 
 <AlgoViz trace={reverseSegment} />
 
 <CodeTabs files={['snippets/splice.js']} java={['snippets/java/Splice.java']} python={['snippets/python/splice.py']} />
 
-`reverseAfter` returns `first`, which is the next segment's `before`, so repeated reversal is a loop:
-
-- <ProblemLink slug="reverse-linked-list-ii" />: walk `left - 1` steps from a dummy, then reverse `right - left + 1` nodes.
-- <ProblemLink slug="reverse-nodes-in-k-group" />: while k nodes remain, splice and move `before` on. `swapPairs` is k = 2.
+Repeat it for <ProblemLink slug="reverse-linked-list-ii" /> (one range) or <ProblemLink slug="reverse-nodes-in-k-group" /> (while k nodes remain).
 
 ## Template 4: split, reverse, weave
 
-Pairing the first node with the last needs the back half backwards, and a singly linked list can't walk backwards. So build it:
+A list can't walk backwards, so reverse the back half:
 
 1. Find the middle with [fast and slow pointers](/dsa/patterns/fast-slow-pointers).
 2. Cut there (`slow.next = null`) and reverse the back half.
-3. Walk both halves together: compare them (palindrome) or weave them (reorder).
+3. Walk both halves together: compare or weave.
 
-The weave rewrites two links per step, so save both successors first, then link `a → b → aNext`:
+Save both successors, then link `a → b → aNext`:
 
 <AlgoViz trace={weaveHalves} />
 
 <CodeTabs files={['snippets/weave.js']} java={['snippets/java/Weave.java']} python={['snippets/python/weave.py']} />
 
-`fold` is <ProblemLink slug="reorder-list" />; compare instead of weaving and you check a <ProblemLink slug="palindrome-linked-list" /> in O(1) space.
+`fold` is <ProblemLink slug="reorder-list" />. Compare instead of weaving to check a <ProblemLink slug="palindrome-linked-list" />.
 
 ## Try it
 
@@ -129,33 +124,33 @@ curr.next = prev;                               // flip
 return dummy.next;                              // the real head, even if it changed
 ```
 
-The one-line swap works because the right side is evaluated first. Left-side order still matters: `[prev, curr, curr.next] = [curr, curr.next, prev]` moves `curr` before writing `curr.next`, so it hits the wrong node.
+The right side is evaluated first, but order on the left still matters.
 
 <Callout kind="warning">
 
-- Returning `head` after it moved: return `prev` after a reversal and `dummy.next` after any dummy edit.
-- Reversing the back half without cutting first: the result has a cycle.
-- Reading `node.next.next` without checking `node.next`: a TypeError on lists of length 0, 1 or 2.
+- Returning `head` after it moved: return `prev` or `dummy.next`.
+- Reversing the back half without cutting first: you get a cycle.
+- Reading `node.next.next` without checking `node.next`.
 
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
-  <FollowUp q="Iterative or recursive reversal: which would you write?">
-    Iterative: same O(n) time, O(1) space. Recursion (`reverse(head.next)`, then `head.next.next = head; head.next = null`) holds one frame per node and can overflow on lists of tens of thousands of nodes.
+  <FollowUp q="Iterative or recursive reversal?">
+    Iterative: O(1) space. Recursion can overflow on long lists.
   </FollowUp>
-  <FollowUp q="Why use a dummy node instead of special-casing the head?">
-    It gives the head a predecessor, so head edits become the general case: fewer branches, fewer bugs, for one extra object.
+  <FollowUp q="Why use a dummy node?">
+    The head gets a predecessor, so editing it needs no special case.
   </FollowUp>
-  <FollowUp q="How do you rotate a list to the right by k places?">
-    Find the length `n` and the tail, set `k %= n`, and join the tail to the head. Walk `n - k - 1` steps to the new tail, take its next as the new head, and cut: O(n) time, O(1) space.
+  <FollowUp q="How do you rotate a list right by k?">
+    Join the tail to the head, walk `n - k % n - 1` steps to the new tail, and cut.
   </FollowUp>
-  <FollowUp q="How do you add two numbers stored as lists with the most significant digit first?">
-    Reverse both, add digit by digit with a carry behind a dummy, then reverse the result. If the inputs must stay intact, pop the digits from two stacks instead.
+  <FollowUp q="Add two numbers stored as lists, most significant digit first?">
+    Reverse both, add with a carry, reverse the result. Or use two stacks.
   </FollowUp>
-  <FollowUp q="Reverse Nodes in k-Group: how do you leave the last short group alone?">
-    Check before you reverse: walk k steps from `before` and stop at `null`. Or count once and reverse exactly `Math.floor(n / k)` groups.
+  <FollowUp q="Reverse in k-groups: how do you leave a short last group alone?">
+    Walk k steps from `before` first. Stop if you hit `null`.
   </FollowUp>
 </FollowUps>
 

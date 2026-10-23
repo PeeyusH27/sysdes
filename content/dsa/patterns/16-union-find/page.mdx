@@ -2,7 +2,7 @@ import { pathCompression, unionByRank } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Union-find (disjoint set union) stores each group as a tree whose **root names the group**, so "are these connected?" becomes "same root?". With **path compression** and **union by rank**, `find` and `union` are effectively O(1): m edges on n items cost about O(n + m).
+Union-find keeps each group as a tree whose **root is the group's name**, so "are these connected?" means "same root?". With two small tricks, each step is almost instant.
 </TLDR>
 
 ## When to reach for it
@@ -16,31 +16,31 @@ Union-find (disjoint set union) stores each group as a tree whose **root names t
 
 </Callout>
 
-| Variant | What you watch | Classic problems |
+| Variant | What you watch | Classic problem |
 |---|---|---|
-| Count groups | `count`, down one per merge | number of provinces, connected components |
-| Cycle detection | `union` returning `false` | redundant connection, graph valid tree |
-| Keyed groups | roots and group sizes in a `Map` | accounts merge, islands added one by one |
-| Kruskal's MST | edges that join two groups | min cost to connect all points |
+| Count groups | `count` drops per merge | number of provinces |
+| Cycle detection | `union` returns `false` | redundant connection |
+| Keyed groups | roots in a `Map` | accounts merge |
+| Kruskal's MST | edges that join two groups | min cost to connect points |
 
 ## The core idea: one root per group
 
-A group is a chain of command: everyone has a `parent`, and following parents ends at the **root**, the one item that is its own parent. Same group? Compare `find(a)` with `find(b)`. Merge? Point one root at the other.
+Picture friend groups. Each group has one **leader**. Everyone points to a friend, and following friends ends at the leader. Are two people in the same group? Compare their leaders. To merge two groups, one leader starts following the other.
 
-Linking is O(1); the cost is the climb inside `find`, which is as long as the tree is tall. Two tricks keep trees flat:
+The only slow part is climbing to the leader, and that depends on how tall the tree is. Two tricks keep trees flat:
 
-- **Union by rank**: hang the shorter tree (by rank, an upper bound on height) under the taller. Height grows only when equals merge, so no tree passes log₂ n.
-- **Path compression**: after `find(x)` reaches the root, point every node it passed straight at it. The next `find` from any of them is one hop.
+- **Union by rank**: hang the shorter tree under the taller one, so trees stay short.
+- **Path compression**: after a climb, point everyone you passed straight at the leader.
 
-Watch the badges (each node's root). The edge 3-0 is rejected because both ends already share root 0, and finding 3 flattens its path. Try your own edges with Edit input.
+Watch the badges (each node's leader). Edge 3-0 is rejected: both ends share leader 0. Try your own edges with Edit input.
 
 <AlgoViz trace={unionByRank} />
 
-With both, m operations on n items cost O(m α(n)), where α, the inverse Ackermann function, is at most 4 for any input that fits in the universe. Treat it as constant.
+With both tricks, each step is close to O(1), so you can treat it as constant.
 
 ## Play with it
 
-Click two people to make them friends and watch whole trees glide under a new root. Then press Worst case for a 9-link chain, turn path compression on, switch clicks to Find and find 0: one climb, and the chain snaps flat.
+Click two people to make them friends. Then press Worst case for a 9-link chain, turn path compression on, switch clicks to Find and find 0: the chain snaps flat.
 
 <UnionFindLab />
 
@@ -48,57 +48,57 @@ Click two people to make them friends and watch whole trees glide under a new ro
 
 <Steps>
   <Step title="Decide what the items are">
-    Number them `0 … n - 1` (grid cells as `r * cols + c`), or use the keyed version with a `Map`.
+    Number them `0 … n - 1` (grid cells as `r * cols + c`), or use a `Map`.
   </Step>
   <Step title="Decide what links two items">
-    An edge, a shared email, `a == b`, two adjacent land cells: one `union` each.
+    An edge, a shared email, `a == b`: one `union` each.
   </Step>
-  <Step title="Initialise">
-    `parent[i] = i`, `rank[i] = 0`, and `count = n` if you need the number of groups.
+  <Step title="Start with everyone alone">
+    `parent[i] = i`, `rank[i] = 0`, `count = n`.
   </Step>
-  <Step title="Union every link and use the return value">
-    `true`: merged, lower the count. `false`: already connected, so that edge closes a cycle.
+  <Step title="Union every link">
+    `true`: merged, lower the count. `false`: already connected, so the edge closes a cycle.
   </Step>
-  <Step title="Read the answer through find">
-    `count`, `find(a) === find(b)`, or items bucketed by `find(i)`. Never `parent[i]`: a parent is not always a root.
+  <Step title="Read answers through find">
+    Use `count` or `find(a) === find(b)`. Never `parent[i]`: a parent is not always a root.
   </Step>
 </Steps>
 
 ## Template 1: the UnionFind class
 
-The version to memorise. `find` loops twice (climb, then re-point the path at the root); `union` returns whether it merged.
+The version to memorise. `find` climbs, then re-points the path at the root. `union` returns whether it merged.
 
 <CodeTabs files={['snippets/union-find.js']} java={['snippets/java/UnionFind.java']} python={['snippets/python/union_find.py']} />
 
-Here path compression flattens a chain, and a second find reuses the first one's work:
+Here a chain flattens, and the second find is one hop:
 
 <AlgoViz trace={pathCompression} />
 
-The recursive one-liner `if (parent[x] !== x) parent[x] = find(parent[x]); return parent[x];` compresses too, but the loop is safer in JavaScript: without union by rank, a chain of 100,000 nodes overflows the call stack.
+A recursive `find` works too, but the loop is safer in JavaScript: a chain of 100,000 nodes overflows the call stack.
 
 ## Template 2: count groups
 
-Start with `n` groups; every successful union removes exactly one, so what's left is the number of components. Isolated items need no special case.
+Start with `n` groups. Every successful union removes one, so what is left is the answer.
 
 <CodeTabs files={['snippets/count-groups.js']} java={['snippets/java/CountGroups.java']} python={['snippets/python/count_groups.py']} />
 
-This solves <ProblemLink slug="number-of-provinces" /> (union every 1 in the matrix) and <ProblemLink slug="number-of-connected-components" />. To list the groups, bucket each item under `find(i)`.
+This solves <ProblemLink slug="number-of-provinces" /> and <ProblemLink slug="number-of-connected-components" />.
 
 ## Template 3: cycle detection
 
-In an undirected graph, an edge whose ends already share a root closes a cycle. The first such edge is the last edge of the first cycle to form.
+An edge whose ends already share a root closes a cycle.
 
 <CodeTabs files={['snippets/cycle-edge.js']} java={['snippets/java/CycleEdge.java']} python={['snippets/python/cycle_edge.py']} />
 
-That is all of <ProblemLink slug="redundant-connection" />. <ProblemLink slug="graph-valid-tree" /> adds a counting fact: n nodes form a tree exactly when there are n - 1 edges and none closes a cycle. Directed cycles need [Topological Sort](/dsa/patterns/topological-sort) or a DFS with colours.
+That is all of <ProblemLink slug="redundant-connection" />. For <ProblemLink slug="graph-valid-tree" />, n nodes form a tree when there are n - 1 edges and none closes a cycle. Directed cycles need [Topological Sort](/dsa/patterns/topological-sort).
 
 ## Template 4: items that aren't numbers
 
-For emails, words or coordinates, keep `parent` in a `Map` and add each key on first sight. This version uses **union by size**: the smaller group joins the larger, which keeps trees just as shallow and gives every group's size for free.
+For emails or words, keep `parent` in a `Map` and add each key when you first see it. This version joins the smaller group to the larger (**union by size**), which also gives each group's size.
 
 <CodeTabs files={['snippets/keyed-union-find.js']} java={['snippets/java/KeyedUnionFind.java']} python={['snippets/python/keyed_union_find.py']} />
 
-For <ProblemLink slug="accounts-merge" />, union emails directly with this class, or union **account indices** with a `Map` from email to the first account that listed it.
+For <ProblemLink slug="accounts-merge" />, union the emails directly.
 
 ## Try it
 
@@ -106,15 +106,13 @@ For <ProblemLink slug="accounts-merge" />, union emails directly with this class
 
 ## Complexity
 
-| Version | find / union | Extra space |
+| Version | find / union | Space |
 |---|---|---|
-| Path compression + union by rank (or size) | O(α(n)) amortised, effectively O(1) | O(n) |
-| Union by rank only | O(log n) worst case | O(n) |
-| Path compression only | O(log n) amortised | O(n) |
-| Neither (always link a under b) | O(n) worst case: trees become chains | O(n) |
-| n items, m unions and finds, both tricks | O(n + m α(n)) total | O(n) |
+| Both tricks | almost O(1) | O(n) |
+| One trick only | O(log n) | O(n) |
+| Neither | O(n): trees become chains | O(n) |
 
-Kruskal's MST is dominated by sorting the edges: O(E log E).
+Kruskal's MST is dominated by sorting: O(E log E).
 
 ## JavaScript you'll use
 
@@ -128,33 +126,30 @@ const id = (r, c) => r * cols + c;                      // grid cell → item nu
 const uf = new UnionFind(n + 1);                        // labels 1 … n: one extra slot
 ```
 
-The JavaScript trap is recursion depth: a recursive `find` on a long chain throws `RangeError: Maximum call stack size exceeded`.
+The trap: a recursive `find` on a long chain throws `RangeError: Maximum call stack size exceeded`.
 
 <Callout kind="warning">
 
-- Linking the items instead of their roots: `parent[a] = b` cuts `a` out of its tree and leaves the rest behind.
-- Lowering `count` on every union call, including the ones that return `false`.
-- Labels that start at 1 with arrays of size n: node `n` has no slot. Allocate `n + 1`.
+- Linking the items instead of their roots: `parent[a] = b` cuts `a` out of its tree.
+- Lowering `count` when `union` returned `false`.
+- Labels that start at 1: allocate `n + 1` slots.
 
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
-  <FollowUp q="Union-find or BFS/DFS for connected components: which would you pick?">
-    On a fixed graph both are linear, and BFS/DFS also gives paths. Union-find wins when edges **arrive over time**: each answer is near-constant, where BFS would start again.
+  <FollowUp q="Union-find or BFS/DFS for connected components?">
+    On a fixed graph both are linear. Union-find wins when edges **arrive over time**: each answer is near-instant, where BFS would start again.
   </FollowUp>
   <FollowUp q="Can union-find remove an edge?">
-    Not directly. With all queries known, run them **offline in reverse** so deletions become additions; for last-in-first-out undo, skip compression and keep a stack of links to restore.
+    Not directly. If you know all queries, run them **in reverse** so deletions become additions.
   </FollowUp>
-  <FollowUp q="How would you find the size of the largest group?">
-    Union by size: add the smaller `size` to the larger root on each merge and track the maximum. `size[find(x)]` counts x's group.
+  <FollowUp q="How do you find the size of the largest group?">
+    Union by size: add the smaller size to the larger root on each merge, and track the maximum.
   </FollowUp>
   <FollowUp q="How does Kruskal's algorithm use union-find?">
-    Sort edges by weight and take one only if `union(a, b)` returns `true` (otherwise it closes a cycle), stopping at n - 1 edges. Sorting is O(E log E); the unions are almost free.
-  </FollowUp>
-  <FollowUp q="How do you use union-find on a grid, for example islands appearing one cell at a time?">
-    Number cells `r * cols + c`. New land adds a group (count + 1) and unions with each land neighbour (count - 1 per merge): about O(k) for k additions, not a flood fill each time.
+    Sort edges by weight. Take an edge only if `union(a, b)` returns `true`. Stop at n - 1 edges.
   </FollowUp>
 </FollowUps>
 

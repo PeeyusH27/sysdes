@@ -143,6 +143,13 @@ describe("simulate: losing one instance, and side calls from a gateway", () => {
     expect(simulate(mk(1), e, { lose: new Set(["k"]) }).errorsPerSec).toBeCloseTo(1000);
     expect(simulate(mk(2), e, { lose: new Set(["k"]) }).errorsPerSec).toBe(0);
   });
+  it("an edge's share sends only part of the traffic down it", () => {
+    const g = [node("c", "client", { qps: 1000, readRatio: 1 }), node("a", "service", { replicas: 2 }), node("s", "search"), node("q", "queue")];
+    const r = simulate(g, [edge("c", "a"), edge("a", "s", { share: 0.1 }), edge("a", "q", { share: 0.3, async: true })]);
+    expect(r.nodes.a.qps).toBeCloseTo(1000);
+    expect(r.nodes.s.qps).toBeCloseTo(100);
+    expect(r.nodes.q.qps).toBeCloseTo(300);
+  });
   it("adds the cache's latency to the gateway's own and averages the services", () => {
     const g = [node("c", "client", { qps: 10 }), node("g", "gateway"), node("k", "cache"), node("s", "service")];
     const r = simulate(g, [edge("c", "g"), edge("g", "k"), edge("g", "s")]);

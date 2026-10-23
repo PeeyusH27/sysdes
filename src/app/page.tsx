@@ -1,11 +1,9 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { ArrowDown, ArrowRight, BookA, BookOpen, Boxes, Binary, Braces, Code2, FileQuestion, Gauge, Hammer, Library, Network, Zap } from "lucide-react";
+import { ArrowDown, ArrowRight, Binary, ClipboardCheck, Network, Zap } from "lucide-react";
 import { deepDives, learnSteps, questions } from "@content/registry";
 import { jsTopics, patterns } from "@content/dsa/registry";
-import { lldLessons } from "@content/lld/registry";
 import { shorts } from "@content/shorts";
-import { glossary } from "@content/glossary";
 import { playLabs, playSimulators, requestJourney, type PlayArt, type PlayItem } from "@content/home";
 import { pairSum } from "@content/dsa/patterns/02-two-pointers/viz";
 import { FlowDiagram } from "@/components/diagram/FlowDiagram";
@@ -16,59 +14,29 @@ import { LegacyHashRedirect, NextUp, TrackMeter } from "./home-client";
 
 export default function Home() {
   const problems = problemRows();
-  const designLessons = learnSteps.length + deepDives.length + questions.length;
-  const corners: { href: string; label: string; count: string; blurb: string; Icon: typeof BookOpen; track: "sd" | "dsa" | "shorts" }[] = [
-    { href: "/learn", label: "HLD path", count: `${learnSteps.length} steps`, blurb: "Rough numbers to full case studies", Icon: BookOpen, track: "sd" },
-    { href: "/deep-dives", label: "Deep dives", count: `${deepDives.length} techniques`, blurb: "The ideas interviewers circle back to", Icon: Library, track: "sd" },
-    { href: "/questions", label: "Interview questions", count: `${questions.length} questions`, blurb: "LLD and HLD, answered in full", Icon: FileQuestion, track: "sd" },
-    { href: "/lld", label: "Low-level design", count: `${lldLessons.length} foundations`, blurb: "Classes, patterns and coding exercises", Icon: Boxes, track: "sd" },
-    { href: "/playground", label: "Playground", count: "Graded", blurb: "Drag boxes, simulate load, get a score", Icon: Hammer, track: "sd" },
-    { href: "/cheatsheet", label: "Cheatsheet", count: "Numbers", blurb: "Latencies and formulas worth memorising", Icon: Gauge, track: "sd" },
-    { href: "/glossary", label: "Glossary", count: `${glossary.length} terms`, blurb: "Every term in one line", Icon: BookA, track: "sd" },
-    { href: "/dsa/js", label: "JS cheat sheet", count: `${jsTopics.length} topics`, blurb: "The syntax you reach for under pressure", Icon: Braces, track: "dsa" },
-    { href: "/dsa/patterns", label: "Patterns", count: `${patterns.length} patterns`, blurb: "Walkthrough, template and lab for each", Icon: Binary, track: "dsa" },
-    { href: "/dsa/problems", label: "Problems", count: `${problems.length} problems`, blurb: "Hidden tests run in your browser", Icon: Code2, track: "dsa" },
-    { href: "/shorts", label: "Shorts", count: `${shorts.length} shorts`, blurb: "One idea a minute, swipe for more", Icon: Zap, track: "shorts" },
-  ];
-
   return (
     <div className="container home">
       <LegacyHashRedirect />
 
       <section className="h-hero" aria-labelledby="home-title">
         <div className="h-hero-copy">
-          <p className="eyebrow">Coding and system design interviews</p>
+          <p className="eyebrow">Interview prep, at your pace</p>
           <h1 id="home-title">
             Watch it run.
             <br />
             <span className="h-mark">Then run it yourself.</span>
           </h1>
           <p className="h-lede">
-            {patterns.length} coding patterns and a {learnSteps.length}-step system design path. Every idea comes with an animation you can step through and a
-            simulator you can break.
+            Nervous about the interview? Start anywhere. Every idea comes with an animation you can step through and a simulator you can break.
           </p>
           <div className="hero-cta">
             <a href="#tracks" className="btn btn-primary">
               Choose your track <ArrowDown size={16} aria-hidden />
             </a>
-            <Link href="/shorts" className="btn">
-              <Zap size={16} aria-hidden /> Try a one-minute short
+            <Link href="/plan" className="link">
+              <ClipboardCheck size={16} aria-hidden /> Plan my prep
             </Link>
           </div>
-          <ul className="h-stats">
-            <li>
-              <b>{patterns.length}</b> patterns
-            </li>
-            <li>
-              <b>{problems.length}</b> problems
-            </li>
-            <li>
-              <b>{designLessons}</b> design lessons
-            </li>
-            <li>
-              <b>{shorts.length}</b> shorts
-            </li>
-          </ul>
         </div>
         <div className="h-stage">
           <div className="h-pane" data-track="sd">
@@ -105,7 +73,7 @@ export default function Home() {
             <Link href="/dsa" className="btn btn-primary">
               Start the DSA track <ArrowRight size={16} aria-hidden />
             </Link>
-            <Link href="/dsa/patterns" className="btn">
+            <Link href="/dsa/patterns" className="link">
               Browse patterns
             </Link>
           </div>
@@ -129,7 +97,7 @@ export default function Home() {
             <Link href="/learn" className="btn btn-primary">
               Start the HLD path <ArrowRight size={16} aria-hidden />
             </Link>
-            <Link href="/system-design" className="btn">
+            <Link href="/system-design" className="link">
               Track overview
             </Link>
           </div>
@@ -140,31 +108,10 @@ export default function Home() {
         <div className="h-head">
           <p className="eyebrow">Play with it</p>
           <h2 id="play-title">Break things on purpose</h2>
-          <p>Simulators for the classic design questions, a lab for every pattern. Push a slider until something gives.</p>
+          <p>Push a slider until something gives. You learn the limits faster when you find them yourself.</p>
         </div>
         <PlayRow id="play-sd" title="System design simulators" track="sd" items={playSimulators} />
         <PlayRow id="play-dsa" title="DSA labs" track="dsa" items={playLabs} />
-      </section>
-
-      <section className="h-corners" aria-labelledby="corners-title">
-        <div className="h-head">
-          <p className="eyebrow">Everything</p>
-          <h2 id="corners-title">Every corner of the site</h2>
-        </div>
-        <ul className="corner-grid">
-          {corners.map(({ href, label, count, blurb, Icon, track }) => (
-            <li key={href}>
-              <Link href={href} className="corner card-link" data-track={track}>
-                <span className="corner-icon">
-                  <Icon size={18} aria-hidden />
-                </span>
-                <span className="corner-name">{label}</span>
-                <span className="corner-count">{count}</span>
-                <span className="corner-blurb">{blurb}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
       </section>
 
       <section className="h-shorts" aria-labelledby="shorts-title">

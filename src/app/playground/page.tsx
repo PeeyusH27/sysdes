@@ -28,7 +28,7 @@ export default function PlaygroundHub() {
           Design it, <span className="grad">then break it</span>
         </h1>
         <p className="lede">
-          {challenges.length} challenges graded on the decisions interviewers look for. New to this? Take a guided mission: a naive design, one scenario at a time, and a coach. Or start from a brief, or open the sandbox.
+          {challenges.length} challenges, graded on the decisions interviewers look for. New to this? Start with a guided mission and a coach beside you.
         </p>
         <ul className="hub-facts">
           <li>

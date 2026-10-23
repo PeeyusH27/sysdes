@@ -5,6 +5,9 @@ import createMDX from "@next/mdx";
 const nextConfig: NextConfig = {
   // Lets several local builds coexist (e.g. NEXT_DIST_DIR=.next-layout); defaults to .next.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  experimental: {
+    agentUpgrade: "latest",
+  },
   pageExtensions: ["js", "jsx", "ts", "tsx", "md", "mdx"],
   turbopack: {
     root: process.cwd(),
@@ -22,7 +25,7 @@ const nextConfig: NextConfig = {
 const withMDX = createMDX({
   options: {
     remarkPlugins: ["remark-gfm"],
-    rehypePlugins: ["rehype-slug", path.join(process.cwd(), "src/lib/mdx/rehype-section-cards.mjs")],
+    rehypePlugins: ["rehype-slug", path.join(process.cwd(), "src/lib/mdx/rehype-glossary.mjs"), path.join(process.cwd(), "src/lib/mdx/rehype-section-cards.mjs")],
   },
 });
 

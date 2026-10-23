@@ -2,96 +2,88 @@ import { leaderReplication } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-CAP: in a network split, a replicated system refuses some requests (**consistency**) or risks stale answers (**availability**); PACELC: even a healthy network trades latency for consistency. Pick per feature: strong for money and stock, read-your-writes for your own edits, eventual for counters and feeds.
+When the network splits, a system must either refuse some requests (**consistency**) or answer with possibly stale data (**availability**). Pick per feature: strong for money, read-your-writes for your own edits, eventual for counters.
 </TLDR>
 
 ## Why it matters
 
-Your data lives on three machines. A switch dies. Which copy is the truth?
+<Doodle name="replica" size={150} caption />
 
-Replication survives dead servers and scales reads, but copies lag and partitions let them diverge. So ask: what may a user see when the network breaks?
+Your data lives on three machines. A switch dies. Now two copies disagree, and users may see either.
 
-Play **Normal replication**, then **Partition: CP choice** and **Partition: AP choice**: one split, two opposite answers.
+Copies survive dead servers, but they lag, and a split lets them drift apart.
+
+Play **Partition: CP choice**, then **Partition: AP choice**: one split, two opposite answers.
 
 <FlowDiagram spec={leaderReplication} />
 
 ## CAP, stated precisely
 
-Switches fail, cables get cut, and a long GC pause looks exactly like a dead node. So "pick 2 of 3" is wrong: you pick C or A **for the moment a partition happens**; a healthy network gives you both.
+When the network splits, each side cannot hear the other. Each side must choose:
 
-- **Consistency** (C): every read sees the latest write, as if there were one copy. The minority side must refuse or block.
-- **Availability** (A): every live node answers, maybe stale, and writes on both sides may conflict.
+- **Consistency**: refuse or wait, so nobody reads old data.
+- **Availability**: keep answering, even if the answer is stale.
 
-A bank ledger leans CP: "try again later" beats two ATMs across a split paying out the same money. A social feed leans AP: a like count a few seconds stale beats an error page.
+A bank picks consistency. Two data centers lose their link while you and your partner each withdraw the last 100: if both sides pay, the bank loses 100. "Try again later" is cheaper. A like count picks availability: showing 1,204 instead of 1,207 hurts nobody.
 
-CAP's C is linearizability, unrelated to ACID's C (constraints).
+So "pick 2 of 3" is wrong. You choose only while the network is split. When it is healthy, you get both.
 
 ## PACELC: the trade-off you pay every day
 
-Partitions are rare. Latency hits every request.
+Splits are rare. Waiting on another region happens on every request: about 70 to 100 ms across the Atlantic.
 
-PACELC: if Partitioned, choose Availability or Consistency; **Else, choose Latency or Consistency**. Waiting on another region costs a round trip (about 70–100 ms across the Atlantic). Async replication skips it, but replica reads may be stale and a leader crash can lose the last few writes.
+So even on a good day you choose: a fast answer from a nearby copy that may be stale, or a slower answer that is always fresh. This extra rule is **PACELC**.
 
-| System | Partition | Else |
+Do the sum: a page that makes 5 reads from a far-away leader waits roughly 5 × 80 = 400 ms. Reading a local copy costs a few ms each. Pay that wait for balances, not for like counts.
+
+| System | During a split | Otherwise |
 |---|---|---|
-| Cassandra, Riak, Dynamo-style stores | Available (PA) | Low latency (EL) |
-| Spanner, etcd, CockroachDB | Consistent (PC) | Consistent (EC) |
-| Postgres + async replicas | Leader side keeps working | Fast replica reads, may lag |
-
-Per-request knobs buy consistency with latency: Cassandra `QUORUM` reads and writes, DynamoDB strongly consistent reads.
+| Cassandra, Dynamo-style | Stays available | Fast |
+| Spanner, etcd | Stays consistent | Consistent |
+| Postgres + async replicas | Leader side works | Fast, may lag |
 
 ## Consistency models: a ladder
 
-"Strong consistency" isn't one thing. Strongest first:
+"Strong" is not one thing. Strongest first; each rung down is faster, with more surprises:
 
 | Model | Guarantee | Example |
 |---|---|---|
-| **Linearizable** | Reads see the latest completed write, like one copy | etcd or leader reads; seats, balances |
+| **Linearizable** | Reads see the latest write, like one copy | Seats, balances |
 | **Sequential** | One write order for all, maybe late | ZooKeeper read without `sync` |
-| **Causal** | If B depends on A, all see A first | Comment replies; MongoDB causal sessions |
-| **Read-your-writes / monotonic reads** | You see your writes; time never rewinds | Your profile edit; pin to one replica |
-| **Eventual** | Converge once writes stop; no deadline | Likes, view counts, DNS |
-
-Each rung down is faster and more available, with more surprises. Most features don't need the top.
+| **Causal** | If B depends on A, all see A first | Comment replies |
+| **Read-your-writes** | You see your own writes | Your profile edit |
+| **Eventual** | Converge once writes stop | Likes, DNS |
 
 ## Quorums
 
-How many replicas must answer before you trust a read?
+Each fact is saved on N copies. How many must answer before you trust a read?
 
-Writes wait for **W** of **N** replicas; reads ask **R** and keep the newest version. If **R + W > N**, every read set overlaps the latest write set.
+A write waits for **W** copies. A read asks **R** copies and keeps the newest. If **R + W is more than N**, every read touches at least one copy with the latest write.
 
-| N, W, R | Survives down (writes / reads) | Good for |
-|---|---|---|
-| 3, 2, 2 | 1 / 1 | The balanced default |
-| 3, 3, 1 | 0 / 2 | Read-heavy, rare writes |
-| 3, 1, 1 | 2 / 2 | Speed; reads may be stale |
-| 5, 3, 3 | 2 / 2 | Higher durability |
-| 5, 3, 2 | 2 / 3 | A trap: 3 + 2 is not more than 5 |
+| N, W, R | Good for |
+|---|---|
+| 3, 2, 2 | The balanced default; one node can be down |
+| 3, 1, 1 | Speed; reads may be stale |
+| 5, 3, 2 | A trap: 3 + 2 is not more than 5 |
 
-**Sloppy quorums** (Dynamo-style): stand-in nodes take writes for unreachable replicas and hand them back later (hinted handoff). Writes stay up, but R + W > N no longer guarantees overlap; read repair and Merkle-tree anti-entropy clean up. Even strict quorums leak (concurrent writes, partial failures, clock-based conflict resolution): true linearizability needs consensus.
+A **sloppy quorum** lets stand-in nodes take writes during failures. Writes stay up, but the overlap guarantee is gone.
 
-In the playground, set R + W equal to N, write, then read a few times: the guarantee is gone.
+Set R + W equal to N, write, then read a few times. The guarantee is gone.
 
 <QuorumPlayground />
 
 ## Conflict resolution
 
-Multi-leader, leaderless or AP: two replicas took writes to the same key. Who wins?
+Two replicas took writes to the same key. Who wins?
 
-- **Last-writer-wins (LWW).** Highest timestamp wins; the other write silently vanishes, and clock skew can pick the wrong one. Fine for caches and "last seen at", wrong for carts and counters.
-- **Vector clocks.** A counter per node separates "A before B" (keep B) from "concurrent" (keep both siblings for the app). Detects conflicts; doesn't resolve them.
-- **CRDTs.** Commutative, associative, idempotent merges converge in any order, uncoordinated: G-Counter, PN-Counter, OR-Set (a cart), sequence CRDTs for co-editing (Yjs, Automerge).
-- **App-level merges.** Union the cart, keep the higher bid, or flag a human, like a git merge.
+- **Last-writer-wins.** Highest timestamp wins; the other write silently vanishes. Fine for "last seen", wrong for carts.
+- **Vector clocks.** Spot "at the same time" writes. They detect conflicts; they do not fix them.
+- **CRDTs.** Data types that merge to the same result in any order: counters, carts, co-edited text.
+- **App-level merge.** Union the cart, or ask a human.
 
 ## Consensus
 
-Some questions need exactly one answer: who leads, who holds the lock. Raft and Paxos elect a leader by majority and agree on an ordered log. Raft in five bullets:
-
-1. **Terms.** At most one leader per numbered term; seeing a higher term makes a stale leader step down.
-2. **Randomised timeouts.** No heartbeat for a random 150–300 ms? Stand as candidate. One node usually fires first, so votes rarely split.
-3. **Majority votes.** One vote per node per term, only for a candidate whose log is at least as up to date.
-4. **Log replication.** The leader appends client commands and replicates them.
-5. **Commit index.** An entry commits once a majority stores it, so it survives losing any minority.
+Some questions need exactly one answer: who leads, who holds the lock. **Raft** picks a leader by majority vote and keeps one ordered log. An entry is safe once a majority stores it, so any minority can be lost.
 
 | Nodes | Majority | Failures tolerated |
 |---|---|---|
@@ -100,53 +92,50 @@ Some questions need exactly one answer: who leads, who holds the lock. Raft and 
 | 5 | 3 | 2 |
 | 7 | 4 | 3 |
 
-Hence **odd cluster sizes**: a 4th node costs money and can fail, yet tolerates no more failures than 3. You'll use consensus, not build it: etcd (locks, config, Kubernetes' state), ZooKeeper (ZAB; older Kafka), Kafka KRaft (Raft, replaced ZooKeeper), Consul, CockroachDB and TiKV (Raft per range).
+So use **odd cluster sizes**: a 4th node tolerates no more failures than 3. You will use consensus (etcd, ZooKeeper), not build it.
 
-Press **Kill leader** and watch a new term begin. Then **Partition a node**: alone, it can't win.
+Press **Kill leader** and watch a new term begin. Then **Partition a node**: alone, it cannot win.
 
 <RaftElection />
 
 ## Distributed transactions: 2PC or sagas
 
-One order touches payments, stock and shipping. All at once, or eventually?
+One order touches payments, stock and shipping.
 
-**Two-phase commit (2PC):** a coordinator asks every participant to *prepare* (lock rows, vote), then to *commit* if all voted yes. Third-party APIs and most microservices don't speak the protocol. **Sagas** chain local transactions with compensations (refund, release stock), as in [Step 5](/learn/async-messaging).
+**Two-phase commit (2PC):** a coordinator asks everyone to prepare (lock rows, vote), then to commit if all said yes. **Sagas** chain local steps with undo steps (refund, release stock), as in [Step 5](/learn/async-messaging).
 
 | | 2PC | Saga |
 |---|---|---|
-| Atomicity | All or nothing | Eventually, via compensations |
-| Isolation | Locks held through both phases | None: intermediate states visible |
-| Coordinator dies after prepare | Participants block, holding locks | Saga resumes from its log |
-| Fits | Inside one database cluster | Across services and external APIs |
-
-Spanner and CockroachDB run 2PC internally, but each participant is a consensus group, so no single failure strands the locks.
+| Atomic | All or nothing | Eventually, via undo steps |
+| If coordinator dies | Participants block, holding locks | Saga resumes from its log |
+| Fits | One database cluster | Across services |
 
 ## Distributed locks need fencing tokens
 
-A lock with a lease (expiry) isn't enough:
+A lock with an expiry is not enough:
 
-1. Client 1 takes the lock with a 10 s lease.
-2. A 15 s garbage-collection pause (or slow network) freezes it. The lease expires.
-3. Client 2 takes the lock and writes the file.
-4. Client 1 wakes, still "holding" the lock, and overwrites Client 2's work.
+1. Client 1 takes a 10 s lock, then freezes for 15 s (a garbage-collection pause). The lock expires.
+2. Client 2 takes the lock and writes.
+3. Client 1 wakes, still thinks it holds the lock, and overwrites Client 2.
 
-Client 1 can't see its own pause, so **storage** checks: each grant carries a strictly increasing **fencing token** (etcd revision, ZooKeeper zxid), and storage rejects writes with an older one. A Redis lock is fine for efficiency (avoiding duplicate work); for correctness, fence the storage.
+Client 1 cannot see its own pause, so **storage** checks. Each grant carries an ever-increasing **fencing token**, and storage rejects any older one. A Redis lock is fine to avoid duplicate work. For correctness, fence the storage.
 
 ## What each feature needs
 
-| Feature | Consistency |
-|---|---|
-| Account balance, payments | Strong (linearizable) |
-| Inventory at checkout | Strong (conditional update) |
-| A user's own profile edit | Read-your-writes |
-| Chat messages in a conversation | Per-conversation order (causal) |
-| Likes, views, follower counts | Eventual |
+Do not pick one level for the whole product. Pick per feature.
 
-Real systems mix levels. The [movie booking question](/questions/movie-booking) applies this to seats.
+| Feature | Consistency | Why |
+|---|---|---|
+| Balance, payments, checkout stock | Strong | A stale read means double-spending |
+| Your own profile edit | Read-your-writes | Seeing your old name after saving looks broken |
+| Chat in one conversation | Same order for everyone | A reply before its question confuses |
+| Likes and views | Eventual | Off by a few for seconds is harmless |
+
+The [movie booking question](/questions/movie-booking) applies this to seats.
 
 ## Code
 
-In `crdt.js`, LWW is one line and loses data; the G-Counter loses no concurrent increment. `fenced-lock.js` issues tokens; the SQL in its comment is the storage-side check.
+In `crdt.js`, last-writer-wins loses data; the counter CRDT does not. `fenced-lock.js` issues tokens.
 
 <CodeTabs files={['snippets/quorum.js', 'snippets/crdt.js', 'snippets/vector-clock.js', 'snippets/fenced-lock.js']} />
 
@@ -160,19 +149,19 @@ In `crdt.js`, LWW is one line and loses data; the G-Counter loses no concurrent 
 
 <FollowUps>
   <FollowUp q="When would you choose eventual consistency?">
-    When stale reads are harmless and latency or availability matter more: likes, views, feeds. Never for money or checkout stock.
+    When stale reads are harmless: likes, views, feeds. Never for money or checkout stock.
   </FollowUp>
   <FollowUp q="Explain CAP with an example.">
-    Two replicas lose their link; if both keep selling seats (AP), one seat sells twice. Ticketing picks CP: the minority side refuses writes until the link heals.
+    Two replicas lose their link. If both keep selling seats, one seat sells twice. So ticketing refuses writes on the minority side.
   </FollowUp>
   <FollowUp q="How do you get read-your-writes on an eventually consistent store?">
-    Read from the leader or a quorum for a few seconds after writing, from a replica caught up to your write's version, or overlay recent writes from a session cache.
+    For a few seconds after a write, read from the leader or a replica that has caught up to your write.
   </FollowUp>
   <FollowUp q="Why do distributed locks need fencing tokens?">
-    A paused client can't tell its lease expired and may write after the new owner. Increasing tokens let storage reject that stale write.
+    A paused client cannot tell its lock expired. Increasing tokens let storage reject its stale write.
   </FollowUp>
   <FollowUp q="2PC or a saga?">
-    2PC is atomic but blocks if the coordinator dies, so keep it inside one database cluster. Across services and third-party APIs, use sagas: eventually consistent, but available.
+    2PC is atomic but blocks if the coordinator dies, so keep it inside one database cluster. Across services, use sagas.
   </FollowUp>
 </FollowUps>
 

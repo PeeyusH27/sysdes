@@ -2,23 +2,35 @@ import { shardRouter, nodeCounts, moduloMovedPct, ringMovedPct } from './diagram
 import { quiz } from './quiz'
 
 <TLDR>
-Shard only when one primary can't hold the data or the writes. The **shard key** (high cardinality, matches your main query) matters more than the scheme; consistent hashing moves only ~1/N of keys when a node joins.
+Shard only when one database can't hold the data or the writes. The **shard key** matters more than the scheme; consistent hashing moves only about 1/N of keys when a node joins.
 </TLDR>
 
 ## When to shard
 
-Sharding is the last resort: joins, transactions, unique constraints and schema changes get harder forever. Spend the cheap options first:
+One database is one checkout till. **Sharding** opens more tills: it splits the data across several databases (**shards**), each holding a slice.
 
-1. **Vertical scaling:** hundreds of GB of RAM, tens of thousands of writes per second.
-2. **Indexes:** most "slow database" problems are a missing one.
-3. **Caching** and **read replicas** (if you can stand replication lag) for reads.
-4. **Archiving** cold rows (old orders, logs) to cheaper storage.
+It is the last resort, because joins, transactions and schema changes get harder forever. Try the cheap fixes first:
+
+1. A bigger machine.
+2. Indexes. Most "slow databases" are missing one.
+3. Caching and read replicas for reads.
+4. Archiving cold rows.
 
 Shard when **writes** or **data size** outgrow one primary, rarely for reads alone.
 
+**Do the sum first.** 500 million users at 5 KB each is 2.5 TB. That fits on one big machine, so size alone is a weak reason. Writes are the usual one.
+
+| Your system | Shard? | Why |
+|---|---|---|
+| 200 GB, 2K writes a second | No | One tuned primary copes |
+| 2.5 TB, 3K writes a second | Not yet | Try a bigger machine, replicas, a cache |
+| 5 TB, 50K writes a second | Yes | One primary cannot take the writes |
+
+The numbers are rough. A tuned primary often handles a few thousand writes a second; tens of thousands is where sharding starts to pay for its pain.
+
 ## How a request finds its shard
 
-A shard router (an app library, or a proxy such as Vitess or `mongos`) maps the shard key to a shard. Play the diagram's four scenarios.
+A **shard router** (a library or a proxy) turns the shard key into a shard, like a mail sorter reading the postcode. Play the four scenarios.
 
 <FlowDiagram spec={shardRouter} />
 
@@ -26,32 +38,42 @@ A shard router (an app library, or a proxy such as Vitess or `mongos`) maps the 
 
 The key decides which queries stay on one shard, and whether load spreads. A good key:
 
-- **Has high cardinality.** `country` has about 200 values: at most 200 useful shards, and one country dominates.
-- **Spreads evenly.** No value owns a big share of rows or traffic.
-- **Matches the dominant query.** Mostly "this user's orders"? Shard by `user_id`.
-- **Avoids hot ranges.** Timestamps and auto-increment ids pile new writes onto one shard.
+- **Has many values.** `country` has about 200, so 200 shards at most.
+- **Spreads evenly.** No value owns a big share of the traffic.
+- **Matches your main query.** Mostly "this user's orders"? Use `user_id`.
+- **Avoids hot ranges.** Timestamps and auto-increment ids pile new writes on one shard.
 
-Usual answer: `user_id` (`tenant_id` in SaaS). Two big access patterns? Store the data twice (orders by buyer **and** by seller).
+Try some keys for an orders table:
+
+| Key | Verdict | Why |
+|---|---|---|
+| `user_id` | Good | Many values, spread evenly, one user's orders stay together |
+| `country` | Weak | About 200 values, and one country can hold most users |
+| `is_premium` | Bad | Two values means two shards, ever |
+| `created_at` | Bad | Every new write lands on the newest shard |
+
+The usual answer is `user_id` (`tenant_id` in SaaS). Need two access patterns? Store the data twice.
 
 ## Strategies compared
 
-| Strategy | Spread and scans | Rebalancing cost | Typical use |
-|---|---|---|---|
-| Hash mod N | Even; no range scans | Moves ~all keys | Fixed shard count |
-| Range | Range scans; hot-range risk | Split or merge ranges | Time-series, ordered ids |
-| Directory | Manual; scans depend | Move one tenant at a time | Multi-tenant SaaS with "whales" |
-| Consistent hashing (+ vnodes) | Even; no range scans | ~1/N of the keys | Caches, Dynamo-style stores |
-| Rendezvous (HRW) | Even; no range scans | ~1/N of the keys | Small node sets, no ring to maintain |
+| Strategy | Good at | Cost of adding a node |
+|---|---|---|
+| Hash mod N | Even spread | Moves almost all keys |
+| Range | Range scans | Split or merge ranges |
+| Directory | Moving one big tenant | One tenant at a time |
+| Consistent hashing | Even spread | Moves about 1/N of keys |
 
-Kafka, Elasticsearch, Redis Cluster (16,384 slots) and Cassandra's vnodes dodge rebalancing with **fixed logical partitions**: far more than machines (say 1,024), keys mapped by `hash % 1024` (which never changes), whole partitions moved between machines.
+Redis Cluster dodges rebalancing with 16,384 fixed slots: whole slots move between machines, and keys never rehash.
 
 ## Consistent hashing, interactively
 
-Nodes and keys hash onto one circle; a key belongs to the first node clockwise. Add or remove a node in the ring: only neighbouring keys move. Then drag virtual nodes down to 1 and watch the bars drift from the ideal share (the readout shows max ÷ min).
+<Doodle name="consistent-hash" size={150} caption />
+
+Picture a clock face. Nodes and keys both land on it, and a key belongs to the next node clockwise. Add a node and only its neighbours' keys move. Drag virtual nodes (extra points per node) down to 1 and watch the load drift uneven.
 
 <HashRing />
 
-With `hash % N`, a key stays only if `hash mod N` equals `hash mod (N+1)`, so **N/(N+1)** of keys move. Consistent hashing moves only the new node's share, **1/(N+1)**.
+With `hash % N`, **N/(N+1)** of keys move when you add a node. A ring moves only **1/(N+1)**.
 
 <LineChart
   title="% of keys moved when going from N to N+1 nodes"
@@ -66,44 +88,44 @@ With `hash % N`, a key stays only if `hash mod N` equals `hash mod (N+1)`, so **
   yMax={100}
 />
 
-At 4 → 5 nodes, that's 80% versus 20%: the size of a cache's miss storm.
+At 4 to 5 nodes, that is 80% versus 20%: the size of a cache's miss storm.
 
 ## Cross-shard queries and transactions
 
-No shard key in the query? Every shard gets asked. Cope with:
+No shard key in the query? Every shard gets asked. "Top 10 posts today" on 64 shards is 64 calls for one question. Ways to cope:
 
-- **Scatter-gather** for admin and reporting: ask all shards in parallel, merge, re-sort, cut. The slowest shard sets the latency.
-- **A global secondary index** (`email → user_id`) that points at the shard.
-- **Denormalized or precomputed tables** fed by events, e.g. "top products".
+- **Scatter-gather** for admin and reports: ask all shards, then merge. The slowest shard sets the latency.
+- **A global index** (`email → user_id`) that points at the shard.
+- **Precomputed tables** fed by events.
 
-Cross-shard transactions are worse: two-phase commit is slow and blocks if the coordinator dies. **Design them away** by keeping data that changes together on one shard (orders and their line items). Must span shards? A **saga** chains local transactions, each with an undo (reserve stock, charge card; on failure, release the stock).
+Cross-shard transactions are worse: two-phase commit is slow. **Design them away** by keeping data that changes together on one shard. Otherwise use a **saga**: local transactions, each with an undo.
 
 ## Hot keys
 
-A good key can still have one scorching value: a celebrity's post, a flash-sale product. **Salt** it into N sub-keys (`likes:42:0` … `likes:42:15`) on different shards, write to a random one, sum on read. Reads cost N times more, so salt only measured hot keys, and cache hot reads in-process.
+One value can still be scorching. A celebrity with 100 million followers sends every like to one shard: that machine melts while the others idle. **Salt** it into N sub-keys (`likes:42:0` to `likes:42:15`): write to a random one, sum on read. Reads cost N times more, so salt only measured hot keys.
 
 ## Resharding without downtime
 
-Never stop the world: move the data while it serves traffic.
+Move the data while it serves traffic.
 
 <Steps>
   <Step title="Add the new shards">
-    Empty, with replicas, monitoring and backups, before any traffic moves.
+    Empty, before any traffic moves.
   </Step>
   <Step title="Dual-write">
-    Writes for moving keys go to both; the old shard stays the source of truth.
+    Moving keys write to both. The old shard stays the truth.
   </Step>
   <Step title="Backfill">
-    Copy old rows in batches with idempotent upserts, throttled to spare the old shard.
+    Copy old rows in throttled batches.
   </Step>
   <Step title="Verify">
-    Compare row counts and checksums per key range; shadow-read the new shard and diff.
+    Compare counts and checksums.
   </Step>
   <Step title="Flip reads">
-    Behind a feature flag, a few percent at a time. Flip back instantly if errors rise.
+    A few percent at a time, behind a flag.
   </Step>
   <Step title="Stop old writes and clean up">
-    Stop dual-writing, delete the moved rows. Only this step is irreversible.
+    Delete the moved rows. Only this step is irreversible.
   </Step>
 </Steps>
 
@@ -111,15 +133,13 @@ Never stop the world: move the data while it serves traffic.
 
 Two auto-increment primaries hand out the same id. Options:
 
-- **UUIDs:** random v4 fragments indexes; time-ordered UUIDv7 is fine.
-- **A central ticket server:** simple, but one more service to run.
-- **Snowflake ids:** 64 bits of timestamp, worker id and per-millisecond sequence. No coordination per id, roughly time-sorted, fits a `BIGINT`.
+- **UUIDs:** time-ordered UUIDv7 is fine; random v4 fragments indexes.
+- **A ticket server:** simple, but one more service.
+- **Snowflake ids:** timestamp, worker id and sequence in 64 bits. No coordination per id.
 
 ## Code
 
 ### Hash sharding
-
-The test: going from 4 to 5 shards moves 80% of 20K keys.
 
 <CodeBlock src="snippets/hash-shard.js" />
 
@@ -129,31 +149,19 @@ The test: going from 4 to 5 shards moves 80% of 20K keys.
 
 ### Directory (lookup) sharding
 
-Move one huge tenant alone, at the cost of an extra (cached) lookup.
-
 <CodeBlock src="snippets/directory-shard.js" />
 
 ### Consistent hashing
 
-Lookup is a binary search over the sorted virtual points, `O(log n)`, not a ring scan per request.
-
 <CodeBlock src="snippets/hash-ring.js" />
 
-The tests add a 5th node to 20K keys: 19% move, all to the new node. Removing a node moves only its keys.
-
 ### Rendezvous hashing
-
-Each key scores every node and takes the highest. No ring, no vnodes, one hash per node per lookup: fine for tens of nodes.
 
 <CodeBlock src="snippets/rendezvous.js" />
 
 ### Online resharding
 
-A sketch: the dual-write in code, the remaining steps as comments.
-
 <CodeBlock src="snippets/resharding.js" />
-
-If a new-shard write fails, the old shard still has the truth: verify finds the gap, backfill repairs it. Many teams use CDC from the old shard instead of app dual-writes for this reason.
 
 ### Scatter-gather
 
@@ -161,13 +169,9 @@ If a new-shard write fails, the old shard still has the truth: verify finds the 
 
 ### Hot-key salting
 
-One hot counter over 16 sub-keys, summed on read.
-
 <CodeBlock src="snippets/hot-key-salting.js" />
 
 ### Snowflake ids
-
-The tests check uniqueness, ordering, the bit layout, and the wait after 4,096 ids in one millisecond.
 
 <CodeBlock src="snippets/snowflake.js" />
 
@@ -179,19 +183,19 @@ The tests check uniqueness, ordering, the bit layout, and the wait after 4,096 i
 
 <FollowUps>
   <FollowUp q="What's the shard key for a multi-tenant SaaS?">
-    `tenant_id`, with a directory so the few huge tenants get their own shards and a global table for cross-tenant admin queries.
+    `tenant_id`, with a directory so huge tenants get their own shards.
   </FollowUp>
   <FollowUp q="How do you run queries that span shards?">
-    Keep them off hot paths: scatter-gather for admin and reporting, otherwise a global secondary index or precomputed tables fed by events.
+    Keep them off hot paths: scatter-gather for admin, else a global index.
   </FollowUp>
   <FollowUp q="How do you reshard without downtime?">
-    Add shards, dual-write, backfill, verify, flip reads behind a flag, then stop old writes; only the cleanup is irreversible.
+    Add shards, dual-write, backfill, verify, flip reads, stop old writes.
   </FollowUp>
   <FollowUp q="Why do you need virtual nodes?">
-    With one point per node, a node can own twice its fair share; many points even out the arcs and spread a dead node's keys over many survivors.
+    One point per node can leave a node with twice its share. Many points even it out and spread a dead node's keys over many survivors.
   </FollowUp>
   <FollowUp q="Hash or range sharding for time-series data?">
-    Hash by series (sensor or user) and sort by time inside each shard, or key by `(sensor_id, day)` so partitions stay bounded; pure range-by-time sends every write to the newest shard.
+    Hash by series and sort by time inside each shard. Pure range-by-time sends every write to the newest shard.
   </FollowUp>
 </FollowUps>
 

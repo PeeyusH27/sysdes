@@ -5,6 +5,7 @@ import { boundComponents } from "@/components/content/bound";
 import { getHeadings } from "@/lib/content";
 import { PatternsBehind } from "@/components/content/Bridges";
 import { patternsFor } from "@content/bridges";
+import { getExtras } from "@content/extras";
 
 export const dynamicParams = false;
 
@@ -43,6 +44,7 @@ export default async function LessonPage({ params }: PageProps<"/learn/[slug]">)
       prev={prev && { href: `/learn/${prev.slug}`, title: prev.title }}
       next={next && { href: `/learn/${next.slug}`, title: next.title }}
       nextNote={step.next}
+      extras={getExtras("learn", step.slug)}
     >
       <Body components={boundComponents(`learn/${step.dir}`)} />
       <PatternsBehind href={`/learn/${step.slug}`} />

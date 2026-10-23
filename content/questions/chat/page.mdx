@@ -2,7 +2,7 @@ import { architecture, chatSequence } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Clients hold a **WebSocket** to any gateway, and **Redis pub/sub** routes each message to the gateway holding the recipient. Every message gets a **per-conversation seq**, is **stored before it's acked**, and carries a client id that dedupes retries; offline users **sync from their last seq**.
+Each phone keeps a **WebSocket** open to a gateway, and **pub/sub** passes each message to the gateway holding the recipient. Store the message first, then ack, then deliver. A client that was offline asks for what it missed.
 </TLDR>
 
 <Requirements
@@ -13,25 +13,24 @@ Clients hold a **WebSocket** to any gateway, and **Redis pub/sub** routes each m
 
 ## Clarifying questions to ask
 
-- **Groups?** 50, 500 or 100K members? Size decides fan-out on write or on read.
-- **Receipts and devices?** Delivery and read receipts, per member or a count? Does my phone's message appear on my laptop?
-- **History and encryption?** Forever or 90 days, searchable on the server? End-to-end encryption moves search, previews and moderation to the client.
-- **Scale?** DAU, messages per user per day, peak **concurrent** connections.
-- **Media?** Which types, how large?
+- **Groups?** 50, 500 or 100K members? Size decides how you fan out.
+- **Receipts and devices?** Delivered and read ticks? Does my phone's message show on my laptop?
+- **History and encryption?** Kept forever? End-to-end encryption moves search to the client.
+- **Scale?** Daily users, and how many are connected at once.
 
 ## Capacity estimate
 
 | Quantity | Calculation | Result |
 |---|---|---|
 | Messages | 50M DAU × 40 messages/day = 2B/day | ≈ **23K/s** (≈ 70K/s peak) |
-| Storage | 2B × ~200 B | ≈ 400 GB/day, ≈ 146 TB/year before replication |
+| Storage | 2B × ~200 B | ≈ 400 GB/day |
 | Connections | 10M concurrent ÷ ~50K per gateway | ≈ **200 gateway nodes** |
 
-The write rate is modest: one sharded database handles it. **Concurrent connections** shape the design. They're long-lived and stateful, so you scale by adding gateways and routing between them.
+At roughly 10 KB per idle socket, 10M sockets need about 100 GB of memory across the gateways. The write rate is modest. **Open connections** shape the design: they last long and hold state, so you scale by adding gateways.
 
 <CapacityCalculator preset="chat" />
 
-The preset counts each message as one write plus about one history read (80 actions per user per day, read/write ratio 1).
+The preset counts each message as one write plus about one history read.
 
 ## API
 
@@ -52,15 +51,15 @@ REST for the rest:
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/conversations` | Mine, with unread counts (`lastSeq − lastReadSeq`) |
-| GET | `/conversations/:id/messages?before=SEQ&limit=50` | History page, newest first, by seq cursor |
+| GET | `/conversations` | Mine, with unread counts |
+| GET | `/conversations/:id/messages?before=SEQ&limit=50` | History, newest first |
 | POST | `/uploads` | A presigned upload URL and the object key |
 
-Authenticate **during the HTTP upgrade** (session cookie or short-lived token), so no frame is ever processed for an unknown user.
+Check who the user is **during the HTTP upgrade**, so no frame is ever processed for a stranger.
 
 ## Data model
 
-MongoDB at moderate scale: messages are append-only and always read by conversation and seq.
+Messages are append-only and always read by conversation and seq.
 
 ```js
 // messages: one document per message
@@ -73,7 +72,7 @@ MongoDB at moderate scale: messages are append-only and always read by conversat
 
 <CodeBlock src="snippets/indexes.js" title="indexes.js" />
 
-At very large scale, Cassandra (or ScyllaDB) fits exactly, as in the CQL table: one partition per conversation, rows clustered by seq. For years-long conversations, add a time bucket to the partition key so no partition grows without bound.
+At very large scale, Cassandra fits: one partition per conversation, rows clustered by seq.
 
 ```sql
 CREATE TABLE messages (
@@ -87,25 +86,35 @@ CREATE TABLE messages (
 ) WITH CLUSTERING ORDER BY (seq DESC);
 ```
 
-Ephemeral state lives in Redis:
+Short-lived state lives in Redis:
 
 | Key | Type | Purpose |
 |---|---|---|
-| `seq:CONVERSATION_ID` | counter | `INCR` gives the conversation's next seq |
-| `user:USER_ID` | pub/sub channel | Every gateway holding a socket for that user subscribes |
-| `presence:USER_ID` | string, `EX 70` | Exists while the user's heartbeats keep arriving |
+| `seq:CONVERSATION_ID` | counter | `INCR` gives the next seq |
+| `user:USER_ID` | pub/sub channel | Every gateway holding that user's socket subscribes |
+| `presence:USER_ID` | string, `EX 70` | Exists while heartbeats keep arriving |
 
 ## Architecture
 
-Gateways are dumb socket-holders that don't know each other. Each subscribes to `user:ID` for the users it holds, and the chat service publishes every stored message to each member's channel. Pub/sub is fire-and-forget, which is fine: the **database is the source of truth** and sync repairs misses. Play **Bob offline** and **Ack lost → retry** to see both repairs.
+<Doodle name="pubsub" size={150} caption />
+
+Why sockets, not polling? Ask every 5 seconds and a message waits 2.5 seconds on average, and most answers are empty.
+
+| Users | Polling every 5 s | Verdict |
+|---|---|---|
+| 1,000 | 200 requests/s | Polling is fine |
+| 100,000 | 20,000/s, mostly empty | Long polling, or sockets |
+| 10M | 2M requests/s | WebSockets |
+
+Gateways just hold sockets and don't know each other. Each listens on a channel per connected user, and the chat service publishes every stored message there. Pub/sub can drop a message, and that is fine: the **database is the truth**, and sync repairs misses. Play **Bob offline** and **Ack lost → retry**.
 
 <FlowDiagram spec={architecture} />
 
-The sequence diagram is the same message. Pick a branch.
+The same message as a sequence:
 
 <SequenceDiagram spec={chatSequence} />
 
-In the simulator, ticks go sending → sent → delivered → read across two phones. Drop packets or take Bob offline to watch retries and dedupe.
+Drop packets or take Bob offline and watch the ticks.
 
 <ChatSim />
 
@@ -113,24 +122,24 @@ In the simulator, ticks go sending → sent → delivered → read across two ph
 
 <Steps>
   <Step title="Clarify">
-    1:1 or groups, receipts, offline delivery, connection scale.
+    1:1 or groups, receipts, offline, scale.
   </Step>
   <Step title="Pick the transport">
     WebSockets online, push notifications offline.
   </Step>
   <Step title="Route messages">
-    Redis pub/sub or Kafka between gateways.
+    Pub/sub between gateways.
   </Step>
   <Step title="Persist and ack">
-    Store, ack, then deliver; dedupe by client ID.
+    Store, ack, then deliver.
   </Step>
   <Step title="Cover edge cases">
-    Ordering, reconnect replay, presence, encryption.
+    Ordering, reconnect, presence, encryption.
   </Step>
 </Steps>
 
 <Callout kind="interview" title="Say this sentence early">
-"Store, then ack, then fan out, and make the send idempotent with a client id." Durability, duplicates and delivery in one breath.
+"Store, then ack, then fan out, and make the send idempotent with a client id."
 </Callout>
 
 ## Step-by-step answer
@@ -138,17 +147,17 @@ In the simulator, ticks go sending → sent → delivered → read across two ph
 <Steps>
 <Step title="Clarify">
 
-Ask the questions, then write down the number that drives everything: 10M concurrent sockets.
+Ask, then name the number that drives everything: 10M open sockets.
 
 </Step>
 <Step title="Choose the transport">
 
-**WebSocket** online, **push** (APNs/FCM) offline, **REST** for history and uploads. Reject unauthenticated upgrades with 401. A layer-4 load balancer spreads connections with no sticky sessions, since pub/sub does the routing.
+**WebSocket** online, **push** offline, **REST** for history and uploads. Pub/sub does the routing, so no sticky sessions.
 
 </Step>
 <Step title="Keep a connection registry on each gateway">
 
-`userId → Set<socket>`, because one user has several devices. Subscribe to `user:ID` while the set is non-empty; unsubscribe on the last close, or Redis keeps sending traffic for users the gateway no longer holds.
+`userId → Set<socket>`, because one user has several devices. Subscribe to `user:ID` while the set is non-empty, and unsubscribe on the last close.
 
 ```js
 let mine = local.get(userId);
@@ -159,7 +168,7 @@ mine.add(ws);
 </Step>
 <Step title="Send path: store, then ack, then fan out">
 
-Membership check → dedupe by `(from, clientId)` → `seq = INCR seq:CONVERSATION` → store → **ack the sender** → publish to each member. Store-then-ack means an acked message is never lost; the unique index turns a retry into a re-ack.
+Check membership, dedupe by `(from, clientId)`, get a `seq`, store, **ack the sender**, then publish. An acked message is never lost, and the unique index turns a retry into a re-ack.
 
 ```js
 const existing = await db.messages.findOne({ from: userId, clientId });
@@ -173,71 +182,71 @@ await broadcast(conversationId, { type: 'message', /* … */ });
 </Step>
 <Step title="Ordering">
 
-**Per conversation**, by seq. Clients sort and tolerate gaps (an insert failing after `INCR` burns a number); nobody compares order across chats, so there's no global bottleneck.
+**Per conversation**, by seq. Clients sort and tolerate gaps. Nobody compares order across chats, so there is no global bottleneck.
 
 </Step>
 <Step title="Offline delivery and sync">
 
-On every (re)connect and conversation open, the client sends `sync` with its last seq, and the server replays the rest from the `(conversationId, seq)` index. That also **repairs any missed live message**. Members with no presence key get a push notification.
+On every reconnect, the client sends `sync` with its last seq, and the server replays the rest. That also **repairs any missed live message**. Members who are offline get a push notification.
 
 </Step>
 <Step title="Receipts as watermarks">
 
-A `lastReadSeq` and `lastDeliveredSeq` per member, not a row per message: reading seq 1042 implies everything before. Conditional updates (only if higher) keep watermarks moving forward, and receipts broadcast only on a change.
+Keep a `lastReadSeq` and `lastDeliveredSeq` per member, not a row per message. Reading 1042 implies everything before it.
 
 </Step>
 <Step title="Presence and typing">
 
-Presence: a Redis key with a 70 s TTL and a 30 s heartbeat, so a crashed client simply expires. Typing: at most one event per 3 s, never stored, sent only to people with the conversation open, hidden after 5 s of silence.
+Presence: a Redis key with a 70 s TTL and a 30 s heartbeat, so a crashed client expires. Typing: one event per 3 s at most, never stored.
 
 </Step>
 <Step title="Groups and very large channels">
 
-Small groups fan out on write. Channels of thousands fan out on read: members pull on open, notifications are batched or mention-only, and there are no per-member delivery receipts.
+Small groups fan out on write. Big channels fan out on read: members pull on open.
 
 </Step>
-<Step title="Client: optimistic, reconciled, resilient">
+<Step title="Client: optimistic and resilient">
 
-Show the bubble at once as `sending`, keyed by `clientId`, and merge the ack, your echo and any sync replay into it (sorted by seq, unsent last). After reconnect, resend pending messages with the same `clientId`. **Full-jitter** backoff stops 50K clients from a dead gateway returning in the same second.
+Show the bubble at once as `sending`. After reconnect, resend pending messages with the same `clientId`. Random (**jittered**) backoff stops 50K clients returning together.
 
 </Step>
 </Steps>
 
 ## Implementation
 
-Server tabs: gateway and presence. The chat-service handlers (send, sync, read) run inside the gateway for clarity, as in the sequence diagram; at scale they're a stateless service, as in the flow diagram.
+Server tabs: gateway and presence. The handlers run inside the gateway for clarity. At scale they are a stateless service.
 
 <CodeTabs files={['snippets/server.js', 'snippets/presence.js']} />
 
-Client tabs: the React hook and its unit-tested pure helpers.
+Client tabs: the React hook and its tested helpers.
 
 <CodeTabs files={['snippets/useChat.js', 'snippets/chat-state.js']} />
 
-Classic bugs fixed: a **set** of sockets per user, unsubscribe on the last close, membership checks before send and sync, a per-conversation `seq`, and idempotent sends via the unique `(from, clientId)` index, even for two simultaneous retries (duplicate-key error `11000` becomes a re-ack).
+Bugs this fixes: one socket per user, no membership checks, a global `seq`, and sends that are not idempotent.
 
 ## Failure modes
 
 | What breaks | Effect | Mitigation |
 |---|---|---|
-| A gateway node dies | Its ~50K sockets drop | Jittered reconnect elsewhere; `sync` from the last seq |
-| A pub/sub message is lost | A live message is missed | Sync on reconnect and on conversation open |
-| Client retries after a lost ack | Duplicate message | Unique `(from, clientId)`; re-ack the stored seq |
+| A gateway dies | Its ~50K sockets drop | Jittered reconnect; `sync` from the last seq |
+| A pub/sub message is lost | A live message is missed | Sync on reconnect and on open |
+| Retry after a lost ack | Duplicate message | Unique `(from, clientId)`; re-ack |
 | Out-of-order arrival | Wrong display order | Clients sort by seq |
-| A huge group | Fan-out storm | Fan out on read; no per-member receipts |
-| Redis is down | No cross-gateway routing, no new seqs | Replicated Redis with failover; stored messages safe; sync recovers |
-| Mass reconnect after a deploy | Thundering herd on remaining gateways | Drain slowly (close sockets over minutes); client jitter |
+| A huge group | Fan-out storm | Fan out on read |
+| Redis is down | No routing, no new seqs | Replicated Redis; sync recovers |
+| Mass reconnect after a deploy | Thundering herd | Drain slowly; client jitter |
 
 ## Trade-offs
 
-| Choice | Pros | Cons | Choose when |
-|---|---|---|---|
-| WebSocket vs long polling | Low latency, two-way | Stateful connections to scale | Chat (always) |
-| Redis pub/sub vs Kafka for routing | Simple and fast | No durability or replay | Routing only (durability is DB + sync) |
-| Fan-out on write vs read for groups | Fast reads | Write amplification | Small groups vs large channels |
-| MongoDB vs Cassandra | Flexible, simpler ops | Less write scale | Moderate vs very large scale |
+| Choice | Gain | Cost |
+|---|---|---|
+| WebSocket, not long polling | Fast, two-way | Stateful connections |
+| Redis pub/sub, not Kafka | Simple and fast | No replay |
+| Fan-out on write | Fast reads | Heavy writes for big groups |
+| MongoDB, not Cassandra | Simpler | Less write scale |
 
 <Callout kind="warning" title="Common mistakes">
-Acking before storing, and a registry with one socket per user (goodbye, multi-device): the two classic chat-server bugs.
+Acking before storing, and one socket per user (goodbye, multi-device).
 </Callout>
 
 ## Build it in the playground
@@ -250,31 +259,31 @@ Acking before storing, and a registry with one socket per user (goodbye, multi-d
 - a push service as an external node;
 - object storage for media.
 
-Background: [Polling, SSE and WebSockets](/deep-dives/polling-sse-websockets) for transport, [Async messaging](/learn/async-messaging) for pub/sub versus queues.
+Background: [Polling, SSE and WebSockets](/deep-dives/polling-sse-websockets), and [Async messaging](/learn/async-messaging).
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="How do you guarantee message ordering?">
-    Per conversation only, from an `INCR` counter that clients sort by. Gaps are fine, and no global sequencer means no global bottleneck.
+    Per conversation only, from a counter that clients sort by. Gaps are fine, and there is no global bottleneck.
   </FollowUp>
   <FollowUp q="How would you build presence and typing at scale?">
-    Presence is a TTL'd key refreshed by heartbeats, with changes sent only to contacts who have the app open; typing is throttled and never stored.
+    Presence is a key with a TTL, refreshed by heartbeats. Typing is throttled and never stored.
   </FollowUp>
   <FollowUp q="How does end-to-end encryption change the design?">
-    Per-device keys (the Signal protocol: X3DH or PQXDH, then the Double Ratchet) leave the server only ciphertext and public prekey bundles. Search, previews and moderation move to the client, and every message is encrypted for every device of every member.
+    The server sees only ciphertext. Search, previews and moderation move to the client, and each message is encrypted for every device of every member.
   </FollowUp>
   <FollowUp q="What about very large channels (100K members)?">
-    Fan out on read, as in the groups step, with a view count instead of per-member receipts.
+    Fan out on read, with a view count instead of per-member receipts.
   </FollowUp>
   <FollowUp q="How do media messages work?">
-    Upload to object storage with a presigned URL and send the object key as a message. An async worker makes thumbnails; downloads go through a CDN with signed, expiring URLs.
+    Upload to object storage with a presigned URL, then send the object key as a message.
   </FollowUp>
   <FollowUp q="How do you run 10M concurrent connections?">
-    About 200 gateways at ~50K sockets each behind layer-4 load balancers, with raised file-descriptor limits, lean per-socket memory and 30 s pings for connections dead behind NATs. Deploy by draining sockets gradually.
+    About 200 gateways at ~50K sockets each, behind layer-4 load balancers. Deploy by draining sockets gradually.
   </FollowUp>
   <FollowUp q="How does multi-device sync work?">
-    Every device's socket is in the user's set, so each gets every message; your own come back as echoes merged by `clientId`. Read state is per user, so reading on the laptop clears the phone's badge.
+    Every device's socket is in the user's set, so each gets every message.
   </FollowUp>
 </FollowUps>
 

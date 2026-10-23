@@ -4,6 +4,7 @@ import { DocLayout } from "@/components/layout/DocLayout";
 import { boundComponents } from "@/components/content/bound";
 import { LessonExercises } from "@/components/dsa/LessonExercises";
 import { getHeadings } from "@/lib/content";
+import { getExtras } from "@content/extras";
 import { loadExercises } from "@/lib/dsa/load";
 
 export const dynamicParams = false;
@@ -41,6 +42,7 @@ export default async function LldLessonPage({ params }: PageProps<"/lld/foundati
       prev={prev && { href: `/lld/foundations/${prev.slug}`, title: prev.title }}
       next={next && { href: `/lld/foundations/${next.slug}`, title: next.title }}
       nextNote={l.next}
+      extras={getExtras("lld", l.slug)}
     >
       <Body components={boundComponents(`lld/foundations/${l.dir}`)} />
       <LessonExercises lesson={l.slug} />

@@ -115,11 +115,12 @@ function relationsInWords(id: string, spec: ClassSpec) {
  * ~600 px pinned pane, a phone) the boxes show names and member counts, and the selected class's members are listed
  * as text under the drawing. Click, tap or focus a class to select it; its relations light up.
  */
-export function ClassDiagram({ spec }: { spec: ClassSpec }) {
+/** `stage` starts the drawing at that stage; `bare` hides the stage bar (a story shows one stage per step and narrates it itself). */
+export function ClassDiagram({ spec, stage: startStage = 0, bare = false }: { spec: ClassSpec; stage?: number; bare?: boolean }) {
   const uid = useId().replace(/:/g, "");
   const reduce = useReducedMotion();
   const [hover, setHover] = useState<string | null>(null);
-  const [stage, setStage] = useState(0);
+  const [stage, setStage] = useState(startStage);
   const scroller = useRef<HTMLDivElement>(null);
   const boxWidth = useBoxWidth(scroller);
 
@@ -147,7 +148,7 @@ export function ClassDiagram({ spec }: { spec: ClassSpec }) {
 
   return (
     <figure className={compact ? "flow uml uml--compact" : "flow uml"}>
-      {stages && current && (
+      {stages && current && !bare && (
         <div className="uml-stages">
           <div className="uml-stage-bar">
             <button type="button" className="wbtn" onClick={() => setStage(stage - 1)} disabled={stage === 0} aria-label="Previous stage">
@@ -297,8 +298,8 @@ export function ClassDiagram({ spec }: { spec: ClassSpec }) {
           })}
         </svg>
       </div>
-      <figcaption>
-        {compact && sel && (
+      <figcaption className={bare ? "sr-only" : undefined}>
+        {compact && sel && !bare && (
           <div className="uml-card" id={`${uid}card`}>
             <p className="uml-card-head">
               {sel.stereotype && <span className="uml-card-stereo">«{sel.stereotype}»</span>}

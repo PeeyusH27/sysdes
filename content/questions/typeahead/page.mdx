@@ -2,7 +2,7 @@ import { typeaheadFlow, componentTree } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Debounce input (~250 ms), abort the stale request on every change, and cache per query in a small LRU with a TTL so backspace is instant. Render an accessible WAI-ARIA combobox with `<mark>` highlights; a server-side top-K trie answers in O(prefix length) behind a CDN.
+Wait for a pause in typing (**debounce**, about 250 ms), cancel the stale request, and cache each query so backspace is instant. Use an accessible dropdown, and a prefix tree (**trie**) on the server.
 </TLDR>
 
 <Requirements
@@ -12,13 +12,10 @@ Debounce input (~250 ms), abort the stale request on every change, and cache per
 
 ## Clarifying questions
 
-Each answer changes the design.
-
-- **Source?** A remote API (debounce, abort, cache) or a small local list (filter on every keystroke, no network).
-- **Count and shape?** About 8 strings or rich items (icon, avatar); hundreds need virtualization.
-- **Search box or form field?** Search runs the typed text on Enter; a form field (pick a country) must hold an option.
-- **Keyboard, screen readers, mobile?** Always yes: an ARIA combobox, touch targets, IME composition for Chinese, Japanese and Korean.
-- **Recents or personalisation?** Recents live on the client; personal ranking on the server.
+- **Where do suggestions come from?** A remote API, or a small local list you filter on every key.
+- **How many, and what shape?** About 8 plain strings, or rich items.
+- **Search box or form field?** A search box runs the typed text. A form field must pick an option.
+- **Keyboard, screen readers, mobile?** Always yes.
 
 ## Answer with RADIO
 
@@ -26,14 +23,13 @@ Structure a frontend answer as **R**equirements (done), **A**rchitecture, **D**a
 
 ### Architecture
 
-In the component tree, play **Typing**, **Arrow keys and Enter** and **Click an option**.
+Play **Typing**, **Arrow keys and Enter** and **Click an option** in the component tree.
 
 <FlowDiagram spec={componentTree} />
 
-- `Typeahead`: UI state only (open, active option).
-- `useTypeahead`: data (query, debounce timer, AbortController, LRU cache).
-- `fetchSuggestions(q, signal)`: a prop, so any backend or test fake plugs in.
-- `Highlight`: text pieces and `<mark>` elements, never HTML strings.
+- `Typeahead` owns the UI: open, active option.
+- `useTypeahead` owns the data: query, timer, abort, cache.
+- `fetchSuggestions(q, signal)` is a prop, so any backend plugs in.
 
 ### Data model
 
@@ -49,8 +45,6 @@ In the component tree, play **Typing**, **Arrow keys and Enter** and **Click an 
 ```
 
 ### Interface
-
-The code shows the component, its hook and the CDN-cacheable suggest API. Add a `type` per item (query, user, product) if kinds mix.
 
 ```jsx
 <Typeahead fetchSuggestions={(q, signal) => api.suggest(q, signal)} onSelect={item => runSearch(item.label)} label="Search" />
@@ -70,18 +64,29 @@ Cache-Control: public, max-age=300, stale-while-revalidate=3600
 
 ### Optimizations
 
-- **Fewer requests:** a 2-character minimum and 250 ms debounce; the server lowercases and trims prefixes so users share CDN cache keys.
-- **Fast:** abort stale requests, LRU for backspace, trending suggestions prefetched on focus, ~8 items so no virtualization.
-- **No clashes:** `autoComplete="off"` hides the browser's dropdown; `enterKeyHint="search"` adds a mobile Search key.
-- **IME and screen readers:** skip keys while `isComposing`, query after `compositionend`; a polite live region says "8 suggestions" or "Suggestions unavailable".
+- **Fewer requests:** a 2-character minimum and a 250 ms debounce.
+- **Fast:** cancel old requests, and keep recent answers for backspace.
+- **Safe:** show matches with `<mark>`, never HTML strings.
+
+Do the sum before you pick a backend:
+
+| Data | Load | Use |
+|---|---|---|
+| 5,000 countries | none | Filter in memory |
+| 100,000 products | about 50 requests/s | `LIKE 'rea%'` on an index |
+| 100M past searches | thousands/s | Trie, top 8 per node, behind a CDN |
+
+A short prefix like "a" matches millions of rows. Ranking them on every key is what breaks `LIKE`.
 
 ## Architecture diagram
 
-The cache is checked **before** the timer starts, so a hit renders in the same frame and only misses wait. Play **Fast typing**, **Backspace** and **Slow response** in the flow diagram.
+<Doodle name="cache" size={150} caption />
+
+Check the **cache** (a small memory of recent answers) before starting the timer. A hit shows at once, and only misses wait. Play **Fast typing**, **Backspace** and **Slow response**.
 
 <FlowDiagram spec={typeaheadFlow} />
 
-Then type into the debounce timeline: every key resets the timer, only a pause fires a request, and a late response for an older query is dropped.
+Type into the timeline. Every key resets the timer, and only a pause sends a request.
 
 <DebounceViz />
 
@@ -89,16 +94,16 @@ Then type into the debounce timeline: every key resets the timer, only a pause f
 
 <Steps>
   <Step title="Clarify">
-    Source, count, keyboard, mobile; search or form?
+    Source, count, keyboard, mobile.
   </Step>
   <Step title="Stabilize input">
-    Debounce (say "250 ms") with a minimum length.
+    Debounce about 250 ms, with a minimum length.
   </Step>
   <Step title="Fix races">
-    Abort stale requests. Most candidates miss this: raise it yourself.
+    Cancel stale requests. Raise this yourself.
   </Step>
   <Step title="Add caching">
-    A query-to-results Map with a TTL.
+    A map from query to results, with a TTL.
   </Step>
   <Step title="Accessibility and backend">
     ARIA combobox; a prefix index behind a CDN.
@@ -109,13 +114,13 @@ Then type into the debounce timeline: every key resets the timer, only a pause f
 
 <Steps>
   <Step title="Clarify the scope">
-    Confirm the scope, then state the plan: "a hook for data, a combobox for the UI, a prefix index on the server."
+    Then state the plan: a hook, a combobox, a prefix index.
   </Step>
   <Step title="Debounce the input">
-    Wait ~250 ms after the last keystroke and skip queries under 2 characters: a fast "react" sends 1 request, not one per key. In React it's a `setTimeout` in an effect whose cleanup clears it.
+    Wait about 250 ms after the last key and skip queries under 2 characters. A fast "react" sends 1 request, not 5. Without it, 10,000 people typing five keys a second can send 50,000 requests a second.
   </Step>
   <Step title="Fix the race">
-    Pause twice and the older request may answer last. Abort it in the effect cleanup, and check the signal too, since some servers ignore aborts:
+    Pause twice and the older request may answer last. Cancel it in the effect cleanup, and check the signal too, since some servers ignore cancels:
 
 ```js
 const items = await load(q, ctrl.signal);
@@ -125,80 +130,79 @@ return () => { clearTimeout(timer); ctrl.abort(); };   // cleanup: cancel the wa
 ```
   </Step>
   <Step title="Cache results">
-    A Map of query to `{ items, at }`, re-inserted on write so its order is LRU order; evict past 100 entries, ignore entries older than 60 s. Check it **before** the timer starts, so backspace is instant. More in the [caching lesson](/learn/caching).
+    A Map of query to `{ items, at }`. Drop the oldest past 100 entries and ignore entries older than 60 s. Check it **before** the timer starts. More in the [caching lesson](/learn/caching).
   </Step>
   <Step title="Render an accessible combobox">
-    The input gets `role="combobox"`, `aria-expanded`, `aria-controls` (listbox id) and `aria-activedescendant` (active option id); the `ul` is `role="listbox"`, each `li` a `role="option"` with `aria-selected`. Arrows move, Enter selects, Escape closes; focus never leaves the input. `preventDefault` on an option's `mousedown` stops the blur that would close the list before the click lands.
+    The input is the `combobox`, the list is a `listbox`, each row an `option`. Arrows move, Enter selects, Escape closes, and focus stays in the input. `preventDefault` on an option's `mousedown` stops the blur that would close the list early.
   </Step>
   <Step title="Highlight safely">
-    Split the label on the regex-escaped query with a capture group, and wrap the odd pieces (the matches) in `<mark>`. React escapes all text, so a label like `<img onerror=…>` stays text.
+    Split the label on the escaped query and wrap the matches in `<mark>`. React escapes all text, so a label like `<img onerror=…>` stays text.
 
 ```js
 'React Native'.split(/(re)/gi)    // ['', 'Re', 'act Native']: matches land at odd indexes
 ```
   </Step>
   <Step title="Cover the states">
-    **Loading:** keep the old items; spinner only after ~300 ms. **Empty:** "No suggestions". **Error:** quiet, and typing and plain search still work. The live region announces each.
+    **Loading:** keep the old items; show a spinner after about 300 ms. **Empty:** "No suggestions". **Error:** stay quiet; typing still works.
   </Step>
   <Step title="Design the backend">
-    A trie from query logs, every node holding its top-K completions (K = 8): lookup is O(prefix length), no subtree search. Rebuild offline and swap atomically. `Cache-Control: public` lets the CDN absorb hot short prefixes like "a" and "re". Fuzzy matching or huge catalogs: a search engine's completion suggester.
+    A trie built from query logs, where every node holds its top 8 completions. Lookup costs O(prefix length). Rebuild offline and swap. A CDN absorbs hot prefixes. For fuzzy matching, use a search engine.
   </Step>
 </Steps>
 
 <Callout kind="interview">
-"Debounce cuts how many requests I send, not their order: two can still be in flight. So each query gets an AbortController that the next keystroke aborts, and I ignore any result whose signal was aborted."
+"Debounce cuts how many requests I send, not their order. So each keystroke aborts the last request, and I ignore any result whose signal was aborted."
 </Callout>
 
 ## Implementation
 
 <CodeTabs files={['snippets/useTypeahead.js', 'snippets/Typeahead.jsx', 'snippets/Highlight.jsx', 'snippets/debounce.js', 'snippets/trie.js', 'snippets/suggest-route.js', 'snippets/useTypeahead.test.jsx']} />
 
-- `useTypeahead.js`: debounce, abort and LRU/TTL in one effect. `useEffectEvent` (React 19.2) calls the latest `fetchSuggestions` without it being a dependency, so a new function each render doesn't restart the timer.
-- `debounce.js`: the stand-alone utility, a favourite warm-up. The hook doesn't need it: effect cleanup already calls `clearTimeout`.
-- `useTypeahead.test.jsx`: fake timers prove 3 quick keystrokes send 1 request, for the latest query; sibling tests cover cache, abort, trie, highlighting and keyboard.
+- `useTypeahead.js`: debounce, abort and cache in one effect.
+- `debounce.js`: the stand-alone utility, a favourite warm-up.
+- `useTypeahead.test.jsx`: 3 quick keystrokes send 1 request.
 
 ## Failure modes
 
 | What breaks | Effect | Mitigation |
 |---|---|---|
-| Responses arrive out of order | An old query's results flash | Abort; ignore aborted results |
-| API down | No suggestions | Error in the live region; typing and search still work |
-| Slow network | Feels laggy | Keep previous items; spinner after ~300 ms; cache |
-| Labels contain HTML | XSS | React text nodes; never `innerHTML` |
-| Input blurs on mousedown | Clicking an option does nothing | `preventDefault` on the option's `mousedown` |
-| IME composition (CJK) | Enter picks an option mid-word | Ignore keys while `isComposing` |
-| Hot prefixes like "a" | Origin overload at peak | Normalised keys, CDN caching, in-memory trie |
+| Answers arrive out of order | An old query's results flash | Abort; ignore aborted results |
+| API down | No suggestions | Quiet error; typing still works |
+| Slow network | Feels laggy | Keep old items; spinner after ~300 ms |
+| Labels contain HTML | XSS | Text nodes; never `innerHTML` |
+| Input blurs on mousedown | Click does nothing | `preventDefault` on `mousedown` |
+| IME composition (CJK) | Enter picks mid-word | Ignore keys while `isComposing` |
+| Hot prefixes like "a" | Origin overload | CDN caching, in-memory trie |
 
 ## Trade-offs
 
-| Choice | Pros | Cons | Choose when |
-|---|---|---|---|
-| Longer vs shorter debounce | Fewer requests | Feels slower | 200–300 ms is the sweet spot |
-| Client cache TTL | Instant backspace | Stale suggestions | 30–120 s for suggestions |
-| Client vs server ranking | Works offline | No global popularity | Server, almost always |
-| Debounce vs throttle | Debounce: fewest requests | Nothing updates mid-burst | Debounce by default; throttle for mid-typing results |
-| Trie vs search engine | O(prefix) lookups, no extra infra | Exact prefixes only; rebuild to update | Trie for known vocabulary; engine for fuzzy |
+| Choice | Gain | Cost |
+|---|---|---|
+| Longer debounce | Fewer requests | Feels slower |
+| Debounce, not throttle | Fewest requests | Nothing updates mid-burst |
+| Client cache | Instant backspace | Stale suggestions |
+| Trie, not a search engine | Fast, no extra system | Exact prefixes only |
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="How do you highlight the matched text safely?">
-    Split on an escaped, capture-group regex, wrap the matches in `<mark>` and let React escape every piece, as `Highlight.jsx` does. Never feed an HTML string to `dangerouslySetInnerHTML`.
+    Split on an escaped regex, wrap matches in `<mark>`, and let React escape every piece. Never use `dangerouslySetInnerHTML`.
   </FollowUp>
   <FollowUp q="What happens on a slow or offline network?">
-    Serve cached results at once, show loading only after a short delay, and fail quietly with "Suggestions unavailable". Skip requests while offline (the `online` and `offline` events).
+    Show cached results at once, show loading only after a short delay, and fail quietly.
   </FollowUp>
   <FollowUp q="How would you rank suggestions?">
-    On the server: prefix before substring matches, then popularity, recency and the user's history. Precompute top-K per prefix offline and blend in a few personal results per request.
+    On the server: prefix matches first, then popularity, recency and the user's history. Precompute the top 8 per prefix offline.
   </FollowUp>
   <FollowUp q="What changes on mobile?">
-    Bigger touch targets, `enterKeyHint="search"`, no hover-only UI, a full-screen results sheet, and a slightly longer debounce: typing on glass is slower and burstier.
+    Bigger touch targets, a Search key on the keyboard, no hover-only UI, and a slightly longer debounce.
   </FollowUp>
   <FollowUp q="How do you show recent searches?">
-    On focus with an empty query, list recent searches from localStorage under their own heading, each removable. Save on real searches, de-duplicated and capped at about 10.
+    On focus with an empty box, list recents from localStorage, each removable. Save real searches only, capped at about 10.
   </FollowUp>
-  <FollowUp q="The list is local: 5,000 countries or contacts. What changes?">
-    Filter in memory on every keystroke with no debounce: 5,000 string comparisons take well under a millisecond. Virtualize if hundreds can show, or keep the top 8.
+  <FollowUp q="The list is local: 5,000 countries. What changes?">
+    Filter in memory on every key, with no debounce. 5,000 comparisons take well under a millisecond.
   </FollowUp>
 </FollowUps>
 

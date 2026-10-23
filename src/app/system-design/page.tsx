@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, BookA, BookOpen, Boxes, FileQuestion, Gauge, Hammer, Library } from "lucide-react";
+import { ArrowRight, BookA, BookOpen, Boxes, Lightbulb, FileQuestion, Gauge, Hammer, Library, Network } from "lucide-react";
 import { lldLessons } from "@content/lld/registry";
 import { deepDives, getDeepDive, getLearnStep, getQuestion, learnSteps, questions } from "@content/registry";
+import { primers } from "@content/primers";
 import { glossary } from "@content/glossary";
 import { questionLabel, requestJourney } from "@content/home";
 import { FlowDiagram } from "@/components/diagram/FlowDiagram";
@@ -37,9 +38,11 @@ function titleOf(href: string) {
 
 export default function SystemDesignHome() {
   const entries = [
+    { href: "/basics", Icon: Lightbulb, title: "The basics", count: `${primers().length} ideas`, text: "New to a word? What is a cache, a shard, a queue? One picture, one short animation, one minute each." },
     { href: "/learn", Icon: BookOpen, title: "HLD path", count: `${learnSteps.length} steps`, text: "Estimation, load balancing, data, caching, queues, consistency, reliability, then two case studies." },
     { href: "/deep-dives", Icon: Library, title: "Deep dives", count: `${deepDives.length} techniques`, text: "Caching, sharding, storage, real-time, connections and request flows, one at a time." },
     { href: "/questions", Icon: FileQuestion, title: "Interview questions", count: `${questions.length} questions`, text: "From a parking lot to Uber. Full answers with code, failure modes and follow-ups." },
+    { href: "/architecture", Icon: Network, title: "Architecture lab", count: "Interactive", text: "One infrastructure, from a single server to a full stack. Watch it grow, click any box to learn it, then spike the traffic and break things." },
     { href: "/lld", Icon: Boxes, title: "Low-level design", count: `${lldLessons.length} foundations`, text: "Classes, SOLID and the design patterns that get asked, the classic LLD questions, and exercises you code and test in the browser." },
     { href: "/playground", Icon: Hammer, title: "Playground", count: "Graded", text: "Drag components onto a canvas, wire them up, simulate traffic and get a score." },
     { href: "/cheatsheet", Icon: Gauge, title: "Cheatsheet", count: "Numbers", text: "Latencies, sizes and formulas to have at your fingertips." },

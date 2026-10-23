@@ -9,7 +9,7 @@ export const quiz: QuizItem[] = [
       "Because it makes the loop run fewer times",
     ],
     answer: 1,
-    explain: "We only know that mid passes, not that it is the first index that passes. hi = mid - 1 could throw the answer away. Rounding mid down guarantees mid < hi, so hi = mid still shrinks the range.",
+    explain: "We only know mid passes, not that it is the first to pass. hi = mid - 1 could throw the answer away. Rounding mid down guarantees mid < hi, so hi = mid still shrinks the range.",
   },
   {
     q: "Why can Koko Eating Bananas be solved with binary search even though no array is sorted?",
@@ -19,7 +19,7 @@ export const quiz: QuizItem[] = [
       "Because the number of hours is always a power of two",
     ],
     answer: 1,
-    explain: "Binary search needs a monotonic yes/no question, not a sorted array. The candidate speeds 1..max(piles) are ordered, and feasibility is monotonic in the speed, so the first-true template finds the slowest speed that works.",
+    explain: "Binary search needs a yes/no question that flips once, not a sorted array. Speeds are ordered and a faster speed never hurts, so first true finds the slowest speed that works.",
   },
   {
     q: "You binary search a capacity between 1 and 10^9, and each feasibility check scans n packages. What is the total time?",

@@ -7,6 +7,8 @@ import { Slider, WidgetFrame } from "./WidgetFrame";
 
 const MAX = 2 ** 32;
 const NODE_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
+// Rounded so the server and the browser print the same digits (Math.cos can differ in the last place).
+const xy = (n: number) => Math.round(n * 100) / 100;
 const COLORS = ["var(--k-client)", "var(--k-service)", "var(--k-database)", "var(--k-gateway)", "var(--k-cache)", "var(--k-queue)", "var(--k-external)", "var(--accent-2)"];
 
 /** Pure ring, exported for tests. */
@@ -114,7 +116,7 @@ export function HashRing() {
             {ring.map((p, i) => {
               const a = angle(p.pos);
               const ni = NODE_NAMES.indexOf(p.node);
-              return <circle key={i} cx={C + Math.cos(a) * R} cy={C + Math.sin(a) * R} r={vnodes > 60 ? 2 : 3.5} fill={COLORS[ni]} />;
+              return <circle key={i} cx={xy(C + Math.cos(a) * R)} cy={xy(C + Math.sin(a) * R)} r={vnodes > 60 ? 2 : 3.5} fill={COLORS[ni]} />;
             })}
             {keyList.map((k, i) => {
               const a = angle(hash32(k, 0x9747b28c));
@@ -124,8 +126,8 @@ export function HashRing() {
               return (
                 <m.circle
                   key={k}
-                  cx={C + Math.cos(a) * r}
-                  cy={C + Math.sin(a) * r}
+                  cx={xy(C + Math.cos(a) * r)}
+                  cy={xy(C + Math.sin(a) * r)}
                   r={changed ? 4.5 : 2.6}
                   initial={false}
                   animate={{ fill: COLORS[ni] }}

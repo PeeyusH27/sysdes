@@ -17,6 +17,6 @@ export const quiz: QuizItem[] = [
     q: "In practice, \"exactly once\" processing means…",
     options: ["A magic broker setting", "At-least-once delivery + idempotent processing", "At-most-once delivery"],
     answer: 1,
-    explain: "Brokers redeliver after crashes and timeouts, so duplicates are normal. Deduplicating by message id (or making the write idempotent) turns at-least-once delivery into an effectively-once result.",
+    explain: "Brokers redeliver after crashes and timeouts, so duplicates are normal. Deduplicating by message id (or making the write idempotent) gives an effectively-once result.",
   },
 ];

@@ -2,7 +2,7 @@ import { combinationsTree, arrangementsTree, pruningTree } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-Backtracking builds an answer **one choice at a time**: choose, explore everything that follows, then **un-choose** and try the next option. It is exponential by nature, so the craft is producing each answer **exactly once** and **pruning** hopeless branches early.
+Backtracking builds an answer **one choice at a time**: choose, explore, then **un-choose** and try the next. It is slow by nature, so the craft is skipping dead ends early.
 </TLDR>
 
 ## When to reach for it
@@ -17,30 +17,32 @@ Backtracking builds an answer **one choice at a time**: choose, explore everythi
 
 </Callout>
 
-| Variant | Repeats avoided by | Classic problems |
+| Variant | Repeats avoided by | Classic problem |
 |---|---|---|
-| Subsets and combinations | a start index (`i + 1`, or `i` for reuse) | subsets, combination sum |
+| Subsets, combinations | a start index | subsets |
 | Permutations | a `used[]` array | permutations |
-| Constraint placement | filling slots in a fixed order | n-queens, sudoku, parentheses |
-| Grid search | marking the cell, then restoring it | word search, maze paths |
+| Placement | fixed slot order | n-queens |
+| Grid search | mark, then restore | word search |
 
 ## The core idea: one path, walked forward and back
 
-Every sequence of choices forms a tree: the root is "nothing chosen", each edge is a choice, each node a partial answer. Backtracking walks it depth-first with **one shared `path`**:
+Picture a maze with a ball of string. At each fork you pick a corridor and unroll the string. At a dead end you wind it back to the fork and try the next corridor. That is backtracking.
 
-1. **Choose**: push an option (and mark it).
-2. **Explore**: recurse through the whole subtree below.
-3. **Un-choose**: pop it (and unmark it), so `path` is exactly as it was.
+Every sequence of choices forms a tree: each edge is a choice, each node a partial answer. You walk it with **one shared `path`**:
 
-Each call undoes its own change, so one array serves the whole search. `path` always matches the highlighted route from the root:
+1. **Choose**: add an option to `path`.
+2. **Explore**: recurse into everything that follows.
+3. **Un-choose**: remove it, so `path` is as it was.
+
+`path` always matches the highlighted route from the root:
 
 <AlgoViz trace={combinationsTree} />
 
-Correctness is two questions. **Does every answer appear?** Some sequence of choices must reach it. **Does each appear once?** No two paths may build the same answer. Everything else is speed, which means pruning.
+Check two things: every answer appears, and each appears once.
 
 ## Play with it
 
-Place N queens so none attack. **Step** through the search: queens drop row by row, attacked squares get pruned, and a dead row lifts the queen above it. Then try **Your turn** and see how fast a board runs out of solutions.
+Place N queens so none attack. **Step** through the search, then try **Your turn**.
 
 <BacktrackingLab />
 
@@ -48,60 +50,60 @@ Place N queens so none attack. **Step** through the search: queens drop row by r
 
 <Steps>
   <Step title="Define the partial solution and when it is complete">
-    A `path` array or string. Complete means length k, target hit, row n reached or every letter matched. Subsets record **every** node.
+    A `path` array. Complete means length k, target hit or row n reached.
   </Step>
   <Step title="List the choices at one step">
-    The next number, column, bracket or cell: the loop inside the recursive function.
+    The next number, column or cell: the loop inside the recursive function.
   </Step>
   <Step title="Rule out duplicates by construction">
-    Order doesn't matter: a `start` index. Order matters: `used[]`. Deduping afterwards with a Set is slow, and a sign the choice rule is wrong.
+    Order irrelevant: `start` index. Order matters: `used[]`.
   </Step>
   <Step title="Write choose, explore, un-choose">
     Undo every change right after the recursive call.
   </Step>
   <Step title="Record copies">
-    `result.push([...path])`, or `path.join("")` for strings. Pushing `path` itself stores the live array, which is empty by the end.
+    `result.push([...path])`. Pushing `path` itself stores an array that ends up empty.
   </Step>
   <Step title="Prune">
-    Ask "can this branch still succeed?" **before** recursing, not on finished answers. Return early if you only need **any** answer.
+    Ask "can this branch still succeed?" **before** recursing.
   </Step>
 </Steps>
 
 ## Template 1: combinations with a start index
 
-When order doesn't matter, give each call a `start`: it chooses from `start` on, and its child starts after the chosen item. Every combination is built in exactly one order, increasing.
+Order doesn't matter, so pick items left to right. Each call gets a `start` and chooses from there on.
 
 <CodeTabs files={['snippets/combinations.js']} java={['snippets/java/Combinations.java']} python={['snippets/python/combinations.py']} />
 
-Two tweaks, two problems. Record `[...path]` at the **top of every call** and you list every subset: <ProblemLink slug="subsets" />. Recurse with `i` instead of `i + 1` and items can repeat: <ProblemLink slug="combination-sum" />.
+Record `[...path]` at the **top of every call** to list every subset: <ProblemLink slug="subsets" />. Recurse with `i` instead of `i + 1` to allow repeats: <ProblemLink slug="combination-sum" />.
 
 ## Template 2: permutations with used[]
 
-Now order matters: `[a, b]` and `[b, a]` are different answers, so a start index would lose half of them. Each call loops over **every** item and skips those already in the path, tracked in a boolean `used`.
+Now `[a, b]` and `[b, a]` are different answers. Each call loops over **every** item and skips those already on the path, tracked in `used`.
 
 <AlgoViz trace={arrangementsTree} />
 
 <CodeTabs files={['snippets/arrangements.js']} java={['snippets/java/Arrangements.java']} python={['snippets/python/arrangements.py']} />
 
-Un-choosing has two parts, `path.pop()` and `used[i] = false`; forgetting the second is the classic bug. Practice: <ProblemLink slug="permutations" />.
+Un-choosing has two parts: `path.pop()` and `used[i] = false`. Practice: <ProblemLink slug="permutations" />.
 
 ## Template 3: pruning
 
-A branch is worth exploring only if it can still succeed, so check **before** recursing. Sorting often makes one failed check final: once a number exceeds what's still missing, every later number does too, so `break` instead of `continue`. The red nodes are calls that never happen.
+Check **before** recursing: can this branch still succeed? On sorted input, once one number is too big, so is every later one: `break`. Red nodes never run.
 
 <AlgoViz trace={pruningTree} />
 
 <CodeTabs files={['snippets/subset-sum.js']} java={['snippets/java/SubsetSum.java']} python={['snippets/python/subset_sum.py']} />
 
-Pruning by **validity** works the same way. <ProblemLink slug="generate-parentheses" /> only adds `")"` while a `"("` is open. <ProblemLink slug="n-queens" /> tracks taken columns and diagonals and never places a queen on an attacked square.
+Pruning by rule works the same way. <ProblemLink slug="generate-parentheses" /> adds `")"` only while a `"("` is open. <ProblemLink slug="n-queens" /> never places a queen on an attacked square.
 
 ## Template 4: backtracking on a grid
 
-On a grid the choices are the four neighbours, and "used" means "on the current path". Let the grid be the visited set: overwrite the cell with a marker, explore, then write the original back, so a cell on a failed path is free for the next one.
+On a grid the choices are the four neighbours. Overwrite the cell with a marker, explore, then write the original back. A cell on a failed path is free again.
 
 <CodeTabs files={['snippets/grid-paths.js']} java={['snippets/java/GridPaths.java']} python={['snippets/python/grid_paths.py']} />
 
-Practice: <ProblemLink slug="word-search" />, with a marker like `"#"` that matches no letter.
+Practice: <ProblemLink slug="word-search" />.
 
 ## Try it
 
@@ -109,15 +111,13 @@ Practice: <ProblemLink slug="word-search" />, with a marker like `"#"` that matc
 
 ## Complexity
 
-Backtracking is exponential. Estimate **(nodes in the tree) × (work per node)**, plus copying each recorded answer.
+Estimate **(nodes in the tree) × (work per node)**.
 
-| Problem shape | Time | Extra space (besides the output) |
+| Problem | Time | Space |
 |---|---|---|
-| All subsets of n items | O(n · 2^n): 2^n subsets, O(n) copy each | O(n) |
-| Combinations of k items from n | O(k · C(n, k)) | O(k) |
-| All permutations of n items | O(n · n!) | O(n) for `path` and `used` |
-| A word of length L in an m × n grid | O(m · n · 3^L): at most 3 new directions per step | O(L) recursion |
-| N-Queens | O(n!) at most, far less after pruning | O(n) |
+| All subsets of n items | O(n · 2^n) | O(n) |
+| All permutations | O(n · n!) | O(n) |
+| Word in an m × n grid | O(m · n · 3^L) | O(L) |
 
 ## JavaScript you'll use
 
@@ -131,30 +131,25 @@ const word = path.join("");                // character path -> string answer
 const board = Array.from({ length: n }, () => Array(n).fill(".")); // n independent rows
 ```
 
-Recursion depth is rarely a worry: it equals one answer's length, far below JavaScript's limit of roughly ten thousand nested calls.
-
 <Callout kind="warning">
 
-- Forgetting to undo **every** change: the `pop()`, `used[i] = false`, the Set `delete`, the restored cell.
-- Recursing with `start + 1` instead of `i + 1`: an earlier item can follow a later one, creating duplicates.
-- Pruning with `break` on **unsorted** input, which skips smaller options further on.
+- Forgetting to undo **every** change: `pop()`, `used[i] = false`, the restored cell.
+- Recursing with `start + 1` instead of `i + 1`: creates duplicates.
+- Pruning with `break` on **unsorted** input.
 
 </Callout>
 
 ## Interview questions
 
 <FollowUps>
-  <FollowUp q="The input has duplicate values. How do you avoid duplicate subsets or permutations?">
-    Sort, then skip `nums[i]` when it equals `nums[i - 1]` and `i > start` (subsets) or `nums[i - 1]` isn't in use (permutations). Either way, that value was already tried at this level of the tree.
+  <FollowUp q="The input has duplicates. How do you avoid duplicate answers?">
+    Sort, then skip `nums[i]` when it equals `nums[i - 1]` and that value was already tried at this level.
   </FollowUp>
-  <FollowUp q="What is the difference between backtracking, DFS and dynamic programming?">
-    Backtracking **is** DFS over a tree of partial solutions, with an explicit undo; DP applies when paths reach the **same** subproblem, so answers can be cached. Counting subsets with a given sum is DP; listing them is backtracking.
-  </FollowUp>
-  <FollowUp q="How do you estimate the running time of a backtracking solution?">
-    Branching factor to the power of the depth, times the work per node including copies, as in the complexity table. Add that pruning cuts the real cost but not the worst-case bound.
+  <FollowUp q="How is backtracking different from DFS and dynamic programming?">
+    Backtracking **is** DFS over partial solutions, with an undo. DP applies when paths reach the **same** subproblem. Counting subsets is DP; listing them is backtracking.
   </FollowUp>
   <FollowUp q="How would you search a grid for many words at once?">
-    Put every word in a **trie** and run one search per cell, following trie children instead of one word's letters, removing words once found.
+    Put the words in a **trie** and run one search per cell, following trie children.
   </FollowUp>
 </FollowUps>
 

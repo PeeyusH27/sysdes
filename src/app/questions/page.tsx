@@ -16,8 +16,7 @@ export default function QuestionsPage() {
           Interview questions, <span className="grad">answered in full</span>
         </h1>
         <p className="lede">
-          {questions.length} classics, from a parking lot to Uber. Each answer walks the whole interview: requirements, numbers, API, data model, an animated
-          architecture, code and the follow-ups.
+          {questions.length} classics, from a parking lot to Uber. Each answer walks the whole interview, start to follow-ups.
         </p>
         <ul className="hub-facts">
           <li>

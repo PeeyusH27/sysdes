@@ -2,48 +2,40 @@ import { popcountKernighan, subsetMasks, xorAccumulate } from './viz'
 import { quiz } from './quiz'
 
 <TLDR>
-An integer is a row of bits, and one bitwise operator changes them all in O(1). Three tricks cover most questions: **XOR cancels pairs**, **`n & (n - 1)` drops the lowest set bit**, and **masks** built with `1 << i` test, set or clear one bit.
+A number is a row of switches (bits), and one operator flips many at once. Three tricks cover most questions: **XOR cancels pairs**, **`n & (n - 1)` drops the lowest 1**, and **masks** test one switch.
 </TLDR>
 
 ## When to reach for it
 
 <Callout kind="tip" title="Spot it in the problem statement">
 
-- "Every element appears **twice except one**", or a number is **missing** from a range, in O(1) extra space: XOR.
+- "Every element appears **twice except one**", or a number is **missing** from a range, in O(1) space: XOR.
 - **Count set bits** or test for a **power of two**: `n & (n - 1)`.
-- Arithmetic **without `+`, `-`, `*` or `/`**: XOR plus a carry.
-- Every **subset** of a small set (n up to about 20), or "which items are used" as one number: masks.
-- The input is **32-bit unsigned**, or a row of bits or flags.
+- Arithmetic **without `+` or `-`**: XOR plus a carry.
+- Every **subset** of a small set (n up to about 20): masks.
 
 </Callout>
 
 ## The core idea: one operator, every bit at once
 
-A bitwise operator doesn't loop over bits: it handles every column in one step.
+Picture a panel of switches. An operator works on the whole row in a single step, no loop.
 
 | Operator | Example on 4 bits | Typical use |
 |---|---|---|
-| `a & b` (AND) | `1100 & 1010 = 1000` | test a bit, keep only a mask's bits |
+| `a & b` (AND) | `1100 & 1010 = 1000` | test a bit |
 | `a \| b` (OR) | `1100 \| 1010 = 1110` | set bits |
-| `a ^ b` (XOR) | `1100 ^ 1010 = 0110` | toggle bits, cancel pairs |
-| `~a` (NOT) | `~5 === -6` | flip every bit; `~x` equals `-x - 1` |
-| `a << k` | `0011 << 2 = 1100` | multiply by 2^k, build the mask `1 << i` |
-| `a >> k` | `-8 >> 1 === -4` | divide by 2^k rounding down, keeping the sign |
-| `a >>> k` | `-1 >>> 0 === 4294967295` | treat the 32 bits as unsigned |
+| `a ^ b` (XOR) | `1100 ^ 1010 = 0110` | toggle, cancel pairs |
+| `1 << i` | `1 << 2 = 0100` | build a mask for bit `i` |
 
-XOR is the star. `x ^ x` is 0, `x ^ 0` is `x` and order doesn't matter, so in a XOR of a whole list every pair cancels and only the unpaired value survives. Each result bit is the **parity** of its column:
+XOR is the star. `x ^ x` is 0 and `x ^ 0` is `x`, so XOR a whole list and every pair cancels. Only the unpaired value survives:
 
 <AlgoViz trace={xorAccumulate} />
 
-**JavaScript's 32-bit rule.** Numbers are 64-bit floats, but bitwise operators work on **signed 32-bit** integers:
-
-- Bit 31 is the sign bit: `1 << 31` is `-2147483648`, and `4294967295` reads as `-1`.
-- `x >>> 0` reads the 32 bits as unsigned (0 to 2^32 - 1): use it when bit 31 may be set.
-- Wider values are cut (`2 ** 32 | 0` is 0) and fractions dropped (`7.9 | 0` is 7). For more bits, use `BigInt`: `1n << 40n`.
+**JavaScript's 32-bit rule.** Bitwise operators work on **signed 32-bit** integers, so bit 31 is the sign. Use `x >>> 0` to read the bits as unsigned, and `BigInt` for wider values.
 
 ## Play with it
 
-Tap bits of A and B, pick an operator, and watch the result fill in one column at a time. Then switch to **Single number**: XOR a list into `acc` and watch each pair cancel.
+Tap bits of A and B, pick an operator, and watch the result. Then switch to **Single number** and watch each pair cancel.
 
 <BitLab />
 
@@ -53,52 +45,52 @@ Bit bugs are silent, so work in this order.
 
 <Steps>
   <Step title="Write small cases in binary">
-    3 to 6 inputs in 4- or 8-bit binary, aligned by column. Pairs, parity and "lowest 1" patterns jump out.
+    3 to 6 inputs in 4-bit binary, aligned by column. Patterns jump out.
   </Step>
   <Step title="Mind the 32-bit rule">
-    `>>>` on unsigned input, a final `>>> 0` when the answer may reach 2^31, and shifts below 32: `1 << 32` is 1, because the count is taken modulo 32.
+    Use `>>>` on unsigned input and `>>> 0` when the answer may reach 2^31.
   </Step>
   <Step title="Add parentheses">
-    `&`, `|` and `^` bind **more loosely** than `===` and `<`. Write `(n & 1) === 0`, never `n & 1 === 0`.
+    `&`, `|` and `^` bind **more loosely** than `===`. Write `(n & 1) === 0`.
   </Step>
   <Step title="Test the edges">
-    0, 1, a power of two, all ones (2^31 - 1, or 2^32 - 1 unsigned), and a negative if allowed.
+    0, 1, a power of two, all ones, and a negative if allowed.
   </Step>
 </Steps>
 
 ## Template 1: masks for single bits
 
-`1 << i` has only bit `i` set: AND with it to test, OR to set, AND with its complement to clear, XOR to toggle. Reading bits one by one (`n & 1`, then `n >>>= 1`) also reverses them.
+`1 << i` has only bit `i` set: AND with it to test, OR to set, AND with its complement to clear, XOR to toggle.
 
 <CodeTabs files={['snippets/bit-masks.js']} java={['snippets/java/BitMasks.java']} python={['snippets/python/bit_masks.py']} />
 
-`reverseBits` is <ProblemLink slug="reverse-bits" />. <ProblemLink slug="sum-of-two-integers" /> thinks in columns too: `a ^ b` adds without carries, `(a & b) << 1` moves the carries one column left, and you repeat until no carry is left.
+`reverseBits` is <ProblemLink slug="reverse-bits" />. In <ProblemLink slug="sum-of-two-integers" />, `a ^ b` adds without carries and `(a & b) << 1` is the carry. Repeat until no carry is left.
 
 ## Template 2: XOR cancellation
 
 <CodeTabs files={['snippets/xor-tricks.js']} java={['snippets/java/XorTricks.java']} python={['snippets/python/xor_tricks.py']} />
 
-`xorAll` is all of <ProblemLink slug="single-number" />. <ProblemLink slug="missing-number" /> becomes the same problem once you also XOR in 0 to n, so every present number appears twice. `twoSingles` splits the list on a bit where its two unpaired values differ.
+`xorAll` is all of <ProblemLink slug="single-number" />. For <ProblemLink slug="missing-number" />, also XOR in 0 to n so every present number appears twice.
 
 ## Template 3: drop the lowest set bit
 
-Subtracting 1 turns the lowest 1 into 0 and the 0s under it into 1s, leaving higher bits alone. AND with `n` keeps the higher bits and wipes the rest: `n` loses its lowest set bit, and a loop runs once per set bit. Try your own `n` with Edit input:
+Subtracting 1 turns the lowest 1 into 0 and the 0s below it into 1s. AND with `n` wipes them: `n` loses its lowest 1, so a loop runs once per set bit. Try your own `n` with Edit input:
 
 <AlgoViz trace={popcountKernighan} />
 
 <CodeTabs files={['snippets/lowest-bit.js']} java={['snippets/java/LowestBit.java']} python={['snippets/python/lowest_bit.py']} />
 
-`popcount` solves <ProblemLink slug="number-of-1-bits" />. <ProblemLink slug="counting-bits" /> reuses smaller answers: `i >> 1` is `i` without its last bit, so `bits[i] = bits[i >> 1] + (i & 1)`.
+`popcount` solves <ProblemLink slug="number-of-1-bits" />. <ProblemLink slug="counting-bits" /> reuses smaller answers: `bits[i] = bits[i >> 1] + (i & 1)`.
 
 ## Template 4: subsets as bitmasks
 
-The numbers 0 to 2^n - 1 are all the n-bit patterns, and each says which of n items are in. Counting through them lists every subset once, with no recursion:
+The numbers 0 to 2^n - 1 are all the n-bit patterns. Each says which of n items are in. Count through them to list every subset, no recursion:
 
 <AlgoViz trace={subsetMasks} />
 
 <CodeTabs files={['snippets/subsets-bitmask.js']} java={['snippets/java/SubsetsBitmask.java']} python={['snippets/python/subsets_bitmask.py']} />
 
-Masks also make compact DP states ("which cities have I visited?" as one number) with O(1) set operations. Keep n at 30 or less with plain numbers; [Backtracking](/dsa/patterns/backtracking) handles subsets with conditions better.
+Masks also make compact DP states ("which cities have I visited?" as one number). Keep n at 30 or less.
 
 ## Try it
 
@@ -106,14 +98,12 @@ Masks also make compact DP states ("which cities have I visited?" as one number)
 
 ## Complexity
 
-| Task | Time | Extra space |
+| Task | Time | Space |
 |---|---|---|
-| Any single bitwise operation | O(1) | O(1) |
+| One bitwise operation | O(1) | O(1) |
 | XOR over n values | O(n) | O(1) |
-| Popcount with `n & (n - 1)` | O(number of set bits), at most 32 | O(1) |
-| Counting bits for 0 … n | O(n) | O(n) for the output |
-| Reversing 32 bits | O(32) = O(1) | O(1) |
-| All subsets of n items | O(n · 2^n) | O(n · 2^n) for the output |
+| Popcount with `n & (n - 1)` | at most 32 steps | O(1) |
+| All subsets of n items | O(n · 2^n) | O(n · 2^n) |
 
 ## JavaScript you'll use
 
@@ -126,6 +116,7 @@ n & ~(1 << i)              // clear bit i
 n & (n - 1)                // n without its lowest set bit
 n & -n                     // only the lowest set bit
 x >>> 0                    // the same 32 bits, read as unsigned
+~x                         // flips every bit: ~5 is -6
 (13).toString(2)           // "1101": binary for debugging
 parseInt("1101", 2)        // 13
 ```
@@ -141,19 +132,16 @@ parseInt("1101", 2)        // 13
 
 <FollowUps>
   <FollowUp q="Every number appears three times except one. XOR no longer cancels: what now?">
-    Count the 1s in each of the 32 columns: triples add a multiple of 3, so `count % 3` is the single number's bit. Rebuild it with `result |= 1 << i` in O(32 · n) time and O(1) space.
+    Count the 1s in each of the 32 columns. Triples add a multiple of 3, so `count % 3` is the single number's bit.
   </FollowUp>
   <FollowUp q="Two numbers appear once and all others twice. How do you find both?">
-    XOR everything to get `a ^ b` (non-zero, since they differ) and take a set bit, such as `x & -x`. Split the array by that bit and XOR each half: pairs stay together, so each half yields one answer.
+    XOR everything to get `a ^ b`, and take a set bit of it. Split the array by that bit and XOR each half.
   </FollowUp>
-  <FollowUp q="How do you check whether n is a power of two, or a power of four?">
-    Power of two: `n > 0 && (n & (n - 1)) === 0` (exactly one set bit). Power of four: also `(n & 0x55555555) !== 0`, so the bit sits at an even position, or equivalently `n % 3 === 1`.
+  <FollowUp q="How do you check whether n is a power of two?">
+    `n > 0 && (n & (n - 1)) === 0`: exactly one set bit.
   </FollowUp>
   <FollowUp q="When would you store a set as a bitmask instead of a Set?">
-    When the universe is small and fixed (up to 31 items in a plain number). Union is `|`, intersection is `&`, and the whole set is one number, so it's a memo key: that's what makes bitmask DP over 2^n states practical up to n ≈ 20.
-  </FollowUp>
-  <FollowUp q="How do you handle 64-bit values in JavaScript?">
-    `BigInt`: literals end in `n` and every operator works (`1n << 40n`), but it can't mix with plain numbers and it's slower. `BigInt.asUintN(64, x)` wraps a result to 64 unsigned bits; the alternative is two 32-bit halves.
+    When the universe is small and fixed. Union is `|`, intersection is `&`, and the whole set is one number you can use as a memo key.
   </FollowUp>
 </FollowUps>
 

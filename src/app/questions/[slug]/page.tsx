@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Hammer } from "lucide-react";
+import { Hammer, Mic } from "lucide-react";
 import { getQuestion, questions, allPages } from "@content/registry";
 import { DocLayout } from "@/components/layout/DocLayout";
 import { boundComponents } from "@/components/content/bound";
 import { getHeadings } from "@/lib/content";
 import { PatternsBehind } from "@/components/content/Bridges";
 import { patternsFor } from "@content/bridges";
+import { getExtras } from "@content/extras";
 
 export const dynamicParams = false;
 
@@ -26,6 +27,7 @@ export default async function QuestionPage({ params }: PageProps<"/questions/[sl
   const i = questions.indexOf(q);
   const prev = questions[i - 1];
   const next = questions[i + 1];
+  const extras = getExtras("questions", q.slug);
   const titleOf = (href: string) => allPages().find((p) => p.href === href)?.title ?? href;
   return (
     <DocLayout
@@ -48,6 +50,11 @@ export default async function QuestionPage({ params }: PageProps<"/questions/[sl
               {titleOf(r)}
             </Link>
           ))}
+          {extras?.explain && (
+            <Link href={`/explain/${q.slug}`} className="btn btn-sm">
+              <Mic size={14} aria-hidden /> Explain it back
+            </Link>
+          )}
           {q.challenge && (
             <Link href={`/playground/${q.challenge}`} className="btn btn-sm btn-primary">
               <Hammer size={14} aria-hidden /> Build it in the playground
@@ -61,6 +68,7 @@ export default async function QuestionPage({ params }: PageProps<"/questions/[sl
       ]}
       prev={prev && { href: `/questions/${prev.slug}`, title: prev.title }}
       next={next && { href: `/questions/${next.slug}`, title: next.title }}
+      extras={extras}
     >
       <Body components={boundComponents(`questions/${q.slug}`)} />
       <PatternsBehind href={`/questions/${q.slug}`} />

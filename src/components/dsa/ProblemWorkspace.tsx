@@ -6,6 +6,7 @@ import { Braces, CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, CloudOf
 import { useHydrated } from "@/lib/hooks";
 import { useProgress } from "@/lib/progress";
 import { useDrafts, useDsa } from "@/lib/dsa/store";
+import { useMock } from "@/lib/prep/mock-store";
 import { runTests, type ErrorInfo, type RunOutcome, type TestResult } from "@/lib/dsa/runner";
 import { bootPython, runTestsPy, usePythonStatus, type PyRunOutcome } from "@/lib/dsa/py-runner";
 import { snakeCase } from "@/lib/dsa/python";
@@ -64,7 +65,9 @@ export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, st
   const lang: RunnableLang = siteLang === "java" ? javaFallback : siteLang;
   const starters = useMemo<Docs>(() => ({ js: starter, python: starterPy }), [starter, starterPy]);
 
-  const unlocked = hydrated && failed > 0;
+  // In a mock round hints and the solution stay locked until the round ends: that is what makes it a rehearsal.
+  const inMock = useMock((m) => !!m.active && m.active.items.some((i) => i.key === slug));
+  const unlocked = hydrated && failed > 0 && !inMock;
   const [tab, setTab] = useState<"description" | "hints" | "solution">("description");
   const [hintsShown, setHintsShown] = useState(0);
   const [editorKey, setEditorKey] = useState(0);
@@ -212,7 +215,14 @@ export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, st
               )}
             </>
           )}
-          {tab === "hints" && (
+          {tab === "hints" && inMock && (
+            <div className="pw-locked">
+              <Lock size={22} aria-hidden />
+              <h3>Hints are off in a mock round</h3>
+              <p>In the interview you would talk it through instead. Say your approach out loud, then write it. Hints and the solution come back when the round ends.</p>
+            </div>
+          )}
+          {tab === "hints" && !inMock && (
             <div className="pw-hints">
               <p className="muted">Reveal one hint at a time; each one gives away a little more.</p>
               <ol>
@@ -227,7 +237,14 @@ export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, st
               )}
             </div>
           )}
-          {tab === "solution" &&
+          {tab === "solution" && inMock && (
+            <div className="pw-locked">
+              <Lock size={22} aria-hidden />
+              <h3>The solution is locked during the round</h3>
+              <p>It opens when you finish the round or the timer runs out.</p>
+            </div>
+          )}
+          {tab === "solution" && !inMock &&
             (unlocked ? (
               solution
             ) : (
@@ -301,7 +318,7 @@ export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, st
           running={running}
           lang={lang}
           problem={problem}
-          justUnlocked={justUnlocked}
+          justUnlocked={justUnlocked && !inMock}
           onShowSolution={() => {
             setTab("solution");
             setJustUnlocked(false);

@@ -5,7 +5,7 @@ export const quiz: QuizItem[] = [
     q: "prefix has n + 1 entries with prefix[0] = 0. Which expression is the sum of nums[left..right], both ends included?",
     options: ["prefix[right] - prefix[left]", "prefix[right + 1] - prefix[left]", "prefix[right + 1] - prefix[left - 1]"],
     answer: 1,
-    explain: "prefix[right + 1] is the sum of indices 0..right, and prefix[left] is the sum of indices 0..left - 1. Their difference is exactly left..right, and left = 0 needs no special case.",
+    explain: "prefix[right + 1] is the sum of indices 0..right, and prefix[left] is the sum of 0..left - 1. Their difference is exactly left..right, and left = 0 needs no special case.",
   },
   {
     q: "When counting subarrays that sum to k with a prefix-sum map, why does the map start as 0 → 1?",
@@ -15,7 +15,7 @@ export const quiz: QuizItem[] = [
       "To handle k = 0 separately",
     ],
     answer: 0,
-    explain: "A subarray from index 0 to j has sum P(j) - 0: it needs an \"earlier prefix\" with sum 0, the empty prefix before the array. Without that entry those subarrays are missed.",
+    explain: "A subarray from index 0 to j has sum P(j) - 0: it needs an earlier prefix of 0, the empty prefix before the array. Without that entry those subarrays are missed.",
   },
   {
     q: "You must add a value to m different ranges of an array of length n, then read the final array once. What is the cost with a difference array?",

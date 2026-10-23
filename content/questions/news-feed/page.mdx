@@ -2,7 +2,7 @@ import { feedArchitecture, pushVsPull } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-**Hybrid fan-out**: a normal user's post is pushed into each active follower's capped Redis feed, so a read is one lookup, while **celebrities** (over ~100K followers) are merged in at read time. Reads hydrate ids through a post cache and page with a **score cursor**.
+**Hybrid fan-out**: copy a normal user's post into each follower's ready-made feed, so reading is one lookup. For **celebrities** (over ~100K followers), skip the copy and merge their posts in when the feed opens.
 </TLDR>
 
 <Requirements
@@ -13,11 +13,11 @@ import { quiz } from './quiz'
 
 ## Clarifying questions to ask
 
-- **Ranked or chronological?** Ranking adds a scoring step; chronological is simpler and more transparent.
-- **Follow graph?** Average follows, largest follower count, a follow limit (say 5,000)?
+- **Ranked or chronological?** Ranking adds a scoring step.
+- **Follow graph?** Average follows, biggest follower count, a follow limit?
 - **Freshness?** Seconds, or is a minute fine?
-- **Celebrities?** Millions of followers? (Yes: this is the crux.)
-- **Media and scale?** Video changes storage and CDN cost, not the feed design. DAU, feed opens per user, posts per day.
+- **Celebrities?** Millions of followers? Yes: this is the crux.
+- **Scale?** Daily users, feed opens, posts per day.
 
 ## Capacity estimate
 
@@ -28,7 +28,7 @@ import { quiz } from './quiz'
 | Fan-out writes | 50M posts × 200 average followers | ≈ **116K/s** |
 | Cached feed memory | 300M × 800 ids × ~40 B | ≈ 9.6 TB |
 
-Reads outnumber posts 60 to 1, so pay at write time to make reads cheap. The bill: 580 posts/s become 116K writes/s, and 9.6 TB of RAM is about 100 Redis nodes at ~100 GB, before replicas. So cache only recently active users' feeds, capped, and rebuild cold ones on demand.
+Reads outnumber posts 60 to 1, so do the work at write time. The bill: 580 posts/s become 116K writes/s, and 9.6 TB of RAM. So cache only active users' feeds.
 
 <CapacityCalculator preset="news-feed" />
 
@@ -42,7 +42,7 @@ Reads outnumber posts 60 to 1, so pay at write time to make reads cheap. The bil
 | POST | `/posts/:id/like` | Optimistic on the client |
 | GET | `/feed/new-count?after=TS` | For the "new posts" banner |
 
-In a feed page, `nextCursor` is the last post's timestamp; `null` means nothing older exists.
+`nextCursor` is the last post's timestamp; `null` means nothing older exists.
 
 ```json
 {
@@ -55,7 +55,7 @@ In a feed page, `nextCursor` is the last post's timestamp; `null` means nothing 
 
 ## Data model
 
-Posts and the follow graph live in a durable store (SQL here; wide-column works too). Ids are time-ordered (Snowflake-style), so sorting by id sorts by time.
+Posts and follows live in a durable store. Ids are time-ordered.
 
 ```sql
 CREATE TABLE posts (
@@ -82,57 +82,61 @@ Feeds are derived data in Redis:
 | Key | Type | Contents |
 |---|---|---|
 | `feed:USER_ID` | sorted set | score = `createdAt` ms, member = post id; newest 800 |
-| `posts:AUTHOR_ID` | sorted set | The author's own timeline; used for the celebrity merge |
+| `posts:AUTHOR_ID` | sorted set | The author's own timeline, for the celebrity merge |
 | `post:ID` | string (JSON) | Post body cache, 1 h TTL |
 
-A time-scored sorted set, not a list, makes the **score cursor** possible: "20 posts strictly older than T" stays correct however many posts arrive at the top.
+A time-scored sorted set makes the **score cursor** work: "20 posts older than T" stays correct as new posts arrive.
 
 ## Architecture
 
-<FlowDiagram spec={feedArchitecture} />
+<Doodle name="cache" size={150} caption />
 
-Play **Normal user posts**, **Celebrity posts** and **User opens feed**. Writes store, enqueue fan-out and return, so the author never waits; reads usually touch only caches: one sorted-set read, one per followed celebrity, one batched post-cache lookup.
+Each user's feed is a ready-made list of post ids, kept in fast memory. Writes store the post, queue the copying and return, so the author never waits. Reads touch only caches. Play **Normal user posts**, **Celebrity posts** and **User opens feed**.
+
+<FlowDiagram spec={feedArchitecture} />
 
 ## Push, pull or hybrid
 
-The decision the whole question turns on. Compare the two pure strategies in the flow diagram first.
+The whole question turns on this. Compare the two pure strategies first.
 
 <FlowDiagram spec={pushVsPull} />
 
-Push makes every read one lookup, but write cost grows with followers: at 100K fan-out writes per second, a post by a 30M-follower account takes 5 minutes to reach everyone. Pull writes once, but every feed open merges hundreds of timelines. The hybrid pushes for the vast majority of authors and pulls only the few celebrities each user follows. Try the numbers in the fan-out calculator.
+**Push** copies each post into every follower's feed, so reads are one lookup. **Pull** stores a post once, but every feed open merges many timelines. The **hybrid** pushes for most authors and pulls only the few celebrities each user follows.
 
 <FanoutCalc />
 
-Push and hybrid deliver in seconds; pull is instant.
+Do the sum first. Say the workers manage about 100K feed writes a second:
 
-| Strategy | Write cost | Read cost | Choose when |
-|---|---|---|---|
-| Fan-out on write (push) | High (× followers) | Very low | Most users |
-| Fan-out on read (pull) | Low | High (merge many timelines) | Celebrities, inactive users |
-| **Hybrid** | Bounded | Low + a small merge | Real systems |
+| Author | Followers | Push takes |
+|---|---|---|
+| Typical user | 200 | Instant |
+| Popular account | 100K | About 1 second |
+| Celebrity | 30M | About 5 minutes |
+
+Push the first two. Pull the third: fans see the post when they next open the feed. A user who follows 5 celebrities merges only 5 extra timelines. An app where nobody has many followers can skip fan-out and just pull.
 
 ## How to approach it
 
 <Steps>
   <Step title="Clarify">
-    Follow graph, ranking, freshness, celebrities.
+    Graph, ranking, freshness, celebrities.
   </Step>
   <Step title="Compare fan-out">
-    Write fan-out reads fast; read fan-out writes cheap.
+    Push reads fast; pull writes cheap.
   </Step>
   <Step title="Choose hybrid">
-    Push for normal users, merge celebrities at read time.
+    Push for most, pull celebrities.
   </Step>
   <Step title="Define storage">
-    Posts, follow graph, a capped Redis feed of ids, hydrate on read.
+    Posts, follows, a capped feed of ids.
   </Step>
   <Step title="Design the client">
-    Cursor scroll, optimistic actions, a new posts banner.
+    Cursor scroll, optimistic likes.
   </Step>
 </Steps>
 
 <Callout kind="interview" title="Raise the celebrity problem yourself">
-Present push, then say "this breaks for an account with 30M followers" before the interviewer does. Proposing the hybrid unprompted, with a tunable threshold, is the strongest signal in this question.
+Present push, then say "this breaks for an account with 30M followers" before they do. Then propose the hybrid with a tunable threshold.
 </Callout>
 
 ## Step-by-step answer
@@ -140,27 +144,27 @@ Present push, then say "this breaks for an account with 30M followers" before th
 <Steps>
 <Step title="Clarify">
 
-Note the read/write ratio, about 60 feed reads per post: it justifies doing work at write time.
+About 60 reads per post justifies work at write time.
 
 </Step>
 <Step title="Push: fan-out on write">
 
-Write each post id into every follower's feed: one-lookup reads, but 10M followers means 10M writes, mostly for people who never look.
+Write each post id into every follower's feed. Reads are one lookup, but 10M followers means 10M writes.
 
 </Step>
 <Step title="Pull: fan-out on read">
 
-Merge followed authors' timelines at read time: cheap writes, always fresh, but too slow for a 200 ms p99 at 35K reads/s.
+Merge timelines at read time. Writes are cheap, but reads are too slow at 35K/s.
 
 </Step>
 <Step title="Hybrid: push for most, pull for celebrities">
 
-Push for normal authors, pull celebrities. Tune the ~100K-follower threshold on write amplification versus read cost; users follow few celebrities, so the merge stays small.
+Tune the ~100K threshold on write cost versus read cost. Users follow few celebrities, so the merge stays small.
 
 </Step>
 <Step title="Feed storage">
 
-A sorted set per user, scored by time, capped at 800. Workers skip users inactive for 30 days (rebuilt on login); each queue message carries 1,000 followers to spread the work.
+A sorted set per user, scored by time, capped at 800. Skip users inactive for 30 days.
 
 ```js
 redis.zadd(`feed:${userId}`, ts, postId);
@@ -170,7 +174,7 @@ redis.zremrangebyrank(`feed:${userId}`, 0, -801);             // keep the newest
 </Step>
 <Step title="Read path: score cursor, merge, hydrate">
 
-Read a page of your sorted set by score cursor, plus the same window from each followed celebrity; merge, dedupe, sort, cut. Hydrate ids through the post cache (database on a miss) and drop deleted posts.
+Read a page by score cursor, plus the same window from each followed celebrity. Merge, dedupe, sort, then fetch post bodies and drop deleted ones.
 
 ```js
 const max = cursor ? `(${cursor}` : '+inf';                     // "(" = strictly older than the cursor
@@ -180,58 +184,57 @@ redis.zrevrangebyscore(`feed:${userId}`, max, '-inf', 'WITHSCORES', 'LIMIT', 0, 
 </Step>
 <Step title="Ranking">
 
-Start chronological, then score a few hundred candidates with an explainable formula: `affinity × (likes + 2·comments + 3·shares + 1) / (ageHours + 2)^1.5`. Engagement decays with age; authors you interact with get up to 3×. A learned model later replaces the formula, not the pipeline.
+Start chronological, then score candidates: `affinity × (likes + 2·comments + 3·shares + 1) / (ageHours + 2)^1.5`. A learned model can replace the formula later.
 
 </Step>
 <Step title="Freshness">
 
-Poll `GET /feed/new-count?after=TS` every 30 to 60 s (or listen on SSE) and show a "New posts" banner. Never insert above the reader; a tap scrolls up and refetches page one.
+Poll `/feed/new-count` every 30 to 60 s and show a banner. Never insert above the reader.
 
 </Step>
 <Step title="Unfollow and delete">
 
-Filter at read time (hydration drops `deleted` posts; a follow check drops unfollowed authors), then remove that author's ids from the follower's set asynchronously. Never block the user's action on cleanup.
+Filter at read time, then clean up asynchronously. Never block the user on cleanup.
 
 </Step>
 <Step title="Client">
 
-A cursor-paginated, virtualized infinite list (see [Build an Infinite Scroll Feed](/questions/infinite-feed)), a server-rendered first page, fixed-size image placeholders, and optimistic likes that roll back on error.
+A virtualized list (see [Build an Infinite Scroll Feed](/questions/infinite-feed)) and optimistic likes that roll back on error.
 
 </Step>
 </Steps>
 
 ## Implementation
 
-Server tabs: hybrid fan-out on write, the read path, and its unit-tested pure helpers.
+Server tabs: fan-out, the read path, helpers.
 
 <CodeTabs files={['snippets/publish.js', 'snippets/feed.js', 'snippets/timeline.js', 'snippets/hydrate.js', 'snippets/rank.js']} />
 
-Client tabs: an optimistic like with rollback (TanStack Query v5) and its pure cache update.
+Client tabs: an optimistic like.
 
 <CodeTabs files={['snippets/useLike.js', 'snippets/optimistic-like.js']} />
 
-`feed.js` fixes the classic version's two bugs: **list offsets** that repeated or skipped posts as new ones arrived (now a score cursor), and no celebrity merge (now `mergeTimelines`, which also dedupes a post found in both lists after an author crosses the threshold).
+`feed.js` fixes two classic bugs: offsets that repeated posts (now a score cursor), and no celebrity merge (now `mergeTimelines`).
 
 ## Failure modes
 
 | What breaks | Effect | Mitigation |
 |---|---|---|
-| Fan-out queue backlog | Followers see posts late | Autoscale workers on queue age; authors see their own post at once |
-| A worker dies mid-batch | Some followers miss the post | Redeliver; `ZADD` is idempotent, so a retry can't duplicate |
-| A Redis feed is lost or evicted | Empty feed | Rebuild from follows + author timelines (fan-out on read) |
-| A celebrity's timeline gets hammered | A hot key | In-process L1 cache with a few seconds' TTL; replicate the key |
-| A post is deleted after fan-out | A ghost post | Filter at hydrate time (deleted flag); clean up async |
-| Unfollow | Old posts linger | Follow check at read time; remove async |
+| Fan-out queue backlog | Posts arrive late | Autoscale workers; authors see their own post at once |
+| A worker dies mid-batch | Some followers miss the post | Redeliver; `ZADD` is idempotent |
+| A Redis feed is lost | Empty feed | Rebuild by pulling |
+| A celebrity's timeline is hammered | A hot key | Short in-process cache; replicate the key |
+| A post is deleted after fan-out | A ghost post | Filter at read time |
+| Unfollow | Old posts linger | Follow check at read time |
 
 ## Trade-offs
 
-| Choice | Pros | Cons | Choose when |
-|---|---|---|---|
-| Ranked vs chronological | Better engagement | Ranking compute; less transparent | Engagement goals vs transparency |
-| Sorted set vs list for feeds | Score cursor, ordered inserts | A little more memory | Always for feeds that page |
-| Lower vs higher celebrity threshold | Less write amplification | More read-time merging | Tune on measured read vs write cost |
-| Cache every feed vs active users only | No rebuilds | Terabytes of RAM for people who never look | Active-only, rebuild on login |
-| SSE vs polling for "new posts" | Instant | An open connection per user | Polling is usually enough here |
+| Choice | Gain | Cost |
+|---|---|---|
+| Ranked, not chronological | Better engagement | Ranking compute |
+| Lower celebrity threshold | Less write cost | More read-time merging |
+| Cache every feed | No rebuilds | Terabytes of RAM for idle users |
+| SSE, not polling, for banners | Instant | A connection per user |
 
 <Callout kind="warning" title="Common mistakes">
 - Whole posts in every follower's feed instead of ids.
@@ -244,35 +247,34 @@ Client tabs: an optimistic like with rollback (TanStack Query v5) and its pure c
 
 - post service → queue → fan-out workers → feed cache;
 - celebrity timelines readable by the feed service;
-- a post cache;
-- a database with replicas;
+- a post cache and a database with replicas;
 - a CDN for media.
 
-Background: [Caching](/learn/caching) for the post cache and hot keys, [Async messaging](/learn/async-messaging) for the fan-out queue.
+See [Caching](/learn/caching) and [Async messaging](/learn/async-messaging).
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="How would you rank posts?">
-    Gather pushed and pulled candidates, compute features (engagement, recency, affinity, content type), score them (formula first, learned model later), re-rank for diversity (no five in a row from one author), and cache the page briefly.
+    Score pushed and pulled candidates, then mix so one author doesn't fill the page.
   </FollowUp>
   <FollowUp q="How do you handle unfollows and deleted posts?">
-    Filter both at read time (cheap, always correct), then clean the sorted sets asynchronously, never blocking the user.
+    Filter at read time, then clean the sorted sets later, never blocking the user.
   </FollowUp>
   <FollowUp q="How do you cache viral posts?">
-    Post bodies sit in Redis behind an in-process L1 cache; like counters are salted across sub-keys or batched (write-behind) and shown approximately ("12.3K").
+    Cache post bodies in Redis and in-process. Spread like counters across sub-keys.
   </FollowUp>
   <FollowUp q="What does a new user see?">
-    Onboarding follow suggestions plus a "popular" feed pulled from trending timelines, until their graph can fill a feed on its own.
+    Follow suggestions and a "popular" feed, until their own graph fills a feed.
   </FollowUp>
   <FollowUp q="How do you handle inactive users?">
-    Skip them in fan-out. On their next login, rebuild the feed once by fan-out on read, then switch back to push.
+    Skip them in fan-out. On login, rebuild their feed once by pulling, then switch back to push.
   </FollowUp>
   <FollowUp q="How do you shard the feed cache?">
-    By user id across a Redis Cluster's hash slots, so a read touches one shard. Workers pipeline writes per node, so a batch of 1,000 followers costs a few round trips, not 1,000.
+    By user id, so one read touches one shard. Workers batch writes per node.
   </FollowUp>
   <FollowUp q="An author goes from 90K to 110K followers. What changes?">
-    Their new posts are pulled instead of pushed. Already-pushed posts stay in followers' feeds, so for a while one post can come from both sources; the read-time merge dedupes by post id.
+    New posts are pulled, not pushed. Old pushed posts stay in feeds, so the merge dedupes by post id.
   </FollowUp>
 </FollowUps>
 

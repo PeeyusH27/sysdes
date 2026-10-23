@@ -45,10 +45,12 @@ const SECTIONS = {
   ],
   sd: [
     { href: "/system-design", label: "Overview" },
+    { href: "/basics", label: "Basics" },
     { href: "/learn", label: "HLD path" },
     { href: "/deep-dives", label: "Deep dives" },
     { href: "/questions", label: "Questions" },
     { href: "/lld", label: "LLD" },
+    { href: "/architecture", label: "Architecture lab" },
     { href: "/playground", label: "Playground" },
     { href: "/cheatsheet", label: "Cheatsheet" },
     { href: "/glossary", label: "Glossary" },

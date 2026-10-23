@@ -30,6 +30,7 @@ export const DesignDoc = z.object({
             protocol: z.string().max(20).optional(),
             async: z.boolean().optional(),
             weight: z.number().min(0).max(1).optional(),
+            share: z.number().min(0).max(1).optional(),
             label: z.string().max(40).optional(),
           })
           .optional(),

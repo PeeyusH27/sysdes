@@ -16,7 +16,22 @@ export function ogCard({ eyebrow, title, summary, motif = "sd" }: { eyebrow: str
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#0b1110", color: "#e8efec", padding: 72, position: "relative" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 28, fontWeight: 700 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #46d6b4, #5aa9ff)" }} />
+          <svg width="44" height="44" viewBox="0 0 64 64">
+            <defs>
+              <linearGradient id="bg" x1="8" y1="0" x2="56" y2="64" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stopColor="#6d5ffa" />
+                <stop offset="1" stopColor="#3a2eb8" />
+              </linearGradient>
+            </defs>
+            <rect width="64" height="64" rx="15" fill="url(#bg)" />
+            <path d="M45 18 C37 12 19 14 19 24 C19 31 26 32 32 32 C38 32 45 33 45 40 C45 50 27 52 19 46" fill="none" stroke="#ffffff" strokeOpacity="0.9" strokeWidth="4.4" strokeLinecap="round" />
+            <circle cx="45" cy="18" r="6" fill="#f0b35a" />
+            <circle cx="32" cy="32" r="5.2" fill="#ffffff" />
+            <circle cx="19" cy="46" r="6" fill="#5eead4" />
+            <circle cx="45" cy="18" r="2" fill="#3a2eb8" />
+            <circle cx="32" cy="32" r="1.8" fill="#3a2eb8" />
+            <circle cx="19" cy="46" r="2" fill="#3a2eb8" />
+          </svg>
           DSA &amp; System Design
         </div>
         <div style={{ marginTop: 70, fontSize: 26, letterSpacing: 3, textTransform: "uppercase", color: "#f4b95a", display: "flex" }}>{eyebrow}</div>

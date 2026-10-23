@@ -2,7 +2,7 @@ import { classes, purchase } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-A **state machine** in disguise: four states and a table that gives every (state, event) pair one outcome. Money stays in **integer cents** and in **escrow** until the drop sensor confirms; change comes from a **bounded DP** over the coins in the tubes, and no change means no sale.
+A **state machine** in disguise: four states and a table that gives every event one outcome in each. Money is **integer cents**, held in **escrow** until the drop sensor confirms.
 </TLDR>
 
 <Requirements
@@ -10,21 +10,21 @@ A **state machine** in disguise: four states and a table that gives every (state
   nonFunctional={['Never dispense without full payment', 'Never lose money: every coin is kept for a sale or returned', 'Exactly one outcome per event in each state', 'New payment methods need no state-logic edits', 'Deterministic tests (no clock or randomness in the core)']}
   outOfScope={['Coin validator hardware', 'A fleet of machines (an HLD follow-up)', 'Dynamic pricing (a follow-up)']} />
 
-A **low-level design** (LLD) question with two tests: spot the state machine in the first minute, and handle money exactly. Most points are lost on change-making and on the gap between "motor on" and "item in the tray".
+A **low-level design** (LLD) question with two tests: spot the state machine fast, and handle money exactly.
 
-New to low-level design? The state table here is the idea behind [State machines and observers](/lld/foundations/state-observer), and the exercise below lets you write it.
+New to this? Read [State machines and observers](/lld/foundations/state-observer) first.
 
 ## Clarifying questions
 
-- Coins only, or notes and cards? (Cards add authorize and capture.)
-- Is change paid from the machine's own tubes? (Then change can fail.)
+- Coins only, or notes and cards?
+- Is change paid from the machine's own tubes? (Then it can fail.)
 - After SOLD OUT, does the customer keep their credit?
-- Does a drop sensor confirm the item fell? What if it sticks?
-- One machine, or a monitored fleet (HLD)?
+- Does a sensor confirm the item fell?
+- One machine, or a fleet?
 
 ## Scale check
 
-A busy office machine sells about 300 items a day, roughly 1,500 events (three coins, a select, a drop sensor per sale), one every 36 seconds. A microcontroller copes easily, so the hard part is **correctness**: one wrong transition hands out a free cola or swallows a dollar.
+A busy machine sees one event every 36 seconds. A tiny chip copes. The hard part is **correctness**: one wrong transition hands out a free cola or swallows a dollar.
 
 ## Public interface
 
@@ -42,17 +42,17 @@ Every input is one event for `machine.send(event)`.
 
 ## What it remembers
 
-- `Inventory.slots`: slot code → `Slot { code, product, price, count, capacity }`, prices in integer cents.
-- `CoinBox.counts`: coins per denomination in the tubes, e.g. `{ 100: 2, 25: 40, 10: 50, 5: 50 }`.
-- `escrow`: coins inserted for this purchase, still the customer's.
-- `pending`: the sale between "motor on" and the drop sensor: `{ code, price, change }`.
+- `Inventory.slots`: slot code → product, price (cents), count.
+- `CoinBox.counts`: coins per denomination, e.g. `{ 100: 2, 25: 40, 10: 50, 5: 50 }`.
+- `escrow`: coins for this purchase, still the customer's.
+- `pending`: the sale between "motor on" and the drop sensor.
 - `state`: one of four names.
 
-Persist `state`, `escrow` and `pending` on every transition, so a power cut can't forget credit. A fleet also uploads its events: see Telemetry for a fleet, below.
+Save `state`, `escrow` and `pending` on every transition, so a power cut can't forget credit.
 
 ## State transition table
 
-Thirty-two cells, one outcome each. ✕ means **rejected**: nothing changes, and a refused coin drops to the return cup.
+Thirty-two cells, one outcome each. ✕ means **rejected**: nothing changes.
 
 | Event | Idle | HasMoney | Dispensing | OutOfService |
 |---|---|---|---|---|
@@ -67,23 +67,25 @@ Thirty-two cells, one outcome each. ✕ means **rejected**: nothing changes, and
 
 ¹ No possible change: refund, back to Idle. Sold out or short credit: stay in HasMoney.
 
-**Sold out belongs to a slot, not the machine**: the other 29 slots still sell, so SOLD OUT is a message and the customer keeps their credit. A table beats nested `if/else` because a missing cell is a rejection by default, and a test can loop over all 32 pairs.
+**Sold out belongs to a slot, not the machine.** The customer keeps their credit.
+
+**Is a table worth it?** A toy with two states and two events is four cells, so one `if` is fine. Here, three flags (`hasMoney`, `dispensing`, `broken`) give 8 combinations and only 4 are legal. Miss one guard and a double press of `select` mid-drop hands out a second cola. A table shows every cell, a missing cell means rejected, and a test can loop over all 32 pairs.
 
 ## Build the design in stages
 
-Step through the stages: the machine and what it holds first, then the state objects that replace boolean flags, then change-making, payment and telemetry. A green outline marks what the latest stage added; click a class to see its members and relations.
+Step through: the machine, then state objects instead of flags, then change-making and payment. Green marks what the latest stage added.
 
 <ClassDiagram spec={classes} />
 
 ## Watch it run
 
-Insert coins and press a slot. Then break it: select with no money, pick the **SOLD OUT** slot, set coins to **Low** and buy C2 (85¢) or B3 (70¢) with $1, jam an item, or open service mode with credit inside. **Run** plays a fixed seed.
+Insert coins and press a slot. Then break it: pick the **SOLD OUT** slot, set coins to **Low** and buy C2 (85¢) with $1, or jam an item.
 
 <VendingMachineSim />
 
 ## Buy one item, step by step
 
-Play the sequence, then switch branches: **sold out**, **not enough credit**, **can't make change** and, inside the dispensed branch, an item that **never drops**.
+Play it, then try **sold out**, **not enough credit**, **can't make change** and an item that **never drops**.
 
 <SequenceDiagram spec={purchase} />
 
@@ -91,19 +93,19 @@ Play the sequence, then switch branches: **sold out**, **not enough credit**, **
 
 <Steps>
   <Step title="Clarify">
-    Payment, coins, change, drop sensor, fleet.
+    Payment, change, sensor, fleet.
   </Step>
   <Step title="Name the states and events">
-    Four states, about eight events.
+    Four states, eight events.
   </Step>
   <Step title="Fill in the table">
     Unlisted means rejected.
   </Step>
   <Step title="Get the money right">
-    Cents, escrow, change from real coins.
+    Cents, escrow, real coins.
   </Step>
   <Step title="Walk a purchase, then break it">
-    Sold out, short credit, no change, a jam.
+    Sold out, no change, a jam.
   </Step>
 </Steps>
 
@@ -111,14 +113,14 @@ Play the sequence, then switch branches: **sold out**, **not enough credit**, **
 
 <Steps>
   <Step title="Events first">
-    Coin, slot button, cancel, drop sensor (dropped or not), service key, restock, refill. Keypad, coin mech and sensor all feed **one queue**.
+    Coin, select, cancel, drop sensor, service, restock, refill.
   </Step>
   <Step title="States">
-    **Idle**, **HasMoney**, **Dispensing**, **OutOfService**. Dispensing is a real state, not a step inside `select()`: it waits for the sensor and refuses everything else.
+    **Idle**, **HasMoney**, **Dispensing**, **OutOfService**. Dispensing waits for the sensor and refuses everything else.
   </Step>
   <Step title="The State pattern as a table">
 
-Each state object maps the events it accepts to the next state; anything else is rejected and changes nothing.
+Each state maps the events it accepts to the next state. Anything else is rejected.
 
 ```js
 hasMoney: {
@@ -134,18 +136,18 @@ hasMoney: {
   },
 ```
 
-Every rejection comes **before** any mutation, so nothing half-applies.
+Every rejection comes before any change, so nothing half-applies.
 
   </Step>
   <Step title="Money is integer cents">
-    `0.1 + 0.2` is `0.30000000000000004` in floating point. A cola costs `65`, not `0.65`.
+    `0.1 + 0.2` is `0.30000000000000004`. A cola costs `65`, not `0.65`.
   </Step>
   <Step title="Escrow, then commit">
-    Coins sit in `escrow`; select only reserves the change. `dropped` moves escrow into the tubes, pays the change and decrements the slot **exactly once**; cancel and `dropFailed` return the same coins. Invariant: escrow + tubes + coins paid out = opening float + coins inserted + refills.
+    Coins sit in `escrow`. `dropped` moves them into the tubes, pays the change and takes one item off the slot, **once**. Cancel and `dropFailed` return the same coins.
   </Step>
   <Step title="Making change">
 
-Greedy (largest coin first) is optimal only with unlimited coins of a canonical system like 100/25/10/5. Owe 30¢ from one 25¢ and three 10¢, and greedy takes the 25¢, then needs a missing 5¢. A bounded DP over the real counts finds 10¢ + 10¢ + 10¢:
+Greedy (biggest coin first) fails when coins run low. Owe 30¢ from one 25¢ and three 10¢: greedy takes the 25¢, then needs a missing 5¢. A **bounded DP** over the real counts finds 10 + 10 + 10:
 
 ```js
 for (const d of denoms) {                     // best[a]: fewest coins for amount a
@@ -155,26 +157,26 @@ for (const d of denoms) {                     // best[a]: fewest coins for amoun
 }
 ```
 
-Microseconds per sale. Include the escrow: the customer's own quarter can be their change.
+Include the escrow: the customer's own quarter can be their change.
 
   </Step>
   <Step title="No change, no sale">
-    DP returns `null`? Refuse, refund, back to Idle. **EXACT CHANGE ONLY** lights when tubes run low, but the DP check is the real guard.
+    DP returns `null`? Refuse, refund, back to Idle.
   </Step>
   <Step title="One event at a time">
-    `send()` queues events and drains them in order, so an event sent mid-transition (by the display, or an async card terminal) waits its turn and never sees half-updated state.
+    `send()` runs events in order, so none sees half-updated state.
   </Step>
   <Step title="Payment methods as a strategy">
-    `PaymentMethod` has `credit()`, `commit(price)` and `refund()`. Coins use the escrow; a card **authorizes** at select, **captures** on `dropped` and **voids** on `dropFailed` or cancel. The table doesn't change.
+    `PaymentMethod` has `credit()`, `commit(price)` and `refund()`. A card authorizes at select, captures on `dropped`, voids otherwise. The table doesn't change.
   </Step>
   <Step title="Tests">
-    Loop over all 32 pairs asserting rejections change nothing; add the greedy counterexample, a brute-force DP check, the no-change refund, the failed drop, and thousands of random events with the money invariant checked after each.
+    Loop over all 32 pairs. Add the greedy counterexample, the no-change refund and the failed drop.
   </Step>
 </Steps>
 
 ## Implementation
 
-The same design in **JavaScript, Java or Python**: pick a language and every code block on the site follows. The Java and Python versions add real locks where the JavaScript leans on the single-threaded event loop.
+The same design in **JavaScript, Java or Python**. Java and Python add real locks.
 
 <CodeTabs
   files={['snippets/models.js', 'snippets/change.js', 'snippets/states.js', 'snippets/vending-machine.js', 'snippets/vending-machine.test.js']}
@@ -182,18 +184,17 @@ The same design in **JavaScript, Java or Python**: pick a language and every cod
   python={['snippets/python/models.py', 'snippets/python/change.py', 'snippets/python/states.py', 'snippets/python/vending_machine.py', 'snippets/python/test_vending_machine.py']}
 />
 
-- `makeChange` gets `box.with(escrow)`: the tubes **plus** the inserted coins.
-- `CoinBox.remove` checks every coin before removing any, so a payout can't half-happen.
-- The test walks all 4 × 8 = 32 pairs: 13 accepted, and the other 19 must change nothing.
-- A refused coin never enters the books.
+- `makeChange` gets the tubes **plus** the inserted coins.
+- `CoinBox.remove` checks every coin first, so a payout can't half-happen.
+- The test walks all 32 pairs: 13 accepted, 19 must change nothing.
 
 ## Code it yourself
 
-Write the state machine against hidden tests, in JavaScript or Python: the [Vending Machine exercise](/lld/exercises/vending-machine) gives you the state table and checks every cell of it.
+Try the [Vending Machine exercise](/lld/exercises/vending-machine): it checks every cell of your state table.
 
 ## Telemetry for a fleet
 
-Only if the interviewer asks about many machines. Each machine uploads its events; `seq` makes a re-sent batch idempotent.
+Only if asked. Each machine uploads its events, and `seq` makes a re-sent batch safe.
 
 ```sql
 CREATE TABLE vend_events (
@@ -211,44 +212,43 @@ CREATE TABLE vend_events (
 
 | What breaks | Effect | Mitigation |
 |---|---|---|
-| Item stuck in the spiral | Paid, got nothing | No beam break in 2 s: retry once, then `dropFailed` refunds and flags the slot |
-| Power cut mid-purchase | Lost credit or a double vend | Persist every transition; booting in Dispensing refunds unless the sensor logged a drop |
-| Coin jams in the acceptor | Coins swallowed | Credit only after the validator confirms; a jam sensor goes OutOfService |
-| Counterfeit coin or washer | Free products | Validator checks size, weight and metal; unknown coins drop to the cup |
-| Change tubes run low | Can't pay change | DP check, refuse and refund; EXACT CHANGE ONLY; low-coins alert |
-| Button bounce, two buttons at once | Double vend | One event queue; Dispensing rejects select; keypad debounce |
+| Item stuck | Paid, got nothing | No drop in 2 s: retry once, then refund and flag the slot |
+| Power cut mid-purchase | Lost credit or double vend | Save every transition; refund on boot unless a drop was logged |
+| Coin jams | Coins swallowed | Credit only after the validator confirms |
+| Fake coin | Free products | Validator checks size and weight; unknown coins drop to the cup |
+| Tubes run low | Can't pay change | DP check, refuse and refund; low-coins alert |
+| Two buttons at once | Double vend | One event queue; Dispensing rejects select |
 
 ## Trade-offs
 
 | Choice | Pros | Cons |
 |---|---|---|
-| Table or state objects vs `switch` | Every cell visible; unlisted means rejected | More structure for two or three states |
-| State classes vs a plain table | Per-state fields or timers | More boilerplate |
-| Bounded DP vs greedy | Finds change whenever it exists, even with low tubes | A little more code |
-| Escrow vs a credit number | Exact refunds; commit on a confirmed drop | Tracks coins, not a total |
-| Return the same coins vs equal value | No change-making on refund | Needs an escrow tray (most have one) |
+| Table vs `switch` | Every cell visible | More structure |
+| Bounded DP vs greedy | Finds change when it exists | More code |
+| Escrow vs a credit number | Exact refunds | Tracks coins |
+| Same coins vs equal value | No change-making on refund | Needs an escrow tray |
 
 <Callout kind="interview" title="What interviewers listen for">
-"This is a state machine" early; one outcome in **every** cell; rejections that change nothing; integer cents, escrow until the drop, and the greedy counterexample. A class per coin or a `SoldOutState` costs points.
+"This is a state machine" early. One outcome in **every** cell. Integer cents, escrow until the drop, the greedy counterexample. A class per coin costs points.
 </Callout>
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="How would you add card payments?">
-    A `CardPayment` behind `PaymentMethod`: authorize on select, capture on `dropped`, void otherwise, with the terminal's reply as one more queued event.
+    A `CardPayment` behind `PaymentMethod`: authorize on select, capture on `dropped`, void otherwise.
   </FollowUp>
   <FollowUp q="How would you run a fleet of 10,000 machines?">
-    Machines work offline and upload event logs keyed by a per-machine sequence number, so re-sends are idempotent; the centre plans restocks and pushes versioned prices, applied only when Idle.
+    Machines work offline and upload event logs numbered per machine, so re-sends are safe. The centre plans restocks and pushes prices, applied only when Idle.
   </FollowUp>
   <FollowUp q="How would you support dynamic pricing?">
-    A `PricingStrategy` fed by pushed config, with the price locked into `pending` at select so a mid-purchase change can't alter it.
+    A `PricingStrategy` fed by config. Lock the price into `pending` at select so it can't change mid-purchase.
   </FollowUp>
   <FollowUp q="How would you add a buy-2 combo?">
-    Make `pending` a **basket**: each select adds a slot, each `dropped` commits one item, and a failed item refunds its share of the combo price.
+    Make `pending` a **basket**. Each `dropped` commits one item. A failed item refunds its share.
   </FollowUp>
   <FollowUp q="How do you test it?">
-    Table tests over all 32 pairs plus long random runs asserting the money invariant and "stock drops once per sale"; nothing random in the core, so failures reproduce.
+    Table tests over all 32 pairs, plus long random runs that check the money adds up. Nothing random in the core, so failures repeat.
   </FollowUp>
 </FollowUps>
 

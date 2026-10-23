@@ -68,3 +68,10 @@ export const lldLessons: LldLesson[] = [
 ];
 
 export const getLldLesson = (slug: string) => lldLessons.find((l) => l.slug === slug);
+
+/** The coding exercises that practise each classic LLD question (by question slug). Used by the readiness map. */
+export const questionExercises: Record<string, string[]> = {
+  "parking-lot": ["parking-lot", "pricing-rules"],
+  "vending-machine": ["vending-machine"],
+  elevator: [],
+};

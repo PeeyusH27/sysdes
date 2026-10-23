@@ -1,0 +1,101 @@
+/* The reading layer: air between section cards, one comfortable measure, a steady Core/Everything toggle, the
+   30-second card and the "What is X?" primers. Colours and radii come from the tokens in globals.css; this file only
+   decides spacing and rhythm. Loaded after the page stylesheets, so it wins over them. */
+
+/* ------------------------------------------------------------------ section cards: air between them */
+.prose > .sec-card { margin-top: var(--space-cards); }
+.sec-card { padding: 28px 32px 22px; }
+.sec-card::before { content: none; }
+.sec-card:hover { border-color: var(--border); }
+.reader[data-mode=scroll] .sec-card[data-current] { border-color: color-mix(in srgb, var(--kind) 45%, var(--border)); box-shadow: none; }
+.sec-head { margin-bottom: 8px; }
+.sec-body > h2:first-child { margin: 4px 0 12px !important; }
+@media (max-width: 640px) {
+  :root { --space-cards: 20px; }
+  .sec-card { padding: 20px 18px 16px; }
+}
+
+/* ------------------------------------------------------------------ reading: one measure, loose lines */
+.sec-body { font-size: 17px; line-height: 1.72; }
+.sec-body > :is(p, ul, ol, blockquote):not(.steps) { max-width: 64ch; }
+.sec-body > * + * { margin-top: 1.1em; }
+.sec-body li + li { margin-top: .5em; }
+.sec-body > h3 { margin-top: 1.8em; }
+.sec-body > h3 + * { margin-top: .5em; }
+@media (max-width: 640px) { .sec-body { font-size: 16.5px; line-height: 1.66; } }
+.sec-foot { margin-top: 28px !important; padding-top: 16px; }
+.sec-body + .sec-stage { margin-top: 1.7em; }
+.sec-card .sec-fit > * + * { margin-top: 22px; }
+
+/* the intro before the first card keeps a readable measure too */
+.doc .prose > :is(p, ul, ol, .tldr, .callout) { max-width: 760px; }
+
+/* ------------------------------------------------------------------ Core / Everything: one steady row */
+.seg button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; line-height: 1.2; min-height: 30px; }
+.rail-depth, .rb-depth { flex-wrap: nowrap; }
+.rail-depth button { flex: 1 1 0; }
+.rb-depth .depth-more, .rail-depth .depth-more { font: 600 11px var(--font-mono); color: var(--muted); background: var(--card-2); border-radius: 999px; padding: 1px 6px; }
+.seg button[aria-pressed=true] .depth-more { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+
+/* ------------------------------------------------------------------ the 30-second card: the answer first, in plain sans */
+.saycard { border: 1px solid var(--border); padding: 22px 26px 22px 30px; border-radius: var(--radius-lg); box-shadow: inset 4px 0 0 var(--hl); margin-bottom: 28px; }
+.saycard-answer { font-family: var(--font-sans); font-size: 18px; line-height: 1.6; font-weight: 500; margin-bottom: 18px; max-width: 62ch; }
+.saycard-numbers { gap: 10px; margin-bottom: 18px; }
+.saycard-numbers li { padding: 10px 14px; border: 0; }
+.saycard-cols { gap: 26px; }
+
+/* ------------------------------------------------------------------ primers: "What is X?" */
+.primer-fold { margin: 0 0 var(--space-cards); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); overflow: hidden; }
+.primer-fold-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 22px; border: 0; background: transparent; color: var(--fg); text-align: left; font: inherit; cursor: pointer; }
+.primer-fold-head:hover { background: var(--card-2); }
+.primer-fold-head .eyebrow { color: var(--accent-2); }
+.primer-fold-head b { flex: 1; font-size: 16.5px; }
+.primer-chev { flex: none; color: var(--muted); transition: transform .2s var(--ease-out); }
+.primer-fold:not([data-open]) .primer-chev { transform: rotate(-90deg); }
+.primer-fold > .primer { padding: 8px 24px 24px; }
+
+.primer { display: grid; gap: 24px; }
+.primer-top { display: flex; align-items: center; gap: 28px; }
+.primer-top > * { min-width: 0; }
+.primer-idea, .primer-analogy { overflow-wrap: anywhere; }
+.primer-top > div:last-child { min-width: 0; display: grid; gap: 12px; }
+.primer-idea { margin: 0; font-family: var(--font-display); font-variation-settings: "SOFT" 60; font-size: clamp(21px, 2.4vw, 25px); line-height: 1.32; font-weight: 600; letter-spacing: -.01em; }
+.primer-analogy { margin: 0; font-size: 16.5px; line-height: 1.6; color: var(--muted); padding-left: 16px; border-left: 3px solid var(--hl); }
+.primer-flow { min-width: 0; }
+.primer-flow > * { margin: 0; }
+.primer-remember { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; counter-reset: rem; }
+.primer-remember li { counter-increment: rem; margin: 0; padding: 14px 16px 14px 50px; position: relative; border-radius: var(--radius); background: var(--card-2); font-weight: 560; line-height: 1.45; font-size: 15.5px; }
+.primer-remember li::before { content: counter(rem); position: absolute; left: 14px; top: 13px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font: 700 13px var(--font-mono); }
+.primer-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.primer-cols > div { padding: 16px 20px; border-radius: var(--radius); background: var(--card-2); }
+.primer-cols > div:last-child { background: color-mix(in srgb, var(--hl) 14%, var(--card)); }
+.primer-cols h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.primer-cols p { margin: 0; line-height: 1.58; }
+.primer-say { margin: 0; padding: 16px 22px; border-radius: 0 var(--radius) var(--radius) 0; border-left: 4px solid var(--hl); background: color-mix(in srgb, var(--hl) 14%, var(--card)); font-size: 17px; line-height: 1.58; font-weight: 500; }
+.primer-say .eyebrow { display: block; margin-bottom: 4px; }
+.primer-more { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.primer-more li { margin: 0; }
+.primer-open { margin: 0; font-size: 14.5px; }
+.primer-open .link, .primer-more .link { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.primer-page { max-width: 920px; padding-block: 24px 64px; }
+.primer-page h1 { margin: 10px 0 18px; font-size: clamp(32px, 5vw, 44px); }
+.primer-back { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.primer-page .prev-next { margin-top: 36px; }
+
+.basics-grid { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.basics-grid > li { margin: 0; display: flex; }
+.basics-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; padding: 20px 22px 18px; }
+.basics-card h2 { margin: 6px 0 0; font-size: 20px; }
+.basics-card p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+.basics-card .tc-go { margin-top: auto; padding-top: 8px; }
+
+@media (max-width: 720px) {
+  .primer-top { flex-direction: column; align-items: stretch; gap: 14px; }
+  .primer-remember, .primer-cols { grid-template-columns: minmax(0, 1fr); }
+  .primer-fold > .primer { padding: 6px 16px 18px; }
+  .primer-fold-head { padding: 12px 16px; }
+  .primer-fold-head .eyebrow { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) { .primer-chev { transition: none; } }
+@media print { .primer-fold-head { display: none; } }

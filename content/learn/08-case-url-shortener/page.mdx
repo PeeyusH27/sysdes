@@ -2,14 +2,14 @@ import { urlShortener } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-A URL shortener is a read-heavy key-value lookup: about **40 writes/s and 4,000 redirects/s**. Use 7-character base62 codes from scrambled **range-allocated counters**, serve redirects from CDN and Redis over Postgres, and send clicks through a **queue** so analytics never slow a redirect.
+A URL shortener is a read-heavy lookup: about **40 writes and 4,000 redirects a second**. Hand out short codes from a counter, serve redirects from cache, and send clicks through a queue so analytics never slow a redirect.
 </TLDR>
 
 ## Why it matters
 
-Every earlier idea (estimation, IDs, caching, storage) in one 45-minute problem. Interviewers watch **how** you work, and how deep you go on code generation, 301 vs 302 and redirect speed.
+One problem that uses everything so far. Interviewers watch how you work, then dig into codes, 301 vs 302 and speed.
 
-Narrate each scenario in the diagram; **Click analytics** shows the async side.
+Play each scenario. **Click analytics** shows the async side.
 
 <FlowDiagram spec={urlShortener} />
 
@@ -21,18 +21,25 @@ Narrate each scenario in the diagram; **Click analytics** shows the async side.
   outOfScope={["Editing a link's destination", "User accounts and billing", "QR codes and link-in-bio pages"]}
 />
 
-Say it out loud: **redirects matter more than creation**. Creation down? People retry. Redirects down? Every link ever shared, in emails, PDFs and posters, breaks at once.
+**Redirects matter more than creation.** If creation is down, people retry. If redirects are down, every link ever shared breaks at once.
 
 ## Estimation
 
-- 100M new URLs a month ≈ **40 writes/s**.
-- 100 reads per write ≈ **4,000 redirects/s**; **12K/s** at a 3× peak.
-- 6B URLs over 5 years × ~500 B ≈ **3 TB** (9 TB with 3 replicas).
-- 62⁷ ≈ **3.5 trillion** 7-character base62 codes: plenty.
+100M new links a month is **40 writes a second**. At 100 reads per write, that is **4,000 redirects a second**. Six billion links in 5 years is about 3 TB.
 
-One Postgres primary barely notices 40 inserts/s: **the read path is the whole game**. And the hot set fits in memory: 10M codes × ~600 B ≈ 6 GB, one Redis node.
+One database barely notices 40 writes a second. **The read path is the whole game.** The popular links fit in about 6 GB: one Redis node.
 
-In the calculator, drag **Reads per write** or **Daily active users** and watch what moves.
+Do the sum first:
+
+| Reads per write | Redirects/s | Plan |
+|---|---|---|
+| 1 | 40 | One database, no cache |
+| 100 | 4,000 | Add Redis; the database would sweat |
+| 1,000 | 40,000 | CDN and Redis, no choice |
+
+A private link tool with 1,000 redirects a day needs none of this.
+
+Drag **Reads per write** in the calculator.
 
 <StatTiles items={[
   { label: "Writes", value: "40/s", sub: "100M a month" },
@@ -45,13 +52,13 @@ In the calculator, drag **Reads per write** or **Daily active users** and watch 
 
 ## API
 
-| Method | Path | Body / result |
+| Method | Path | Result |
 |---|---|---|
-| POST | `/api/urls` | `{ longUrl, alias?, expiresAt? }` → `201 { code, shortUrl }` · `409` alias taken · `429` rate limited |
-| GET | `/:code` | `302` (or `301`) to `long_url` · `404` · `410` expired |
+| POST | `/api/urls` | `201 { code, shortUrl }` · `409` alias taken · `429` rate limited |
+| GET | `/:code` | `302` (or `301`) to the long URL · `404` · `410` expired |
 | GET | `/api/urls/:code/stats` | `{ clicks, byDay[], topReferrers[] }` |
 
-The redirect lives at the root (`short.example/oqxem9y`) to stay short, so reserve `api`, `admin`, `login` and the like: they can never be aliases.
+The redirect lives at the root to stay short, so reserve `api`, `admin` and `login`: they can never be aliases.
 
 ## Data model
 
@@ -66,106 +73,107 @@ CREATE TABLE urls (
 CREATE INDEX urls_expiry ON urls (expires_at) WHERE expires_at IS NOT NULL;   -- for the cleanup job
 ```
 
-Every read is a primary-key lookup on `code`, no joins; at scale, a key-value table (DynamoDB, Cassandra) sharded by hash of the code. Never count clicks here: 4,000 updates a second would make a read-only table write-hot.
+Every read is a lookup by `code`, with no joins. At scale, use a key-value table sharded by hash of the code. Never count clicks here: 4,000 updates a second would make a read-only table write-hot.
 
 ## Generating short codes
 
-Unique, short, cheap. Four candidates:
+<Doodle name="hash-map" size={150} caption />
 
-| Option | Unique? | Needs | Guessable? |
-|---|---|---|---|
-| Counter + base62 (shortest) | Yes | A counter (range allocation) | **Yes**, unless scrambled |
-| Hash (MD5/SHA), truncated (7+) | Collisions possible | Nothing | No |
-| Random + uniqueness check (7) | Rare retry (~0.17% at 6B of 3.5T used) | Nothing | No |
-| Snowflake 64-bit id (11 in base62) | Yes | Worker ids | Partly (time-ordered) |
+A short code is a number written with 62 symbols (**base62**: 0-9, a-z, A-Z). Seven symbols give 3.5 trillion codes. Six billion links fill only 0.2% of that, so a random code collides about 1 time in 600.
 
-**Base62** (`0-9`, `a-z`, `A-Z`) is URL-safe, unlike base64's `+` and `/`.
+Where does the number come from?
 
-**Hashing** needs no coordination, but 7 truncated characters collide (millions over five years at 6B links), so you still check and retry. And identical URLs share one code, breaking per-user analytics and expiry.
+| Option | Unique? | The catch |
+|---|---|---|
+| Counter | Yes | Guessable unless scrambled |
+| Hash, cut to 7 | Collisions | Check and retry |
+| Random + check | Rare retry | Check on every insert |
 
-**One counter** is a hot spot and a single point of failure. Use **range allocation**: each app server grabs 1,000 ids with one atomic `INCRBY` and serves them from memory, so at 40 writes/s the counter sees a call about **every 25 seconds**. A crash wastes a block. Fine: ids must be unique, not contiguous.
+Use a counter. One counter is a bottleneck, so each app server grabs 1,000 ids at once and hands them out from memory. A crash wastes a block. That is fine: ids must be unique, not contiguous.
 
-In the playground, step an id to see its code, then change app servers and block size.
+Step an id in the playground, then change the block size.
 
 <Base62Playground />
 
 ## Making sequential ids unguessable
 
-Base62 of a counter only *looks* random: 1000, 1001, 1002 become `g8`, `g9`, `ga`. Anyone can walk the keyspace and read private links (shared documents, password resets, invoices).
+Base62 of a counter only looks random: 1000, 1001, 1002 become `g8`, `g9`, `ga`. Anyone can walk the codes and read private links.
 
-Scramble first: multiply by a large constant `P` modulo 62⁷. `P` shares no factor with 62⁷ = 2⁷ · 31⁷, so the map is a **bijection**: every id gets its own code, always 7 characters, reversible with the modular inverse. `shortCode(1)` is `CjIO2GV`; `shortCode(2)` is `eDrC5nQ`.
+Scramble first: multiply the id by a large constant modulo 62⁷. Every id still gets its own 7-character code, and you can reverse it. `shortCode(1)` is `CjIO2GV`; `shortCode(2)` is `eDrC5nQ`.
 
 <Callout kind="warning" title="Obfuscation, not security">
-The scramble is linear: two consecutive codes reveal the step. It stops casual guessing, not a determined attacker. If enumeration must be impossible (private documents), use **random** codes with a uniqueness check, or longer codes plus access control on the destination.
+Two consecutive codes reveal the step. This stops casual guessing, not a determined attacker. If guessing must be impossible, use **random** codes with a uniqueness check.
 </Callout>
 
 ## 301 vs 302
 
 Both redirect. The difference is who remembers the answer.
 
-| | 301 Moved Permanently | 302 Found |
-|---|---|---|
-| Browser caches it | Yes, often for a long time | No (unless `Cache-Control` allows it) |
-| CDN caches it | Yes | Only with an explicit `max-age` |
-| Every click reaches you | No: only the first per browser | Yes |
-| Change the destination later | Hard: old browsers keep the old one | Easy |
+A **301** says "moved for good": browsers and CDNs remember it, and repeat clicks never reach you. A **302** says "try here for now": every click comes back, so you can count it.
 
-A **301** is fastest, but clicks vanish and mistakes stay cached in browsers you can't reach. A **302** always comes back, so you can count, expire or disable. Default to 302. For the hottest links, `Cache-Control: max-age=60` on a 302 lets the CDN absorb load while you still see about one request per edge per minute.
+With a 301, a campaign link whose destination you fix later keeps sending returning visitors to the old page.
+
+| | 301 | 302 |
+|---|---|---|
+| Every click reaches you | No | Yes |
+| Change the destination later | Hard | Easy |
+| Speed | Fastest | One extra trip |
+
+Default to 302. For the hottest links, add `Cache-Control: max-age=60`: the CDN absorbs the load, and you still see some requests.
 
 ## Scaling the reads
 
-A few codes get most clicks (a power law). Each layer catches traffic before Postgres:
+A few links get most of the clicks. Stack caches so most reads never reach the database:
 
-1. **CDN.** Caches 301s and short-max-age 302s at the edge.
-2. **Redis.** Cache-aside on `u:<code>`, TTL one day capped at expiry. At 4,000 redirects/s and a 95% hit ratio, Postgres sees 200 reads/s.
-3. **In-process L1.** A viral link (50K redirects/s on one key) overloads one Redis node; a tiny few-second LRU in each app server absorbs it.
-4. **The database.** Key-value by `code`, read replicas, hash-sharded once it outgrows one machine.
+1. **CDN.** Answers at the edge.
+2. **Redis.** Remembers recent codes. At 4,000 a second and 95% hits, Postgres sees only 200 reads a second.
+3. **A tiny cache in each app server**, so a viral link (50K a second) does not overload one Redis node.
+4. **Read replicas** behind it all.
 
-Redirects never write to `urls`, so replicas in every region serve them; creation (40/s) stays in one primary region. Cached codes survive a Postgres blip: that's your 99.99%.
+Cached links survive a database blip.
 
 ## Click analytics
 
-The redirect fires a click event and **never awaits it**:
+<Doodle name="queue" size={150} caption />
 
-1. Publish `{ code, ts, referrer }` to a queue while sending the 302.
-2. A worker consumes batches of a few thousand.
-3. It bulk-inserts them into a columnar store (ClickHouse), partitioned by day.
-4. The stats API reads rollups (clicks per day, top referrers), not raw events.
+A redirect never waits for counting. It drops a click note on a **queue** and moves on.
 
-Queue or analytics store down? You lose or delay a few counts, never a redirect. Two details interviewers like: filter out bots and link-preview fetchers (chat apps unfurl every link), and store a country, not the IP.
+A worker saves notes in batches to an analytics store. The stats page reads daily totals.
+
+If the queue is down, you lose a few counts, never a redirect.
 
 ## Expiry and cleanup
 
-Expired means expired, even when hot in cache.
+Expired means expired, even when the link is hot in cache.
 
-- **Lazy check on read.** Lookups filter on `expires_at > now()`; cache TTLs are capped at expiry.
-- **Nightly cleanup.** Small batches via the partial index on `expires_at`, never a long table lock.
-- **Status code.** `410 Gone` with a tombstone, `404` once the row is deleted.
-- **Never reuse codes.** Old links live on in emails, PDFs and printed QR codes; reuse sends their clicks to a stranger's destination (phishing). With 3.5 trillion codes, there's no need.
+- **Check on read**, and cap cache lifetimes at expiry.
+- **Clean up nightly**, in small batches.
+- **Answer `410 Gone`**, then `404` once the row is gone.
+- **Never reuse codes.** Old links live on in emails and printed QR codes.
 
 ## Abuse and safety
 
-Shorteners are a favourite disguise for malicious links:
+Shorteners are a favourite disguise for malicious links.
 
-- **Rate-limit creation** per user and IP: the API's `429` (see the [rate limiter question](/questions/rate-limiter)).
-- **Scan destinations** against malware and phishing lists at creation, and rescan: destinations turn bad later.
-- **Block `javascript:` and `data:` URLs.** Allow only `http` and `https`, as `routes.js` does.
-- **Keep aliases apart.** Reserve `api`, `admin`, `login`, `static` and brand names. Require 8+ characters or a character codes never use (like `-`), or a user can claim a code the counter will generate later, and that insert fails.
-- **Disable, don't delete.** Show a warning page; purge from Redis and the CDN.
+- **Rate-limit creation** (see the [rate limiter question](/questions/rate-limiter)).
+- **Scan destinations** for malware and phishing, and again later.
+- **Allow only `http` and `https`.**
+- **Keep aliases apart** from generated codes (say 8 or more characters).
+- **Disable, don't delete.** Show a warning page and purge the caches.
 
 ## Code
 
-`range-allocator.js` shares one in-flight refill, so a burst on an empty block makes **one** Redis call, not hundreds. `routes.js` validates the scheme, maps a unique violation to `409`, never caches past expiry, and fires the click event unawaited.
+`range-allocator.js` shares one refill, so a burst on an empty block makes **one** Redis call. `routes.js` validates the URL, maps a duplicate to `409`, and fires the click event without waiting.
 
 <CodeTabs files={['snippets/base62.js', 'snippets/scramble.js', 'snippets/range-allocator.js', 'snippets/routes.js']} />
 
 ## Build it in the playground
 
-Try the [URL shortener challenge](/playground/url-shortener): wire components on a canvas and get graded on a load balancer before several app servers, a cache before the database, an ID generator, a database replica and async click analytics. The reference design appears after your first submit.
+Try the [URL shortener challenge](/playground/url-shortener): wire components on a canvas and get graded.
 
 <Callout kind="warning" title="Classic mistakes">
 - Returning 301, then promising click analytics.
-- Counting clicks in `urls`, or awaiting the analytics write, on every redirect.
+- Counting clicks in `urls`, or waiting on the analytics write.
 - Caching a link longer than it lives.
 </Callout>
 
@@ -173,19 +181,19 @@ Try the [URL shortener challenge](/playground/url-shortener): wire components on
 
 <FollowUps>
   <FollowUp q="Counter-based vs hash-based short codes?">
-    Counters: unique and shortest, but need coordination (range allocation removes the hot spot) and are guessable unless scrambled. Hashes: no coordination, but collisions, longer codes, and one shared code per URL.
+    Counters are unique but guessable unless scrambled. Hashes collide.
   </FollowUp>
   <FollowUp q="301 or 302?">
-    302 if analytics matter or the link may change; 301 for pure speed, since browsers and CDNs answer and you stop seeing clicks. Very hot links: a 302 with a short `max-age`.
+    302 if you count clicks or may change the link. 301 only for pure speed.
   </FollowUp>
   <FollowUp q="How do custom aliases work?">
-    Validate charset and length, check reserved words, let the primary key reject duplicates (409). Keep aliases out of the generated namespace, say longer than 7 characters.
+    Check length and reserved words, and let the primary key reject duplicates with a 409.
   </FollowUp>
   <FollowUp q="How do you expire links?">
-    Store `expires_at`, check it on read (410 or 404), cap cache TTLs at expiry, clean up nightly, and never reuse codes.
+    Check `expires_at` on read, cap cache lifetimes, clean up nightly, never reuse codes.
   </FollowUp>
   <FollowUp q="A link goes viral (50K redirects/s). Now what?">
-    CDN (a 301 or a short-max-age 302), an in-process L1 on every app server so one Redis node isn't the hot spot, and async, batched analytics.
+    Let the CDN answer, add a tiny cache in every app server, and batch the analytics.
   </FollowUp>
 </FollowUps>
 

@@ -48,7 +48,23 @@ test.describe("desktop (1440×900)", () => {
 test.describe("phone (390 px)", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
+  test("a phone reads one card at a time by default, without sideways scrolling", async ({ page }) => {
+    await page.goto("/learn/caching");
+    await page.evaluate(() => { localStorage.clear(); localStorage.setItem("sds-view", "read"); });
+    await page.reload();
+    await expect(page.locator(".reader")).toHaveAttribute("data-mode", "cards");
+    await expect(page.locator(".sec-card:visible")).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    // The choice is the reader's: switching to Scroll sticks.
+    await page.getByRole("button", { name: "Scroll" }).first().click();
+    await expect(page.locator(".reader")).toHaveAttribute("data-mode", "scroll");
+    await page.reload();
+    await expect(page.locator(".reader")).toHaveAttribute("data-mode", "scroll");
+  });
+
   test("text and visuals stack: the words first, then the visual, nothing hidden", async ({ page }) => {
+    // This is the scroll layout, so ask for it: a phone's default is cards.
+    await page.addInitScript(() => localStorage.setItem("sds-progress", JSON.stringify({ state: { readerMode: "scroll" }, version: 2 })));
     await page.goto("/learn/caching");
     await expect(page.locator(".rail")).toBeHidden();
     const stage = await box(page, '.sec-card[data-sec="why-it-matters"] .sec-stage');

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { allPages } from "@content/registry";
+import { primers } from "@content/primers";
 import { problemSlugs, loadExercises } from "@/lib/dsa/load";
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -7,10 +8,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const paths = [
     "/",
     "/system-design",
+    "/basics",
     "/learn",
     "/deep-dives",
     "/questions",
     "/lld",
+    "/plan",
+    "/architecture",
+    "/mock",
     "/playground",
     "/dsa/drill",
     "/dsa",
@@ -21,6 +26,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...allPages()
       .map((p) => p.href)
       .filter((h) => !h.includes("#")),
+    ...primers().map((p) => `/basics/${p.id}`),
     ...problemSlugs().map((s) => `/dsa/problems/${s}`),
     ...loadExercises().map((e) => `/lld/exercises/${e.slug}`),
   ];

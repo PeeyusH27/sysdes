@@ -6,6 +6,11 @@ import { useProgress } from "@/lib/progress";
 
 function MotionSettings({ children }: { children: React.ReactNode }) {
   const reduce = useProgress((s) => s.reduceMotion);
+  const sketch = useProgress((s) => s.sketch);
+  useEffect(() => {
+    if (sketch) document.documentElement.dataset.sketch = "on";
+    else delete document.documentElement.dataset.sketch;
+  }, [sketch]);
   useEffect(() => {
     if (reduce) document.documentElement.dataset.motion = "reduce";
     else delete document.documentElement.dataset.motion;

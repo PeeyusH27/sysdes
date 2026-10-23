@@ -6,14 +6,14 @@ export const quiz: QuizItem[] = [
     options: ["Write-through", "Write-behind", "Cache-aside"],
     answer: 1,
     explain:
-      "Write-behind acknowledges the write once it's in the cache or an in-memory buffer. If the process crashes before the next flush, those writes never reach the database.",
+      "Write-behind says 'done' once the write is in the cache. If it crashes before the next flush, the database never gets it.",
   },
   {
     q: "What's the safety net for in-process (L1) caches?",
     options: ["A bigger L1", "Short TTLs alongside pub/sub invalidation", "Updating L1 on every write"],
     answer: 1,
     explain:
-      "Pub/sub is fire-and-forget, so an instance can miss an invalidation. A TTL of a few seconds bounds how long that stale copy can live.",
+      "An instance can miss a pub/sub message. A TTL of a few seconds limits how long its copy stays stale.",
   },
   {
     q: "A Bloom filter answers 'might contain' for an id. What do you know?",
@@ -24,6 +24,6 @@ export const quiz: QuizItem[] = [
     ],
     answer: 1,
     explain:
-      "Bloom filters have false positives but no false negatives. 'No' means definitely absent (skip the lookup); 'maybe' means do the normal lookup.",
+      "A Bloom filter can say 'maybe' wrongly, but never 'no' wrongly. 'No' means skip the lookup; 'maybe' means look it up as usual.",
   },
 ];

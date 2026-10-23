@@ -1,0 +1,1089 @@
+[
+  {
+    "term": "ACID",
+    "def": "Four promises for a transaction: all or nothing, rules kept, no interference from others, and saved even after a crash.",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Acknowledgement (ack)",
+    "def": "A short reply meaning \"got it\". Until the sender hears one, it may send the message again.",
+    "aliases": [
+      "acknowledgment",
+      "acked"
+    ],
+    "href": "/questions/chat",
+    "short": "chat-store-then-ack"
+  },
+  {
+    "term": "Anycast",
+    "def": "Many servers around the world share one IP address, and the network sends each user to the nearest one.",
+    "short": "dns-anycast-geodns"
+  },
+  {
+    "term": "API gateway",
+    "def": "One front door in front of your services. It checks who is calling, limits traffic, routes each request and logs it.",
+    "primer": "api-gateway",
+    "href": "/learn/api-load-balancing"
+  },
+  {
+    "term": "At-least-once delivery",
+    "def": "A promise that every message arrives, even if that means some arrive twice. So the receiver must cope with repeats.",
+    "aliases": [
+      "at-least-once"
+    ],
+    "href": "/learn/async-messaging",
+    "short": "idempotent-consumers"
+  },
+  {
+    "term": "Autoscaling",
+    "def": "Adding or removing servers automatically as load changes, based on things like CPU, request rate or queue length.",
+    "aliases": [
+      "autoscale"
+    ],
+    "short": "autoscaling"
+  },
+  {
+    "term": "B-tree",
+    "def": "The sorted, tree-shaped index most SQL databases use. A lookup takes just a few page reads, and changes are made in place.",
+    "aliases": [
+      "B-tree index"
+    ],
+    "short": "lsm-tree-vs-b-tree"
+  },
+  {
+    "term": "Backpressure",
+    "def": "When a receiver can't keep up, it tells senders to slow down (or some work is dropped) instead of letting it pile up.",
+    "aliases": [
+      "back-pressure"
+    ],
+    "href": "/learn/async-messaging",
+    "short": "backpressure-load-shedding"
+  },
+  {
+    "term": "Bloom filter",
+    "def": "A tiny memory-saving check of whether you have seen something. It may say \"maybe\", but its \"no\" is always right.",
+    "primer": "bloom-filter",
+    "href": "/deep-dives/caching-techniques",
+    "short": "bloom-filter"
+  },
+  {
+    "term": "Blue-green deployment",
+    "def": "Run two identical copies of your system. Switch all traffic from the old one to the new one, and back if it goes wrong.",
+    "aliases": [
+      "blue-green"
+    ],
+    "short": "blue-green-canary"
+  },
+  {
+    "term": "Bulkhead",
+    "def": "Giving each outside service its own separate pool of workers, so one slow service can't use up everyone's share. Like ship compartments.",
+    "aliases": [
+      "bulkheads"
+    ],
+    "href": "/learn/reliability-observability",
+    "short": "circuit-breaker-bulkhead"
+  },
+  {
+    "term": "Cache",
+    "def": "A small, fast place that keeps the answers you need most, so you rarely go to the slower source.",
+    "aliases": [
+      "caching"
+    ],
+    "primer": "cache",
+    "href": "/learn/caching"
+  },
+  {
+    "term": "Cache hit ratio",
+    "def": "The share of reads the cache answers without going to the database. Higher means the cache is helping.",
+    "aliases": [
+      "hit ratio",
+      "hit rate",
+      "cache hit"
+    ],
+    "primer": "cache",
+    "href": "/learn/caching"
+  },
+  {
+    "term": "Cache-aside",
+    "def": "The app checks the cache first. If the answer is missing, it asks the database, then saves it in the cache for next time.",
+    "aliases": [
+      "lazy loading"
+    ],
+    "primer": "cache",
+    "href": "/learn/caching",
+    "short": "cache-aside-default"
+  },
+  {
+    "term": "Canary release",
+    "def": "Send a small slice of users to the new version first and watch for problems before rolling it out to everyone.",
+    "aliases": [
+      "canary"
+    ],
+    "short": "blue-green-canary"
+  },
+  {
+    "term": "CAP theorem",
+    "def": "If a network split cuts your copies of the data apart, you can keep answers correct or keep answering, but not both.",
+    "aliases": [
+      "CAP"
+    ],
+    "primer": "cap",
+    "href": "/learn/consistency-cap",
+    "short": "cap-during-a-partition"
+  },
+  {
+    "term": "CDN",
+    "def": "Servers around the world that keep copies of your files, so each user downloads from one nearby.",
+    "aliases": [
+      "content delivery network"
+    ],
+    "primer": "cdn",
+    "href": "/learn/caching",
+    "short": "cdn-pull-vs-push"
+  },
+  {
+    "term": "Circuit breaker",
+    "def": "After too many failures, stop calling a broken service for a while and fail right away. Like a fuse in your house.",
+    "primer": "circuit-breaker",
+    "href": "/learn/reliability-observability",
+    "short": "circuit-breaker-bulkhead"
+  },
+  {
+    "term": "Columnar storage",
+    "def": "Storing each column together instead of each row. Reports that need a few columns read less data, and it compresses well.",
+    "short": "columnar-storage"
+  },
+  {
+    "term": "Compare-and-set",
+    "def": "Update a value only if it still equals what you last saw. If not, it fails, so two writers can't both win.",
+    "aliases": [
+      "compare and set",
+      "CAS"
+    ],
+    "href": "/questions/ride-sharing",
+    "short": "ride-matching-compare-and-set"
+  },
+  {
+    "term": "Connection pool",
+    "def": "A set of already-open connections that requests borrow and return, instead of opening a new one every time.",
+    "aliases": [
+      "connection pooling"
+    ],
+    "primer": "connection-pool",
+    "href": "/deep-dives/connections-pooling",
+    "short": "pool-size-total"
+  },
+  {
+    "term": "Consensus",
+    "def": "Several machines agreeing on one answer, even when some of them fail or messages get lost.",
+    "href": "/learn/consistency-cap"
+  },
+  {
+    "term": "Consistent hashing",
+    "def": "Servers and keys are placed around a circle. Adding a server moves only about 1/N of the keys, not all of them.",
+    "aliases": [
+      "hash ring"
+    ],
+    "primer": "consistent-hashing",
+    "href": "/deep-dives/sharding-strategies",
+    "short": "consistent-hashing-ring"
+  },
+  {
+    "term": "Consumer",
+    "def": "The program that takes messages from a queue or topic and does the work.",
+    "primer": "queue",
+    "href": "/learn/async-messaging"
+  },
+  {
+    "term": "Count-min sketch",
+    "def": "A small grid of counters that estimates how often each item appears. It can guess too high, but never too low.",
+    "short": "count-min-sketch"
+  },
+  {
+    "term": "CQRS",
+    "def": "Splitting a system into one part that handles writes and separate parts, shaped for reading, that answer queries.",
+    "short": "event-sourcing-cqrs"
+  },
+  {
+    "term": "CRDT",
+    "def": "A data type built so copies can be changed separately, anywhere, and always merge into the same result without conflicts.",
+    "aliases": [
+      "conflict-free replicated data type"
+    ],
+    "href": "/learn/consistency-cap",
+    "short": "crdts"
+  },
+  {
+    "term": "Cursor pagination",
+    "def": "Fetching the next page with \"give me what comes after this item\", not \"page 3\", so new items don't shift the pages.",
+    "aliases": [
+      "keyset pagination"
+    ],
+    "href": "/learn/api-load-balancing",
+    "short": "feed-cursor-pagination"
+  },
+  {
+    "term": "Database index",
+    "def": "A side lookup the database keeps so it can find rows fast, like the index at the back of a book.",
+    "aliases": [
+      "secondary index"
+    ],
+    "primer": "db-index",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Dead letter queue (DLQ)",
+    "def": "A holding area for messages that kept failing after every retry, so people can inspect them and try again later.",
+    "aliases": [
+      "dead letter",
+      "dead-letter queue"
+    ],
+    "primer": "queue",
+    "href": "/learn/async-messaging",
+    "short": "idempotent-consumers"
+  },
+  {
+    "term": "Debounce",
+    "def": "Wait until typing pauses before doing the work, so you don't call the search server on every keystroke.",
+    "aliases": [
+      "debouncing"
+    ],
+    "href": "/questions/typeahead",
+    "short": "typeahead-debounce-abort"
+  },
+  {
+    "term": "Deduplication (dedupe)",
+    "def": "Spotting and dropping repeats, so the same thing is only handled once.",
+    "aliases": [
+      "dedup",
+      "deduplicate"
+    ],
+    "href": "/learn/async-messaging"
+  },
+  {
+    "term": "DNS",
+    "def": "The internet's phone book: it turns a name like example.com into the numeric address of a server.",
+    "href": "/deep-dives/request-flows",
+    "short": "dns-anycast-geodns"
+  },
+  {
+    "term": "Double-entry ledger",
+    "def": "A money record where every transfer is written twice, as a debit and a credit that cancel out, so balances can always be checked.",
+    "aliases": [
+      "double entry"
+    ],
+    "href": "/questions/payment-system",
+    "short": "payment-double-entry-ledger"
+  },
+  {
+    "term": "Error budget",
+    "def": "How much failure you are allowed: 100% minus your reliability target. You can spend it by shipping risky changes.",
+    "href": "/learn/reliability-observability",
+    "short": "slo-error-budget"
+  },
+  {
+    "term": "Event sourcing",
+    "def": "Instead of storing the current state, store every change as an event, and rebuild the state by replaying them. Like a bank statement.",
+    "short": "event-sourcing-cqrs"
+  },
+  {
+    "term": "Eventual consistency",
+    "def": "Copies may disagree for a moment, but once writes stop they all end up the same.",
+    "aliases": [
+      "eventually consistent"
+    ],
+    "href": "/learn/consistency-cap"
+  },
+  {
+    "term": "Eviction",
+    "def": "Throwing items out of a full cache to make room. A policy such as LRU decides which ones go.",
+    "aliases": [
+      "evict"
+    ],
+    "primer": "cache",
+    "href": "/learn/caching"
+  },
+  {
+    "term": "Exactly-once delivery",
+    "def": "A promise that each message is handled once, not twice. In practice it is at-least-once delivery plus ignoring repeats.",
+    "aliases": [
+      "exactly-once"
+    ],
+    "href": "/learn/async-messaging"
+  },
+  {
+    "term": "Exponential backoff",
+    "def": "Waiting longer after each failed try, such as 1, 2, 4, 8 seconds, so a struggling server gets room to recover.",
+    "aliases": [
+      "backoff"
+    ],
+    "href": "/learn/reliability-observability",
+    "short": "retries-with-jitter"
+  },
+  {
+    "term": "Failover",
+    "def": "Switching to a backup when the main machine fails, so the service keeps running.",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Fan-out",
+    "def": "Copying one event to many places, like a post going to every follower's feed.",
+    "aliases": [
+      "fan out"
+    ],
+    "href": "/questions/news-feed",
+    "short": "hybrid-fan-out-feed"
+  },
+  {
+    "term": "Fan-out on write",
+    "def": "When someone posts, copy it into every follower's feed right away, so reading a feed is quick.",
+    "aliases": [
+      "push model"
+    ],
+    "href": "/questions/news-feed",
+    "short": "hybrid-fan-out-feed"
+  },
+  {
+    "term": "Feature flag",
+    "def": "A switch in the code you can flip while it runs, to show a feature to some users without deploying again.",
+    "aliases": [
+      "feature toggle"
+    ],
+    "short": "blue-green-canary"
+  },
+  {
+    "term": "Fencing token",
+    "def": "A number that goes up with every lock handed out. Storage refuses any holder with an older number, so a stale one can't do damage.",
+    "href": "/learn/consistency-cap",
+    "short": "fencing-tokens"
+  },
+  {
+    "term": "GeoDNS",
+    "def": "A DNS that gives different answers depending on where the asker is, so users reach a nearby server.",
+    "short": "dns-anycast-geodns"
+  },
+  {
+    "term": "Geohash",
+    "def": "Turns a map position into a short text code. The longer the start two codes share, the closer the places.",
+    "href": "/questions/ride-sharing",
+    "short": "geohash-quadtree"
+  },
+  {
+    "term": "Gossip protocol",
+    "def": "Every machine regularly tells a few random others what it knows, so news spreads through the whole cluster fast, like a rumor.",
+    "aliases": [
+      "gossip"
+    ],
+    "short": "gossip-protocol"
+  },
+  {
+    "term": "GraphQL",
+    "def": "A way to ask one endpoint for exactly the fields you want, in a single request.",
+    "short": "rest-grpc-graphql"
+  },
+  {
+    "term": "gRPC",
+    "def": "A fast way for services to call each other, using compact typed messages (Protobuf) over HTTP/2, with streaming.",
+    "short": "rest-grpc-graphql"
+  },
+  {
+    "term": "Heartbeat",
+    "def": "A regular \"I'm alive\" message. If several in a row are missed, the sender is assumed to be down.",
+    "aliases": [
+      "heartbeats"
+    ],
+    "short": "failure-detection"
+  },
+  {
+    "term": "Horizontal scaling",
+    "def": "Handling more load by adding more machines, instead of buying one bigger machine.",
+    "aliases": [
+      "scale out",
+      "scale horizontally",
+      "scaling out"
+    ],
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Hot key",
+    "def": "One key that gets far more traffic than the others, so whichever machine holds it is overloaded.",
+    "href": "/learn/caching",
+    "short": "cache-stampede"
+  },
+  {
+    "term": "Hot spot",
+    "def": "One machine, key or shard that gets far more traffic than the rest, while the others sit idle.",
+    "aliases": [
+      "hotspot",
+      "hot shard",
+      "hot partition"
+    ],
+    "href": "/deep-dives/sharding-strategies"
+  },
+  {
+    "term": "HTTP/2",
+    "def": "A newer HTTP that sends many requests at once over a single connection and compresses the headers.",
+    "short": "http-versions"
+  },
+  {
+    "term": "HTTP/3 (QUIC)",
+    "def": "The newest HTTP, run over QUIC (which is built on UDP). One lost packet doesn't stall everything, and it connects faster.",
+    "short": "http-versions"
+  },
+  {
+    "term": "HyperLogLog",
+    "def": "Counts roughly how many different items you have seen using only a few kilobytes of memory, with about 1% error.",
+    "short": "hyperloglog"
+  },
+  {
+    "term": "Idempotency key",
+    "def": "A unique id sent with a request. On a retry, the server sees the id and returns the saved result.",
+    "primer": "idempotency",
+    "href": "/learn/api-load-balancing",
+    "short": "idempotency-keys"
+  },
+  {
+    "term": "Idempotent",
+    "def": "Safe to repeat: doing it twice has the same effect as doing it once. Like pressing an elevator button again.",
+    "aliases": [
+      "idempotency"
+    ],
+    "primer": "idempotency",
+    "href": "/learn/api-load-balancing"
+  },
+  {
+    "term": "Inverted index",
+    "def": "A list that maps each word to the documents containing it, like a book's index. It powers search.",
+    "short": "inverted-index"
+  },
+  {
+    "term": "Jitter",
+    "def": "A little random delay added to waits, so many clients don't all retry at the same moment.",
+    "href": "/learn/reliability-observability",
+    "short": "retries-with-jitter"
+  },
+  {
+    "term": "JWT",
+    "def": "A signed token the server can check without a lookup. Anyone can read it, nobody can forge it, and it's hard to cancel early.",
+    "aliases": [
+      "JSON Web Token"
+    ],
+    "short": "jwt-vs-sessions"
+  },
+  {
+    "term": "Kafka",
+    "def": "A system that keeps a never-ending ordered log of messages, which many programs can read at their own pace.",
+    "href": "/learn/async-messaging"
+  },
+  {
+    "term": "Keep-alive",
+    "def": "Leaving a connection open after a request so the next one skips the setup work.",
+    "aliases": [
+      "keepalive",
+      "persistent connection"
+    ],
+    "href": "/deep-dives/connections-pooling",
+    "short": "keep-alive-handshake-tax"
+  },
+  {
+    "term": "L4 / L7 load balancing",
+    "def": "Two ways to balance load: by network address and port only (L4), or by reading the request itself, like its URL (L7).",
+    "aliases": [
+      "L4 load balancing",
+      "L7 load balancing"
+    ],
+    "primer": "load-balancer",
+    "href": "/learn/api-load-balancing",
+    "short": "power-of-two-choices"
+  },
+  {
+    "term": "Lamport timestamp",
+    "def": "A simple counter that orders events by cause and effect, without relying on clocks that may disagree.",
+    "aliases": [
+      "Lamport clock"
+    ],
+    "short": "lamport-vector-clocks"
+  },
+  {
+    "term": "Latency",
+    "def": "How long one request takes, from asking to getting the answer. Like the wait at a shop counter.",
+    "href": "/deep-dives/request-flows",
+    "short": "latency-numbers-to-know"
+  },
+  {
+    "term": "Leader election",
+    "def": "Picking one machine to be in charge of writes, usually by majority vote. If it dies, the rest vote for a new one.",
+    "href": "/learn/consistency-cap",
+    "short": "raft-leader-election"
+  },
+  {
+    "term": "List virtualization",
+    "def": "Drawing only the rows currently on screen in a long list, and reusing them as you scroll.",
+    "href": "/questions/infinite-feed",
+    "aliases": []
+  },
+  {
+    "term": "Little's law",
+    "def": "How many things are in a system at once equals how fast they arrive times how long each one stays.",
+    "aliases": [
+      "Little’s law"
+    ],
+    "href": "/learn/async-messaging"
+  },
+  {
+    "term": "Load balancer",
+    "def": "A traffic director that spreads incoming requests across several servers, so none gets overloaded.",
+    "aliases": [
+      "load balancing"
+    ],
+    "primer": "load-balancer",
+    "href": "/learn/api-load-balancing"
+  },
+  {
+    "term": "Load shedding",
+    "def": "When overloaded, refuse some requests early so the rest still get a good answer.",
+    "short": "backpressure-load-shedding"
+  },
+  {
+    "term": "Long polling",
+    "def": "The client asks, and the server waits to answer until it has news (or time runs out). Then the client asks again.",
+    "primer": "realtime",
+    "href": "/deep-dives/polling-sse-websockets",
+    "short": "realtime-transport-choice"
+  },
+  {
+    "term": "LOOK scheduling",
+    "def": "An elevator keeps going one way while stops remain ahead, then turns around, so no floor waits forever.",
+    "href": "/questions/elevator",
+    "short": "elevator-look-dispatch"
+  },
+  {
+    "term": "LRU",
+    "def": "Least recently used: when the cache is full, throw out the item nobody has touched for the longest time.",
+    "primer": "cache",
+    "href": "/learn/caching"
+  },
+  {
+    "term": "LSM tree",
+    "def": "A storage design for fast writes: save to memory and a log first, flush to sorted files, and merge those files later.",
+    "aliases": [
+      "log-structured merge tree"
+    ],
+    "short": "lsm-tree-vs-b-tree"
+  },
+  {
+    "term": "Merkle tree",
+    "def": "A tree of fingerprints (hashes) where each parent summarizes its children, so two copies find their differences by comparing a few hashes.",
+    "short": "merkle-tree"
+  },
+  {
+    "term": "Message queue",
+    "def": "A waiting line for messages. One program drops work in, another picks it up later, at its own pace.",
+    "aliases": [
+      "message broker",
+      "broker"
+    ],
+    "primer": "queue",
+    "href": "/learn/async-messaging"
+  },
+  {
+    "term": "MVCC",
+    "def": "Keeping several versions of each row, so readers see a steady snapshot and never block writers.",
+    "aliases": [
+      "multi-version concurrency control"
+    ],
+    "short": "mvcc-snapshot-isolation"
+  },
+  {
+    "term": "NoSQL",
+    "def": "Databases that give up the strict table-and-join model for flexibility and easier scaling. Cassandra and DynamoDB are examples.",
+    "primer": "sql-nosql",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "OAuth 2.0",
+    "def": "A standard way to let an app use part of your account without ever giving it your password.",
+    "aliases": [
+      "OAuth"
+    ],
+    "short": "oauth-pkce"
+  },
+  {
+    "term": "Object storage",
+    "def": "A cheap place to keep big files like photos and videos by name, such as S3. Not made for fast tiny lookups.",
+    "aliases": [
+      "blob storage",
+      "S3"
+    ],
+    "href": "/deep-dives/choosing-a-data-store"
+  },
+  {
+    "term": "Optimistic locking",
+    "def": "Don't lock while you work. When saving, check nobody else changed the row (with a version number), and retry if they did.",
+    "aliases": [
+      "optimistic concurrency"
+    ],
+    "short": "optimistic-vs-pessimistic-locking"
+  },
+  {
+    "term": "Outbox pattern",
+    "def": "Save the message to send in the same transaction as the data change. A separate worker sends it later, so a crash can't lose it.",
+    "aliases": [
+      "transactional outbox",
+      "outbox"
+    ],
+    "href": "/learn/async-messaging",
+    "short": "transactional-outbox"
+  },
+  {
+    "term": "p99",
+    "def": "The time that 99 out of 100 requests beat. It shows how slow the unlucky few are, which an average hides.",
+    "aliases": [
+      "99th percentile",
+      "P99"
+    ],
+    "href": "/learn/requirements-estimation"
+  },
+  {
+    "term": "PACELC",
+    "def": "Extends CAP: during a network split, choose availability or consistency; otherwise, choose between fast answers and consistent ones.",
+    "href": "/learn/consistency-cap"
+  },
+  {
+    "term": "Password hashing",
+    "def": "Storing passwords as a deliberately slow, salted scramble (Argon2id, scrypt, bcrypt), never a fast hash like SHA-256.",
+    "short": "password-hashing"
+  },
+  {
+    "term": "PKCE",
+    "def": "An extra check for OAuth login in apps that can't keep a secret, like phone or browser apps.",
+    "short": "oauth-pkce"
+  },
+  {
+    "term": "Poison message",
+    "def": "A message that fails every time it is processed, so retrying it never helps.",
+    "aliases": [
+      "poison pill"
+    ],
+    "href": "/learn/async-messaging"
+  },
+  {
+    "term": "Polling",
+    "def": "Asking the server again and again whether anything is new, like checking the mailbox every minute.",
+    "primer": "realtime",
+    "href": "/deep-dives/polling-sse-websockets",
+    "short": "realtime-transport-choice"
+  },
+  {
+    "term": "Primary database",
+    "def": "The one copy of a database that accepts writes. The replicas copy from it.",
+    "aliases": [
+      "primary",
+      "primary DB",
+      "primary node"
+    ],
+    "primer": "replication",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Primary key",
+    "def": "A column whose value is unique for every row, so each row can be found directly and never duplicated.",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Pub/sub (publish-subscribe)",
+    "def": "Senders publish messages to a named channel, and everyone subscribed to it gets a copy. The sender doesn't know who listens.",
+    "primer": "pub-sub",
+    "href": "/learn/async-messaging"
+  },
+  {
+    "term": "QPS",
+    "def": "Queries per second: how many requests hit your system each second. A way to size how much load you must handle.",
+    "aliases": [
+      "queries per second",
+      "requests per second",
+      "RPS"
+    ],
+    "href": "/learn/requirements-estimation",
+    "short": "qps-back-of-envelope"
+  },
+  {
+    "term": "Quadtree",
+    "def": "A map split into four squares, then each busy square split into four again, wherever points crowd together.",
+    "short": "geohash-quadtree"
+  },
+  {
+    "term": "Quorum",
+    "def": "With N copies, writing to W and reading from R overlap on a fresh copy whenever R + W > N.",
+    "aliases": [
+      "quorums"
+    ],
+    "primer": "replication",
+    "href": "/learn/consistency-cap",
+    "short": "quorum-r-plus-w"
+  },
+  {
+    "term": "Race condition",
+    "def": "A bug where the result depends on which of two actions happens first. Like two people grabbing the last seat.",
+    "aliases": [
+      "write race"
+    ],
+    "href": "/questions/movie-booking"
+  },
+  {
+    "term": "Raft",
+    "def": "A way for machines to agree: a majority elects one leader, and a change counts as saved once a majority has it.",
+    "short": "raft-leader-election"
+  },
+  {
+    "term": "Rate limiting",
+    "def": "Capping how many requests one client can make in a time window, so no one can overwhelm the service.",
+    "aliases": [
+      "rate limit",
+      "rate limiter"
+    ],
+    "primer": "rate-limiter",
+    "href": "/questions/rate-limiter",
+    "short": "token-bucket-vs-windows"
+  },
+  {
+    "term": "Read replica",
+    "def": "A copy of the database that answers reads. If the main one fails, it can take over.",
+    "aliases": [
+      "read replicas"
+    ],
+    "primer": "replication",
+    "href": "/learn/databases-scaling",
+    "short": "replicas-then-shards"
+  },
+  {
+    "term": "Read-your-writes",
+    "def": "A promise that after you save something, you see it when you read, even if the read comes from a copy that is behind.",
+    "aliases": [
+      "read your writes"
+    ],
+    "href": "/learn/consistency-cap"
+  },
+  {
+    "term": "Redis",
+    "def": "A very fast database that keeps data in memory. Often used as a cache, a counter store, or a leaderboard.",
+    "href": "/learn/caching"
+  },
+  {
+    "term": "Replica",
+    "def": "A copy of a database that follows the main one. It can answer reads and take over if the main one dies.",
+    "primer": "replication",
+    "href": "/learn/databases-scaling",
+    "short": "replicas-then-shards"
+  },
+  {
+    "term": "Replication",
+    "def": "Keeping copies of the same data on several machines, so you survive a failure and can spread out reads.",
+    "primer": "replication",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Replication lag",
+    "def": "How far a replica is behind the main database. During that gap, a read from the replica can return old data.",
+    "primer": "replication",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Resharding",
+    "def": "Moving data between shards when you add or remove machines. It is slow and risky, so pick the key well.",
+    "primer": "sharding",
+    "href": "/deep-dives/sharding-strategies"
+  },
+  {
+    "term": "RPO",
+    "def": "Recovery point objective: the most recent data you can afford to lose in a disaster, measured in time, like the last 5 minutes.",
+    "aliases": [
+      "recovery point objective"
+    ],
+    "href": "/learn/reliability-observability"
+  },
+  {
+    "term": "RTO",
+    "def": "Recovery time objective: how long you can stay down before you must be back up.",
+    "aliases": [
+      "recovery time objective"
+    ],
+    "href": "/learn/reliability-observability"
+  },
+  {
+    "term": "Saga",
+    "def": "A long task split into small steps, each with an \"undo\" step in case a later one fails. Used instead of one big all-or-nothing transaction.",
+    "href": "/learn/consistency-cap",
+    "short": "saga-pattern"
+  },
+  {
+    "term": "Scatter-gather",
+    "def": "Sending a query to every shard and merging the answers. It works, but it is only as fast as the slowest shard.",
+    "aliases": [
+      "scatter gather"
+    ],
+    "href": "/deep-dives/sharding-strategies"
+  },
+  {
+    "term": "Schema",
+    "def": "The blueprint of a database: which tables and columns exist, and what kind of value each one holds.",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Server-Sent Events (SSE)",
+    "def": "The server keeps one web response open and keeps pushing events to the browser. The browser reconnects by itself if it drops.",
+    "primer": "realtime",
+    "href": "/deep-dives/polling-sse-websockets",
+    "short": "realtime-transport-choice"
+  },
+  {
+    "term": "Service discovery",
+    "def": "How one service finds the live, healthy copies of another, using a registry or DNS.",
+    "short": "service-discovery"
+  },
+  {
+    "term": "Shard",
+    "def": "One slice of a split-up database. Each shard keeps part of the data on its own machine.",
+    "primer": "sharding",
+    "href": "/deep-dives/sharding-strategies"
+  },
+  {
+    "term": "Shard key",
+    "def": "The field that decides which shard a row goes to, like user id. A poor choice piles load onto one shard.",
+    "primer": "sharding",
+    "href": "/deep-dives/sharding-strategies",
+    "short": "shard-key-choice"
+  },
+  {
+    "term": "Sharding",
+    "def": "Splitting a database into pieces by a key, each on its own machine, so no one machine holds everything.",
+    "aliases": [
+      "sharded"
+    ],
+    "primer": "sharding",
+    "href": "/deep-dives/sharding-strategies",
+    "short": "shard-key-choice"
+  },
+  {
+    "term": "Single point of failure (SPOF)",
+    "def": "One part that, if it breaks, takes the whole system down with it.",
+    "href": "/learn/api-load-balancing"
+  },
+  {
+    "term": "Skip list",
+    "def": "Layers of linked lists where upper layers let you skip ahead, so search is fast and sorted ranges are easy to scan.",
+    "short": "skip-list"
+  },
+  {
+    "term": "SLI / SLO / SLA",
+    "def": "What you measure (SLI), the goal you set (SLO), and the promise you put in a contract (SLA).",
+    "aliases": [
+      "SLI",
+      "SLO",
+      "SLA"
+    ],
+    "href": "/learn/reliability-observability",
+    "short": "slo-error-budget"
+  },
+  {
+    "term": "Snowflake ID",
+    "def": "A 64-bit id made from the time, a machine number and a counter, so ids come out roughly in time order.",
+    "aliases": [
+      "Snowflake"
+    ],
+    "href": "/deep-dives/sharding-strategies",
+    "short": "id-generation"
+  },
+  {
+    "term": "Sorted set (ZSET)",
+    "def": "A Redis structure that keeps items ordered by a score. Adding, finding a rank and fetching the top K are all fast.",
+    "href": "/questions/leaderboard",
+    "short": "leaderboard-rank-sorted-set"
+  },
+  {
+    "term": "Split brain",
+    "def": "After a network split, two parts of a cluster each think they are the leader and accept conflicting writes.",
+    "aliases": [
+      "split-brain"
+    ],
+    "short": "split-brain"
+  },
+  {
+    "term": "SQL",
+    "def": "The standard language for asking a relational database (tables, rows, joins) for data or changing it.",
+    "primer": "sql-nosql",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Stampede",
+    "def": "Many requests find the same cache entry missing at once and all hit the database together.",
+    "aliases": [
+      "cache stampede"
+    ],
+    "primer": "cache",
+    "href": "/learn/caching",
+    "short": "cache-stampede"
+  },
+  {
+    "term": "State pattern",
+    "def": "Each state is its own object that knows how to react to every event, replacing tangled if/else checks on a status field.",
+    "href": "/questions/vending-machine",
+    "short": "vending-machine-state-table"
+  },
+  {
+    "term": "Stateless",
+    "def": "A server that remembers nothing between requests, so any copy of it can answer any request.",
+    "href": "/learn/api-load-balancing"
+  },
+  {
+    "term": "Sticky session",
+    "def": "Sending a user's requests to the same server every time, because that server remembers them.",
+    "aliases": [
+      "session affinity"
+    ],
+    "primer": "load-balancer",
+    "href": "/learn/api-load-balancing"
+  },
+  {
+    "term": "Stream processing",
+    "def": "Handling data continuously as it arrives, with results in seconds instead of waiting for a nightly batch.",
+    "aliases": [
+      "stream processor"
+    ],
+    "short": "batch-vs-stream"
+  },
+  {
+    "term": "Stream watermark",
+    "def": "A stream processor's guess that all events up to a certain time have arrived, so it can close that time window.",
+    "short": "stream-windows-watermarks"
+  },
+  {
+    "term": "Tail latency",
+    "def": "How slow the slowest few requests are, like the slowest 1 in 100. Users feel these even when the average looks fine.",
+    "href": "/deep-dives/request-flows",
+    "short": "latency-budget-tail"
+  },
+  {
+    "term": "TCP",
+    "def": "The usual way computers send data reliably: it sets up a connection first and resends anything that gets lost.",
+    "href": "/deep-dives/connections-pooling",
+    "short": "tcp-vs-udp"
+  },
+  {
+    "term": "TCP vs UDP",
+    "def": "TCP delivers data reliably and in order, after a setup handshake. UDP just sends separate packets with no guarantees, but faster.",
+    "short": "tcp-vs-udp"
+  },
+  {
+    "term": "Throughput",
+    "def": "How much work a system finishes per second. Like cars passing a toll booth each minute.",
+    "href": "/deep-dives/connections-pooling"
+  },
+  {
+    "term": "Thundering herd",
+    "def": "Lots of clients all acting at the same moment, like retrying or reconnecting together, and swamping a server.",
+    "href": "/questions/movie-booking"
+  },
+  {
+    "term": "Time to live (TTL)",
+    "def": "A timer on a stored item. When it runs out, the item is deleted, so stale copies don't stay forever.",
+    "aliases": [
+      "time-to-live"
+    ],
+    "primer": "cache",
+    "href": "/learn/caching"
+  },
+  {
+    "term": "TLS",
+    "def": "The encryption behind https. It scrambles traffic so nobody in between can read or change it.",
+    "aliases": [
+      "SSL"
+    ],
+    "href": "/deep-dives/connections-pooling"
+  },
+  {
+    "term": "Token bucket",
+    "def": "A rate-limit method: a bucket gets tokens at a steady rate and each request takes one. No token, no request.",
+    "primer": "rate-limiter",
+    "href": "/questions/rate-limiter",
+    "short": "token-bucket-vs-windows"
+  },
+  {
+    "term": "Transaction",
+    "def": "A group of database changes that all succeed together or not at all. Like a bank transfer: both sides, or neither.",
+    "href": "/learn/databases-scaling"
+  },
+  {
+    "term": "Two-phase commit (2PC)",
+    "def": "A coordinator asks everyone \"can you commit?\" and only if all say yes does it tell them to. If it dies midway, they wait.",
+    "short": "two-phase-commit"
+  },
+  {
+    "term": "Vector clock",
+    "def": "A counter per machine attached to every update, so you can tell if one came before another or they happened independently.",
+    "aliases": [
+      "vector clocks"
+    ],
+    "short": "lamport-vector-clocks"
+  },
+  {
+    "term": "Virtual nodes",
+    "def": "Extra points per server on the hash ring, so load spreads more evenly and a failure is shared among many servers.",
+    "aliases": [
+      "virtual node",
+      "vnodes"
+    ],
+    "primer": "consistent-hashing",
+    "href": "/deep-dives/sharding-strategies",
+    "short": "consistent-hashing-ring"
+  },
+  {
+    "term": "Webhook",
+    "def": "A web address you give a provider so it calls you when something happens. It may call twice, so ignore repeats by event id.",
+    "aliases": [
+      "webhooks"
+    ],
+    "href": "/questions/payment-system",
+    "short": "payment-timeout-means-unknown"
+  },
+  {
+    "term": "WebSocket",
+    "def": "One connection that stays open, so browser and server can send each other messages at any time.",
+    "aliases": [
+      "WebSockets"
+    ],
+    "primer": "realtime",
+    "href": "/deep-dives/polling-sse-websockets",
+    "short": "realtime-transport-choice"
+  },
+  {
+    "term": "Write skew",
+    "def": "Two people check the same rule at once, both see it holds, both act, and together they break it.",
+    "href": "/learn/databases-scaling",
+    "short": "write-skew"
+  },
+  {
+    "term": "Write-ahead log (WAL)",
+    "def": "A log where changes are written to disk before they are confirmed, so after a crash the database can replay them.",
+    "aliases": [
+      "write ahead log"
+    ],
+    "short": "write-ahead-log"
+  },
+  {
+    "term": "Write-behind",
+    "def": "Save to the cache right away and write to the database later, in batches. Fast, but a crash can lose recent writes.",
+    "aliases": [
+      "write-back"
+    ],
+    "primer": "cache",
+    "href": "/deep-dives/caching-techniques"
+  },
+  {
+    "term": "Write-through",
+    "def": "Every write goes to the cache and the database together, so the cache is never behind. Writes are a bit slower.",
+    "primer": "cache",
+    "href": "/deep-dives/caching-techniques",
+    "short": "cache-write-patterns"
+  }
+]

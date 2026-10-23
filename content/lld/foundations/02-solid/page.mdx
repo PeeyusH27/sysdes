@@ -2,125 +2,114 @@ import { mailerInversion } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-SOLID is five questions you ask a design when a requirement changes: does one class change for many reasons, do I edit instead of add, can a subtype stand in, is the contract too wide, and does policy depend on detail. Each one is shown here as code that hurts, then code that does not.
+SOLID is five questions to ask a design when a requirement changes. Each one below is code that hurts, then code that does not.
 </TLDR>
 
 ## What the five letters ask
 
-Memorising the acronym earns nothing. What earns points is looking at a class and saying which change would hurt it.
+Look at a class and say which change would hurt it.
 
 | Principle | The question | The smell |
 |---|---|---|
-| **S**ingle responsibility | How many reasons does this class have to change? | Tax, layout and storage in one class |
-| **O**pen/closed | Can I add behaviour without editing old code? | An `if/else` ladder on a type |
-| **L**iskov substitution | Can a subtype go wherever its parent goes? | A subclass that throws or surprises |
-| **I**nterface segregation | Does a client depend on methods it never calls? | Stubs that throw "not supported" |
-| **D**ependency inversion | Does policy depend on a detail? | `new SmtpMailer()` inside business code |
-
-Each section below has a **before** that works today and hurts tomorrow, and an **after** that does not.
+| **S**ingle responsibility | How many reasons to change? | Tax, layout, storage in one class |
+| **O**pen/closed | Can I add without editing? | An `if/else` ladder on a type |
+| **L**iskov substitution | Can a subtype stand in? | A subclass that throws |
+| **I**nterface segregation | Does a client need methods it never calls? | Stubs that throw |
+| **D**ependency inversion | Does policy depend on detail? | `new SmtpMailer()` in business code |
 
 ## Single responsibility: one reason to change
 
-In `srp-before.js` an `Order` computes its total with tax, formats its receipt, and saves itself. Finance changes the tax rule, marketing changes the receipt, and the platform team changes the database. Three teams, one file, and every edit risks the other two. You also cannot price an order without a database in hand.
+A swiss army knife is handy until one broken tool ruins the lot. In `srp-before.js` an `Order` computes tax, formats the receipt, and saves itself. Three teams edit one file.
 
-In `srp-after.js` each concern has its own home: `Order` holds items, `withTax` is a rule, `receiptText` is layout, and `OrderStore` is storage. A change to the receipt cannot break the total.
+In `srp-after.js` each concern has a home: `Order` holds items, `withTax` is a rule, `receiptText` is layout, and `OrderStore` is storage.
 
 <CodeTabs
   files={['snippets/srp-before.js', 'snippets/srp-after.js']}
   python={['snippets/python/srp_before.py', 'snippets/python/srp_after.py']}
 />
 
-**Rule of thumb:** a responsibility is a reason to change, usually tied to one team or one kind of requirement. It is not "one method per class".
+**Rule of thumb:** a responsibility is a reason to change, not "one method per class".
 
 ## Open/closed: add, don't edit
 
-In `ocp-before.js` every customer kind is a branch in `price`. A student discount means reopening a function that already works, and until someone does, students are quietly charged in full.
+Think of a power strip: plug in a new device, never rewire the wall. In `ocp-before.js` every customer kind is a branch in `price`.
 
-In `ocp-after.js` a `Pricing` object holds registered rules. A student rule is one `register` call, and a rule can be any function: a percentage, a flat amount, whatever the next requirement invents. Old code is closed to edits and open to additions.
+In `ocp-after.js` a `Pricing` object holds registered rules. A student rule is one `register` call. Old code is closed to edits and open to additions.
 
 <CodeTabs
   files={['snippets/ocp-before.js', 'snippets/ocp-after.js']}
   python={['snippets/python/ocp_before.py', 'snippets/python/ocp_after.py']}
 />
 
-A function in a map is the smallest possible version of this idea. When the varying part has a name and several parts that must be combined, it grows into **Strategy and Decorator**, the subject of [the next lesson](/lld/foundations/strategy-decorator).
+A function in a map is the smallest version of this. It grows into **Strategy and Decorator** in [the next lesson](/lld/foundations/strategy-decorator).
 
 ## Liskov substitution: keep the parent's promise
 
-A subclass must work everywhere its parent does. `lsp-before.js` makes `Square` a `Rectangle`, which sounds right in geometry. But `areaAt4By5` sets a width of 4 and a height of 5 and expects 20. A `Square` returns 25, because setting one side moves the other.
+A subclass must work everywhere its parent does. `lsp-before.js` makes `Square` a `Rectangle`. But `areaAt4By5` sets width 4 and height 5 and expects 20. A `Square` returns 25, because setting one side moves the other.
 
-Three signs of a violation: a subclass **throws** where the parent did not, it **demands more** from its inputs, or it **returns less** than the parent promised. In `lsp-after.js` the two shapes stop pretending: each offers `area()`, and a resize returns a new value.
+Three signs of a violation: the subclass **throws** where the parent did not, **demands more** of its inputs, or **returns less** than promised. In `lsp-after.js` the shapes stop pretending: each offers `area()`.
 
 <CodeTabs
   files={['snippets/lsp-before.js', 'snippets/lsp-after.js']}
   python={['snippets/python/lsp_before.py', 'snippets/python/lsp_after.py']}
 />
 
-**Rule of thumb:** if a caller needs an `instanceof` check to stay safe, the hierarchy is wrong. This is the formal version of the inheritance problem from [the first lesson](/lld/foundations/thinking-in-objects).
+**Rule of thumb:** if a caller needs an `instanceof` check to stay safe, the hierarchy is wrong. See [the first lesson](/lld/foundations/thinking-in-objects).
 
 ## Interface segregation: small contracts
 
-`isp-before.js` has one wide contract for paying: charge, refund and save a card. `Cash` can only charge, so it fills in stubs that throw. Then `refundAll` receives a list that contains one cash entry and the whole batch crashes. Add a `payout` method tomorrow and every implementer and every test fake grows a stub.
+`isp-before.js` has one wide contract for paying: charge, refund and save a card. `Cash` can only charge, so it stubs the rest with throws. Then `refundAll` meets one cash entry and the whole batch crashes.
 
-In `isp-after.js` the contracts are **roles named by what a client needs**. `checkout` needs something that can `charge`, so a one-method fake is enough to test it. `refundAll` needs something that can `refund`, and `Cash` simply does not have it.
+In `isp-after.js` the contracts are **roles named by what a client needs**. `checkout` needs something that can `charge`, so a one-method fake is enough to test it.
 
 <CodeTabs
   files={['snippets/isp-before.js', 'snippets/isp-after.js']}
   python={['snippets/python/isp_before.py', 'snippets/python/isp_after.py']}
 />
 
-**Rule of thumb:** write the interface from the caller's side. If an implementer would throw "not supported", the interface is too wide.
+**Rule of thumb:** write the interface from the caller's side. If an implementer would throw "not supported", it is too wide.
 
 ## Dependency inversion: policy should not know the detail
 
-Business rules change slowly and for business reasons. Mail servers, databases and clocks change for technical ones. When `OrderService` creates its own `SmtpMailer`, the slow-moving part points at the fast-moving part, and every test needs a mail server.
+A lamp does not care which power station feeds the socket. In `dip-before.js`, `OrderService` creates its own `SmtpMailer`, so every test needs a mail server.
 
-Step through the stages: the service names what it needs as a `Mailer`, the SMTP class plugs into that, and a fake plugs in for tests. The **inversion** is that the source-code arrow now points from the detail to the interface the policy owns.
+Step through: the service names a `Mailer`, and SMTP or a fake plugs into it. The **inversion**: the arrow now points from the detail to the interface the policy owns.
 
 <ClassDiagram spec={mailerInversion} />
 
-`dip-before.js` cannot be tested without a mail server. In `dip-after.js` the service takes a `Mailer` in its constructor, and the test file shows the payoff: a few lines of `FakeMailer`, no network, and a failing mailer is one line.
+In `dip-after.js` the service takes a `Mailer`, so a test needs only a `FakeMailer`.
 
 <CodeTabs
   files={['snippets/dip-before.js', 'snippets/dip-after.js', 'snippets/dip-after.test.js']}
   python={['snippets/python/dip_before.py', 'snippets/python/dip_after.py', 'snippets/python/test_dip_after.py']}
 />
 
-Dependency **injection** is the mechanism (pass it in). Dependency **inversion** is the design decision (the high-level side owns the interface). The place that calls `new SmtpMailer()` is the edge of the program, not the business code.
+**Injection** is passing it in. **Inversion** is who owns the interface: the high-level side.
 
 ## SOLID as interview vocabulary, and when to stop
 
-Use the principles as a short, concrete sentence, not a recital: "I will keep tax in its own rule so `Order` has one reason to change", or "the service takes a `Mailer`, so I can test it with a fake". The name of the principle is optional. The class and the change it survives are not.
+Say it as one concrete sentence: "I keep tax in its own rule so `Order` has one reason to change."
 
 <Callout kind="interview" title="What interviewers listen for">
-A named change and where it lands: "if a new customer kind arrives, I add a rule and edit nothing else". Interviewers also follow up with "why an interface here?" and expect an answer about a test fake or a second variant, not "because SOLID".
+A named change and where it lands. Answer "why an interface here?" with a test fake or a second variant, not "because SOLID".
 </Callout>
 
-Stop when the pain is not real. Extract an interface when a **second variant** appears or a **test needs a fake**. A single `if` with two branches is fine, and a ladder that has grown to three is the cue to extract.
+Stop when the pain is not real. Extract an interface when a **second variant** appears or a **test needs a fake**. An `if` with two branches is fine. Three is the cue.
 
 <Callout kind="warning" title="Interface for every class">
-Wrapping every class in an interface, a factory and a manager makes the design harder to read and no easier to change. Pay for an abstraction only where you can name the requirement that varies.
+Pay for an abstraction only where you can name the requirement that varies.
 </Callout>
 
-Try it in context: the [parking lot exercise](/lld/exercises/parking-lot) asks for pricing and spot choice that can change without edits, and the [parking lot question](/questions/parking-lot) walks the same ideas through a full answer.
+Practise on the [parking lot exercise](/lld/exercises/parking-lot).
 
 ## Follow-up questions
 
 <FollowUps>
   <FollowUp q="Which SOLID principle matters most in an LLD round?">
-    Open/closed and dependency inversion show up most, because every question asks "how do I add a new X?" and "how do I test this?". Single responsibility comes first in practice, since it decides the classes you draw.
+    Open/closed and dependency inversion, because every question asks "how do I add a new X?" and "how do I test this?".
   </FollowUp>
   <FollowUp q="What is the difference between dependency injection and dependency inversion?">
-    Injection is passing a collaborator in rather than creating it. Inversion is who owns the interface: the high-level code defines what it needs, and the low-level detail implements it.
-  </FollowUp>
-  <FollowUp q="Does single responsibility mean one method per class?">
-    No. It means one reason to change, usually one team or one kind of requirement. An `Order` with several methods about items is fine, but tax, layout and storage are three reasons.
-  </FollowUp>
-  <FollowUp q="How do you apply open/closed without guessing the future?">
-    Do not guess. Write the simple version, and when the second variant arrives, move the varying part behind a seam. Three branches in an `if` ladder is a good signal.
-  </FollowUp>
-  <FollowUp q="Give a Liskov violation that is not Square and Rectangle.">
-    A read-only collection that extends a mutable one and throws on `add`. Any caller that adds to the parent type now crashes, so the subclass cannot stand in for it.
+    Injection passes a collaborator in. Inversion means the high-level code defines the interface the detail implements.
   </FollowUp>
 </FollowUps>
 

@@ -28,8 +28,7 @@ export default function DsaHome() {
             Learn the patterns, <span className="grad">not 1,000 problems.</span>
           </h1>
           <p className="lede">
-            Most interview problems are one of about twenty ideas in disguise. Learn each with an animation and a template, then prove it on problems that run
-            right here.
+            Most interview problems are one of about twenty ideas in disguise. Learn each one, then prove it on problems that run right here.
           </p>
           <div className="hero-cta">
             <Link href="/dsa/js" className="btn btn-primary">

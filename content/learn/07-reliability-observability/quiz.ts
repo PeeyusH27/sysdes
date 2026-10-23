@@ -11,12 +11,12 @@ export const quiz: QuizItem[] = [
     q: "A request needs two dependencies in series, each 99.9% available. Its availability is…",
     options: ["99.9%", "≈ 99.8%", "99.99%"],
     answer: 1,
-    explain: "Serial availabilities multiply: 0.999 × 0.999 ≈ 0.998. Every dependency you can't do without adds its downtime to yours.",
+    explain: "Availabilities in a chain multiply: 0.999 × 0.999 ≈ 0.998. Each dependency you need adds its downtime to yours.",
   },
   {
     q: "A half-open circuit breaker…",
     options: ["Blocks everything", "Lets a trial request through", "Retries forever"],
     answer: 1,
-    explain: "After the cooldown, a half-open breaker lets one probe reach the dependency. Success closes the breaker; failure opens it for another cooldown.",
+    explain: "After the cooldown, one probe reaches the dependency. Success closes the breaker; failure opens it again.",
   },
 ];
