@@ -1,0 +1,215 @@
+import { lldPlan, choosePattern } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Run every LLD round the same way: **clarify, use cases, entities, interface, diagram, code the core, then stress the design** for extensibility, concurrency and tests, in about 45 minutes. Pick a pattern only when a requirement hurts, name the race before you are asked, and inject the clock so the tests are deterministic.
+</TLDR>
+
+## What interviewers score
+
+An LLD round is not a trivia quiz about patterns. The interviewer has a rubric, and most of its rows are about how you work.
+
+| What they score | What it looks like | What loses points |
+|---|---|---|
+| Scope | Questions first, use cases agreed early | Coding from the first sentence |
+| Modelling | One responsibility per class, relationships justified | A god class, or a class per noun |
+| Interface | Few public methods, clear failure behaviour | Exposed internals, vague returns |
+| Working code | One use case end to end, readable names | Half of everything, nothing runs |
+| Extensibility | A new requirement adds a class | Editing a switch in four files |
+| Concurrency | You name the race and the fix | "It is single threaded" |
+| Tests | Boundaries, failures, an injected clock | No tests, or a sleep |
+| Communication | Thinks aloud, checks in, watches the clock | Silence |
+
+<Callout kind="interview" title="What interviewers listen for">
+They listen for the **reason** behind each choice: "I made pricing a strategy because it will change", not "I used Strategy". They also notice the order of your work. Use cases before classes, a working core before polish, and a concurrency answer before they ask for it.
+</Callout>
+
+## A 45-minute plan
+
+The split is **5, 12, 16 and 12 minutes**. The longest block is the code, because working code is the one thing a diagram cannot prove. Press play to fill it in.
+
+<Timeline spec={lldPlan} />
+
+Checkpoints: use cases agreed by minute 5, a diagram you both accept by 17, the core working by 33. If you are behind, say so and cut scope out loud: "I will code only `book` and `cancel`, and describe recurring meetings." Managing the clock is a signal in itself.
+
+## The repeatable template
+
+Each step leaves something on the board for the next, so you never face a blank page.
+
+<Steps>
+  <Step title="Clarify">
+    Three to five questions: what is in scope, how big (a handful of rooms, or a thousand), what happens on failure, one process or many. Write the answers down.
+  </Step>
+  <Step title="Use cases">
+    The verbs a user can do, as method names: `park`, `exit`, `quote`. Every class you add must serve one of them.
+  </Step>
+  <Step title="Entities">
+    Nouns become candidate classes, verbs become methods, and each class gets one responsibility. This is the [first lesson](/lld/foundations/thinking-in-objects) in one line.
+  </Step>
+  <Step title="Public interface">
+    Write the signatures of the four to six methods and what each returns when it fails. This is the contract you code against, and it is the part the interviewer cares about most.
+  </Step>
+  <Step title="Class diagram">
+    Boxes and arrows for the entities: filled diamonds for ownership, plain arrows for uses. Five minutes, not fifteen.
+  </Step>
+  <Step title="Code the core">
+    One use case end to end with the real classes, in the simplest form that works. Name things so the code reads like the use case.
+  </Step>
+  <Step title="Extensibility check">
+    Pick the likeliest new requirement and say what you would edit. The target is to **add a class and change none**.
+  </Step>
+  <Step title="Concurrency">
+    Find the check-then-act, make it one step, and say what changes across several servers.
+  </Step>
+  <Step title="Tests">
+    Three or four cases: the happy path, a boundary, a failure, and a time dependency with an injected clock.
+  </Step>
+</Steps>
+
+## Which pattern does this requirement call for?
+
+Do not start from the pattern list. Start from the **wording of the requirement** and let the pain choose. Answer the questions in order and the tree lands on a pattern, with a link to the lesson that teaches it.
+
+<DecisionTree spec={choosePattern} />
+
+In words: a rule that varies is a [Strategy](/lld/foundations/strategy-decorator), and rules that layer are a [Decorator](/lld/foundations/strategy-decorator). Behaviour that changes with the phase is a [State](/lld/foundations/state-observer), and others that must react are [Observers](/lld/foundations/state-observer). An action you can undo is a [Command](/lld/foundations/creation-and-commands), and a class chosen from a string is a [Factory](/lld/foundations/creation-and-commands). If none of the questions gets a yes, plain classes are the right answer.
+
+## The extensibility check
+
+The interviewer will add a requirement, so do it to yourself first. Ask: **if they add a new X, how many existing classes do I edit?**
+
+- A new vehicle type, payment method or pricing rule should be a new class, plus one line where it is registered.
+- A new `if` in four files means a missing seam. Pull the varying part behind an interface, as in the [SOLID lesson](/lld/foundations/solid).
+- Say it as a sentence: "To add reservations I add a `ReservationPolicy`, and `ParkingLot` does not change." That sentence is worth more than the code behind it.
+
+Practise it on the [parking lot](/lld/exercises/parking-lot) exercise: after each step, name one new requirement and say which class you would add.
+
+## The concurrency checklist
+
+Every LLD round ends with "what if two people do this at once?". Prepare a fixed answer.
+
+<Steps>
+  <Step title="Find the check-then-act">
+    Any "if it is free, then take it" is a race as soon as two callers can interleave. Booking a room, taking a spot and spending a coupon are all the same bug.
+  </Step>
+  <Step title="Make the pair one step">
+    A lock around both, claiming first, or a single atomic operation such as compare-and-set or a unique constraint.
+  </Step>
+  <Step title="Lock the invariant, not the world">
+    One lock per room beats one lock for everything. Hold it briefly and never across slow I/O. If you ever need two locks, take them in a fixed order.
+  </Step>
+  <Step title="Prefer immutable data">
+    A frozen object can be shared by any number of callers with no lock at all.
+  </Step>
+  <Step title="Make retries safe">
+    Give each request an id. Repeating a booking with the same id returns the first result instead of booking twice. This is **idempotency**.
+  </Step>
+  <Step title="Say what changes across servers">
+    An in-memory lock protects one process. With several servers the database arbitrates, with a unique constraint or a conditional update.
+  </Step>
+</Steps>
+
+Here is the bug and its fix. In JavaScript a race needs an `await` between the check and the act, because only one step runs at a time. In Python, threads can switch between any two lines, so the fix is a lock.
+
+<CodeTabs files={['snippets/race-before.js', 'snippets/race-after.js', 'snippets/race.test.js']} python={['snippets/python/race_before.py', 'snippets/python/race_after.py', 'snippets/python/test_race.py']} titles={['Check then act (before)', 'Claim first (after)', 'Tests']} />
+
+The racy version lets both callers through, and the tests prove it. The fixed version claims the room in the same step as the check, then does the slow work. If that slow work fails, release the claim, or the room stays booked forever.
+
+"Node is single threaded, so there is no race" is the answer that loses points. It is false the moment an `await` or a callback sits between the check and the act. Name the gap, close it, and say where the real arbiter lives when there is more than one process.
+
+## Test with an injected clock
+
+A test that sleeps for ten minutes never gets run. Anything that reads the time, a random number or a new id should be **passed in**, so the test controls it.
+
+<CodeTabs files={['snippets/hold.js', 'snippets/hold.test.js']} python={['snippets/python/hold.py', 'snippets/python/test_hold.py']} />
+
+The clock is a function, and the test moves a variable. The boundary is exact: a hold made at time 0 is still held at 599,999 ms and gone at 600,000. Run the cell and move the clock yourself.
+
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" />
+
+## Worked example: a meeting-room booker
+
+The prompt: "Design a system to book meeting rooms." Here is the whole round in eight steps, without the full code.
+
+<Steps>
+  <Step title="Clarify">
+    A fixed list of rooms in one building, one process, times in whole minutes. Out of scope: recurring meetings and calendar sync, which I will name as follow-ups.
+  </Step>
+  <Step title="Use cases">
+    `book(room, start, end, who)`, `cancel(bookingId)`, `freeRooms(start, end)`. Three verbs cover the prompt.
+  </Step>
+  <Step title="Entities">
+    `Room`, `Booking`, and `RoomBooker` as the one class that owns the rules. No `BookingManagerFactory`.
+  </Step>
+  <Step title="Public interface">
+    A clash returns `false`, a backwards slot or an unknown room throws. Say that choice aloud, because it is part of the contract.
+  </Step>
+  <Step title="Class diagram">
+    `RoomBooker` owns rooms, and each room owns its bookings. Two arrows and three boxes.
+  </Step>
+  <Step title="Code the core">
+    The one subtle function is the overlap test. Use **half-open intervals**, start included and end excluded, so a meeting that ends at 10 does not clash with one that starts at 10.
+  </Step>
+  <Step title="Extensibility">
+    Recurring meetings: a rule that expands into concrete bookings, using the same `book`. Notify attendees: an [observer](/lld/foundations/state-observer). Pick the best room: a [strategy](/lld/foundations/strategy-decorator). Undo a booking: a [command](/lld/foundations/creation-and-commands). Each is a new class.
+  </Step>
+  <Step title="Concurrency and tests">
+    Two people booking the same slot is the check-then-act again, so `book` must check and claim in one step, with a lock per room if threads are involved. Across servers, a database exclusion constraint on the room and the time range does the arbitration. Test the half-open boundary, a clash, a backwards slot, and inject the clock for "no bookings in the past".
+  </Step>
+</Steps>
+
+The core is `book` and `freeRooms`, short enough to write on a whiteboard; `cancel` is a three-line removal from the same list. Bookings sit in one list per room, which is enough at this size.
+
+
+
+<CodeTabs files={['snippets/room-booker.js', 'snippets/room-booker.test.js']} python={['snippets/python/room_booker.py', 'snippets/python/test_room_booker.py']} />
+
+## When you are stuck
+
+<Callout kind="warning" title="The mistakes that cost the most">
+- Coding before the use cases are agreed.
+- A class per noun and a pattern per class, such as a `SpotManagerFactory`.
+- A beautiful diagram and no code that runs.
+- Waiting for the interviewer to raise concurrency.
+- Skipping tests because there is no time. Describe three even if you cannot write them.
+</Callout>
+
+Everyone stalls. The recovery is mechanical:
+
+- **Say what you are stuck on**, out loud. Silence reads as lost, and a stated problem often gets a hint.
+- **Go back to the use cases.** Which verb am I implementing right now?
+- **Write the simplest version**: one class, a list and a loop. Then say what you would change and why.
+- **Cut scope on purpose**: "I will leave recurring meetings out, and here is where they would plug in."
+- **Offer a choice, not a blank**: "I am deciding between a lock per room and one global lock."
+
+## Practise in this order
+
+Work on a timer, out loud, and finish each with the extensibility and concurrency questions.
+
+1. [Tic-tac-toe](/lld/exercises/tic-tac-toe): entities and responsibilities, from the [first lesson](/lld/foundations/thinking-in-objects).
+2. The [parking lot exercise](/lld/exercises/parking-lot), then the classic [parking lot question](/questions/parking-lot): SOLID in practice.
+3. The [rate limiter](/lld/exercises/rate-limiter) and [pricing rules](/lld/exercises/pricing-rules): swappable and stackable behaviour.
+4. The [vending machine exercise](/lld/exercises/vending-machine) and its [classic](/questions/vending-machine), then the [elevator](/questions/elevator): state machines.
+5. The [event bus](/lld/exercises/event-bus): observers. The [text editor](/lld/exercises/text-editor): commands and undo.
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="You are 20 minutes in and the design has grown too big. What do you do?">
+    Stop adding, and say so. Pick the one use case that matters most, code it end to end with the classes you have, and list the rest as extensions with the seam where each would plug in.
+  </FollowUp>
+  <FollowUp q="The interviewer says 'add feature X' at minute 35. How do you respond?">
+    Restate it, find the seam, and say which classes you would add and which stay untouched. Then change the design only if the answer is "I would edit several classes", because that is the signal the seam is missing.
+  </FollowUp>
+  <FollowUp q="Do you always use design patterns?">
+    No. Name the pressure first (a rule that varies, an undo requirement) and then the pattern that relieves it. A plain class with a clear job is a good answer when nothing hurts.
+  </FollowUp>
+  <FollowUp q="How do you test code that depends on time?">
+    Pass the clock in as a parameter and let the test move it. Do the same for random numbers and ids, so every test is fast and deterministic.
+  </FollowUp>
+  <FollowUp q="Your in-memory design must now run on several servers. What changes?">
+    Locks in memory no longer protect anything. Move the invariant into the shared store as a unique constraint or a conditional update, make operations idempotent with request ids, and keep the class interface the same.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

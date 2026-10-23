@@ -18,6 +18,13 @@ import { PythonStatus } from "./PythonStatus";
 const CodeEditor = dynamic(() => import("./CodeEditor").then((m) => m.CodeEditor), { ssr: false, loading: () => <div className="code-editor code-editor--loading">Loading editor…</div> });
 
 type Mode = "run" | "submit";
+type Track = "dsa" | "lld";
+
+/** Where a track's pages live, and the key its solved state and drafts are stored under. */
+const TRACKS: Record<Track, { base: string; list: { href: string; label: string }; patternBase: string; patternNoun: string; key: (slug: string) => string }> = {
+  dsa: { base: "/dsa/problems", list: { href: "/dsa/problems", label: "Problems" }, patternBase: "/dsa/patterns", patternNoun: "pattern", key: (s) => s },
+  lld: { base: "/lld/exercises", list: { href: "/lld", label: "LLD" }, patternBase: "/lld/foundations", patternNoun: "lesson", key: (s) => `lld:${s}` },
+};
 type Outcome = RunOutcome & { mode: Mode; passed: boolean; lang: RunnableLang; unavailable?: string };
 type Docs = Record<RunnableLang, string>;
 
@@ -26,8 +33,11 @@ export interface WorkspaceProps {
   starter: string;
   /** Python starter (snake_case names, type hints). */
   starterPy: string;
+  /** DSA patterns, or (for LLD exercises) lessons. */
   patterns: { slug: string; title: string }[];
   js: { id: string; title: string }[];
+  /** "dsa" (default): a practice problem. "lld": a design exercise, which has its own routes and solved state. */
+  track?: Track;
   statement: React.ReactNode;
   solution: React.ReactNode;
   position: { index: number; total: number };
@@ -35,8 +45,11 @@ export interface WorkspaceProps {
   next?: { slug: string; title: string };
 }
 
-export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, statement, solution, position, prev, next }: WorkspaceProps) {
-  const { slug } = problem;
+export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, statement, solution, position, prev, next, track = "dsa" }: WorkspaceProps) {
+  const T = TRACKS[track];
+  const { slug: pageSlug } = problem;
+  // Solved state, failed attempts and drafts are stored under `slug`; an exercise never shares a key with a DSA problem.
+  const slug = T.key(pageSlug);
   const hydrated = useHydrated();
   const solved = useDsa((s) => !!s.solved[slug]);
   const failed = useDsa((s) => s.failed[slug] ?? 0);
@@ -64,7 +77,7 @@ export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, st
   // One save timer per language, so switching language mid-typing doesn't drop the other one's last edit.
   const saveTimers = useRef<Partial<Record<RunnableLang, ReturnType<typeof setTimeout>>>>({});
   const visit = useProgress((s) => s.visit);
-  useEffect(() => visit(`/dsa/problems/${slug}`), [visit, slug]);
+  useEffect(() => visit(`${T.base}/${pageSlug}`), [visit, T.base, pageSlug]);
 
   // The editor mounts after hydration with the saved drafts (localStorage), so the server render never depends on them.
   useEffect(() => {
@@ -143,9 +156,9 @@ export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, st
       <section className="pw-left" aria-label="Problem">
         <header className="pw-head">
           <nav className="pw-crumbs" aria-label="Breadcrumb">
-            <Link href="/dsa/problems">Problems</Link>
+            <Link href={T.list.href}>{T.list.label}</Link>
             <span aria-hidden>/</span>
-            {patterns[0] && <Link href={`/dsa/patterns/${patterns[0].slug}`}>{patterns[0].title}</Link>}
+            {patterns[0] && <Link href={`${T.patternBase}/${patterns[0].slug}`}>{patterns[0].title}</Link>}
             <span className="muted pw-pos">
               {position.index + 1} of {position.total}
             </span>
@@ -154,7 +167,7 @@ export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, st
           <div className="pw-meta">
             <span className={`diff diff-${problem.difficulty}`}>{problem.difficulty}</span>
             {patterns.map((p) => (
-              <Link key={p.slug} href={`/dsa/patterns/${p.slug}`} className="tag">
+              <Link key={p.slug} href={`${T.patternBase}/${p.slug}`} className="tag">
                 {p.title}
               </Link>
             ))}
@@ -234,14 +247,14 @@ export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, st
         </div>
         <nav className="pw-prevnext" aria-label="Previous and next problem">
           {prev ? (
-            <Link href={`/dsa/problems/${prev.slug}`}>
+            <Link href={`${T.base}/${prev.slug}`}>
               <ChevronLeft size={15} aria-hidden /> {prev.title}
             </Link>
           ) : (
             <span />
           )}
           {next && (
-            <Link href={`/dsa/problems/${next.slug}`}>
+            <Link href={`${T.base}/${next.slug}`}>
               {next.title} <ChevronRight size={15} aria-hidden />
             </Link>
           )}
@@ -295,6 +308,7 @@ export function ProblemWorkspace({ problem, starter, starterPy, patterns, js, st
           }}
           onUseJs={() => pickLang("js")}
           next={next}
+          base={T.base}
         />
       </section>
     </div>
@@ -310,6 +324,7 @@ function Results({
   onShowSolution,
   onUseJs,
   next,
+  base,
 }: {
   outcome: Outcome | null;
   running: Mode | null;
@@ -319,6 +334,7 @@ function Results({
   onShowSolution: () => void;
   onUseJs: () => void;
   next?: { slug: string; title: string };
+  base: string;
 }) {
   const [view, setView] = useState<"tests" | "console">("tests");
   const [picked, setPicked] = useState<number | null>(null);
@@ -432,7 +448,7 @@ function Results({
         <div className="pw-banner pw-banner--ok">
           <CheckCircle2 size={16} aria-hidden /> Solved and marked complete.
           {next && (
-            <Link href={`/dsa/problems/${next.slug}`} className="link">
+            <Link href={`${base}/${next.slug}`} className="link">
               Next: {next.title} →
             </Link>
           )}

@@ -15,7 +15,6 @@ import { architecture as bookingArchitecture } from "@content/questions/movie-bo
 import { feedArchitecture } from "@content/questions/news-feed/diagrams";
 import { architecture as rateLimiterArchitecture } from "@content/questions/rate-limiter/diagrams";
 import type { FlowSpec } from "@/components/diagram/types";
-import { challenges, referenceDesign } from "./challenges";
 import type { DesignDoc } from "./schema";
 import { specToDesign } from "./share";
 
@@ -38,5 +37,4 @@ export const TEMPLATES: { id: string; title: string; doc: () => DesignDoc }[] = 
   fromSpec("q-booking", "Question: ticket booking", bookingArchitecture),
   fromSpec("q-chat", "Question: chat", chatArchitecture),
   fromSpec("q-feed", "Question: news feed", feedArchitecture),
-  ...challenges.map((c) => ({ id: `ref-${c.slug}`, title: `Challenge answer: ${c.title}`, doc: () => referenceDesign(c) })),
 ];

@@ -1,0 +1,150 @@
+import { libraryGrowth } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+An LLD answer is nouns turned into classes, verbs turned into methods, and one question asked of every method: who owns this? Keep classes small enough to protect their own rules, prefer composition to inheritance, and stop adding classes the moment a new one has nothing to protect.
+</TLDR>
+
+## What an LLD round scores
+
+An interviewer is not checking that your code compiles in their head. They are watching how you **decide**: what you ask, what you name, and where you put each rule.
+
+Four things earn the points:
+
+- **Requirements:** you ask about limits, users and what is out of scope before you draw anything.
+- **The model:** the nouns are sensible and the relationships between them are honest.
+- **Change:** you can name the requirement most likely to change and show the one place it lands.
+- **A working core:** one scenario walked through end to end, with the edge cases said out loud.
+
+This lesson follows one tiny domain, a lending library, from a single class that does everything to a design where each class owns one thing.
+
+<Callout kind="interview" title="What interviewers listen for">
+Two sentences in your own voice: "who owns this?" and "if this rule changed, which class would I edit?" Naming classes is cheap. Justifying where the boundaries sit is the score.
+</Callout>
+
+## Nouns and verbs from a prompt
+
+Read the prompt twice with two highlighters. Nouns are candidate classes, verbs are candidate methods.
+
+> A library lends books to members. A member may hold three books at a time, each for 14 days. Returning late costs 0.50 per day.
+
+| In the prompt | Becomes | Why |
+|---|---|---|
+| library | `Library`, the coordinator | The entry point callers talk to |
+| books, members | `Book`, `Member` | Each has data and rules of its own |
+| lends, returns | `borrow`, `giveBack` | Verbs are methods, on the class holding the data they need |
+| a member holds a book for 14 days | `Loan` | A relationship with its own data (a due date) is a noun |
+| three, 14 days, 0.50 | Fields and arguments | Numbers change first, so never bury them |
+
+Not every noun is a class. A `day` or a `fee` is a number. If a noun has no data to protect and no behaviour, it is a field.
+
+The [tic-tac-toe exercise](/lld/exercises/tic-tac-toe) is the same move on a game: read the rules, highlight, and let the classes fall out of the nouns.
+
+## Who owns the behaviour
+
+Every rule has an owner, and a bad design is one where the owner is the wrong class. In `god-library-before.js` the library does everything and it works. Then students get 7 days instead of 14.
+
+The 14 is written in two places: `borrow` (for the email) and `giveBack` (for the fee). Miss one and the email says day 7 while the fee starts on day 14. The limit of 3 hides in a third spot. That is a **god class**: one class that changes for many unrelated reasons, so every change risks all the others.
+
+The fix is not more code, it is moving each rule next to the data it reads. In `library-after.js` a `Loan` knows its own due day and fee, a `Member` knows their limit and loan period, a `Book` counts its own copies, and `Library` only coordinates. Students are now `new Member('sam', 'Sam', 3, 7)`, with no edit anywhere.
+
+<CodeTabs
+  files={['snippets/god-library-before.js', 'snippets/library-after.js']}
+  python={['snippets/python/god_library_before.py', 'snippets/python/library_after.py']}
+/>
+
+**Rule of thumb:** a method that mostly reads another class's fields belongs on that class.
+
+## Composition over inheritance
+
+Inheritance answers "is a". Most of the time you mean "has a". An `ElectricCar` really is a `Car`, until `fillUp` loops over vehicles and calls `refuel()` on one that has no tank.
+
+In `inheritance-before.js` the subclass has to either break the parent's promise or lie. Every new trait multiplies the tree: electric, hybrid, truck, electric truck. In `composition-after.js` a vehicle **has** an energy source, and every source answers `refill`. A hybrid is a new part, not a new branch.
+
+<CodeTabs
+  files={['snippets/inheritance-before.js', 'snippets/composition-after.js']}
+  python={['snippets/python/inheritance_before.py', 'snippets/python/composition_after.py']}
+/>
+
+Inherit only when every subclass can be used anywhere the parent is, and the hierarchy stays one level deep (an abstract base and its implementations). The next lesson names that test: [Liskov substitution](/lld/foundations/solid).
+
+## The relationships you draw
+
+A class diagram is a thinking tool, so draw it in the order you would think it. Step through the four stages: the first is the god class, and each later stage pulls out a noun, a relationship that carries data, or a collaborator.
+
+<ClassDiagram spec={libraryGrowth} />
+
+On a whiteboard, do the same: write the one class you cannot avoid, add the nouns, then ask which relationships hold data of their own. Hover a class in the diagram to light up its lines.
+
+## What each line means in code
+
+Four lines cover almost everything, and each one is a question about **lifetime**.
+
+| Relationship | Ask | In the code |
+|---|---|---|
+| Association | Does A know B? | A field or argument holding B |
+| Aggregation | A holds B, but B outlives A | A field filled from outside |
+| Composition | A creates and owns B | `new B` inside A; B dies with A |
+| Dependency | Does A use B for one call? | A parameter or a local |
+
+`relationships.js` has one of each: the library creates its books, is handed its members, a loan points at both, and the notifier arrives as an argument to `lend`.
+
+<CodeTabs files={['snippets/relationships.js']} python={['snippets/python/relationships.py']} />
+
+In an interview, association against aggregation is rarely worth a debate. **Composition against dependency** is the one that matters, because it decides who creates an object and how a test replaces it.
+
+## Encapsulation and tell, don't ask
+
+Look at `member.loans.push(loan)` in `library-after.js`. The library reaches into a member, reads a list, and decides for the member. That is **asking**: the rule about the limit now lives in whoever calls.
+
+`reach-in-before.js` shows the cost: the desk checks the limit, the kiosk forgets, and one member holds two books on a limit of one. In `tell-after.js` the member hides its list and exposes `borrow`. The rule lives next to the data, and no caller can skip it.
+
+<CodeTabs
+  files={['snippets/reach-in-before.js', 'snippets/tell-after.js']}
+  python={['snippets/python/reach_in_before.py', 'snippets/python/tell_after.py']}
+/>
+
+**Rule of thumb:** if two callers need the same `if` on an object's fields, move the `if` into the object. Hand out copies (`get loans()`), not the live list.
+
+## The too-many-classes trap
+
+The opposite failure is just as common, and just as costly. A class earns its place when it has **state to protect**, **behaviour that would otherwise be duplicated**, or **a requirement that varies there**. A class with none of these is a function or a field.
+
+```text
+LoanFeeCalculatorFactory -> LoanFeeCalculator -> FeeResult
+BookManager, MemberManager, LoanManager, LibraryManager
+```
+
+Nothing in that list protects anything. Compare it with `Loan.feeAt(day)`: one method, on the one class that knows the due day. For most classic questions, five to eight classes are enough; the [parking lot question](/questions/parking-lot) is a good model, with thin data classes, a few coordinators, and small interfaces only where rules vary.
+
+<Callout kind="warning" title="Over-modelling costs points too">
+`Manager`, `Helper`, `Util` and `Factory` suffixes are a smell, not a design. If you cannot say what a class protects in one sentence, merge it into its caller.
+</Callout>
+
+## Try it
+
+Change Ana's limit to 2, make Sam a 14-day member, or move a return day, and run it. Each change touches one number in one place, which is the point of the design.
+
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" />
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="How do you decide what becomes a class?">
+    A noun becomes a class when it has data to protect or behaviour that would otherwise be duplicated. A relationship that carries its own data, like a loan with a due date, is a noun too. Everything else is a field.
+  </FollowUp>
+  <FollowUp q="When is inheritance the right choice?">
+    When every subclass can stand in for the parent without surprising any caller, and the hierarchy is shallow: an abstract base with a few implementations. If you find yourself overriding a method to throw, delegate to a part instead.
+  </FollowUp>
+  <FollowUp q="Composition versus dependency: why does it matter?">
+    Composition means the class creates and owns the part, so a test cannot swap it. A dependency is handed in, so a test can pass a fake. Decide per collaborator which one you mean.
+  </FollowUp>
+  <FollowUp q="How do you keep a coordinator class from becoming a god class?">
+    Keep rules that read one object's data on that object, and let the coordinator only sequence the calls. If a method of the coordinator is mostly getters on another class, move it there.
+  </FollowUp>
+  <FollowUp q="How many classes should a 45-minute answer have?">
+    Usually five to eight, each with a one-sentence reason to exist. More than that is usually a sign you modelled the vocabulary instead of the behaviour.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

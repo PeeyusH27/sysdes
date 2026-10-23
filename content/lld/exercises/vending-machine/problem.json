@@ -1,0 +1,806 @@
+{
+  "title": "Vending Machine",
+  "difficulty": "Medium",
+  "patterns": [
+    "state-observer"
+  ],
+  "js": [],
+  "order": 5,
+  "summary": "Model a vending machine as a state machine so that every event in every state has exactly one defined outcome, and money is never lost or created.",
+  "kind": "design",
+  "className": "VendingMachine",
+  "samples": 3,
+  "tests": [
+    {
+      "ops": [
+        "VendingMachine",
+        "insert",
+        "state",
+        "balance",
+        "cancel",
+        "state",
+        "balance"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 150,
+              "qty": 2
+            }
+          }
+        ],
+        [
+          100
+        ],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        "OK",
+        "HAS_MONEY",
+        100,
+        100,
+        "IDLE",
+        0
+      ],
+      "explain": "One accepted coin moves the machine from IDLE to HAS_MONEY. Cancel returns the 100 cents and goes back to IDLE."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "insert",
+        "select",
+        "insert",
+        "select",
+        "change",
+        "state",
+        "balance",
+        "stock"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 150,
+              "qty": 2
+            }
+          }
+        ],
+        [
+          100
+        ],
+        [
+          "A1"
+        ],
+        [
+          100
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [],
+        [],
+        [
+          "A1"
+        ]
+      ],
+      "expected": [
+        null,
+        "OK",
+        "INSUFFICIENT",
+        "OK",
+        "DISPENSED",
+        50,
+        "IDLE",
+        0,
+        1
+      ],
+      "explain": "100 cents is not enough for a 150 item (INSUFFICIENT, still HAS_MONEY, credit kept). After a second coin the balance is 200, the item is dispensed, 50 comes back as change, the machine is IDLE with no balance and one item fewer."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "select",
+        "select",
+        "insert",
+        "insert",
+        "insert",
+        "state",
+        "cancel"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 150,
+              "qty": 2
+            }
+          }
+        ],
+        [
+          "A1"
+        ],
+        [
+          "ZZ"
+        ],
+        [
+          3
+        ],
+        [
+          50
+        ],
+        [
+          0
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        "NO_MONEY",
+        "NO_MONEY",
+        "REJECTED",
+        "REJECTED",
+        "REJECTED",
+        "IDLE",
+        0
+      ],
+      "explain": "Selecting while IDLE gives NO_MONEY, even for a slot that does not exist. A 3, 50 or 0 cent coin is REJECTED and nothing changes. Cancel with nothing inserted returns 0."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "insert",
+        "insert",
+        "insert",
+        "insert",
+        "insert",
+        "balance",
+        "select",
+        "change",
+        "balance"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 135,
+              "qty": 3
+            }
+          }
+        ],
+        [
+          100
+        ],
+        [
+          25
+        ],
+        [
+          10
+        ],
+        [
+          5
+        ],
+        [
+          1
+        ],
+        [],
+        [
+          "A1"
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        "OK",
+        "OK",
+        "OK",
+        "OK",
+        "REJECTED",
+        140,
+        "DISPENSED",
+        5,
+        0
+      ],
+      "explain": "Coins accumulate: 100 + 25 + 10 + 5 = 140. A 1 cent coin is REJECTED while in HAS_MONEY and is not added. The item costs 135, so 5 cents come back."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "change",
+        "insert",
+        "insert",
+        "select",
+        "change",
+        "insert",
+        "select",
+        "change",
+        "insert",
+        "select",
+        "change",
+        "insert",
+        "select",
+        "change",
+        "stock",
+        "state"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 100,
+              "qty": 3
+            }
+          }
+        ],
+        [],
+        [
+          100
+        ],
+        [
+          25
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [
+          10
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [
+          100
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [
+          100
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [
+          "A1"
+        ],
+        []
+      ],
+      "expected": [
+        null,
+        0,
+        "OK",
+        "OK",
+        "DISPENSED",
+        25,
+        "OK",
+        "INSUFFICIENT",
+        25,
+        "OK",
+        "DISPENSED",
+        10,
+        "OK",
+        "DISPENSED",
+        0,
+        0,
+        "IDLE"
+      ],
+      "explain": "change() is 0 before any purchase. The first sale takes 100 of 125 and pays 25 back. A failed select (INSUFFICIENT) does not touch change(): it still reports 25. The next sale uses the 10 left in credit plus a 100 coin (change 10), and an exact 100 coin pays no change."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "insert",
+        "select",
+        "change",
+        "stock",
+        "insert",
+        "select",
+        "state",
+        "balance",
+        "select",
+        "change",
+        "cancel"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 50,
+              "qty": 1
+            },
+            "B1": {
+              "price": 80,
+              "qty": 1
+            }
+          }
+        ],
+        [
+          100
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [
+          "A1"
+        ],
+        [
+          100
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [],
+        [
+          "B1"
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        "OK",
+        "DISPENSED",
+        50,
+        0,
+        "OK",
+        "SOLD_OUT",
+        "HAS_MONEY",
+        100,
+        "DISPENSED",
+        20,
+        0
+      ],
+      "explain": "A1 had one item. The second purchase attempt is SOLD_OUT: the machine stays in HAS_MONEY and keeps the credit, so the customer can still pick B1 (a different slot): 100 - 80 leaves 20 change and nothing to cancel."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "insert",
+        "select",
+        "select",
+        "select",
+        "state",
+        "balance"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 150,
+              "qty": 0
+            }
+          }
+        ],
+        [
+          25
+        ],
+        [
+          "A1"
+        ],
+        [
+          "Z9"
+        ],
+        [
+          "A1"
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        "OK",
+        "SOLD_OUT",
+        "INVALID_SLOT",
+        "SOLD_OUT",
+        "HAS_MONEY",
+        25
+      ],
+      "explain": "A sold-out slot reports SOLD_OUT even when the credit would not cover the price, and an unknown slot is INVALID_SLOT. Neither changes the state or the balance."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "insert",
+        "select",
+        "restock",
+        "select",
+        "change",
+        "stock",
+        "restock",
+        "restock",
+        "restock",
+        "stock"
+      ],
+      "args": [
+        [
+          {
+            "B1": {
+              "price": 75,
+              "qty": 0
+            }
+          }
+        ],
+        [
+          100
+        ],
+        [
+          "B1"
+        ],
+        [
+          "B1",
+          3
+        ],
+        [
+          "B1"
+        ],
+        [],
+        [
+          "B1"
+        ],
+        [
+          "Q",
+          5
+        ],
+        [
+          "B1",
+          0
+        ],
+        [
+          "B1",
+          -2
+        ],
+        [
+          "Q"
+        ]
+      ],
+      "expected": [
+        null,
+        "OK",
+        "SOLD_OUT",
+        3,
+        "DISPENSED",
+        25,
+        2,
+        -1,
+        -1,
+        -1,
+        -1
+      ],
+      "explain": "Restocking a sold-out slot makes it sellable again. An unknown slot or a quantity below 1 returns -1 and changes nothing."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "insert",
+        "insert",
+        "service",
+        "state",
+        "balance",
+        "insert",
+        "select",
+        "cancel",
+        "service",
+        "service",
+        "state",
+        "insert"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 150,
+              "qty": 2
+            }
+          }
+        ],
+        [
+          100
+        ],
+        [
+          25
+        ],
+        [
+          true
+        ],
+        [],
+        [],
+        [
+          25
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [
+          true
+        ],
+        [
+          false
+        ],
+        [],
+        [
+          25
+        ]
+      ],
+      "expected": [
+        null,
+        "OK",
+        "OK",
+        125,
+        "OUT_OF_SERVICE",
+        0,
+        "REJECTED",
+        "OUT_OF_SERVICE",
+        0,
+        0,
+        0,
+        "IDLE",
+        "OK"
+      ],
+      "explain": "Service mode refunds the 125 cents first. While out of service a coin is REJECTED, select answers OUT_OF_SERVICE, cancel returns 0 and switching service on again returns 0. Switching it off returns the machine to IDLE."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "service",
+        "state",
+        "restock",
+        "service",
+        "state",
+        "restock",
+        "state",
+        "service",
+        "insert",
+        "service",
+        "state",
+        "balance",
+        "cancel"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 150,
+              "qty": 2
+            }
+          }
+        ],
+        [
+          false
+        ],
+        [],
+        [
+          "A1",
+          1
+        ],
+        [
+          true
+        ],
+        [],
+        [
+          "A1",
+          2
+        ],
+        [],
+        [
+          false
+        ],
+        [
+          10
+        ],
+        [
+          false
+        ],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        0,
+        "IDLE",
+        3,
+        0,
+        "OUT_OF_SERVICE",
+        5,
+        "OUT_OF_SERVICE",
+        0,
+        "OK",
+        0,
+        "HAS_MONEY",
+        10,
+        10
+      ],
+      "explain": "service(false) while not out of service does nothing and returns 0, both in IDLE and in HAS_MONEY (the 10 cents stay). restock works in IDLE and OUT_OF_SERVICE and never changes the state."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "insert",
+        "insert",
+        "select",
+        "change",
+        "insert",
+        "insert",
+        "select",
+        "change",
+        "insert",
+        "select",
+        "cancel",
+        "insert",
+        "insert",
+        "service",
+        "state",
+        "balance"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 60,
+              "qty": 5
+            },
+            "B1": {
+              "price": 35,
+              "qty": 1
+            }
+          }
+        ],
+        [
+          100
+        ],
+        [
+          25
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [
+          25
+        ],
+        [
+          10
+        ],
+        [
+          "B1"
+        ],
+        [],
+        [
+          5
+        ],
+        [
+          "B1"
+        ],
+        [],
+        [
+          25
+        ],
+        [
+          10
+        ],
+        [
+          true
+        ],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        "OK",
+        "OK",
+        "DISPENSED",
+        65,
+        "OK",
+        "OK",
+        "DISPENSED",
+        0,
+        "OK",
+        "SOLD_OUT",
+        5,
+        "OK",
+        "OK",
+        35,
+        "OUT_OF_SERVICE",
+        0
+      ],
+      "explain": "Money never appears or vanishes. Inserted: 125 + 35 + 5 + 35 = 200. Out: A1 60 + change 65, B1 35 + change 0, refund of 5 after SOLD_OUT, refund of 35 when service starts = 200. The sum of purchases, change and refunds equals the sum of inserts."
+    },
+    {
+      "ops": [
+        "VendingMachine",
+        "insert",
+        "select",
+        "insert",
+        "insert",
+        "select",
+        "change",
+        "insert",
+        "select",
+        "change",
+        "select",
+        "state",
+        "stock"
+      ],
+      "args": [
+        [
+          {
+            "A1": {
+              "price": 60,
+              "qty": 2
+            }
+          }
+        ],
+        [
+          25
+        ],
+        [
+          "A1"
+        ],
+        [
+          25
+        ],
+        [
+          5
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [
+          100
+        ],
+        [
+          "A1"
+        ],
+        [],
+        [
+          "A1"
+        ],
+        [],
+        [
+          "A1"
+        ]
+      ],
+      "expected": [
+        null,
+        "OK",
+        "INSUFFICIENT",
+        "OK",
+        "OK",
+        "INSUFFICIENT",
+        0,
+        "OK",
+        "DISPENSED",
+        95,
+        "NO_MONEY",
+        "IDLE",
+        1
+      ],
+      "explain": "Credit keeps accumulating across failed selects: 25, then 55, both short of 60 (INSUFFICIENT; change() is still 0 because nothing was bought). A 100 coin makes 155, the sale pays 95 back, and a further select in IDLE is NO_MONEY. One item is left."
+    }
+  ],
+  "hints": [
+    "Write the table first: three states, five events, one outcome per cell. If you can fill in every cell on paper, the code is mostly typing.",
+    "Give each state its own object with insert, select, cancel and service methods, and let the machine forward every call to its current state object. Then an illegal event is simply a method that returns the rejection.",
+    "Only HAS_MONEY ever holds credit, so only its transitions move money. Spend the price, keep the rest as change, set the credit to 0 and switch back to IDLE in the same place; the refund paths do the same without the price."
+  ],
+  "complexity": {
+    "time": "O(1) per call",
+    "space": "O(number of slots)"
+  }
+}

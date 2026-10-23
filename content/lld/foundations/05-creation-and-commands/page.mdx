@@ -1,0 +1,155 @@
+import { commandDesign } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Decide **which class to create** in exactly one place (a factory or registry), skip the Builder when an options object or keyword arguments will do, and replace a Singleton with one instance that you create at startup and pass in. Model undo and redo as **commands** with `do` and `undo`, and group several into one undo step with a command that wraps commands.
+</TLDR>
+
+## Create it by name
+
+A string arrives from a config file or a queue message: `"sms"`. Something has to turn it into an object. The question is how many places in your code know how.
+
+<CodeTabs files={['snippets/notification-before.js']} python={['snippets/python/notification_before.py']} />
+
+It works on day one. Then product asks for push notifications, and you must find **every** switch on the channel: sending, pricing, validation, the settings screen. Miss one and that path fails at runtime with `unknown channel`, in production, for push users only.
+
+The fix is not a cleverer switch. It is to put the choice of class in **one place** and have everyone else ask it.
+
+<CodeTabs files={['snippets/channel-registry.js', 'snippets/channel-registry.test.js']} python={['snippets/python/channel_registry.py', 'snippets/python/test_channel_registry.py']} />
+
+Callers say `channels.create(kind)` and then use whatever comes back. They never learn which classes exist. A new kind is one `register` call, with no edit to old code, so this is open/closed from the [SOLID lesson](/lld/foundations/solid) again. In Python the registry can hold the class itself (`register("sms", Sms)`), because a class is already a function that makes an object.
+
+How much machinery you need depends on how the type arrives:
+
+| Tool | Use it when | Example |
+|---|---|---|
+| Constructor | You know the exact type at the call site | `new Sms()` |
+| Static factory | Creation needs a name, a check or a cache | `Duration.ofMinutes(5)` |
+| Registry | The type arrives as data and new kinds must not edit old code | `channels.create(kind)` |
+
+A registry is the heavy end. If the kinds are fixed and few, a single `createChannel(kind)` function with one `switch` is a perfectly good factory. The rule is **one switch, in one place**, not a map.
+
+## Builder, and when it is overkill
+
+A constructor with seven parameters, four of them optional, is where `new Email(a, b, null, null, true)` comes from. Nobody can read that call.
+
+A **Builder** collects the parts one at a time and creates the object at the end, checking the whole combination once.
+
+<CodeTabs files={['snippets/email-builder.js', 'snippets/email-builder.test.js']} python={['snippets/python/email_builder.py', 'snippets/python/test_email_builder.py']} />
+
+Reach for it when:
+
+- **Many parts are optional**, and the call reads better as named steps.
+- **A rule spans several fields** (a recipient and a subject are both required) and must hold before any object exists.
+- **The result should be immutable**, but the parts arrive from different places over time, such as a query assembled by several functions.
+
+In JavaScript and Python you need one **less often** than in Java or C#, because the language already has named arguments in disguise. An options object does the same job in one line:
+
+```js
+new Email({ to: ['ann@x.com'], subject: 'Lunch', cc: ['bob@x.com'] })
+```
+
+```python
+Email(to=("ann@x.com",), subject="Lunch", cc=("bob@x.com",))
+```
+
+Add a validity check to the constructor and you have most of what a builder gives you. Keep the builder for the three cases in that list, and do not write one for a class with three fields.
+
+## Singleton: one instance, no global
+
+`TicketNumbers.get().next()` looks harmless. It is a global variable with a nicer name.
+
+<CodeTabs files={['snippets/singleton-before.js', 'snippets/singleton-after.js', 'snippets/singleton.test.js']} python={['snippets/python/singleton_before.py', 'snippets/python/singleton_after.py', 'snippets/python/test_singleton.py']} titles={['Singleton (before)', 'Passed in (after)', 'Tests']} />
+
+Three things go wrong with the first version:
+
+- **A hidden dependency.** The signature of `issueTicket(vehicle)` says nothing about shared state. You find it by reading the body.
+- **Tests leak into each other.** The counter keeps its value from one test to the next, so a test passes alone and fails in a suite. There is no way to start from a clean state.
+- **You cannot have two.** The day a second garage, tenant or test needs its own counter, every caller has to change.
+
+The alternative is **dependency injection**: the class asks for what it needs in its constructor, and the one place that builds the program (often called the composition root, near `main`) creates each object once and hands it in. In production there is still exactly one `TicketNumbers`. The difference is that nothing forces it, so a test builds a fresh one or passes a fake.
+
+One instance was never the problem. The smell is the **global access point**. A module-level instance (`export const numbers = new TicketNumbers()`) in JavaScript or Python is a Singleton by another name: acceptable for a stateless helper, a smell when it holds business state that a test must control.
+
+## Command: an action as an object
+
+Ctrl+Z works because an edit is not only something that happened. It is something the editor can still hold.
+
+The naive undo saves a full copy of the text before every edit. That is simple, and its cost is document size times edit count: 1,000 edits of a 10,000-character text store 10 million characters, and redo needs a second pile of copies.
+
+The **Command** pattern stores the action instead. Each command knows how to `do` itself and how to `undo` itself, and keeps only what it needs to reverse the change.
+
+<CodeTabs files={['snippets/command.js', 'snippets/command.test.js']} python={['snippets/python/command.py', 'snippets/python/test_command.py']} />
+
+Three details carry the design:
+
+- **`Erase` remembers what it removed.** Asked to erase 5 characters from `"ab"`, it removes 2, and undo must put back exactly 2.
+- **`History` has two stacks.** `run` does the command and pushes it on `done`. `undo` moves it to `undone`, and `redo` moves it back.
+- **A new edit clears the redo stack.** After undo, typing starts a different future, so the old one is discarded. Every editor does this.
+
+`History` never looks inside a command. A new kind of edit, such as `Replace` or `Paste`, is a new class with `do` and `undo`, and `History` stays as it is. The same shape gives you a job queue (store commands, run them later) and an audit log (store commands, replay them).
+
+## Watch the design grow
+
+Step through the diagram. Stage one is the editor that edits directly, and every stage after it adds classes without changing the ones already there.
+
+<ClassDiagram spec={commandDesign} />
+
+## One undo step for many edits
+
+"Replace all" changes forty places. Undoing it forty times would be absurd, so the user expects one Ctrl+Z.
+
+The trick is that a group of commands is itself a command.
+
+<CodeTabs files={['snippets/macro.js', 'snippets/macro.test.js']} python={['snippets/python/macro.py', 'snippets/python/test_macro.py']} />
+
+`Macro` does its steps in order and undoes them in **reverse**, because the last change sits on top of the earlier ones. `History` cannot tell it from a single edit, so grouping costs no change there. If a step throws halfway through `do`, a real editor undoes the steps already done before it lets the error out.
+
+Run the cell, then add a third command to the `Macro`, such as `new Type(doc, '!')`, and watch one undo remove all three.
+
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" />
+
+## Which one, when
+
+Each pattern answers one question. If you are not asking it, you do not need the pattern.
+
+| Pattern | Reach for it when | Skip it when |
+|---|---|---|
+| Factory or registry | The class depends on data, or new kinds arrive | The type is known where you write the call |
+| Builder | Many optional parts, or a cross-field rule | An options object or keyword arguments will do |
+| Singleton | Never as a global; create once and inject | Always, for anything with state |
+| Command | Undo, redo, queues, logs or retries | The action is never reversed, queued or recorded |
+
+<Callout kind="interview" title="What interviewers listen for">
+You say where the decision of which class to create lives, and that it lives in one place. You decline the Singleton on purpose ("one instance, created at startup and passed in") instead of reaching for it by habit. For undo, you name commands, the two stacks and the redo-clearing rule without being asked.
+</Callout>
+
+## The over-engineering trap
+
+<Callout kind="warning" title="A pattern needs a pain">
+A factory for a class with one constructor, a builder for three fields, or a command for an action nobody undoes, queues or logs is cost with no benefit. A `ParkingSpotFactoryBuilderManager` loses points faster than a plain constructor does. Wait for the second variant, the second awkward call site, or the first undo requirement.
+</Callout>
+
+Then practise on the real thing: build the [text editor](/lld/exercises/text-editor) with undo, redo and nested groups. The classic question where vehicle types arrive as strings at a gate is the [parking lot](/questions/parking-lot). The last lesson puts everything together into a 45-minute plan: [the LLD interview playbook](/lld/foundations/lld-playbook).
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="Is a Singleton ever the right answer?">
+    One instance is often right, but a global way to reach it rarely is. Create it once at startup and pass it in. A stateless helper such as a logger can live at module level if no test needs to control it.
+  </FollowUp>
+  <FollowUp q="What is the difference between a Factory and a Builder?">
+    A factory chooses **which** class to create, usually from one value. A builder assembles **one** object from many parts and checks the whole combination before it exists.
+  </FollowUp>
+  <FollowUp q="How would you cap the undo history?">
+    Keep the done stack bounded and drop the oldest command when it is full. The cost is that the user cannot undo further back, which most editors accept. Commands that store large snapshots are the ones to watch.
+  </FollowUp>
+  <FollowUp q="What about an action that cannot be undone, such as sending an email?">
+    Do not put it on the undo stack, or clear the stack when it runs. If the business needs a reversal, make it a new compensating action (send a correction) rather than a true undo.
+  </FollowUp>
+  <FollowUp q="Command stores the change. Why not store the whole state instead?">
+    A snapshot is the simplest undo and fine for small documents. Commands cost less memory per step and give you the action as data for queues and logs, but every command needs a correct `undo`.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

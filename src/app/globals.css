@@ -388,6 +388,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .uml .uml-class:focus { outline: none; }
 .uml .uml-class:focus-visible rect { stroke-width: 3; }
 .uml .uml-class[data-selected] rect { stroke: var(--accent); stroke-width: 2.6; fill: color-mix(in srgb, var(--accent) 8%, var(--card-2)); }
+.uml .uml-class[data-new] rect { stroke: var(--good); stroke-width: 2.4; }
+.uml-stages { padding: 0 0 8px; }
+.uml-stage-bar { display: flex; align-items: center; gap: 8px; }
+.uml-stage-title { flex: 1; display: flex; flex-direction: column; font-size: 14px; line-height: 1.3; }
+.uml-stage-title b { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 650; }
+.uml-stage-note { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 .uml .uml-rel[data-lit] path { stroke: var(--accent); stroke-width: 2; }
 .uml .uml-rel[data-lit] :is(.uml-filled) { fill: var(--accent); }
 .uml [data-dim] { opacity: .35; transition: opacity .2s; }
@@ -570,6 +576,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .pg-toolbar .title-input:hover, .pg-toolbar .title-input:focus { border-color: var(--border); }
 .pg-canvas { position: relative; min-height: 0; }
 .pg-bottom { border-top: 1px solid var(--border); background: var(--card); max-height: 34vh; overflow: auto; }
+.pg-bottom:has(.mission) { max-height: 42vh; }
 .pg-tabs { display: flex; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--card); z-index: 1; }
 .pg-tabs button { border: 0; background: transparent; color: var(--muted); padding: 7px 12px; border-bottom: 2px solid transparent; cursor: pointer; font-size: 13.5px; font-weight: 600; }
 .pg-tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var(--accent); }
@@ -624,3 +631,26 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   body { background: #fff; color: #000; }
   .card, .table-wrap { break-inside: avoid; }
 }
+
+/* ------------------------------------------------------------------ playground: guided mission panel */
+.mission { display: grid; grid-template-columns: minmax(170px, 230px) minmax(0, 1fr); gap: 16px; }
+.mission-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; align-content: start; }
+.mission-steps li { margin: 0; }
+.mission-steps button { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 6px 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--fg); font: inherit; font-size: 13px; cursor: pointer; }
+.mission-steps button[aria-current=step] { border-color: var(--accent); background: var(--card-2); }
+.mission-steps button:disabled { color: var(--muted); cursor: not-allowed; }
+.mission-num { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-strong); font-size: 11px; }
+.mission-steps button[data-done] .mission-num { color: var(--good); border-color: var(--good); }
+.mission-body h3 { margin: 0 0 4px; font-size: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.mission-body h3 .eyebrow { margin: 0 10px 0 0; }
+.mission-body p { margin: 4px 0; }
+.mission-scenario { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.mission-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.mission-result { min-height: 24px; }
+.mission-fail, .mission-pass > p { display: flex; gap: 8px; align-items: flex-start; }
+.mission-fail { color: var(--critical); }
+.mission-fail svg, .mission-pass svg { flex: none; margin-top: 2px; }
+.mission-pass svg { color: var(--good); }
+.mission-pass > p { margin-bottom: 8px; }
+.mission-done { display: block !important; }
+@media (max-width: 720px) { .mission { grid-template-columns: minmax(0, 1fr); } .mission-steps { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; } }

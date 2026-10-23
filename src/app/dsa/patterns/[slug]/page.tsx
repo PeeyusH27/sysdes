@@ -5,6 +5,8 @@ import { getJsTopic, getPattern, patterns } from "@content/dsa/registry";
 import { DocLayout } from "@/components/layout/DocLayout";
 import { boundComponents } from "@/components/content/bound";
 import { PatternProblems } from "@/components/dsa/PatternProblems";
+import { PatternInSystems } from "@/components/content/Bridges";
+import { systemsFor } from "@content/bridges";
 import { getHeadings } from "@/lib/content";
 
 export const dynamicParams = false;
@@ -51,13 +53,18 @@ export default async function PatternPage({ params }: PageProps<"/dsa/patterns/[
           </span>
         </>
       }
-      headings={[...headings, { depth: 2, text: "Practice problems", id: "practice-problems" }]}
+      headings={[
+        ...headings,
+        { depth: 2 as const, text: "Practice problems", id: "practice-problems" },
+        ...(systemsFor(p.slug).length ? [{ depth: 2 as const, text: "In real systems", id: "in-real-systems" }] : []),
+      ]}
       prev={prev && { href: `/dsa/patterns/${prev.slug}`, title: prev.title }}
       next={next && { href: `/dsa/patterns/${next.slug}`, title: next.title }}
       nextNote={p.next}
     >
       <Body components={boundComponents(`dsa/patterns/${p.dir}`)} />
       <PatternProblems slug={p.slug} />
+      <PatternInSystems slug={p.slug} />
     </DocLayout>
   );
 }

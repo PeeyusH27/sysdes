@@ -22,6 +22,8 @@ import { getChallenge, referenceDesign, type Challenge } from "./challenges";
 import { edgeTypes } from "./edges";
 import { grade } from "./grader";
 import { lint, type Finding } from "./lint";
+import { MissionPanel, type MissionResult } from "./MissionPanel";
+import { evaluateStep, getMission, scenarioOptions } from "./missions";
 import { nodeTypes } from "./nodes";
 import { DesignDoc, migrate } from "./schema";
 import { decodeDesign, encodeDesign } from "./share";
@@ -30,17 +32,18 @@ import { redo, undo, useDesign } from "./store";
 import { TEMPLATES } from "./templates";
 import type { FlowEdgeT, HldNode } from "./types";
 
-export function Playground({ challengeSlug }: { challengeSlug?: string }) {
+export function Playground({ challengeSlug, guided = false }: { challengeSlug?: string; guided?: boolean }) {
   return (
     <ReactFlowProvider>
-      <Editor challenge={challengeSlug ? getChallenge(challengeSlug) : undefined} />
+      <Editor challenge={challengeSlug ? getChallenge(challengeSlug) : undefined} guided={guided} />
     </ReactFlowProvider>
   );
 }
 
-type Tab = "lint" | "sim" | "grade" | "outline";
+type Tab = "mission" | "lint" | "sim" | "grade" | "outline";
 
-function Editor({ challenge }: { challenge?: Challenge }) {
+function Editor({ challenge, guided }: { challenge?: Challenge; guided: boolean }) {
+  const mission = challenge && guided ? getMission(challenge.slug) : undefined;
   const { nodes, edges, title, onNodesChange, onEdgesChange, onConnect, addNode, setTitle, load } = useDesign(
     useShallow((s) => ({
       nodes: s.nodes, edges: s.edges, title: s.title, onNodesChange: s.onNodesChange, onEdgesChange: s.onEdgesChange,
@@ -49,10 +52,12 @@ function Editor({ challenge }: { challenge?: Challenge }) {
   );
   const { screenToFlowPosition, fitView, getNodes } = useReactFlow();
   const { resolvedTheme } = useTheme();
-  const [tab, setTab] = useState<Tab>(challenge ? "grade" : "lint");
+  const [tab, setTab] = useState<Tab>(mission ? "mission" : challenge ? "grade" : "lint");
   const [running, setRunning] = useState(false);
   const [multiplier, setMultiplier] = useState(1);
   const [down, setDown] = useState<Set<string>>(new Set());
+  const [lose, setLose] = useState<Set<string>>(new Set());
+  const [missionResult, setMissionResult] = useState<MissionResult | null>(null);
   const [highlight, setHighlight] = useState<Finding | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showRef, setShowRef] = useState(false);
@@ -76,10 +81,16 @@ function Editor({ challenge }: { challenge?: Challenge }) {
       }, 50);
     } else if (window.location.hash.startsWith("#d=")) {
       setTimeout(() => notify("That share link is invalid or damaged."), 0);
-    } else if (challenge && useDesign.getState().title !== challenge.title) {
+    } else if (mission) {
+      // A guided mission starts from its own naive design; coming back to it keeps the learner's work.
+      if (useDesign.getState().title !== mission.start.title) {
+        load(mission.start);
+        setTimeout(() => fitView({ padding: 0.2, maxZoom: 1 }), 50);
+      }
+    } else if (challenge && ![challenge.title, `${challenge.title} (guided)`].includes(useDesign.getState().title)) {
       load({ version: 1, title: challenge.title, nodes: [], edges: [] });
     }
-  }, [challenge, load, fitView]);
+  }, [challenge, mission, load, fitView]);
 
   // Undo / redo shortcuts
   useEffect(() => {
@@ -94,13 +105,50 @@ function Editor({ challenge }: { challenge?: Challenge }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const sim = useMemo(() => (running ? simulate(nodes, edges, { multiplier, down }) : null), [running, nodes, edges, multiplier, down]);
+  const sim = useMemo(() => (running ? simulate(nodes, edges, { multiplier, down, lose }) : null), [running, nodes, edges, multiplier, down, lose]);
   const findings = useMemo(() => {
     const withSim = sim ? nodes.map((n) => ({ ...n, data: { ...n.data, sim: sim.nodes[n.id] } })) : nodes;
     return lint(withSim, edges);
   }, [nodes, edges, sim]);
   const result = useMemo(() => (challenge ? grade(challenge.rubric, nodes, edges) : null), [challenge, nodes, edges]);
   const saveChallenge = useProgress((s) => s.saveChallenge);
+  const missionPassed = useProgress((s) => (mission ? s.mission[mission.slug] ?? 0 : 0));
+  const setMission = useProgress((s) => s.setMission);
+
+  const runMission = (index: number) => {
+    if (!mission) return;
+    const step = mission.steps[index];
+    const o = scenarioOptions(step.scenario, nodes);
+    setMultiplier(o.multiplier);
+    setDown(o.down);
+    setLose(o.lose);
+    setRunning(true);
+    const { failure } = evaluateStep(step, nodes, edges);
+    setMissionResult({ step: step.id, failure });
+    setHighlight(failure?.nodes?.length ? { id: `mission:${step.id}`, level: "warn", message: failure.message, nodes: failure.nodes } : null);
+    if (!failure && index >= missionPassed) setMission(mission.slug, index + 1);
+  };
+  const showMissionFix = (index: number) => {
+    if (!mission) return;
+    load(mission.steps[index].solve(useDesign.getState().toDoc()));
+    setHighlight(null);
+    setMissionResult(null);
+    setTimeout(() => fitView({ padding: 0.2, maxZoom: 1 }), 50);
+    notify("Applied the fix. Run the scenario to check it, or undo.");
+  };
+  const restartMission = () => {
+    if (!mission) return;
+    if (useDesign.getState().nodes.length && !window.confirm("Restart the mission from its starting design?")) return;
+    load(mission.start);
+    setMission(mission.slug, 0);
+    setMissionResult(null);
+    setHighlight(null);
+    setRunning(false);
+    setDown(new Set());
+    setLose(new Set());
+    setMultiplier(1);
+    setTimeout(() => fitView({ padding: 0.2, maxZoom: 1 }), 50);
+  };
   useEffect(() => {
     if (challenge && result && nodes.length) saveChallenge(challenge.slug, result.percent);
   }, [challenge, result, nodes.length, saveChallenge]);
@@ -206,12 +254,15 @@ function Editor({ challenge }: { challenge?: Challenge }) {
       <aside className="pg-palette" aria-label="Components">
         {challenge && (
           <div className="card" style={{ padding: 12, marginBottom: 8 }}>
+            <Link href="/playground" className="link" style={{ float: "right", fontSize: 12.5 }}>All challenges</Link>
             <span className="eyebrow">Challenge</span>
             <strong style={{ display: "block", marginTop: 2 }}>{challenge.title}</strong>
-            <p className="muted" style={{ margin: "4px 0 6px", fontSize: 13 }}>{challenge.brief}</p>
-            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5 }}>
-              {challenge.requirements.map((r) => <li key={r}>{r}</li>)}
-            </ul>
+            <p className="muted" style={{ margin: "4px 0 6px", fontSize: 13 }}>{mission ? mission.intro : challenge.brief}</p>
+            {!mission && (
+              <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5 }}>
+                {challenge.requirements.map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            )}
             <p style={{ margin: "6px 0 0", fontSize: 12.5 }}>
               {challenge.numbers.map(([k, v]) => <span key={k} style={{ display: "block" }}><b>{k}:</b> {v}</span>)}
             </p>
@@ -330,6 +381,7 @@ function Editor({ challenge }: { challenge?: Challenge }) {
 
         <div className="pg-bottom">
           <div className="pg-tabs" role="tablist" aria-label="Panels">
+            {mission && <button role="tab" aria-selected={tab === "mission"} onClick={() => setTab("mission")}>Mission {missionPassed}/{mission.steps.length}</button>}
             <button role="tab" aria-selected={tab === "lint"} onClick={() => setTab("lint")}>
               Review {errors + warns > 0 && <span className="pill bad-ink" style={{ marginLeft: 4 }}>{errors + warns}</span>}
             </button>
@@ -338,6 +390,9 @@ function Editor({ challenge }: { challenge?: Challenge }) {
             <button role="tab" aria-selected={tab === "outline"} onClick={() => setTab("outline")}><ListTree size={13} aria-hidden /> Outline</button>
           </div>
           <div className="pg-panel" role="tabpanel">
+            {tab === "mission" && mission && (
+              <MissionPanel mission={mission} passed={missionPassed} result={missionResult} score={result ? result.percent : null} onRun={runMission} onShowMe={showMissionFix} onRestart={restartMission} />
+            )}
             {tab === "lint" && <LintPanel findings={findings} highlight={highlight} onHighlight={setHighlight} />}
             {tab === "sim" && (
               <SimPanel
@@ -347,6 +402,8 @@ function Editor({ challenge }: { challenge?: Challenge }) {
                 setMultiplier={setMultiplier}
                 down={down}
                 setDown={setDown}
+                lose={lose}
+                setLose={setLose}
                 nodes={nodes}
                 sim={sim}
               />
@@ -414,7 +471,7 @@ function LintPanel({ findings, highlight, onHighlight }: { findings: Finding[]; 
 }
 
 function SimPanel({
-  running, onToggle, multiplier, setMultiplier, down, setDown, nodes, sim,
+  running, onToggle, multiplier, setMultiplier, down, setDown, lose, setLose, nodes, sim,
 }: {
   running: boolean;
   onToggle: () => void;
@@ -422,6 +479,8 @@ function SimPanel({
   setMultiplier: (n: number) => void;
   down: Set<string>;
   setDown: (s: Set<string>) => void;
+  lose: Set<string>;
+  setLose: (s: Set<string>) => void;
   nodes: HldNode[];
   sim: ReturnType<typeof simulate> | null;
 }) {
@@ -443,21 +502,28 @@ function SimPanel({
           <input type="range" min={0.5} max={20} step={0.5} value={multiplier} onChange={(e) => setMultiplier(Number(e.target.value))} />
         </label>
         <button type="button" className="wbtn" onClick={() => setMultiplier(multiplier >= 10 ? 1 : 10)}>{multiplier >= 10 ? "End spike" : "Spike ×10"}</button>
-        <label className="control" style={{ maxWidth: 260 }}>
-          <span>Kill a component</span>
+        <label className="control" style={{ maxWidth: 280 }}>
+          <span>Break something{down.size + lose.size > 0 ? ` (${down.size + lose.size} active)` : ""}</span>
           <select
             value=""
             onChange={(e) => {
-              const next = new Set(down);
-              if (next.has(e.target.value)) next.delete(e.target.value);
-              else if (e.target.value) next.add(e.target.value);
-              setDown(next);
+              const v = e.target.value;
+              if (!v) return;
+              const toggle = (set: Set<string>, id: string) => {
+                const next = new Set(set);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              };
+              if (v.startsWith("lose:")) setLose(toggle(lose, v.slice(5)));
+              else setDown(toggle(down, v));
             }}
           >
             <option value="">Choose…</option>
-            {nodes.filter((n) => n.data.kind !== "client").map((n) => (
-              <option key={n.id} value={n.id}>{down.has(n.id) ? `Revive ${n.data.label}` : `Kill ${n.data.label}`}</option>
-            ))}
+            {nodes.filter((n) => n.data.kind !== "client").flatMap((n) => [
+              <option key={n.id} value={n.id}>{down.has(n.id) ? `Revive ${n.data.label}` : `Kill ${n.data.label}`}</option>,
+              <option key={`lose:${n.id}`} value={`lose:${n.id}`}>{lose.has(n.id) ? `Restore the lost ${n.data.label} instance` : `Lose one ${n.data.label} instance`}</option>,
+            ])}
           </select>
         </label>
       </div>

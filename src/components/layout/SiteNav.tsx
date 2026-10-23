@@ -39,6 +39,7 @@ const TRACKS: Track[] = [
             items: [
               { href: "/dsa/js", label: "JavaScript cheat sheet", note: `${jsTopics.length} topics, every snippet runs` },
               { href: "/dsa/problems", label: "Problems", note: "Hidden tests run in your browser" },
+              { href: "/dsa/drill", label: "Pattern drill", note: "Read a problem, name the pattern" },
             ],
           },
           { title: "Problems by level", items: LEVELS.map((lv) => ({ href: `/dsa/problems?lv=${lv}`, label: lv, level: lv })) },
@@ -60,7 +61,7 @@ const TRACKS: Track[] = [
     id: "sd",
     label: "System Design",
     blurb: `${learnSteps.length} steps, deep dives, questions`,
-    match: ["/system-design", "/learn", "/deep-dives", "/questions", "/playground", "/cheatsheet", "/glossary"],
+    match: ["/system-design", "/learn", "/deep-dives", "/questions", "/lld", "/playground", "/cheatsheet", "/glossary"],
     columns: [
       {
         id: "sd-path",
@@ -86,11 +87,12 @@ const TRACKS: Track[] = [
       },
       {
         id: "sd-tools",
-        title: "Tools",
+        title: "Practice and tools",
         hub: { href: "/system-design", label: "Track overview" },
         groups: [
           {
             items: [
+              { href: "/lld", label: "LLD track", note: "Foundations and coding exercises" },
               { href: "/playground", label: "Playground", note: "Drag, connect, get graded" },
               { href: "/cheatsheet", label: "Cheatsheet", note: "Numbers worth memorising" },
               { href: "/glossary", label: "Glossary", note: "Every term in one line" },
@@ -113,10 +115,11 @@ function railFor(track: TrackId, path: string): Item[] {
       { href: "/dsa/js", label: "JS cheat sheet" },
       { href: "/dsa/patterns", label: "Patterns" },
       { href: "/dsa/problems", label: "Problems" },
+      { href: "/dsa/drill", label: "Drill" },
     ];
   }
   const tool = under(path, "/cheatsheet") ? { href: "/cheatsheet", label: "Cheatsheet" } : under(path, "/glossary") ? { href: "/glossary", label: "Glossary" } : { href: "/playground", label: "Playground" };
-  return [{ href: "/learn", label: "HLD path" }, { href: "/deep-dives", label: "Deep dives" }, { href: "/questions", label: "Questions" }, tool];
+  return [{ href: "/learn", label: "HLD path" }, { href: "/deep-dives", label: "Deep dives" }, { href: "/questions", label: "Questions" }, { href: "/lld", label: "LLD" }, tool];
 }
 
 /* ------------------------------------------------------------------ menu pieces (shared by the mega menu and the drawer) */

@@ -12,6 +12,8 @@ Each car is a **state machine** that serves its **up-stops and down-stops** in *
 
 A **low-level design** (LLD) question with a scheduling problem inside. Split it early: **which car** answers a hall call (dispatch), and **in what order** a car serves its stops (scheduling).
 
+New to low-level design? The dispatch strategy and the car as a state machine are taught in [Swap behaviour](/lld/foundations/strategy-decorator) and [State machines and observers](/lld/foundations/state-observer).
+
 ## Clarifying questions
 
 - How many floors and cars? Zones, or every car to every floor?
@@ -20,33 +22,7 @@ A **low-level design** (LLD) question with a scheduling problem inside. Split it
 - What happens on a car failure, a power cut, a fire alarm?
 - Optimise average wait, longest wait or energy? One building or a fleet?
 
-## Capacity estimate
-
-Size for the **up-peak**, the morning rush when nearly every trip starts in the lobby. One car's round-trip time (RTT) sets everything.
-
-| Quantity | Estimate |
-|---|---|
-| Building | 20 floors above the lobby, 3.5 m each (a 70 m rise) |
-| Population | 50 per floor = **1,000** |
-| Target | 12% of them in the busiest 5 minutes = **120 people** |
-| Load per trip | A 13-person car, 80% full: **P = 10** |
-| Travel | 2.5 m/s: **1.4 s per floor** (3.5 ÷ 2.5) |
-| Stops per trip | S = 20 × (1 − (19/20)^10) ≈ **8.0** (10 riders, some sharing a floor) |
-| Highest floor reached | H ≈ **18.6** on average |
-| Time per stop | ~**8 s**: close 3 s, open 2 s, ~3 s braking and accelerating |
-| Transfer | **1.2 s** per passenger, in at the lobby, out upstairs |
-
-RTT = 2 × H × 1.4 + (S + 1) × 8 + 2 × P × 1.2 = 52 + 72 + 24 ≈ **148 s**.
-
-- One car: 300 × 10 ÷ 148 ≈ **20 people per 5 minutes**.
-- **Four cars**: about **81**, leaving the lobby every 148 ÷ 4 ≈ **37 s** (offices aim for under 30 s).
-- **Six cars**: about 121, every ~25 s. At 1.6 m/s instead of 2.5, the RTT is about 178 s and six cars move about 101.
-
-The surprise: **stopping (72 s) costs more than travelling (52 s)**. Destination dispatch's 4 stops instead of 8 give an RTT of about 116 s: four cars then move about 103. The controller is tiny (120 presses in 5 minutes is 0.4 per second, plus a tick per car every 50–100 ms), so correctness is the hard part. The timeline plays one trip.
-
-<Timeline spec={trip} />
-
-## API
+## Public interface
 
 | Call | Returns | Notes |
 |---|---|---|
@@ -59,7 +35,13 @@ The surprise: **stopping (72 s) costs more than travelling (52 s)**. Destination
 
 Each car exposes `addStop(floor, dir?)`, `step()` and `openDoors()`, which throws while moving.
 
-## Data model
+## Build the design in stages
+
+Step through the stages: the building first, then requests as objects, then dispatch as a strategy, then the displays that observe. A green outline marks what the latest stage added; click a class to see its members and relations.
+
+<ClassDiagram spec={classes} />
+
+## What it remembers
 
 It all fits in the controller's memory; the snippet is one instant.
 
@@ -78,12 +60,6 @@ const state = {
 - A hall call is in exactly one place: `assigned` (with one car) or `waiting`.
 - Up calls go into `upStops`, down calls into `downStops`; a car call joins the set on its side of the car.
 - Nothing survives a restart: panels re-send lit calls, riders re-press. An append-only event log serves maintenance, not dispatch.
-
-## Class design
-
-Hover a class to light up its relationships. Filled diamonds mean **ownership**: the system owns floors and cars, each car its door and panel.
-
-<ClassDiagram spec={classes} />
 
 ## Watch it run
 
@@ -195,6 +171,34 @@ The same design in **JavaScript, Java or Python**: pick a language and every cod
 - `#plan()` is all of LOOK: stop if this floor is a stop in the sweep direction, continue while anything lies ahead, else turn (serving a call here in the other direction first).
 - `routeDistance`: a car at 2 sweeping up to 5 is 2 floors from 4▲, but 4 from 4▼ plus 2 for the stop at 5, so 6.
 - `takeOutOfService` re-dispatches at once and puts calls no car can take at the **front** of `waiting`: they were pressed first.
+
+## Capacity estimate
+
+A follow-up, not the opening move: interviewers sometimes ask how many cars a building needs. Size for the **up-peak**, the morning rush when nearly every trip starts in the lobby.
+
+One car's round-trip time (RTT) sets everything.
+
+| Quantity | Estimate |
+|---|---|
+| Building | 20 floors above the lobby, 3.5 m each (a 70 m rise) |
+| Population | 50 per floor = **1,000** |
+| Target | 12% of them in the busiest 5 minutes = **120 people** |
+| Load per trip | A 13-person car, 80% full: **P = 10** |
+| Travel | 2.5 m/s: **1.4 s per floor** (3.5 ÷ 2.5) |
+| Stops per trip | S = 20 × (1 − (19/20)^10) ≈ **8.0** (10 riders, some sharing a floor) |
+| Highest floor reached | H ≈ **18.6** on average |
+| Time per stop | ~**8 s**: close 3 s, open 2 s, ~3 s braking and accelerating |
+| Transfer | **1.2 s** per passenger, in at the lobby, out upstairs |
+
+RTT = 2 × H × 1.4 + (S + 1) × 8 + 2 × P × 1.2 = 52 + 72 + 24 ≈ **148 s**.
+
+- One car: 300 × 10 ÷ 148 ≈ **20 people per 5 minutes**.
+- **Four cars**: about **81**, leaving the lobby every 148 ÷ 4 ≈ **37 s** (offices aim for under 30 s).
+- **Six cars**: about 121, every ~25 s. At 1.6 m/s instead of 2.5, the RTT is about 178 s and six cars move about 101.
+
+The surprise: **stopping (72 s) costs more than travelling (52 s)**. Destination dispatch's 4 stops instead of 8 give an RTT of about 116 s: four cars then move about 103. The controller is tiny (120 presses in 5 minutes is 0.4 per second, plus a tick per car every 50–100 ms), so correctness is the hard part. The timeline plays one trip.
+
+<Timeline spec={trip} />
 
 ## Failure modes
 

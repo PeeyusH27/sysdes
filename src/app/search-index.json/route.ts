@@ -1,7 +1,7 @@
 import { allPages } from "@content/registry";
 import { shorts } from "@content/shorts";
 import { mdxToPlainText, readContent } from "@/lib/content";
-import { loadProblems } from "@/lib/dsa/load";
+import { loadExercises, loadProblems } from "@/lib/dsa/load";
 
 export const dynamic = "force-static";
 
@@ -26,6 +26,16 @@ export async function GET() {
       body: (await readContent(`dsa/problems/${p.slug}/statement.md`)).replace(/[`*_#>|]/g, " ").slice(0, 3000),
     })),
   );
+  const exercises = await Promise.all(
+    loadExercises().map(async (p) => ({
+      id: `/lld/exercises/${p.slug}`,
+      title: `${p.meta.title} (LLD exercise)`,
+      section: "LLD",
+      summary: p.meta.summary,
+      tags: ["lld", "exercise", p.meta.difficulty, ...p.meta.patterns].join(" "),
+      body: (await readContent(`lld/exercises/${p.slug}/statement.md`)).replace(/[`*_#>|]/g, " ").slice(0, 3000),
+    })),
+  );
   const shortDocs = shorts.map((s) => ({
     id: `/shorts?s=${s.id}`,
     title: s.title.replace(/[`*]/g, ""),
@@ -34,5 +44,5 @@ export async function GET() {
     tags: `${s.track} ${s.topic}`,
     body: [...s.points, ...s.more.flatMap((g) => g.points)].join(" ").replace(/[`*]/g, ""),
   }));
-  return Response.json([...docs, ...problems, ...shortDocs]);
+  return Response.json([...docs, ...problems, ...exercises, ...shortDocs]);
 }

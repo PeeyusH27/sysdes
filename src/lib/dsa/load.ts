@@ -12,6 +12,8 @@ import { ProblemMeta, type FunctionProblemMeta, type RunnableProblem } from "./s
 import { generatePythonStarter } from "./python";
 
 export const PROBLEMS_DIR = path.join(process.cwd(), "content", "dsa", "problems");
+/** LLD exercises are design problems in the same format: content/lld/exercises/<slug>/. */
+export const EXERCISES_DIR = path.join(process.cwd(), "content", "lld", "exercises");
 
 export interface LoadedProblem {
   slug: string;
@@ -24,15 +26,15 @@ export interface LoadedProblem {
   starterPy: string;
 }
 
-const read = (slug: string, file: string) => {
-  const p = path.join(PROBLEMS_DIR, slug, file);
+const read = (slug: string, file: string, dir = PROBLEMS_DIR) => {
+  const p = path.join(dir, slug, file);
   return existsSync(p) ? readFileSync(p, "utf8") : "";
 };
 
-export function problemSlugs() {
-  if (!existsSync(PROBLEMS_DIR)) return [];
-  return readdirSync(PROBLEMS_DIR, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && existsSync(path.join(PROBLEMS_DIR, d.name, "problem.json")))
+export function problemSlugs(dir = PROBLEMS_DIR) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && existsSync(path.join(dir, d.name, "problem.json")))
     .map((d) => d.name);
 }
 
@@ -59,21 +61,25 @@ export function generateStarter(meta: FunctionProblemMeta) {
 const patternOrder = new Map(patterns.map((p) => [p.slug, p.order]));
 const DIFF = { Easy: 0, Medium: 1, Hard: 2 } as const;
 
+function readProblems(dir: string): LoadedProblem[] {
+  return problemSlugs(dir).map((slug) => {
+    const raw = JSON.parse(read(slug, "problem.json", dir));
+    const parsed = ProblemMeta.safeParse(raw);
+    if (!parsed.success) throw new Error(`${path.relative(process.cwd(), dir)}/${slug}/problem.json: ${parsed.error.message}`);
+    const meta = parsed.data;
+    const starterJs = read(slug, "starter.js", dir);
+    const starter = starterJs || (meta.kind === "design" ? `class ${meta.className} {\n  constructor() {\n    \n  }\n}\n` : generateStarter(meta));
+    const starterPy = generatePythonStarter(meta, starterJs || undefined);
+    return { slug, meta, statement: read(slug, "statement.md", dir), approach: read(slug, "solution.md", dir), solution: read(slug, "solution.js", dir), starter, starterPy };
+  });
+}
+
 let cache: LoadedProblem[] | undefined;
 
 /** All problems, sorted by primary pattern, then `order`. Throws on invalid problem.json (fails the build loudly). */
 export function loadProblems(): LoadedProblem[] {
   if (cache && process.env.NODE_ENV === "production") return cache;
-  const out = problemSlugs().map((slug) => {
-    const raw = JSON.parse(read(slug, "problem.json"));
-    const parsed = ProblemMeta.safeParse(raw);
-    if (!parsed.success) throw new Error(`content/dsa/problems/${slug}/problem.json: ${parsed.error.message}`);
-    const meta = parsed.data;
-    const starterJs = read(slug, "starter.js");
-    const starter = starterJs || (meta.kind === "design" ? `class ${meta.className} {\n  constructor() {\n    \n  }\n}\n` : generateStarter(meta));
-    const starterPy = generatePythonStarter(meta, starterJs || undefined);
-    return { slug, meta, statement: read(slug, "statement.md"), approach: read(slug, "solution.md"), solution: read(slug, "solution.js"), starter, starterPy };
-  });
+  const out = readProblems(PROBLEMS_DIR);
   out.sort(
     (a, b) =>
       (patternOrder.get(a.meta.patterns[0]) ?? 99) - (patternOrder.get(b.meta.patterns[0]) ?? 99) ||
@@ -84,6 +90,21 @@ export function loadProblems(): LoadedProblem[] {
   cache = out;
   return out;
 }
+
+let exerciseCache: LoadedProblem[] | undefined;
+
+/**
+ * LLD exercises: design problems (`kind: "design"`) in content/lld/exercises/. `patterns` holds lesson slugs from
+ * content/lld/registry.ts instead of DSA patterns. Sorted by `order`.
+ */
+export function loadExercises(): LoadedProblem[] {
+  if (exerciseCache && process.env.NODE_ENV === "production") return exerciseCache;
+  const out = readProblems(EXERCISES_DIR).sort((a, b) => a.meta.order - b.meta.order || a.slug.localeCompare(b.slug));
+  exerciseCache = out;
+  return out;
+}
+
+export const loadExercise = (slug: string) => loadExercises().find((p) => p.slug === slug);
 
 export const loadProblem = (slug: string) => loadProblems().find((p) => p.slug === slug);
 

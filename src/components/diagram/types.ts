@@ -92,6 +92,12 @@ export interface ClassSpec {
     type: "composition" | "aggregation" | "inheritance" | "implements" | "association" | "dependency";
     label?: string;
   }[];
+  /**
+   * Build the diagram up in steps. Each stage adds classes (by id) to the ones already shown, and a relation appears
+   * once both of its classes are on screen. Every class must be added exactly once. Positions stay fixed, so each
+   * stage visibly grows the same drawing. Without stages the whole diagram is shown.
+   */
+  stages?: { title: string; note: string; add: string[] }[];
 }
 
 /* ---------- Decision trees ---------- */

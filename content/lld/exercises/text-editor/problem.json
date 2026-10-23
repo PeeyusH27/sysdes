@@ -1,0 +1,717 @@
+{
+  "title": "Text Editor with Undo",
+  "difficulty": "Medium",
+  "patterns": [
+    "creation-and-commands"
+  ],
+  "js": [],
+  "order": 7,
+  "summary": "Build a text editor whose typing and deleting can be undone and redone, including groups of actions that undo as one step.",
+  "kind": "design",
+  "className": "Editor",
+  "samples": 3,
+  "tests": [
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "type",
+        "text",
+        "undo",
+        "text",
+        "undo",
+        "text",
+        "undo",
+        "canUndo",
+        "canRedo"
+      ],
+      "args": [
+        [],
+        [
+          "hello"
+        ],
+        [
+          " world"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        5,
+        6,
+        "hello world",
+        true,
+        "hello",
+        true,
+        "",
+        false,
+        false,
+        true
+      ],
+      "explain": "Two typed chunks are two undo steps. Undoing both leaves an empty text, a third undo has nothing to do (false), and the redo history now holds two actions."
+    },
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "type",
+        "type",
+        "undo",
+        "undo",
+        "text",
+        "redo",
+        "text",
+        "redo",
+        "text",
+        "redo",
+        "canRedo"
+      ],
+      "args": [
+        [],
+        [
+          "a"
+        ],
+        [
+          "b"
+        ],
+        [
+          "c"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        1,
+        1,
+        1,
+        true,
+        true,
+        "a",
+        true,
+        "ab",
+        true,
+        "abc",
+        false,
+        false
+      ],
+      "explain": "Undo twice leaves \"a\", redo brings back \"ab\" then \"abc\", and a third redo has nothing left to replay."
+    },
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "delete",
+        "text",
+        "undo",
+        "text",
+        "redo",
+        "text"
+      ],
+      "args": [
+        [],
+        [
+          "hello"
+        ],
+        [
+          2
+        ],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        5,
+        2,
+        "hel",
+        true,
+        "hello",
+        true,
+        "hel"
+      ],
+      "explain": "delete(2) reports the 2 characters it removed. Undo restores exactly those characters, redo removes them again."
+    },
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "delete",
+        "text",
+        "delete",
+        "canUndo",
+        "undo",
+        "text",
+        "undo",
+        "text",
+        "undo"
+      ],
+      "args": [
+        [],
+        [
+          "ab"
+        ],
+        [
+          5
+        ],
+        [],
+        [
+          3
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        2,
+        2,
+        "",
+        0,
+        true,
+        true,
+        "ab",
+        true,
+        "",
+        false
+      ],
+      "explain": "delete(5) only had 2 characters to remove, so it returns 2 and undo restores just \"ab\". delete(3) on the now empty text returns 0 and is not recorded, so the first undo undoes the real delete, the second undoes the typing, and the third has nothing to undo."
+    },
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "type",
+        "undo",
+        "canRedo",
+        "type",
+        "canRedo",
+        "redo",
+        "text",
+        "undo",
+        "text",
+        "undo",
+        "text"
+      ],
+      "args": [
+        [],
+        [
+          "a"
+        ],
+        [
+          "b"
+        ],
+        [],
+        [],
+        [
+          "c"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        1,
+        1,
+        true,
+        true,
+        1,
+        false,
+        false,
+        "ac",
+        true,
+        "a",
+        true,
+        ""
+      ],
+      "explain": "After undoing \"b\", typing \"c\" is a new action and clears the redo history, so redo returns false and \"b\" is gone for good."
+    },
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "canUndo",
+        "delete",
+        "delete",
+        "canUndo",
+        "undo",
+        "redo",
+        "text"
+      ],
+      "args": [
+        [],
+        [
+          ""
+        ],
+        [],
+        [
+          0
+        ],
+        [
+          -3
+        ],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        0,
+        false,
+        0,
+        0,
+        false,
+        false,
+        false,
+        ""
+      ],
+      "explain": "An empty type, delete(0) and a negative delete do nothing, return 0 and are not recorded. With no history, undo and redo return false."
+    },
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "beginGroup",
+        "delete",
+        "type",
+        "type",
+        "endGroup",
+        "text",
+        "undo",
+        "text",
+        "canUndo",
+        "redo",
+        "text",
+        "undo",
+        "undo",
+        "text",
+        "canUndo"
+      ],
+      "args": [
+        [],
+        [
+          "abc"
+        ],
+        [],
+        [
+          2
+        ],
+        [
+          "XY"
+        ],
+        [
+          "!"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        3,
+        null,
+        2,
+        2,
+        1,
+        true,
+        "aXY!",
+        true,
+        "abc",
+        true,
+        true,
+        "aXY!",
+        true,
+        true,
+        "",
+        false
+      ],
+      "explain": "The group (delete 2, type XY, type !) is one undo step: one undo returns to \"abc\", one redo replays all three, and the next undo step is the original typing."
+    },
+    {
+      "ops": [
+        "Editor",
+        "beginGroup",
+        "type",
+        "beginGroup",
+        "type",
+        "endGroup",
+        "type",
+        "endGroup",
+        "text",
+        "undo",
+        "text",
+        "canUndo",
+        "endGroup"
+      ],
+      "args": [
+        [],
+        [],
+        [
+          "a"
+        ],
+        [],
+        [
+          "b"
+        ],
+        [],
+        [
+          "c"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        null,
+        1,
+        null,
+        1,
+        true,
+        1,
+        true,
+        "abc",
+        true,
+        "",
+        false,
+        false
+      ],
+      "explain": "A nested group collapses into the outermost one: the inner endGroup does not close the step, so a single undo removes \"abc\". With no group open, endGroup returns false."
+    },
+    {
+      "ops": [
+        "Editor",
+        "endGroup",
+        "beginGroup",
+        "endGroup",
+        "canUndo",
+        "type",
+        "undo",
+        "beginGroup",
+        "type",
+        "delete",
+        "endGroup",
+        "canUndo",
+        "canRedo",
+        "beginGroup",
+        "endGroup",
+        "canRedo"
+      ],
+      "args": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          "a"
+        ],
+        [],
+        [],
+        [
+          ""
+        ],
+        [
+          1
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        false,
+        null,
+        true,
+        false,
+        1,
+        true,
+        null,
+        0,
+        0,
+        true,
+        false,
+        true,
+        null,
+        true,
+        true
+      ],
+      "explain": "endGroup without a begin is false. A group with nothing in it, or only no-op actions, is not recorded: it does not add an undo step and does not clear the redo history."
+    },
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "beginGroup",
+        "type",
+        "text",
+        "canUndo",
+        "undo",
+        "canRedo",
+        "endGroup",
+        "canUndo",
+        "undo",
+        "text"
+      ],
+      "args": [
+        [],
+        [
+          "a"
+        ],
+        [],
+        [
+          "b"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        1,
+        null,
+        1,
+        "ab",
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        "a"
+      ],
+      "explain": "Inside an open group the text changes at once, but history is frozen: canUndo is false and undo does nothing. After endGroup the group is one undoable action."
+    },
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "undo",
+        "beginGroup",
+        "type",
+        "type",
+        "endGroup",
+        "canRedo",
+        "text",
+        "undo",
+        "text",
+        "redo",
+        "text"
+      ],
+      "args": [
+        [],
+        [
+          "a"
+        ],
+        [],
+        [],
+        [
+          "b"
+        ],
+        [
+          "c"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        1,
+        true,
+        null,
+        1,
+        1,
+        true,
+        false,
+        "bc",
+        true,
+        "",
+        true,
+        "bc"
+      ],
+      "explain": "A group is a new action, so when it closes it clears the redo history (the undone \"a\" cannot come back)."
+    },
+    {
+      "ops": [
+        "Editor",
+        "type",
+        "type",
+        "delete",
+        "type",
+        "undo",
+        "text",
+        "undo",
+        "text",
+        "undo",
+        "text",
+        "redo",
+        "redo",
+        "text",
+        "delete",
+        "text",
+        "undo",
+        "text",
+        "beginGroup",
+        "type",
+        "delete",
+        "type",
+        "endGroup",
+        "text",
+        "undo",
+        "text",
+        "undo",
+        "text",
+        "redo",
+        "redo",
+        "text",
+        "canUndo",
+        "canRedo"
+      ],
+      "args": [
+        [],
+        [
+          "one"
+        ],
+        [
+          " two"
+        ],
+        [
+          4
+        ],
+        [
+          " 2"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          10
+        ],
+        [],
+        [],
+        [],
+        [],
+        [
+          "x"
+        ],
+        [
+          1
+        ],
+        [
+          "yz"
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected": [
+        null,
+        3,
+        4,
+        4,
+        2,
+        true,
+        "one",
+        true,
+        "one two",
+        true,
+        "one",
+        true,
+        true,
+        "one",
+        3,
+        "",
+        true,
+        "one",
+        null,
+        1,
+        1,
+        2,
+        true,
+        "oneyz",
+        true,
+        "one",
+        true,
+        "one two",
+        true,
+        true,
+        "oneyz",
+        true,
+        false
+      ],
+      "explain": "A longer alternating sequence of type, delete, undo, redo and a group. After the group closes, undo reverses it as one step and redo replays it; at the end canUndo is true and canRedo is false."
+    }
+  ],
+  "hints": [
+    "Do not store snapshots of the whole text. Ask what each action would need to remember in order to reverse itself.",
+    "Make each action an object with do and undo, and keep two stacks: actions you can undo and actions you can redo. A delete must remember the exact characters it removed.",
+    "A group is just another action whose do runs its children in order and whose undo runs them in reverse. While a group is open, collect actions into it instead of into the history, and only file it when the outermost endGroup arrives."
+  ],
+  "complexity": {
+    "time": "O(length of the affected text) per action, undo or redo",
+    "space": "O(total characters typed or removed in the history)"
+  }
+}

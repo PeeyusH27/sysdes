@@ -121,3 +121,16 @@
 .pattern-card .tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
 .pattern-card-foot { display: flex; align-items: center; gap: 10px; margin-top: auto !important; padding-top: 12px; font-size: 13px; }
 .pattern-card-foot .dsa-progress-bar { flex: 1; }
+
+/* ------------------------------------------------------------------ playground gallery */
+.tc-partial { color: var(--muted); background: var(--card-2); }
+.pg-steps { list-style: none; padding: 0 !important; margin: 0 0 22px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.pg-steps li { display: grid; grid-template-columns: 26px 1fr; column-gap: 10px; row-gap: 2px; margin: 0 !important; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); font-size: 14px; color: var(--muted); }
+.pg-steps li b { color: var(--fg); }
+.pg-steps li > span:last-child { grid-column: 2; }
+.pg-step-num { grid-row: span 2; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--card-2); color: var(--accent); font: 700 13px var(--font-sans); }
+.pg-reqs { margin: 4px 0 0 !important; padding-left: 18px !important; font-size: 13.5px; color: var(--muted); }
+.pg-reqs li { margin: 0 !important; }
+.pg-from { font-size: 12.5px; margin-top: 8px; }
+.pg-card { display: flex !important; flex-direction: column; gap: 6px; height: 100%; }
+.pg-cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 10px; }

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { allPages } from "@content/registry";
-import { problemSlugs } from "@/lib/dsa/load";
+import { problemSlugs, loadExercises } from "@/lib/dsa/load";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -10,6 +10,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/learn",
     "/deep-dives",
     "/questions",
+    "/lld",
+    "/playground",
+    "/dsa/drill",
     "/dsa",
     "/dsa/js",
     "/dsa/patterns",
@@ -19,6 +22,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       .map((p) => p.href)
       .filter((h) => !h.includes("#")),
     ...problemSlugs().map((s) => `/dsa/problems/${s}`),
+    ...loadExercises().map((e) => `/lld/exercises/${e.slug}`),
   ];
   return [...new Set(paths)].map((path) => ({ url: `${base}${path}` }));
 }

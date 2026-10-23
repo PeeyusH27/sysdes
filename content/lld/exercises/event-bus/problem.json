@@ -1,0 +1,539 @@
+{
+  "title": "Event Bus",
+  "difficulty": "Medium",
+  "patterns": [
+    "state-observer"
+  ],
+  "js": [],
+  "order": 6,
+  "summary": "Build a publish/subscribe bus with exact and wildcard topics, where one event reaches each interested subscriber exactly once.",
+  "kind": "design",
+  "className": "EventBus",
+  "samples": 3,
+  "tests": [
+    {
+      "ops": [
+        "EventBus",
+        "subscribe",
+        "subscribe",
+        "publish",
+        "publish",
+        "inbox",
+        "inbox"
+      ],
+      "args": [
+        [],
+        [
+          "orders.created",
+          "a"
+        ],
+        [
+          "orders.created",
+          "b"
+        ],
+        [
+          "orders.created",
+          "new order"
+        ],
+        [
+          "orders.shipped",
+          "shipped"
+        ],
+        [
+          "a"
+        ],
+        [
+          "b"
+        ]
+      ],
+      "expected": [
+        null,
+        null,
+        null,
+        2,
+        0,
+        [
+          [
+            "orders.created",
+            "new order"
+          ]
+        ],
+        [
+          [
+            "orders.created",
+            "new order"
+          ]
+        ]
+      ],
+      "explain": "Both subscribers asked for orders.created, so both receive the first event and the count is 2. The second event has no subscribers, so nothing is delivered."
+    },
+    {
+      "ops": [
+        "EventBus",
+        "subscribe",
+        "publish",
+        "publish",
+        "publish",
+        "inbox"
+      ],
+      "args": [
+        [],
+        [
+          "orders.*",
+          "a"
+        ],
+        [
+          "orders.created",
+          "x"
+        ],
+        [
+          "orders.shipped",
+          "y"
+        ],
+        [
+          "orders",
+          "z"
+        ],
+        [
+          "a"
+        ]
+      ],
+      "expected": [
+        null,
+        null,
+        1,
+        1,
+        0,
+        [
+          [
+            "orders.created",
+            "x"
+          ],
+          [
+            "orders.shipped",
+            "y"
+          ]
+        ]
+      ],
+      "explain": "orders.* matches every topic that starts with orders. but not the bare topic orders, so the third publish reaches nobody."
+    },
+    {
+      "ops": [
+        "EventBus",
+        "subscribe",
+        "subscribe",
+        "publish",
+        "inbox"
+      ],
+      "args": [
+        [],
+        [
+          "orders.*",
+          "a"
+        ],
+        [
+          "orders.created",
+          "a"
+        ],
+        [
+          "orders.created",
+          "once"
+        ],
+        [
+          "a"
+        ]
+      ],
+      "expected": [
+        null,
+        null,
+        null,
+        1,
+        [
+          [
+            "orders.created",
+            "once"
+          ]
+        ]
+      ],
+      "explain": "Two patterns of the same subscriber match, yet the event is delivered once and counted once."
+    },
+    {
+      "ops": [
+        "EventBus",
+        "subscribe",
+        "publish",
+        "subscribe",
+        "publish",
+        "inbox"
+      ],
+      "args": [
+        [],
+        [
+          "news.*",
+          "a"
+        ],
+        [
+          "news.sport",
+          "early"
+        ],
+        [
+          "news.sport",
+          "b"
+        ],
+        [
+          "news.sport",
+          "late"
+        ],
+        [
+          "b"
+        ]
+      ],
+      "expected": [
+        null,
+        null,
+        1,
+        null,
+        2,
+        [
+          [
+            "news.sport",
+            "late"
+          ]
+        ]
+      ],
+      "explain": "b subscribed after the first event, so it only sees the second."
+    },
+    {
+      "ops": [
+        "EventBus",
+        "subscribe",
+        "unsubscribe",
+        "unsubscribe",
+        "publish",
+        "inbox"
+      ],
+      "args": [
+        [],
+        [
+          "a.b",
+          "u"
+        ],
+        [
+          "a.b",
+          "u"
+        ],
+        [
+          "a.b",
+          "u"
+        ],
+        [
+          "a.b",
+          "hello"
+        ],
+        [
+          "u"
+        ]
+      ],
+      "expected": [
+        null,
+        null,
+        true,
+        false,
+        0,
+        []
+      ],
+      "explain": "The first unsubscribe removes an existing subscription (true), the second finds nothing (false), and no event is delivered afterwards."
+    },
+    {
+      "ops": [
+        "EventBus",
+        "subscribe",
+        "subscribe",
+        "unsubscribe",
+        "publish",
+        "inbox"
+      ],
+      "args": [
+        [],
+        [
+          "t.*",
+          "a"
+        ],
+        [
+          "t.x",
+          "a"
+        ],
+        [
+          "t.*",
+          "a"
+        ],
+        [
+          "t.x",
+          "m"
+        ],
+        [
+          "a"
+        ]
+      ],
+      "expected": [
+        null,
+        null,
+        null,
+        true,
+        1,
+        [
+          [
+            "t.x",
+            "m"
+          ]
+        ]
+      ],
+      "explain": "Removing the wildcard leaves the exact subscription, so a still receives t.x."
+    },
+    {
+      "ops": [
+        "EventBus",
+        "inbox",
+        "publish",
+        "unsubscribe"
+      ],
+      "args": [
+        [],
+        [
+          "nobody"
+        ],
+        [
+          "any.topic",
+          "m"
+        ],
+        [
+          "x",
+          "ghost"
+        ]
+      ],
+      "expected": [
+        null,
+        [],
+        0,
+        false
+      ],
+      "explain": "An unknown subscriber has an empty inbox, publishing to nobody returns 0, and unsubscribing a ghost returns false."
+    },
+    {
+      "ops": [
+        "EventBus",
+        "subscribe",
+        "subscribe",
+        "subscribe",
+        "publish",
+        "publish",
+        "inbox",
+        "inbox",
+        "inbox"
+      ],
+      "args": [
+        [],
+        [
+          "a.*",
+          "p"
+        ],
+        [
+          "a.b.*",
+          "q"
+        ],
+        [
+          "a.b.c",
+          "r"
+        ],
+        [
+          "a.b.c",
+          "1"
+        ],
+        [
+          "a.x",
+          "2"
+        ],
+        [
+          "p"
+        ],
+        [
+          "q"
+        ],
+        [
+          "r"
+        ]
+      ],
+      "expected": [
+        null,
+        null,
+        null,
+        null,
+        3,
+        1,
+        [
+          [
+            "a.b.c",
+            "1"
+          ],
+          [
+            "a.x",
+            "2"
+          ]
+        ],
+        [
+          [
+            "a.b.c",
+            "1"
+          ]
+        ],
+        [
+          [
+            "a.b.c",
+            "1"
+          ]
+        ]
+      ],
+      "explain": "Prefix wildcards nest: a.* matches both topics, a.b.* matches only a.b.c, and the exact pattern matches only a.b.c."
+    },
+    {
+      "ops": [
+        "EventBus",
+        "subscribe",
+        "subscribe",
+        "publish",
+        "publish",
+        "publish",
+        "inbox",
+        "inbox"
+      ],
+      "args": [
+        [],
+        [
+          "x.y",
+          "a"
+        ],
+        [
+          "x.y",
+          "a"
+        ],
+        [
+          "x.y",
+          "1"
+        ],
+        [
+          "x.y",
+          "2"
+        ],
+        [
+          "x.y",
+          "3"
+        ],
+        [
+          "a"
+        ],
+        [
+          "zz"
+        ]
+      ],
+      "expected": [
+        null,
+        null,
+        null,
+        1,
+        1,
+        1,
+        [
+          [
+            "x.y",
+            "1"
+          ],
+          [
+            "x.y",
+            "2"
+          ],
+          [
+            "x.y",
+            "3"
+          ]
+        ],
+        []
+      ],
+      "explain": "Subscribing twice with the same pattern changes nothing: three events, three deliveries, in order."
+    },
+    {
+      "ops": [
+        "EventBus",
+        "subscribe",
+        "subscribe",
+        "publish",
+        "unsubscribe",
+        "publish",
+        "inbox",
+        "inbox"
+      ],
+      "args": [
+        [],
+        [
+          "room.*",
+          "a"
+        ],
+        [
+          "room.1",
+          "b"
+        ],
+        [
+          "room.1",
+          "hi"
+        ],
+        [
+          "room.*",
+          "a"
+        ],
+        [
+          "room.1",
+          "again"
+        ],
+        [
+          "a"
+        ],
+        [
+          "b"
+        ]
+      ],
+      "expected": [
+        null,
+        null,
+        null,
+        2,
+        true,
+        1,
+        [
+          [
+            "room.1",
+            "hi"
+          ]
+        ],
+        [
+          [
+            "room.1",
+            "hi"
+          ],
+          [
+            "room.1",
+            "again"
+          ]
+        ]
+      ],
+      "explain": "After a unsubscribes, only b gets the second event. a keeps the first one it already received."
+    }
+  ],
+  "hints": [
+    "Keep who is subscribed, what they asked for, and what they received as separate data. Which maps do you need?",
+    "Write matches(pattern, topic) as its own small function first. What exactly must a pattern like \"orders.*\" accept and reject?",
+    "In publish, loop over subscribers and ask whether any pattern matches. That makes a double match deliver once, and the count is the number of boxes that grew."
+  ],
+  "complexity": {
+    "time": "O(S \u00d7 P) per publish for S subscribers with P patterns each",
+    "space": "O(S \u00d7 P + total deliveries)"
+  }
+}

@@ -9,6 +9,10 @@ type Progress = {
   recent: string[];
   reduceMotion: boolean;
   challenge: Record<string, number>;
+  /** Guided playground missions: how many steps have been passed, per challenge slug. */
+  mission: Record<string, number>;
+  /** Pattern-recognition drill: answers seen and answered right, per pattern slug. */
+  drill: Record<string, { seen: number; right: number }>;
   /** "Got it" per lesson section, keyed `${pathname}#${sectionId}`. */
   sections: Record<string, number>;
   /** Lessons read as one long page, or one section card at a time. */
@@ -20,6 +24,8 @@ type Progress = {
   visit: (href: string) => void;
   setReduceMotion: (v: boolean) => void;
   saveChallenge: (slug: string, percent: number) => void;
+  recordDrill: (pattern: string, correct: boolean) => void;
+  setMission: (slug: string, stepsPassed: number) => void;
   toggleSection: (key: string) => void;
   setReaderMode: (mode: "scroll" | "cards") => void;
 };
@@ -33,6 +39,8 @@ export const useProgress = create<Progress>()(
       recent: [],
       reduceMotion: false,
       challenge: {},
+      drill: {},
+      mission: {},
       sections: {},
       readerMode: "scroll",
       toggleDone: (href) =>
@@ -53,6 +61,12 @@ export const useProgress = create<Progress>()(
       visit: (href) => set((s) => ({ recent: [href, ...s.recent.filter((r) => r !== href)].slice(0, 8) })),
       setReduceMotion: (v) => set({ reduceMotion: v }),
       saveChallenge: (slug, percent) => set((s) => ({ challenge: { ...s.challenge, [slug]: Math.max(percent, s.challenge[slug] ?? 0) } })),
+      setMission: (slug, stepsPassed) => set((s) => ({ mission: { ...s.mission, [slug]: stepsPassed } })),
+      recordDrill: (pattern, correct) =>
+        set((s) => {
+          const prev = s.drill[pattern] ?? { seen: 0, right: 0 };
+          return { drill: { ...s.drill, [pattern]: { seen: prev.seen + 1, right: prev.right + (correct ? 1 : 0) } } };
+        }),
       toggleSection: (key) =>
         set((s) => {
           const sections = { ...s.sections };

@@ -5,6 +5,8 @@ import { getQuestion, questions, allPages } from "@content/registry";
 import { DocLayout } from "@/components/layout/DocLayout";
 import { boundComponents } from "@/components/content/bound";
 import { getHeadings } from "@/lib/content";
+import { PatternsBehind } from "@/components/content/Bridges";
+import { patternsFor } from "@content/bridges";
 
 export const dynamicParams = false;
 
@@ -53,11 +55,15 @@ export default async function QuestionPage({ params }: PageProps<"/questions/[sl
           )}
         </>
       }
-      headings={await getHeadings(`questions/${q.slug}/page.mdx`)}
+      headings={[
+        ...(await getHeadings(`questions/${q.slug}/page.mdx`)),
+        ...(patternsFor(`/questions/${q.slug}`).length ? [{ depth: 2 as const, text: "Patterns behind this", id: "patterns-behind" }] : []),
+      ]}
       prev={prev && { href: `/questions/${prev.slug}`, title: prev.title }}
       next={next && { href: `/questions/${next.slug}`, title: next.title }}
     >
       <Body components={boundComponents(`questions/${q.slug}`)} />
+      <PatternsBehind href={`/questions/${q.slug}`} />
     </DocLayout>
   );
 }

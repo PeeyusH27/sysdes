@@ -90,3 +90,26 @@ test("problem filters are kept in the URL", async ({ page }) => {
   await expect(page.getByRole("link", { name: /Trapping Rain Water/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Move Zeroes/ })).toHaveCount(0);
 });
+
+test("the pattern drill plays a round and shows the signals after an answer", async ({ page }) => {
+  await page.goto("/dsa/drill");
+  await page.getByRole("button", { name: /Start a round/ }).click();
+  await expect(page.getByText("Question 1 of 10")).toBeVisible();
+  await page.keyboard.press("1");
+  await expect(page.getByText("Spot it:")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Next/ })).toBeVisible();
+  for (let i = 0; i < 9; i++) {
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("1");
+  }
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(/^\d+ \/ 10$/)).toBeVisible();
+});
+
+test("pattern and design pages link to each other", async ({ page }) => {
+  await page.goto("/dsa/patterns/trie");
+  await page.getByRole("link", { name: /Build an Autocomplete/ }).click();
+  await expect(page).toHaveURL(/\/questions\/typeahead$/);
+  await page.getByRole("link", { name: /Tries \(Prefix Trees\)/ }).last().click();
+  await expect(page).toHaveURL(/\/dsa\/patterns\/trie$/);
+});

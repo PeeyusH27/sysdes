@@ -1,0 +1,800 @@
+{
+  "title": "Pricing Rules",
+  "difficulty": "Medium",
+  "patterns": [
+    "strategy-decorator"
+  ],
+  "order": 4,
+  "summary": "Compute a parking fee by stacking grace, cap, discount and minimum rules that each wrap the fee so far, in the order they were added.",
+  "js": [],
+  "kind": "design",
+  "className": "PricingEngine",
+  "samples": 3,
+  "tests": [
+    {
+      "ops": [
+        "PricingEngine",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          200
+        ],
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          60
+        ],
+        [
+          61
+        ],
+        [
+          120
+        ],
+        [
+          121
+        ]
+      ],
+      "expected": [
+        null,
+        0,
+        200,
+        200,
+        400,
+        400,
+        600
+      ],
+      "explain": "With no rules, every started hour is charged: 1 and 60 minutes are one hour, 61 and 120 minutes are two, 121 minutes is three. A stay of 0 minutes costs nothing."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "fee",
+        "fee",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          200
+        ],
+        [
+          "grace",
+          {
+            "minutes": 15
+          }
+        ],
+        [
+          10
+        ],
+        [
+          15
+        ],
+        [
+          16
+        ],
+        [
+          75
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        0,
+        0,
+        200,
+        400
+      ],
+      "explain": "A stay of up to 15 minutes is free, including exactly 15. A 16 minute stay is not free and is charged the normal one hour, 200 cents. The rule changes nothing for longer stays."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "fee",
+        "fee",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          200
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 25
+          }
+        ],
+        [
+          0
+        ],
+        [
+          60
+        ],
+        [
+          61
+        ],
+        [
+          180
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        0,
+        150,
+        300,
+        450
+      ],
+      "explain": "25 percent off each base fee: 200 becomes 150, 400 becomes 300 and 600 becomes 450."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          200
+        ],
+        [
+          "daily-cap",
+          {
+            "cap": 1000
+          }
+        ],
+        [
+          240
+        ],
+        [
+          300
+        ],
+        [
+          360
+        ],
+        [
+          1440
+        ],
+        [
+          1441
+        ],
+        [
+          2880
+        ],
+        [
+          2881
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        800,
+        1000,
+        1000,
+        1000,
+        2000,
+        2000,
+        3000
+      ],
+      "explain": "The cap is per started 24-hour day. 5 hours is 1000, exactly at the cap; 6 hours (1200) is capped at 1000. 1440 minutes is one day so it is capped at 1000, but 1441 minutes has started a second day, so the cap is 2000 (the base fee is 5000). 2880 minutes is two days, 2881 minutes is three."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          200
+        ],
+        [
+          "minimum",
+          {
+            "cents": 500
+          }
+        ],
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          60
+        ],
+        [
+          120
+        ],
+        [
+          180
+        ],
+        [
+          181
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        0,
+        500,
+        500,
+        500,
+        600,
+        800
+      ],
+      "explain": "Short paid stays are raised to 500 cents. A stay of 0 minutes has a fee of 0 and stays free. Paid stays of one or two hours (200 and 400) are raised to 500, while 180 and 181 minutes (600 and 800) already exceed the minimum and are untouched."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "fee",
+        "fee",
+        "addRule",
+        "fee",
+        "removeRule",
+        "fee"
+      ],
+      "args": [
+        [
+          333
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 10
+          }
+        ],
+        [
+          60
+        ],
+        [
+          120
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 10
+          }
+        ],
+        [
+          60
+        ],
+        [
+          "member-discount"
+        ],
+        [
+          60
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        299,
+        599,
+        false,
+        299,
+        true,
+        333
+      ],
+      "explain": "Rounding: 10 percent off 333 is 299.7, rounded down to 299 (not 300). 666 becomes 599. The second addRule of the same name is refused (false), so the discount is not applied twice, and removing the rule gives back 333."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "addRule",
+        "fee",
+        "fee",
+        "fee",
+        "removeRule",
+        "removeRule",
+        "addRule",
+        "addRule",
+        "fee",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          300
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 50
+          }
+        ],
+        [
+          "minimum",
+          {
+            "cents": 400
+          }
+        ],
+        [
+          60
+        ],
+        [
+          120
+        ],
+        [
+          180
+        ],
+        [
+          "member-discount"
+        ],
+        [
+          "minimum"
+        ],
+        [
+          "minimum",
+          {
+            "cents": 400
+          }
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 50
+          }
+        ],
+        [
+          60
+        ],
+        [
+          120
+        ],
+        [
+          180
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        400,
+        400,
+        450,
+        true,
+        true,
+        true,
+        true,
+        200,
+        300,
+        450
+      ],
+      "explain": "Order matters. Discount then minimum: 300 becomes 150, then 400. Minimum then discount: 300 becomes 400, then 200. At 180 minutes both orders agree at 450, since the discounted 450 is already above the minimum, while 60 minutes gives 400 in the first order and 200 in the second, and 120 minutes gives 400 and 300."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "addRule",
+        "fee",
+        "fee",
+        "removeRule",
+        "removeRule",
+        "addRule",
+        "addRule",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          100
+        ],
+        [
+          "daily-cap",
+          {
+            "cap": 1000
+          }
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 50
+          }
+        ],
+        [
+          1500
+        ],
+        [
+          600
+        ],
+        [
+          "daily-cap"
+        ],
+        [
+          "member-discount"
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 50
+          }
+        ],
+        [
+          "daily-cap",
+          {
+            "cap": 1000
+          }
+        ],
+        [
+          1500
+        ],
+        [
+          600
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        1000,
+        500,
+        true,
+        true,
+        true,
+        true,
+        1250,
+        500
+      ],
+      "explain": "A 1500 minute stay is 25 hours, base 2500 and two started days. Cap then discount: 2500 is capped at 2000, then halved to 1000. Discount then cap: 2500 is halved to 1250, and the cap of 2000 no longer bites. A 600 minute stay is 1000 before the cap in both orders, so only the discount applies: 500."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "fee",
+        "removeRule",
+        "fee",
+        "removeRule",
+        "fee",
+        "addRule",
+        "fee",
+        "removeRule",
+        "fee",
+        "removeRule"
+      ],
+      "args": [
+        [
+          200
+        ],
+        [
+          "daily-cap",
+          {
+            "cap": 1000
+          }
+        ],
+        [
+          600
+        ],
+        [
+          "daily-cap"
+        ],
+        [
+          600
+        ],
+        [
+          "daily-cap"
+        ],
+        [
+          600
+        ],
+        [
+          "grace",
+          {
+            "minutes": 30
+          }
+        ],
+        [
+          30
+        ],
+        [
+          "grace"
+        ],
+        [
+          30
+        ],
+        [
+          "nothing"
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        1000,
+        true,
+        2000,
+        false,
+        2000,
+        true,
+        0,
+        true,
+        200,
+        false
+      ],
+      "explain": "Removing a rule restores the earlier fee: 600 minutes costs 2000, capped to 1000, then back to 2000 after removal. Removing a rule that is not in the chain returns false."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "addRule",
+        "addRule",
+        "fee",
+        "fee",
+        "removeRule",
+        "fee"
+      ],
+      "args": [
+        [
+          200
+        ],
+        [
+          "surge",
+          {
+            "factor": 2
+          }
+        ],
+        [
+          "grace",
+          {
+            "minutes": 10
+          }
+        ],
+        [
+          "grace",
+          {
+            "minutes": 60
+          }
+        ],
+        [
+          30
+        ],
+        [
+          10
+        ],
+        [
+          "surge"
+        ],
+        [
+          10
+        ]
+      ],
+      "expected": [
+        null,
+        false,
+        true,
+        false,
+        200,
+        0,
+        false,
+        0
+      ],
+      "explain": "An unknown rule name returns false and changes nothing. Adding grace a second time returns false too, so the grace stays at 10 minutes: a 30 minute stay is charged 200. Removing the unknown name surge also returns false."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "addRule",
+        "addRule",
+        "addRule",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          400
+        ],
+        [
+          "grace",
+          {
+            "minutes": 10
+          }
+        ],
+        [
+          "daily-cap",
+          {
+            "cap": 2000
+          }
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 20
+          }
+        ],
+        [
+          "minimum",
+          {
+            "cents": 500
+          }
+        ],
+        [
+          0
+        ],
+        [
+          10
+        ],
+        [
+          11
+        ],
+        [
+          300
+        ],
+        [
+          1000
+        ],
+        [
+          1440
+        ],
+        [
+          1441
+        ],
+        [
+          2880
+        ],
+        [
+          2881
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        true,
+        0,
+        0,
+        500,
+        1600,
+        1600,
+        1600,
+        3200,
+        3200,
+        4800
+      ],
+      "explain": "All four rules in one chain. 10 minutes is free and stays free through the minimum. 11 minutes: 400, capped to 2000 (unchanged), 20 percent off gives 320, raised to the minimum 500. 300 minutes: 2000, then 1600. 1441 minutes: base 10000, cap 4000, then 3200; 2881 minutes: base 19600, cap 6000, then 4800."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "addRule",
+        "addRule",
+        "fee",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          250
+        ],
+        [
+          "minimum",
+          {
+            "cents": 1000
+          }
+        ],
+        [
+          "grace",
+          {
+            "minutes": 5
+          }
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 50
+          }
+        ],
+        [
+          5
+        ],
+        [
+          6
+        ],
+        [
+          120
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        0,
+        500,
+        500
+      ],
+      "explain": "Each rule sees the result of the ones before it. The minimum first raises every paid stay to 1000, then grace zeroes the 5 minute stay (a later rule can undo an earlier one), then the discount halves what is left: 6 minutes gives 1000 then 500, and 120 minutes gives 500, 1000, 500."
+    },
+    {
+      "ops": [
+        "PricingEngine",
+        "addRule",
+        "addRule",
+        "fee",
+        "fee",
+        "fee"
+      ],
+      "args": [
+        [
+          250
+        ],
+        [
+          "member-discount",
+          {
+            "percent": 100
+          }
+        ],
+        [
+          "minimum",
+          {
+            "cents": 300
+          }
+        ],
+        [
+          0
+        ],
+        [
+          60
+        ],
+        [
+          600
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        0,
+        0,
+        0
+      ],
+      "explain": "A free stay stays free: the 100 percent discount brings every fee to 0, and the minimum after it does not raise a fee of 0."
+    }
+  ],
+  "hints": [
+    "Make every rule the same shape: a function that takes the fee so far and the minutes and returns a new fee. What does the engine then have to do to price a stay?",
+    "Keep the rules in an ordered list and fold over it in fee(). A map from rule name to a factory (params in, rule out) lets addRule reject unknown names and means a new rule type is one new entry.",
+    "fee(minutes) = apply each rule in order, starting from ceil(minutes / 60) * rate. The cap multiplies by ceil(minutes / 1440), the discount is floor(fee * (100 - percent) / 100), and minimum leaves a fee of 0 alone."
+  ],
+  "complexity": {
+    "time": "O(R) per fee() call for R rules; addRule and removeRule are O(R)",
+    "space": "O(R)"
+  }
+}

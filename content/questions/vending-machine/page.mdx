@@ -12,6 +12,8 @@ A **state machine** in disguise: four states and a table that gives every (state
 
 A **low-level design** (LLD) question with two tests: spot the state machine in the first minute, and handle money exactly. Most points are lost on change-making and on the gap between "motor on" and "item in the tray".
 
+New to low-level design? The state table here is the idea behind [State machines and observers](/lld/foundations/state-observer), and the exercise below lets you write it.
+
 ## Clarifying questions
 
 - Coins only, or notes and cards? (Cards add authorize and capture.)
@@ -20,19 +22,11 @@ A **low-level design** (LLD) question with two tests: spot the state machine in 
 - Does a drop sensor confirm the item fell? What if it sticks?
 - One machine, or a monitored fleet (HLD)?
 
-## Capacity estimate
+## Scale check
 
-| Quantity | Estimate |
-|---|---|
-| Slots | 6 rows × 5 = **30**, ~10 items each: 300 items when full |
-| Sales | A busy office machine: about **300 a day** |
-| Events per sale | About 5: three coins, a select, the drop sensor |
-| Events per day | 300 × 5 = **1,500**, one every 36 s over 15 hours |
-| Telemetry | 1,500 × ~100 bytes ≈ 150 KB per day |
+A busy office machine sells about 300 items a day, roughly 1,500 events (three coins, a select, a drop sensor per sale), one every 36 seconds. A microcontroller copes easily, so the hard part is **correctness**: one wrong transition hands out a free cola or swallows a dollar.
 
-A microcontroller copes easily, so the hard part is **correctness**: one wrong transition hands out a free cola or swallows a dollar.
-
-## API
+## Public interface
 
 Every input is one event for `machine.send(event)`.
 
@@ -46,7 +40,7 @@ Every input is one event for `machine.send(event)`.
 | `restock(code, n)`, `refill(coins)` | Idle, OutOfService | Admin: never mid-purchase |
 | events `transition`, `sale`, `returned`, `rejected` | | For display, telemetry and persistence |
 
-## Data model
+## What it remembers
 
 - `Inventory.slots`: slot code → `Slot { code, product, price, count, capacity }`, prices in integer cents.
 - `CoinBox.counts`: coins per denomination in the tubes, e.g. `{ 100: 2, 25: 40, 10: 50, 5: 50 }`.
@@ -54,19 +48,7 @@ Every input is one event for `machine.send(event)`.
 - `pending`: the sale between "motor on" and the drop sensor: `{ code, price, change }`.
 - `state`: one of four names.
 
-Persist `state`, `escrow` and `pending` on every transition, so a power cut can't forget credit. A fleet uploads events to the table shown.
-
-```sql
-CREATE TABLE vend_events (
-  machine_id text        NOT NULL,
-  seq        bigint      NOT NULL,          -- per machine: re-sent batches are idempotent
-  at         timestamptz NOT NULL,
-  type       text        NOT NULL,          -- 'sale', 'refund', 'rejected', 'jam', 'restock'
-  slot       text,
-  amount     int,                           -- cents, never a float
-  PRIMARY KEY (machine_id, seq)
-);
-```
+Persist `state`, `escrow` and `pending` on every transition, so a power cut can't forget credit. A fleet also uploads its events: see Telemetry for a fleet, below.
 
 ## State transition table
 
@@ -87,9 +69,9 @@ Thirty-two cells, one outcome each. ✕ means **rejected**: nothing changes, and
 
 **Sold out belongs to a slot, not the machine**: the other 29 slots still sell, so SOLD OUT is a message and the customer keeps their credit. A table beats nested `if/else` because a missing cell is a rejection by default, and a test can loop over all 32 pairs.
 
-## Class design
+## Build the design in stages
 
-Hover a class to light up its relationships. The machine **owns** its inventory and coin box and points at its **current state**.
+Step through the stages: the machine and what it holds first, then the state objects that replace boolean flags, then change-making, payment and telemetry. A green outline marks what the latest stage added; click a class to see its members and relations.
 
 <ClassDiagram spec={classes} />
 
@@ -204,6 +186,26 @@ The same design in **JavaScript, Java or Python**: pick a language and every cod
 - `CoinBox.remove` checks every coin before removing any, so a payout can't half-happen.
 - The test walks all 4 × 8 = 32 pairs: 13 accepted, and the other 19 must change nothing.
 - A refused coin never enters the books.
+
+## Code it yourself
+
+Write the state machine against hidden tests, in JavaScript or Python: the [Vending Machine exercise](/lld/exercises/vending-machine) gives you the state table and checks every cell of it.
+
+## Telemetry for a fleet
+
+Only if the interviewer asks about many machines. Each machine uploads its events; `seq` makes a re-sent batch idempotent.
+
+```sql
+CREATE TABLE vend_events (
+  machine_id text        NOT NULL,
+  seq        bigint      NOT NULL,          -- per machine: re-sent batches are idempotent
+  at         timestamptz NOT NULL,
+  type       text        NOT NULL,          -- 'sale', 'refund', 'rejected', 'jam', 'restock'
+  slot       text,
+  amount     int,                           -- cents, never a float
+  PRIMARY KEY (machine_id, seq)
+);
+```
 
 ## Failure modes
 

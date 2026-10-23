@@ -3,6 +3,8 @@ import { deepDives, getDeepDive } from "@content/registry";
 import { DocLayout } from "@/components/layout/DocLayout";
 import { boundComponents } from "@/components/content/bound";
 import { getHeadings } from "@/lib/content";
+import { PatternsBehind } from "@/components/content/Bridges";
+import { patternsFor } from "@content/bridges";
 
 export const dynamicParams = false;
 
@@ -29,12 +31,16 @@ export default async function DeepDivePage({ params }: PageProps<"/deep-dives/[s
       eyebrow={`Deep dive ${dd.order} · ${dd.minutes} min`}
       title={dd.title}
       lede={dd.summary}
-      headings={await getHeadings(`deep-dives/${dd.dir}/page.mdx`)}
+      headings={[
+        ...(await getHeadings(`deep-dives/${dd.dir}/page.mdx`)),
+        ...(patternsFor(`/deep-dives/${dd.slug}`).length ? [{ depth: 2 as const, text: "Patterns behind this", id: "patterns-behind" }] : []),
+      ]}
       prev={prev && { href: `/deep-dives/${prev.slug}`, title: prev.title }}
       next={next && { href: `/deep-dives/${next.slug}`, title: next.title }}
       nextNote={dd.next}
     >
       <Body components={boundComponents(`deep-dives/${dd.dir}`)} />
+      <PatternsBehind href={`/deep-dives/${dd.slug}`} />
     </DocLayout>
   );
 }

@@ -50,6 +50,13 @@ export const classes: ClassSpec = {
     { from: "system", to: "carcall", type: "dependency", label: "carCall()" },
     { from: "display", to: "system", type: "dependency", label: "observes" },
   ],
+  stages: [
+    { title: "The building", note: "ElevatorSystem owns the floors and the cars. Each floor has a hall panel with the up and down buttons.", add: ["system", "floor", "hall", "car"] },
+    { title: "A press becomes an object", note: "A button press is a HallCall or a CarCall, so it can be queued, assigned to a car, cleared and logged.", add: ["hallcall", "carcall", "panel"] },
+    { title: "A car owns its door", note: "Opening and closing belongs to the car, which is what lets a car refuse to open while it is moving.", add: ["door"] },
+    { title: "Dispatch becomes a strategy", note: "Which car answers a hall call is the rule most likely to change, so ElevatorSystem asks a DispatchStrategy and never decides itself.", add: ["strategy", "nearest", "collective"] },
+    { title: "Displays observe", note: "Lamps and displays listen to the system's events. The system never knows they exist.", add: ["display"] },
+  ],
 };
 
 export const hallCallFlow: SequenceSpec = {

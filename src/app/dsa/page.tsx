@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Binary, Braces, Code2 } from "lucide-react";
+import { ArrowRight, Binary, Braces, Code2, Target } from "lucide-react";
 import { jsTopics, PATTERN_GROUPS, patterns } from "@content/dsa/registry";
 import { pairSum } from "@content/dsa/patterns/02-two-pointers/viz";
 import { AlgoViz } from "@/components/algo/AlgoViz";
@@ -77,6 +77,16 @@ export default function DsaHome() {
             <h2 className="roadmap-title">{rows.length} practice problems</h2>
             <p>Write JavaScript, run the examples, submit against hidden tests. One wrong attempt unlocks the step-by-step solution.</p>
             <SolvedBar slugs={rows.map((r) => r.slug)} />
+          </Link>
+        </li>
+        <li>
+          <Link href="/dsa/drill" className="card card-link">
+            <span className="icon">
+              <Target size={20} aria-hidden />
+            </span>
+            <span className="eyebrow">Step 3</span>
+            <h2 className="roadmap-title">Pattern drill</h2>
+            <p>Read a problem, name the pattern. Ten quick questions on the skill that decides whether a new problem feels familiar.</p>
           </Link>
         </li>
       </ol>

@@ -3,11 +3,12 @@
 A Next.js site for interview preparation with two tracks:
 
 - **DSA** (`/dsa`): a JavaScript-for-DSA cheat sheet with runnable snippets, 22 patterns explained step by step with animations synced to the code (type your own input with **Edit input**), a playable lab per pattern (guess-the-number binary search, a maze flood for BFS/DFS, N-Queens, a top-k heap arena…), and practice problems solved in an in-browser editor. Tests run in a Web Worker, solved problems are tracked, and a step-by-step solution unlocks after the first wrong submission.
+- **Low-level design** (`/lld`): 6 foundation lessons (classes, SOLID, Strategy and Decorator, State and Observer, Factory and Command, an interview playbook), the classic LLD questions, and coding exercises you solve in the browser editor in JavaScript or Python against hidden tests. Class diagrams build up stage by stage.
 - **System design** (`/system-design`): a 10-step HLD path, 6 deep dives and 12 interview questions (including LLD classics: parking lot, elevator, vending machine) with detailed answers in JavaScript (the LLD questions also in Java and Python, behind a site-wide language switch). Diagrams are animated SVG you can play, pause and step through; widgets simulate load balancers, caches, queues, a parking lot with cars driving to their spots, a bank of elevators, and more; and a drag-and-drop playground lints, simulates and grades your designs.
 
 Every lesson is a stack of section cards you can tick off, or flip through one at a time in Cards mode. On desktop, the diagram, simulator or code for whatever you're reading stays pinned on the left, sized to fit the screen, while the text scrolls on the right. **Shorts** (`/shorts`) cover both tracks as one-minute bullet-point cards: on a phone you swipe sideways for the next one and scroll down to read more; on desktop you use the arrows or ←/→.
 
-The implementation plans are in [`docs/plan/`](docs/plan/README.md) (the DSA track is [`07-dsa-track.md`](docs/plan/07-dsa-track.md)). Content conventions are in [`docs/AUTHORING.md`](docs/AUTHORING.md) and [`docs/AUTHORING-DSA.md`](docs/AUTHORING-DSA.md).
+The implementation plans are in [`docs/plan/`](docs/plan/README.md) (the DSA track is [`07-dsa-track.md`](docs/plan/07-dsa-track.md)). Content conventions are in [`docs/AUTHORING.md`](docs/AUTHORING.md), [`docs/AUTHORING-DSA.md`](docs/AUTHORING-DSA.md) and [`docs/AUTHORING-LLD.md`](docs/AUTHORING-LLD.md).
 
 ## Run it
 
@@ -35,6 +36,10 @@ npx playwright test          # end-to-end (builds must exist: run `npm run build
 | `content/registry.ts` | Titles, slugs, summaries and order of every page |
 | `content/learn/<step>/` | Lesson pages: `page.mdx`, `diagrams.ts`, `quiz.ts`, `snippets/*.js` (+ tests) |
 | `content/deep-dives/<topic>/`, `content/questions/<slug>/` | Same shape |
+| `content/lld/registry.ts`, `content/lld/foundations/<dir>/` | LLD foundation lessons: same shape as a lesson, with Python twins of every snippet |
+| `content/lld/exercises/<slug>/` | LLD coding exercises: `problem.json` (design-class tests), `statement.md`, `solution.md`, `solution.js`, `solution.py`, `starter.js` |
+| `src/components/playground/missions.ts` | Guided playground missions: a naive starting design, then one scenario per step (a spike, a crashed server) with a `check` that says what broke and a `solve` that fixes it. `tests/missions.test.ts` proves every mission can be finished |
+| `content/bridges.ts` | Where a DSA pattern shows up in a system design page, and the reverse (drives "In real systems" and "Patterns behind this") |
 | `src/components/diagram/` | The SVG engine: `FlowDiagram` (scenarios + packets), `SequenceDiagram`, `ClassDiagram`, `DecisionTree`, `Timeline` |
 | `src/components/charts/` | `BarChart`, `LineChart`, `StatTiles` (validated colour palette, tooltips, table views) |
 | `src/components/widgets/` | Interactive simulators used in MDX |

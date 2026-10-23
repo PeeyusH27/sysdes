@@ -23,7 +23,7 @@ function loadIndex() {
   return indexPromise;
 }
 
-const ICONS: Record<string, typeof BookOpen> = { Learn: BookOpen, "Deep dives": Library, Questions: FileQuestion, Reference: Boxes, Patterns: Binary, JavaScript: Braces, Problems: Code2, Shorts: Zap };
+const ICONS: Record<string, typeof BookOpen> = { Learn: BookOpen, "Deep dives": Library, Questions: FileQuestion, Reference: Boxes, Patterns: Binary, JavaScript: Braces, Problems: Code2, LLD: Boxes, Shorts: Zap };
 
 export function CommandMenu({ onClose }: { onClose: () => void }) {
   const router = useRouter();

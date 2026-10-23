@@ -12,6 +12,11 @@ export interface SimOptions {
   multiplier?: number;
   /** Node ids that are down: they forward nothing; balancers skip them. */
   down?: Set<string>;
+  /**
+   * Node ids that lose one instance. A node with replicas ≥ 2 keeps serving with less capacity; a node with a single
+   * instance is down. This is what makes a replica visibly worth its cost.
+   */
+  lose?: Set<string>;
 }
 
 export interface SimResult {
@@ -30,8 +35,11 @@ export interface SimResult {
  */
 export function simulate(nodes: HldNode[], edges: FlowEdgeT[], opts: SimOptions = {}): SimResult {
   const mult = opts.multiplier ?? 1;
-  const down = opts.down ?? new Set<string>();
   const byId = new Map(nodes.map((n) => [n.id, n]));
+  const lost = opts.lose ?? new Set<string>();
+  const instances = (n: HldNode) => Math.max(0, (n.data.replicas ?? 1) - (lost.has(n.id) ? 1 : 0));
+  const down = new Set(opts.down ?? []);
+  for (const n of nodes) if (lost.has(n.id) && instances(n) === 0) down.add(n.id);
   const valid = edges.filter((e) => byId.has(e.source) && byId.has(e.target));
   const out = new Map<string, FlowEdgeT[]>();
   for (const e of valid) out.set(e.source, [...(out.get(e.source) ?? []), e]);
@@ -43,7 +51,7 @@ export function simulate(nodes: HldNode[], edges: FlowEdgeT[], opts: SimOptions 
       hitRatio: n.data.hitRatio ?? meta.hitRatio ?? 0,
     };
   };
-  const cap = (n: HldNode) => cfg(n).perInstanceQps * (n.data.replicas ?? 1);
+  const cap = (n: HldNode) => cfg(n).perInstanceQps * instances(n);
 
   const load = new Map(nodes.map((n) => [n.id, zero()]));
   for (const n of nodes) {
@@ -74,12 +82,18 @@ export function simulate(nodes: HldNode[], edges: FlowEdgeT[], opts: SimOptions 
       fwd = scale(fwd, total(fwd) ? drain / total(fwd) : 0);
     }
     const splits = kind === "lb" || kind === "gateway" || kind === "dns";
-    const live = splits ? targets.filter((e) => !down.has(e.target)) : targets;
-    if (splits && live.length === 0) errors += total(fwd);
-    const sideCache = live.map((e) => byId.get(e.target)!).find((t) => t.data.kind === "cache" && !down.has(t.id));
-    for (const e of live) {
+    // A gateway calls a cache on the side (rate-limit counters, sessions): the cache sees every request and does not
+    // take a share of the traffic away from the services behind the gateway. A dead side cache still receives the load,
+    // so its failure shows up as errors (the gateway cannot decide without it).
+    const isSide = (e: FlowEdgeT) => kind === "gateway" && byId.get(e.target)!.data.kind === "cache";
+    const main = targets.filter((e) => !isSide(e));
+    const live = splits ? main.filter((e) => !down.has(e.target)) : targets;
+    const side = splits ? targets.filter(isSide) : [];
+    if (splits && main.length > 0 && live.length === 0) errors += total(fwd);
+    const sideCache = [...live, ...side].map((e) => byId.get(e.target)!).find((t) => t.data.kind === "cache" && !down.has(t.id));
+    for (const e of [...live, ...side]) {
       const t = byId.get(e.target)!;
-      let l = splits ? scale(fwd, e.data?.weight ?? 1 / live.length) : fwd;
+      let l = splits && !side.includes(e) ? scale(fwd, e.data?.weight ?? 1 / live.length) : fwd;
       if (sideCache && t.data.kind === "database") l = scale(l, 1 - cfg(sideCache).hitRatio, 1); // cache-aside
       edgeQps[e.id] = total(l);
       const acc = load.get(t.id)!;
@@ -108,7 +122,13 @@ export function simulate(nodes: HldNode[], edges: FlowEdgeT[], opts: SimOptions 
       return latency(t.id) * (t.data.kind === "database" && sideCache ? 1 - cfg(sideCache).hitRatio : 1);
     });
     const sum = parts.reduce((a, b) => a + b, 0);
-    if (kind === "lb" || kind === "gateway" || kind === "dns") ms += parts.length ? sum / parts.length : 0;
+    if (kind === "gateway") {
+      // Side calls to a cache add up; the services behind the gateway are averaged, like a balancer's targets.
+      const isCache = sync.map((e) => byId.get(e.target)!.data.kind === "cache");
+      const sideSum = parts.filter((_, i) => isCache[i]).reduce((a, b) => a + b, 0);
+      const rest = parts.filter((_, i) => !isCache[i]);
+      ms += sideSum + (rest.length ? rest.reduce((a, b) => a + b, 0) / rest.length : 0);
+    } else if (kind === "lb" || kind === "dns") ms += parts.length ? sum / parts.length : 0;
     else if (kind === "cdn" || kind === "cache") ms += (1 - cfg(n).hitRatio) * sum;
     else ms += sum;
     memo.set(id, ms);

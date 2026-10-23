@@ -73,6 +73,18 @@ describe("diagram specs", () => {
             expect(ids.has(r.to), r.to).toBe(true);
           }
         });
+        if (spec.stages) {
+          it(`${label}: stages add every class exactly once`, () => {
+            const ids = spec.classes.map((c) => c.id).sort();
+            const added = spec.stages!.flatMap((s) => s.add).sort();
+            expect(added).toEqual(ids);
+            expect(spec.stages!.length).toBeGreaterThanOrEqual(2);
+            for (const s of spec.stages!) {
+              expect(s.add.length, s.title).toBeGreaterThan(0);
+              expect(s.note.length, s.title).toBeGreaterThan(20);
+            }
+          });
+        }
       } else if (isDecision(spec)) {
         it(`${label}: every branch exists`, () => {
           expect(spec.nodes[spec.start]).toBeDefined();

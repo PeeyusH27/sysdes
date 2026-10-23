@@ -55,6 +55,17 @@
   .plist-summary, .plist-tags { display: none; }
 }
 .pattern-problems { margin-top: 2.4em; }
+
+/* Cross-track links: "In real systems" on a pattern page, "Patterns behind this" on a design page. */
+.bridges { margin-top: 2.4em; }
+.bridge-list { list-style: none; padding: 0 !important; margin: 0; display: grid; gap: 10px; }
+.bridge-list li { margin: 0 !important; }
+.bridge { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-areas: "icon title go" "icon why go"; column-gap: 12px; row-gap: 2px; align-items: center; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); text-decoration: none !important; color: var(--fg) !important; }
+.bridge:hover { background: var(--card-2); border-color: var(--accent); }
+.bridge-icon { grid-area: icon; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--card-2); color: var(--accent); }
+.bridge-title { grid-area: title; font-weight: 600; }
+.bridge-why { grid-area: why; font-size: 14px; color: var(--muted); }
+.bridge > svg:last-child { grid-area: go; color: var(--muted); }
 .problem-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .problem-link .diff { font-size: 10.5px; padding: 0 7px; }
 
@@ -391,3 +402,27 @@
   :is(.av-cell, .av-gcell, .av-chip, .av-sitem, .av-qitem, .algo-code .line, .algo-hl) { transition: none; }
   :is(.av-pop, .av svg .av-flash, .algo-vars dd) { animation: none; }
 }
+
+/* ------------------------------------------------------------------ pattern drill */
+.drill-card { max-width: 760px; margin: 18px auto 0; padding: 22px 24px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
+.drill-card h2 { margin-top: 0; }
+.drill-meta { display: flex; align-items: center; justify-content: space-between; margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.drill-prompt { font-size: 18px; line-height: 1.55; margin: 0 0 18px; }
+.drill-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.drill-option { display: flex; align-items: center; gap: 10px; text-align: left; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--card-2); color: var(--fg); font: inherit; cursor: pointer; }
+.drill-option:hover:not(:disabled) { border-color: var(--accent); }
+.drill-option:disabled { cursor: default; opacity: 1; }
+.drill-option kbd { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 12px; color: var(--muted); }
+.drill-option span { display: flex; flex-direction: column; flex: 1; }
+.drill-option small { color: var(--muted); font-size: 12px; }
+.drill-option.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.drill-option.wrong { border-color: var(--critical); background: color-mix(in srgb, var(--critical) 10%, transparent); }
+.drill-option.dim:disabled { opacity: 0.5; }
+.drill-reveal { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.drill-reveal p { margin: 0 0 8px; }
+.drill-signals { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.drill-signals > span:first-child { font-size: 13px; color: var(--muted); }
+.drill-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.drill-missed { list-style: none; padding: 0 !important; margin: 0 0 16px; display: grid; gap: 6px; }
+.drill-missed li { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 0 !important; }
+.drill-missed li span { color: var(--muted); }

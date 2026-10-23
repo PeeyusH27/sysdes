@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, BookA, BookOpen, FileQuestion, Gauge, Hammer, Library } from "lucide-react";
+import { ArrowRight, BookA, BookOpen, Boxes, FileQuestion, Gauge, Hammer, Library } from "lucide-react";
+import { lldLessons } from "@content/lld/registry";
 import { deepDives, getDeepDive, getLearnStep, getQuestion, learnSteps, questions } from "@content/registry";
 import { glossary } from "@content/glossary";
 import { questionLabel, requestJourney } from "@content/home";
@@ -39,6 +40,7 @@ export default function SystemDesignHome() {
     { href: "/learn", Icon: BookOpen, title: "HLD path", count: `${learnSteps.length} steps`, text: "Estimation, load balancing, data, caching, queues, consistency, reliability, then two case studies." },
     { href: "/deep-dives", Icon: Library, title: "Deep dives", count: `${deepDives.length} techniques`, text: "Caching, sharding, storage, real-time, connections and request flows, one at a time." },
     { href: "/questions", Icon: FileQuestion, title: "Interview questions", count: `${questions.length} questions`, text: "From a parking lot to Uber. Full answers with code, failure modes and follow-ups." },
+    { href: "/lld", Icon: Boxes, title: "Low-level design", count: `${lldLessons.length} foundations`, text: "Classes, SOLID and the design patterns that get asked, the classic LLD questions, and exercises you code and test in the browser." },
     { href: "/playground", Icon: Hammer, title: "Playground", count: "Graded", text: "Drag components onto a canvas, wire them up, simulate traffic and get a score." },
     { href: "/cheatsheet", Icon: Gauge, title: "Cheatsheet", count: "Numbers", text: "Latencies, sizes and formulas to have at your fingertips." },
     { href: "/glossary", Icon: BookA, title: "Glossary", count: `${glossary.length} terms`, text: "Every term on the site, one line each." },

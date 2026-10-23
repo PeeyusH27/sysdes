@@ -3,6 +3,8 @@ import { getLearnStep, learnSteps } from "@content/registry";
 import { DocLayout } from "@/components/layout/DocLayout";
 import { boundComponents } from "@/components/content/bound";
 import { getHeadings } from "@/lib/content";
+import { PatternsBehind } from "@/components/content/Bridges";
+import { patternsFor } from "@content/bridges";
 
 export const dynamicParams = false;
 
@@ -34,12 +36,16 @@ export default async function LessonPage({ params }: PageProps<"/learn/[slug]">)
           ✓ {o}
         </span>
       ))}
-      headings={await getHeadings(`learn/${step.dir}/page.mdx`)}
+      headings={[
+        ...(await getHeadings(`learn/${step.dir}/page.mdx`)),
+        ...(patternsFor(`/learn/${step.slug}`).length ? [{ depth: 2 as const, text: "Patterns behind this", id: "patterns-behind" }] : []),
+      ]}
       prev={prev && { href: `/learn/${prev.slug}`, title: prev.title }}
       next={next && { href: `/learn/${next.slug}`, title: next.title }}
       nextNote={step.next}
     >
       <Body components={boundComponents(`learn/${step.dir}`)} />
+      <PatternsBehind href={`/learn/${step.slug}`} />
     </DocLayout>
   );
 }

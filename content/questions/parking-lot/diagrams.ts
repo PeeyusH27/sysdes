@@ -42,6 +42,13 @@ export const classes: ClassSpec = {
     { from: "board", to: "lot", type: "dependency", label: "observes" },
     { from: "lot", to: "payment", type: "dependency", label: "exit()" },
   ],
+  stages: [
+    { title: "The nouns", note: "Start with the nouns in the requirements. A lot owns floors, floors own spots, and a ticket links a vehicle to the spot it took.", add: ["lot", "floor", "spot", "vehicle", "ticket"] },
+    { title: "Spot choice becomes a strategy", note: "Which spot a car gets is a rule that will change (lowest floor, nearest the exit), so the lot asks a SpotSelector instead of deciding itself.", add: ["selector", "lowest"] },
+    { title: "Pricing becomes a strategy", note: "The fee is the other rule that changes. The lot only calls fee(), so a new tariff is a new class.", add: ["pricing", "hourly"] },
+    { title: "Payment methods share an interface", note: "Card, cash and wallet all implement PaymentMethod. The lot depends on the interface, never on a concrete payment class.", add: ["payment"] },
+    { title: "New rules arrive without edits", note: "DailyCap wraps any PricingStrategy (Decorator), and DisplayBoard listens to the lot (Observer). Neither required a change to an existing class.", add: ["cap", "board"] },
+  ],
 };
 
 export const parkAndExit: SequenceSpec = {

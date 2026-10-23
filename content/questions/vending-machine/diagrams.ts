@@ -41,6 +41,13 @@ export const classes: ClassSpec = {
     { from: "card", to: "payment", type: "implements" },
     { from: "telemetry", to: "vm", type: "dependency", label: "observes" },
   ],
+  stages: [
+    { title: "The machine and what it holds", note: "A machine owns its inventory (slots with prices and counts) and a coin box.", add: ["vm", "inventory", "slot", "box"] },
+    { title: "Behaviour depends on the phase", note: "Instead of boolean flags, the machine points at a MachineState. Each state accepts only its own events, so an illegal event has one defined outcome.", add: ["state", "hasMoney", "dispensing"] },
+    { title: "Making change is its own job", note: "HasMoney asks a ChangeMaker for change before it sells, so selling and change-making can be tested apart.", add: ["change"] },
+    { title: "Payment methods share an interface", note: "Coins and cards implement one PaymentMethod interface, so a card reader adds a class and not a branch.", add: ["payment", "escrow", "card"] },
+    { title: "Telemetry observes", note: "Telemetry listens to the machine's events for sales and faults, and the machine never depends on it.", add: ["telemetry"] },
+  ],
 };
 
 export const purchase: SequenceSpec = {

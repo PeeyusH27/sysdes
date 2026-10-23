@@ -105,6 +105,52 @@ describe("simulate", () => {
   });
 });
 
+describe("simulate: losing one instance, and side calls from a gateway", () => {
+  const nodes = [node("c", "client", { qps: 1000, readRatio: 1 }), node("s", "service", { replicas: 3 })];
+  const edges = [edge("c", "s")];
+  it("a replicated node keeps serving with less capacity when it loses one instance", () => {
+    expect(simulate(nodes, edges).nodes.s.util).toBeCloseTo(1000 / 6000);
+    const r = simulate(nodes, edges, { lose: new Set(["s"]) });
+    expect(r.nodes.s.util).toBeCloseTo(1000 / 4000);
+    expect(r.nodes.s.down).toBeUndefined();
+    expect(r.errorsPerSec).toBe(0);
+  });
+  it("a single-instance node that loses one instance is down", () => {
+    const single = [node("c", "client", { qps: 1000 }), node("s", "service")];
+    const r = simulate(single, [edge("c", "s")], { lose: new Set(["s"]) });
+    expect(r.nodes.s.down).toBe(true);
+    expect(r.errorsPerSec).toBeCloseTo(1000);
+  });
+  it("capacity can run out after losing an instance even though the full set coped", () => {
+    const busy = [node("c", "client", { qps: 5000, readRatio: 1 }), node("s", "service", { replicas: 3 })];
+    expect(simulate(busy, [edge("c", "s")]).nodes.s.util).toBeLessThan(1);
+    expect(simulate(busy, [edge("c", "s")], { lose: new Set(["s"]) }).nodes.s.util).toBeGreaterThan(1);
+  });
+  it("a cache called by a gateway sees every request and takes none away from the service", () => {
+    const g = [node("c", "client", { qps: 1000 }), node("g", "gateway"), node("k", "cache"), node("s", "service")];
+    const r = simulate(g, [edge("c", "g"), edge("g", "k"), edge("g", "s")]);
+    expect(r.nodes.k.qps).toBeCloseTo(1000);
+    expect(r.nodes.s.qps).toBeCloseTo(1000);
+  });
+  it("a gateway still splits traffic between its services", () => {
+    const g = [node("c", "client", { qps: 1000 }), node("g", "gateway"), node("a", "service"), node("b", "service")];
+    const r = simulate(g, [edge("c", "g"), edge("g", "a"), edge("g", "b")]);
+    expect(r.nodes.a.qps).toBeCloseTo(500);
+  });
+  it("losing the only cache behind a gateway fails every request, but a second instance saves it", () => {
+    const mk = (replicas: number) => [node("c", "client", { qps: 1000 }), node("g", "gateway"), node("k", "cache", { replicas }), node("s", "service")];
+    const e = [edge("c", "g"), edge("g", "k"), edge("g", "s")];
+    expect(simulate(mk(1), e, { lose: new Set(["k"]) }).errorsPerSec).toBeCloseTo(1000);
+    expect(simulate(mk(2), e, { lose: new Set(["k"]) }).errorsPerSec).toBe(0);
+  });
+  it("adds the cache's latency to the gateway's own and averages the services", () => {
+    const g = [node("c", "client", { qps: 10 }), node("g", "gateway"), node("k", "cache"), node("s", "service")];
+    const r = simulate(g, [edge("c", "g"), edge("g", "k"), edge("g", "s")]);
+    expect(r.entryLatencyMs).toBeGreaterThan(3 + 1 + 20 - 0.5);
+    expect(r.entryLatencyMs).toBeLessThan(3 + 1 + 20 + 1);
+  });
+});
+
 describe("share links", () => {
   it("round-trips a design, including ones whose encoding contains '+'", () => {
     for (const c of challenges) {

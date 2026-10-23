@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { ArrowDown, ArrowRight, BookA, BookOpen, Binary, Braces, Code2, FileQuestion, Gauge, Hammer, Library, Network, Zap } from "lucide-react";
+import { ArrowDown, ArrowRight, BookA, BookOpen, Boxes, Binary, Braces, Code2, FileQuestion, Gauge, Hammer, Library, Network, Zap } from "lucide-react";
 import { deepDives, learnSteps, questions } from "@content/registry";
 import { jsTopics, patterns } from "@content/dsa/registry";
+import { lldLessons } from "@content/lld/registry";
 import { shorts } from "@content/shorts";
 import { glossary } from "@content/glossary";
 import { playLabs, playSimulators, requestJourney, type PlayArt, type PlayItem } from "@content/home";
@@ -20,6 +21,7 @@ export default function Home() {
     { href: "/learn", label: "HLD path", count: `${learnSteps.length} steps`, blurb: "Rough numbers to full case studies", Icon: BookOpen, track: "sd" },
     { href: "/deep-dives", label: "Deep dives", count: `${deepDives.length} techniques`, blurb: "The ideas interviewers circle back to", Icon: Library, track: "sd" },
     { href: "/questions", label: "Interview questions", count: `${questions.length} questions`, blurb: "LLD and HLD, answered in full", Icon: FileQuestion, track: "sd" },
+    { href: "/lld", label: "Low-level design", count: `${lldLessons.length} foundations`, blurb: "Classes, patterns and coding exercises", Icon: Boxes, track: "sd" },
     { href: "/playground", label: "Playground", count: "Graded", blurb: "Drag boxes, simulate load, get a score", Icon: Hammer, track: "sd" },
     { href: "/cheatsheet", label: "Cheatsheet", count: "Numbers", blurb: "Latencies and formulas worth memorising", Icon: Gauge, track: "sd" },
     { href: "/glossary", label: "Glossary", count: `${glossary.length} terms`, blurb: "Every term in one line", Icon: BookA, track: "sd" },
@@ -119,6 +121,7 @@ export default function Home() {
             <Stop href="/learn" title={`${learnSteps.length}-step HLD path`} note="Estimation to case studies" />
             <Stop href="/deep-dives" title={`${deepDives.length} deep dives`} note="Caching, sharding, real-time and more" />
             <Stop href="/questions" title={`${questions.length} interview questions`} note="Parking lot to Uber, with full answers" />
+            <Stop href="/lld" title="Low-level design" note="Foundations, classics and coding exercises" />
             <Stop href="/playground" title="Playground" note="Build a design and get it graded" />
           </ol>
           <TrackMeter track="sd" />

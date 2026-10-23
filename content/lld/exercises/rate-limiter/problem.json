@@ -1,0 +1,848 @@
+{
+  "title": "Rate Limiter",
+  "difficulty": "Medium",
+  "patterns": [
+    "strategy-decorator"
+  ],
+  "order": 3,
+  "summary": "Put fixed-window, sliding-window and token-bucket limiting behind one allow() method and switch between them at runtime.",
+  "js": [],
+  "kind": "design",
+  "className": "RateLimiter",
+  "samples": 3,
+  "tests": [
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "fixed-window",
+          {
+            "limit": 2,
+            "windowSec": 10
+          }
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "a",
+          9
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "a",
+          11
+        ],
+        [
+          "a",
+          12
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "explain": "Windows are [0,10), [10,20), and so on. The first two requests fill window 0, so the next two (at 2 and 9) are rejected. At t=10 a new window starts with a count of zero, so two more get through."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "sliding-window-log",
+          {
+            "limit": 2,
+            "windowSec": 10
+          }
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "a",
+          10.5
+        ],
+        [
+          "a",
+          11
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        false,
+        true,
+        false,
+        true
+      ],
+      "explain": "The window is (t-10, t]. At t=2 the log holds 0 and 1, so the request is rejected (and not logged). At t=10 the request from t=0 is exactly 10 seconds old and no longer counts, so one slot is free. At 10.5 the log holds 1 and 10 and is full; at 11 the entry from t=1 has expired."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "token-bucket",
+          {
+            "capacity": 3,
+            "refillPerSec": 1
+          }
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          1
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        false,
+        true,
+        false
+      ],
+      "explain": "The bucket starts full, so the burst of three at t=0 passes and the fourth is rejected. One second later exactly one token has flowed back: it lets one request through and the next one is rejected."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "fixed-window",
+          {
+            "limit": 2,
+            "windowSec": 10
+          }
+        ],
+        [
+          "a",
+          8
+        ],
+        [
+          "a",
+          9
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "a",
+          11
+        ],
+        [
+          "a",
+          12
+        ],
+        [
+          "a",
+          19
+        ],
+        [
+          "a",
+          20
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "explain": "The flaw of fixed windows: four requests are allowed between t=8 and t=11, twice the limit, because the burst straddles the boundary between windows [0,10) and [10,20)."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "sliding-window-log",
+          {
+            "limit": 2,
+            "windowSec": 10
+          }
+        ],
+        [
+          "a",
+          8
+        ],
+        [
+          "a",
+          9
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "a",
+          11
+        ],
+        [
+          "a",
+          17.5
+        ],
+        [
+          "a",
+          18
+        ],
+        [
+          "a",
+          18.5
+        ],
+        [
+          "a",
+          19
+        ],
+        [
+          "a",
+          20
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
+        false
+      ],
+      "explain": "The same burst against the sliding log: only 8 and 9 are allowed, because at t=10 and t=11 the last 10 seconds already hold two requests. At 18 the request from t=8 has expired (exactly 10 seconds old) and at 19 so has the one from t=9."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "token-bucket",
+          {
+            "capacity": 3,
+            "refillPerSec": 1
+          }
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          1.5
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "a",
+          3
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "a",
+          10
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        true,
+        false,
+        true,
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ],
+      "explain": "A burst of three, then the steady rate of one per second (the request at 1.5 only sees half a token). After a long quiet period the bucket refills only up to its capacity of 3, so exactly three get through at t=10."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "fixed-window",
+          {
+            "limit": 1,
+            "windowSec": 10
+          }
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "b",
+          3
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "c",
+          10
+        ],
+        [
+          "c",
+          11
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        false,
+        true,
+        false,
+        true,
+        true,
+        false
+      ],
+      "explain": "Each key has its own count: b is not affected by a using up its request, and a key seen for the first time later starts with a full allowance."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "token-bucket",
+          {
+            "capacity": 1,
+            "refillPerSec": 1
+          }
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0.5
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "b",
+          0.5
+        ],
+        [
+          "b",
+          0.75
+        ],
+        [
+          "b",
+          100
+        ],
+        [
+          "a",
+          1.25
+        ],
+        [
+          "a",
+          2
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        true,
+        false,
+        true
+      ],
+      "explain": "Rejected requests take no token: a is rejected at 0 and 0.5 yet is allowed at t=1 when one token has refilled. b is seen first at t=0.5 and starts with a full bucket of its own."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "sliding-window-log",
+          {
+            "limit": 2,
+            "windowSec": 1
+          }
+        ],
+        [
+          "a",
+          0.25
+        ],
+        [
+          "a",
+          0.5
+        ],
+        [
+          "a",
+          0.75
+        ],
+        [
+          "a",
+          1.25
+        ],
+        [
+          "a",
+          1.5
+        ],
+        [
+          "a",
+          1.75
+        ],
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        false,
+        true,
+        true,
+        false,
+        true
+      ],
+      "explain": "Time may be fractional. At 0.75 the log holds 0.25 and 0.5, so the request is rejected. At 1.25 the entry from 0.25 is exactly one second old and expired; at 1.5 so has the one from 0.5. At 1.75 the log holds 1.25 and 1.5 again."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "sliding-window-log",
+          {
+            "limit": 1,
+            "windowSec": 10
+          }
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "a",
+          5
+        ],
+        [
+          "a",
+          9
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "a",
+          11
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "explain": "A rejected request is not recorded. If the rejections at 2, 5 and 9 were logged, the request at 10 would still find a recent entry and be rejected."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "token-bucket",
+          {
+            "capacity": 2,
+            "refillPerSec": 0.5
+          }
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "a",
+          3
+        ],
+        [
+          "a",
+          100
+        ],
+        [
+          "a",
+          100
+        ],
+        [
+          "a",
+          100
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        true,
+        false,
+        false,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "explain": "A slow refill of half a token per second: after 1 second the bucket holds only 0.5 tokens, so the request is rejected; after 2 seconds it holds a whole token. Waiting 100 seconds refills to the capacity of 2, never beyond."
+    },
+    {
+      "ops": [
+        "RateLimiter",
+        "allow",
+        "allow",
+        "useStrategy",
+        "allow",
+        "allow",
+        "allow",
+        "allow",
+        "useStrategy",
+        "allow",
+        "allow",
+        "useStrategy",
+        "allow",
+        "allow",
+        "allow"
+      ],
+      "args": [
+        [
+          "fixed-window",
+          {
+            "limit": 1,
+            "windowSec": 10
+          }
+        ],
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "token-bucket",
+          {
+            "capacity": 2,
+            "refillPerSec": 1
+          }
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "leaky-bucket",
+          {
+            "rate": 1
+          }
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "a",
+          3
+        ],
+        [
+          "sliding-window-log",
+          {
+            "limit": 1,
+            "windowSec": 10
+          }
+        ],
+        [
+          "a",
+          3
+        ],
+        [
+          "a",
+          4
+        ],
+        [
+          "a",
+          13
+        ]
+      ],
+      "expected": [
+        null,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "explain": "useStrategy switches at runtime and forgets all history: a had used its single fixed-window request, but under the new token bucket it starts with a full bucket of 2. The unknown name leaky-bucket returns false and leaves the token bucket and its state in place. The last switch starts fresh again."
+    }
+  ],
+  "hints": [
+    "Write each algorithm as its own small class with the same allow(key, now) method. What state does each one need per key?",
+    "The limiter should hold one strategy object and delegate to it. Choose the object from a map of name to class, so useStrategy is a lookup instead of an if/else chain.",
+    "Fixed window: store the window index floor(now / windowSec) with the count. Sliding log: drop timestamps <= now - windowSec, then compare the length with the limit, and push only on success. Token bucket: refill lazily with min(capacity, tokens + elapsed * rate), then take a token if there is at least one."
+  ],
+  "complexity": {
+    "time": "O(1) per allow for fixed window and token bucket; amortised O(1) for the sliding log",
+    "space": "O(1) per key for fixed window and token bucket; O(limit) per key for the sliding log"
+  }
+}

@@ -1,5 +1,6 @@
 "use client";
 import { useId, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { m, useReducedMotion } from "motion/react";
 import { useBoxWidth } from "@/lib/hooks";
 import type { ClassSpec } from "./types";
@@ -118,26 +119,53 @@ export function ClassDiagram({ spec }: { spec: ClassSpec }) {
   const uid = useId().replace(/:/g, "");
   const reduce = useReducedMotion();
   const [hover, setHover] = useState<string | null>(null);
+  const [stage, setStage] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
   const boxWidth = useBoxWidth(scroller);
 
+  // Layout always covers every class, so positions do not move as stages add to the drawing.
   const full = useMemo(() => layoutFull(spec.classes), [spec.classes]);
   const compactLayout = useMemo(() => layoutCompact(spec.classes), [spec.classes]);
+  const stages = spec.stages;
+  const current = stages?.[stage];
+  const shownIds = useMemo(() => new Set(stages ? stages.slice(0, stage + 1).flatMap((s) => s.add) : spec.classes.map((c) => c.id)), [stages, stage, spec.classes]);
+  const newIds = useMemo(() => new Set(stages && stage > 0 ? stages[stage].add : []), [stages, stage]);
+  const classes = useMemo(() => spec.classes.filter((c) => shownIds.has(c.id)), [spec.classes, shownIds]);
+  const relations = useMemo(() => spec.relations.filter((r) => shownIds.has(r.from) && shownIds.has(r.to)), [spec.relations, shownIds]);
   // Server render and wide figures: full boxes (today's desktop look). Narrow figures: compact boxes.
   const compact = boxWidth !== undefined && boxWidth < full.width * FULL_MIN_SCALE;
   const { boxes, width, height } = compact ? compactLayout : full;
   const hub = useMemo(() => {
-    const deg = (id: string) => spec.relations.filter((r) => r.from === id || r.to === id).length;
-    return [...spec.classes].sort((a, b) => deg(b.id) - deg(a.id))[0]?.id ?? null;
-  }, [spec]);
+    const deg = (id: string) => relations.filter((r) => r.from === id || r.to === id).length;
+    return [...classes].sort((a, b) => deg(b.id) - deg(a.id))[0]?.id ?? null;
+  }, [classes, relations]);
   const [picked, setPicked] = useState<string | null>(null);
-  const selected = picked ?? hub;
+  const selected = picked && shownIds.has(picked) ? picked : hub;
   const focus = hover ?? (compact ? selected : null);
-  const sel = spec.classes.find((c) => c.id === selected);
+  const sel = classes.find((c) => c.id === selected);
   const minWidth = compact ? Math.min(width, Math.round(width * 0.8)) : Math.min(width, 600);
 
   return (
     <figure className={compact ? "flow uml uml--compact" : "flow uml"}>
+      {stages && current && (
+        <div className="uml-stages">
+          <div className="uml-stage-bar">
+            <button type="button" className="wbtn" onClick={() => setStage(stage - 1)} disabled={stage === 0} aria-label="Previous stage">
+              <ChevronLeft size={15} aria-hidden />
+            </button>
+            <span className="uml-stage-title" aria-live="polite">
+              <b>
+                Stage {stage + 1} of {stages.length}
+              </b>
+              {current.title}
+            </span>
+            <button type="button" className="wbtn" onClick={() => setStage(stage + 1)} disabled={stage === stages.length - 1} aria-label="Next stage">
+              <ChevronRight size={15} aria-hidden />
+            </button>
+          </div>
+          <p className="uml-stage-note">{current.note}</p>
+        </div>
+      )}
       {/* Focusable so keyboard users can scroll it sideways when it is wider than the column. */}
       <div ref={scroller} className="flow-scroll" tabIndex={0} role="group" aria-labelledby={`${uid}t`}>
         <svg viewBox={`0 0 ${width} ${height}`} role={compact ? "group" : "img"} aria-labelledby={`${uid}t ${uid}d`} style={{ width: "100%", maxWidth: width, minWidth }}>
@@ -157,7 +185,7 @@ export function ClassDiagram({ spec }: { spec: ClassSpec }) {
               <path d="M0 0L10 5L0 10" className="uml-open" />
             </marker>
           </defs>
-          {spec.relations.map((r, i) => {
+          {relations.map((r, i) => {
             const a = boxes.get(r.from)!;
             const b = boxes.get(r.to)!;
             const p1 = exitPoint(a, b.x + b.w / 2, b.y + b.h / 2);
@@ -177,21 +205,22 @@ export function ClassDiagram({ spec }: { spec: ClassSpec }) {
                   initial={reduce ? false : { opacity: 0 }}
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
-                  transition={{ delay: 0.4 + i * 0.06 }}
+                  transition={{ delay: stages ? 0.1 : 0.4 + i * 0.06 }}
                 />
               </g>
             );
           })}
-          {spec.classes.map((c, i) => {
+          {classes.map((c, i) => {
             const b = boxes.get(c.id)!;
             let y = HEAD + (c.stereotype ? 12 : 0);
-            const near = focus === c.id || spec.relations.some((r) => (r.from === focus && r.to === c.id) || (r.to === focus && r.from === c.id));
+            const near = focus === c.id || relations.some((r) => (r.from === focus && r.to === c.id) || (r.to === focus && r.from === c.id));
             return (
               <m.g
                 key={c.id}
                 className="uml-class"
                 data-dim={focus && !near ? true : undefined}
                 data-selected={compact && selected === c.id ? true : undefined}
+                data-new={newIds.has(c.id) ? true : undefined}
                 transform={`translate(${b.x},${b.y})`}
                 tabIndex={0}
                 role={compact ? "button" : undefined}
@@ -215,7 +244,7 @@ export function ClassDiagram({ spec }: { spec: ClassSpec }) {
                 initial={reduce ? false : { opacity: 0 }}
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.05 }}
+                transition={{ delay: stages ? 0 : i * 0.05 }}
               >
                 <rect width={b.w} height={b.h} rx={8} />
                 {c.stereotype && (
@@ -253,7 +282,7 @@ export function ClassDiagram({ spec }: { spec: ClassSpec }) {
             );
           })}
           {/* Relation labels last, so a box never hides one (they have a halo in the card colour). */}
-          {spec.relations.map((r, i) => {
+          {relations.map((r, i) => {
             if (!r.label) return null;
             const a = boxes.get(r.from)!;
             const b = boxes.get(r.to)!;
@@ -302,7 +331,7 @@ export function ClassDiagram({ spec }: { spec: ClassSpec }) {
                 )}
               </div>
             </div>
-            {relationsInWords(sel.id, spec).length > 0 && <p className="uml-card-rels">{relationsInWords(sel.id, spec).join("; ")}.</p>}
+            {relationsInWords(sel.id, { ...spec, relations }).length > 0 && <p className="uml-card-rels">{relationsInWords(sel.id, { ...spec, relations }).join("; ")}.</p>}
           </div>
         )}
         <p className="flow-caption">{spec.description}</p>

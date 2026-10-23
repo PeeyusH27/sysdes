@@ -12,6 +12,8 @@ Model **ParkingLot → Floor → Spot**, hide spot choice, pricing and payment b
 
 A **low-level design** (LLD) question: classes and clean seams first, then where concurrency bites.
 
+New to low-level design? Start with [From requirements to classes](/lld/foundations/thinking-in-objects) and [SOLID](/lld/foundations/solid); the strategy and decorator in this answer are taught in [Swap behaviour](/lld/foundations/strategy-decorator).
+
 ## Clarifying questions
 
 - How many floors and spots? (Decides whether a scan is fine.)
@@ -20,19 +22,11 @@ A **low-level design** (LLD) question: classes and clean seams first, then where
 - Pay at the exit gate or a pay station; card, cash or wallet?
 - One lot (one process) or a chain (a distributed system)?
 
-## Capacity estimate
+## Scale check
 
-| Quantity | Estimate |
-|---|---|
-| Spots | 5 floors × 200 spots = **1,000** |
-| Average stay | 2 hours, so ~500 entries an hour (0.14 per second) |
-| Peak entries | ~3× average: under 0.5 per second across 4 gates |
-| Tickets per day | 1,000 spots × 12 busy hours ÷ 2 h = **6,000** |
-| Ticket storage | 6,000 × ~200 bytes ≈ 1.2 MB per day |
+Five floors of 200 spots is **1,000 spots** and about 500 entries an hour, under one per second even at peak. One small process could run the lot, so the hard part is **correctness**: two gates must never hand out the same spot.
 
-One small process could run the lot. The hard part is **correctness**: two gates must never hand out the same spot.
-
-## API
+## Public interface
 
 | Call | Returns | Errors |
 |---|---|---|
@@ -42,45 +36,19 @@ One small process could run the lot. The hard part is **correctness**: two gates
 | `floor.available(type)` | Free spots of that type on the floor | |
 | event `changed(floor)` | Fired after every park and exit | |
 
-## Data model
+## Build the design in stages
 
-In memory, everything hangs off the lot:
+Step through the stages the way you would build it on a whiteboard: nouns first, then each rule that will change moves behind an interface. A green outline marks what the latest stage added; click a class to see its members and relations.
+
+<ClassDiagram spec={classes} />
+
+## What it remembers
+
+Everything hangs off the lot:
 
 - `ParkingLot.floors`: floors indexed by level.
 - `Floor.free`: spot type → `Set` of free spots.
 - `ParkingLot.tickets`: open tickets, `Map<ticketId, Ticket>`; exit deletes the entry, so a ticket works once.
-
-Across gate servers the database is the truth: a spot is free while its `ticket_id` is NULL.
-
-```sql
-CREATE TABLE spots (
-  id        text   PRIMARY KEY,                 -- '2-C14'
-  lot_id    bigint NOT NULL,
-  floor     int    NOT NULL,
-  type      text   NOT NULL CHECK (type IN ('bike', 'compact', 'large')),
-  features  text[] NOT NULL DEFAULT '{}',       -- 'ev', 'accessible'
-  ticket_id uuid   UNIQUE,                      -- NULL means free
-  taken_at  timestamptz
-);
-CREATE INDEX spots_free ON spots (lot_id, type, floor, id) WHERE ticket_id IS NULL;
-
-CREATE TABLE tickets (
-  id       uuid   PRIMARY KEY,
-  lot_id   bigint NOT NULL,
-  plate    text   NOT NULL,                     -- lets you find a lost ticket
-  vehicle  text   NOT NULL,
-  spot_id  text   NOT NULL REFERENCES spots (id),
-  entry_at timestamptz NOT NULL DEFAULT now(),
-  exit_at  timestamptz,
-  fee      int
-);
-```
-
-## Class design
-
-Hover a class to light up its relationships. Filled diamonds mean **ownership**; the interfaces are where the design bends without breaking.
-
-<ClassDiagram spec={classes} />
 
 ## Watch it run
 
@@ -185,6 +153,38 @@ The same design in **JavaScript, Java or Python**: pick a language and every cod
 - `HourlyPricing` charges every **started** hour: 61 minutes is 2 hours. The grace period is inclusive, so exactly 10 minutes is free.
 - `DailyCap` charges whole days at the cap, then caps the rest: 26 hours for a car is 150 + 40 = 190.
 - `LowestFloorFirst` prefers a lower floor to a smaller spot type; `allocate.sql` orders by type, then floor. Pick one policy for both.
+
+## Code it yourself
+
+Write the allocator and the fee policies against hidden tests, in JavaScript or Python: the [Parking Lot exercise](/lld/exercises/parking-lot) adds a spot policy and a pricing policy you can switch at runtime, which is where a design that hard-codes them with if/else falls over.
+
+## Persistence across gate servers
+
+Only if the interviewer asks. Across gate servers the database is the truth: a spot is free while its `ticket_id` is NULL.
+
+```sql
+CREATE TABLE spots (
+  id        text   PRIMARY KEY,                 -- '2-C14'
+  lot_id    bigint NOT NULL,
+  floor     int    NOT NULL,
+  type      text   NOT NULL CHECK (type IN ('bike', 'compact', 'large')),
+  features  text[] NOT NULL DEFAULT '{}',       -- 'ev', 'accessible'
+  ticket_id uuid   UNIQUE,                      -- NULL means free
+  taken_at  timestamptz
+);
+CREATE INDEX spots_free ON spots (lot_id, type, floor, id) WHERE ticket_id IS NULL;
+
+CREATE TABLE tickets (
+  id       uuid   PRIMARY KEY,
+  lot_id   bigint NOT NULL,
+  plate    text   NOT NULL,                     -- lets you find a lost ticket
+  vehicle  text   NOT NULL,
+  spot_id  text   NOT NULL REFERENCES spots (id),
+  entry_at timestamptz NOT NULL DEFAULT now(),
+  exit_at  timestamptz,
+  fee      int
+);
+```
 
 ## Failure modes
 

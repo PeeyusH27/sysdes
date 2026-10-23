@@ -115,7 +115,7 @@ test("arrow keys inside a diagram still drive the diagram in Cards mode", async 
   await expect(card).toHaveAttribute("data-sec", "why-it-matters");
 });
 
-const auditPaths = ["/", "/shorts", "/system-design", "/learn", "/questions", "/deep-dives", "/playground/url-shortener", "/dsa", "/dsa/patterns", "/dsa/problems", "/dsa/problems/three-sum", ...allPages().map((p) => p.href.split("#")[0])];
+const auditPaths = ["/", "/shorts", "/system-design", "/learn", "/questions", "/deep-dives", "/lld", "/lld/exercises/event-bus", "/playground", "/playground/sandbox", "/playground/url-shortener", "/playground/url-shortener/guided", "/playground/rate-limiter/guided", "/dsa", "/dsa/patterns", "/dsa/problems", "/dsa/problems/three-sum", ...allPages().map((p) => p.href.split("#")[0])];
 for (const path of [...new Set(auditPaths)]) {
   test(`no serious accessibility violations on ${path}`, async ({ page }) => {
     await page.goto(path);

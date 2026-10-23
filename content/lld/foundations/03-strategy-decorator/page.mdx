@@ -1,0 +1,118 @@
+import { pricingDesign, chooseShape } from './diagrams'
+import { quiz } from './quiz'
+
+<TLDR>
+Put the rule that keeps changing behind a one-method interface (**Strategy**), and add optional rules such as caps and discounts as wrappers that implement the same interface (**Decorator**). The order of wrapping is part of the pricing rule, so pin it with a test.
+</TLDR>
+
+## The ladder that grows
+
+On Monday the garage charges by the hour. By Friday bikes are cheaper, nights are half price, the first ten minutes are free, and finance wants a cap. Each request is one more `if`.
+
+<CodeTabs files={['snippets/fee-before.js', 'snippets/fee-before.test.js']} python={['snippets/python/fee_before.py', 'snippets/python/test_fee_before.py']} />
+
+It works, and it hurts in three ways:
+
+- **Every rule edits one function.** A new discount can break the cap, so every change means re-checking all the old rules.
+- **The order is hidden.** The discount runs before the cap only because that `if` is higher up. Nobody wrote that decision down.
+- **You cannot swap it.** An event day with a flat price, or a test of just the cap, needs a copy of the whole function.
+
+## Strategy: the rule behind an interface
+
+Ask what varies. Here it is **how a stay becomes a price**. Give that one idea a name, `fee(stay)`, and let the code that charges the driver depend on the name, not on any particular rule.
+
+<CodeTabs files={['snippets/strategy.js', 'snippets/strategy.test.js']} python={['snippets/python/strategy.py', 'snippets/python/test_strategy.py']} />
+
+`Garage` never builds its pricing. It is handed one (**injection**), so a test passes a `FlatRate`, production passes the real thing, and `switchTo` changes it while the garage runs. Choosing between several is just one more strategy: `ByVehicle` looks up the right one and delegates.
+
+This is open/closed from the [SOLID lesson](/lld/foundations/solid) in its cheapest form: a new pricing scheme is a new class, and `Garage` stays untouched.
+
+## Decorator: wrap, do not branch
+
+Grace periods, caps and discounts are not alternatives to hourly pricing. They **adjust** it. So each one implements the same `fee(stay)` and holds another strategy, which it calls and then changes.
+
+<CodeTabs files={['snippets/rules.js', 'snippets/rules.test.js']} python={['snippets/python/rules.py', 'snippets/python/test_rules.py']} />
+
+Because a wrapper has the interface it wraps, the rest of the code cannot tell them apart, and wrappers stack:
+
+```js
+const pricing = new GracePeriod(new Cap(new NightDiscount(new HourlyRate(20), 50), 100), 10);
+```
+
+Read it from the inside out: 20 an hour, half off for night arrivals, never more than 100, and nothing at all for the first 10 minutes. Each rule is a few lines and testable on its own with a `FlatRate` standing in for the inner strategy.
+
+## Watch the design grow
+
+Step through the diagram. Stage one is the ladder, and every stage after it adds classes without editing the ones already there.
+
+<ClassDiagram spec={pricingDesign} />
+
+## The order of wrapping is part of the rule
+
+An 8-hour night stay at 20 an hour is 160 before any rule. Apply a 50% night discount and a cap of 100 in each order:
+
+<CodeTabs files={['snippets/order.js', 'snippets/order.test.js']} python={['snippets/python/order.py', 'snippets/python/test_order.py']} />
+
+| Wrapping | Night, 8 hours | Day, 8 hours |
+|---|---|---|
+| `Cap(NightDiscount(base))` | 160, then 80, cap leaves 80 | 160, cap makes 100 |
+| `NightDiscount(Cap(base))` | 160, cap makes 100, then 50 | 160, cap makes 100 |
+
+Neither is a bug. The first says "the driver never pays more than 100, after discounts". The second says "the discount is half of the capped price". They are different policies, so decide on purpose and let a test, like the one above, keep the next person from swapping them. Put a grace period outermost: a stay that is free should skip every other rule.
+
+## Strategy, decorator, or just a function
+
+In JavaScript and Python you often do not need a class. A function is a strategy with one method, and a function that takes a function is a decorator.
+
+<CodeTabs files={['snippets/as-functions.js', 'snippets/as-functions.test.js']} python={['snippets/python/as_functions.py', 'snippets/python/test_as_functions.py']} />
+
+The three versions give the same numbers, and the function one is the shortest. Reach for a class when the rule has **configuration you want to inspect** (print the active rules on a receipt), **several methods**, **state**, or a name you need in logs. In languages where passing a function is awkward, the class is the default.
+
+<DecisionTree spec={chooseShape} />
+
+<Callout kind="interview" title="What interviewers listen for">
+You name the thing that varies before you draw a class. You say Strategy for alternatives and Decorator for adjustments, you say out loud that wrapping order changes the answer, and you offer a function when the rule is tiny. Pattern names with no pain behind them score worse than a plain `if`.
+</Callout>
+
+## The over-engineering trap
+
+<Callout kind="warning" title="Three rules is not a framework">
+A `PricingStrategyFactoryProvider` for two prices, or a six-deep decorator chain nobody can read in a debugger, costs more than the ladder it replaced. Two stable cases belong in an `if`. Extract the interface when the third case arrives, or the moment you must swap or test a rule alone.
+</Callout>
+
+A few habits keep the pattern cheap:
+
+- One interface with one method. If a strategy needs three methods, you probably mixed two ideas.
+- Give every wrapper a readable name, and log the chain at startup so a wrong price can be traced.
+- Do not build a registry or a factory until rules really come from configuration.
+- Keep wrappers **pure**: the same stay always gives the same fee, with the clock passed in.
+
+## Try it
+
+Run the cell. `BookingFee` adds a flat 5, and moving it inside or outside `Cap` changes the total, the same trap as before with a different rule. Then write your own wrapper and place it somewhere.
+
+<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" />
+
+Then practise on the real thing: build a [rate limiter](/lld/exercises/rate-limiter) whose algorithm is swappable, and a [pricing engine](/lld/exercises/pricing-rules) whose rules are added at runtime. The classic question that uses both patterns is the [parking lot](/questions/parking-lot). The next lesson covers behaviour that depends on what an object is doing right now: [state machines and observers](/lld/foundations/state-observer).
+
+## Follow-up questions
+
+<FollowUps>
+  <FollowUp q="Strategy and State look the same in code. What is the difference?">
+    The shape is identical, the intent is not. A strategy is chosen from outside and usually stays put. A state changes itself as events arrive, and each state knows what comes next.
+  </FollowUp>
+  <FollowUp q="How would finance change pricing rules without a deploy?">
+    Store the rules as data, a list of names with parameters, and build the chain from it through a small registry from name to constructor. The list order is the wrapping order, so validate it and log the result at load time.
+  </FollowUp>
+  <FollowUp q="How do you test a stack of decorators?">
+    Test each wrapper alone with a constant inner strategy such as `FlatRate(160)`. Then test a few real stacks, including both orders of any pair that interact, so a reordering fails loudly.
+  </FollowUp>
+  <FollowUp q="Why inject the strategy instead of creating it inside Garage?">
+    Creating it inside ties the class to one rule and makes tests use the real one. Injection lets tests substitute a stub and lets the choice live in one composition point.
+  </FollowUp>
+  <FollowUp q="The cap here is per stay. What breaks for a cap per calendar day?">
+    A stay that crosses midnight needs a cap on each day. The cap must split the stay at day boundaries and price each piece, as the parking lot question does, so it changes the stay it passes to the inner rule.
+  </FollowUp>
+</FollowUps>
+
+<Quiz items={quiz} />

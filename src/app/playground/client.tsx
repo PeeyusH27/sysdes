@@ -7,6 +7,6 @@ const Playground = dynamic(() => import("@/components/playground/Playground").th
   loading: () => <p className="container muted" style={{ padding: 24 }}>Loading the playground…</p>,
 });
 
-export function PlaygroundClient({ challenge }: { challenge?: string }) {
-  return <Playground challengeSlug={challenge} />;
+export function PlaygroundClient({ challenge, guided = false }: { challenge?: string; guided?: boolean }) {
+  return <Playground challengeSlug={challenge} guided={guided} />;
 }
