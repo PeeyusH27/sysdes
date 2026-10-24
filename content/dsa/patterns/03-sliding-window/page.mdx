@@ -7,20 +7,20 @@ A sliding window is a frame over a row that **slides along instead of starting o
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- You want the longest, shortest or number of **contiguous** ranges that obey a rule.
-- The rule has a bound ("**at most** k distinct", "**no** repeats") or a **fixed size** k.
-- The values are non-negative.
-
-</Callout>
-
-| Variant | How the edges move | Classic problems |
-|---|---|---|
-| Fixed size | together: one in, one out | maximum average subarray |
-| Longest valid | grow `right`; **while invalid**, move `left` | longest substring without repeats |
-| Shortest valid | grow `right`; **while valid**, move `left` | minimum window substring |
-| Monotonic deque | a deque keeps max or min candidates | sliding window maximum |
+<ReachFor
+  signals={[
+    "You want the longest, shortest or number of **contiguous** ranges that obey a rule.",
+    "The rule has a bound (\"**at most** k distinct\", \"**no** repeats\") or a **fixed size** k.",
+    "The values are non-negative.",
+  ]}
+  variants={[
+    {"name": "Fixed size", "how": "together: one in, one out", "extra": "maximum average subarray"},
+    {"name": "Longest valid", "how": "grow `right`; **while invalid**, move `left`", "extra": "longest substring without repeats"},
+    {"name": "Shortest valid", "how": "grow `right`; **while valid**, move `left`", "extra": "minimum window substring"},
+    {"name": "Monotonic deque", "how": "a deque keeps max or min candidates", "extra": "sliding window maximum"},
+  ]}
+  howLabel="How the edges move"
+/>
 
 ## The core idea: update, don't recompute
 

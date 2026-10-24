@@ -7,21 +7,21 @@ Every shortest-path algorithm repeats one move, **relaxation**: if going through
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- **Minimum** cost, time or effort from a start to a target.
-- **Weighted** edges: road lengths, flight prices, delays, heights.
-- **Fewest moves** in a grid or puzzle: every move costs 1, so BFS.
-- "At most **k stops**": count rounds with Bellman-Ford.
-- A route costs its **largest** step: Dijkstra with `max` instead of `+`.
-
-</Callout>
-
-| Algorithm | Edge weights | Classic problem |
-|---|---|---|
-| BFS (queue) | all equal | word ladder |
-| Dijkstra (min-heap) | non-negative | network delay |
-| Bellman-Ford (rounds) | any | flights within k stops |
+<ReachFor
+  signals={[
+    "**Minimum** cost, time or effort from a start to a target.",
+    "**Weighted** edges: road lengths, flight prices, delays, heights.",
+    "**Fewest moves** in a grid or puzzle: every move costs 1, so BFS.",
+    "\"At most **k stops**\": count rounds with Bellman-Ford.",
+    "A route costs its **largest** step: Dijkstra with `max` instead of `+`.",
+  ]}
+  variants={[
+    {"name": "BFS (queue)", "how": "all equal", "extra": "word ladder"},
+    {"name": "Dijkstra (min-heap)", "how": "non-negative", "extra": "network delay"},
+    {"name": "Bellman-Ford (rounds)", "how": "any", "extra": "flights within k stops"},
+  ]}
+  howLabel="Edge weights"
+/>
 
 ## The core idea: relax, closest first
 

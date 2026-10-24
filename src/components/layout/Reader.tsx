@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { usePathname } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, GalleryHorizontalEnd, Layers, PartyPopper, Rows3 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { useHydrated, useMediaQuery } from "@/lib/hooks";
+import { useHydrated } from "@/lib/hooks";
 import { useProgress } from "@/lib/progress";
 
 /**
@@ -59,9 +59,8 @@ export function Reader({ children, detail = [] }: { children: React.ReactNode; d
   const ticks = useProgress((s) => s.sections);
   const toggleSection = useProgress((s) => s.toggleSection);
   const markDone = useProgress((s) => s.markDone);
-  // "auto": one card at a time on a phone, where a long scroll is hardest to take in; the whole page elsewhere.
-  const phone = useMediaQuery("(max-width: 720px)");
-  const mode: "scroll" | "cards" = !hydrated ? "scroll" : storedMode === "auto" ? (phone ? "cards" : "scroll") : storedMode;
+  // "auto": the whole page at once. One card at a time (Cards) is the reader's choice, and it sticks.
+  const mode: "scroll" | "cards" = !hydrated ? "scroll" : storedMode === "auto" ? "scroll" : storedMode;
   const storedDepth = useProgress((s) => s.readerDepth);
   const setStoredDepth = useProgress((s) => s.setReaderDepth);
   // Until the saved choice is known the page is in its Core view, which is also what the server rendered.
@@ -195,6 +194,40 @@ export function Reader({ children, detail = [] }: { children: React.ReactNode; d
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, step]);
 
+  // Cards mode on a touch screen: swipe sideways to flip, unless the touch began on something that scrolls or plays
+  // sideways itself (a wide table, a code block, a diagram, an editor).
+  useEffect(() => {
+    const root = rootRef.current;
+    if (mode !== "cards" || !root) return;
+    let from: { x: number; y: number; ok: boolean } | null = null;
+    const scrollsSideways = (el: Element | null) => {
+      for (; el && el !== root; el = el.parentElement) {
+        if (el.matches(KEY_OWNERS) || el.matches("pre, table")) return true;
+        if (el.scrollWidth > el.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowX)) return true;
+      }
+      return false;
+    };
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      from = e.touches.length === 1 && t ? { x: t.clientX, y: t.clientY, ok: !scrollsSideways(e.target as Element) } : null;
+    };
+    const onEnd = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      const s = from;
+      from = null;
+      if (!s?.ok || !t) return;
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      if (Math.abs(dx) > 64 && Math.abs(dx) > Math.abs(dy) * 1.6) step(dx < 0 ? 1 : -1);
+    };
+    root.addEventListener("touchstart", onStart, { passive: true });
+    root.addEventListener("touchend", onEnd, { passive: true });
+    return () => {
+      root.removeEventListener("touchstart", onStart);
+      root.removeEventListener("touchend", onEnd);
+    };
+  }, [mode, step]);
+
   // Links to #anchors (in the text, search results) open the card that holds the anchor, and the "Read more" fold
   // around it. Printing opens every fold, so the paper copy has all the words.
   useEffect(() => {
@@ -230,7 +263,7 @@ export function Reader({ children, detail = [] }: { children: React.ReactNode; d
 
   return (
     <ReaderContext.Provider value={api}>
-      <div ref={rootRef} className="reader" data-mode={mode} data-dir={dir} data-depth={depth}>
+      <div ref={rootRef} className="reader" data-mode={mode} data-dir={dir} data-depth={depth} data-last={sections.length > 0 && index >= sections.length - 1 ? "" : undefined}>
         {children}
       </div>
     </ReaderContext.Provider>

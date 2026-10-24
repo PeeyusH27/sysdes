@@ -6,6 +6,8 @@ import { extras as patterns } from "./patterns";
 import { extras as questionsFirst } from "./questions";
 import { extras as questionsHld } from "./questions-hld";
 import { extras as questionsLld } from "./questions-lld";
+import { getBasics } from "../basics";
+import { getChecks } from "../checks";
 import { getStory } from "../stories";
 import type { PageExtras } from "./types";
 
@@ -19,6 +21,8 @@ const bySection: Record<ExtrasSection, Record<string, PageExtras>> = { learn, "d
 export const getExtras = (section: ExtrasSection, slug: string): PageExtras | undefined => {
   const e = bySection[section][slug];
   const story = e && getStory(section, slug);
-  return story ? { ...e, story } : e;
+  const checks = e && getChecks(section, slug);
+  const basics = e && getBasics(section, slug);
+  return story || checks || basics ? { ...e, ...(story && { story }), ...(checks && { checks }), ...(basics && { basics }) } : e;
 };
 export const allExtras = bySection;

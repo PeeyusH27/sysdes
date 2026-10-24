@@ -7,14 +7,14 @@ Breadth-first search reads a tree **level by level** with a first-in, first-out 
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- The answer is **per level** or per row: averages, maximums, values of each level.
-- What you see **from one side**: the first or last node on each level.
-- The **nearest** or shallowest something: minimum depth, closest leaf.
-- Output **top to bottom, left to right**.
-
-</Callout>
+<ReachFor
+  signals={[
+    "The answer is **per level** or per row: averages, maximums, values of each level.",
+    "What you see **from one side**: the first or last node on each level.",
+    "The **nearest** or shallowest something: minimum depth, closest leaf.",
+    "Output **top to bottom, left to right**.",
+  ]}
+/>
 
 ## The core idea: a queue keeps the levels in order
 

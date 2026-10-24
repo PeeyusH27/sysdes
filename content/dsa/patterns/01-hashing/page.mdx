@@ -7,20 +7,20 @@ A hash map is a **notebook of what you have seen**. One look costs one step, so 
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- You keep asking **"have I seen this before?"** or **"how many times?"**
-- Each element needs a **partner**: `target - x`, or an earlier running total.
-- The brute force's inner loop only **searches**, or items must be **grouped**.
-
-</Callout>
-
-| Variant | Remembers | Classic problems |
-|---|---|---|
-| Seen set | which values appeared | contains duplicate |
-| Frequency map | value → count | valid anagram, top k frequent |
-| Complement map | value → index or count | two sum, subarray sum equals k |
-| Group by key | key → members | group anagrams |
+<ReachFor
+  signals={[
+    "You keep asking **\"have I seen this before?\"** or **\"how many times?\"**",
+    "Each element needs a **partner**: `target - x`, or an earlier running total.",
+    "The brute force's inner loop only **searches**, or items must be **grouped**.",
+  ]}
+  variants={[
+    {"name": "Seen set", "how": "which values appeared", "extra": "contains duplicate"},
+    {"name": "Frequency map", "how": "value → count", "extra": "valid anagram, top k frequent"},
+    {"name": "Complement map", "how": "value → index or count", "extra": "two sum, subarray sum equals k"},
+    {"name": "Group by key", "how": "key → members", "extra": "group anagrams"},
+  ]}
+  howLabel="Remembers"
+/>
 
 ## The core idea: replace the inner search with a lookup
 

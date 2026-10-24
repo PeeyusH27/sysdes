@@ -7,22 +7,22 @@ Backtracking builds an answer **one choice at a time**: choose, explore, then **
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- "Return **all** subsets, combinations, permutations or partitions."
-- "Generate **every valid** string, board or arrangement."
-- **Place** items under constraints: queens, sudoku digits, a word in a grid.
-- **Small limits** like `n <= 10` or a 6 × 6 board: exponential is expected.
-- "Does **any** assignment exist?" with no greedy or DP shortcut.
-
-</Callout>
-
-| Variant | Repeats avoided by | Classic problem |
-|---|---|---|
-| Subsets, combinations | a start index | subsets |
-| Permutations | a `used[]` array | permutations |
-| Placement | fixed slot order | n-queens |
-| Grid search | mark, then restore | word search |
+<ReachFor
+  signals={[
+    "\"Return **all** subsets, combinations, permutations or partitions.\"",
+    "\"Generate **every valid** string, board or arrangement.\"",
+    "**Place** items under constraints: queens, sudoku digits, a word in a grid.",
+    "**Small limits** like `n <= 10` or a 6 × 6 board: exponential is expected.",
+    "\"Does **any** assignment exist?\" with no greedy or DP shortcut.",
+  ]}
+  variants={[
+    {"name": "Subsets, combinations", "how": "a start index", "extra": "subsets"},
+    {"name": "Permutations", "how": "a `used[]` array", "extra": "permutations"},
+    {"name": "Placement", "how": "fixed slot order", "extra": "n-queens"},
+    {"name": "Grid search", "how": "mark, then restore", "extra": "word search"},
+  ]}
+  howLabel="Repeats avoided by"
+/>
 
 ## The core idea: one path, walked forward and back
 

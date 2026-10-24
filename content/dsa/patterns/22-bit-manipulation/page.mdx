@@ -7,14 +7,14 @@ A number is a row of switches (bits), and one operator flips many at once. Three
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- "Every element appears **twice except one**", or a number is **missing** from a range, in O(1) space: XOR.
-- **Count set bits** or test for a **power of two**: `n & (n - 1)`.
-- Arithmetic **without `+` or `-`**: XOR plus a carry.
-- Every **subset** of a small set (n up to about 20): masks.
-
-</Callout>
+<ReachFor
+  signals={[
+    "\"Every element appears **twice except one**\", or a number is **missing** from a range, in O(1) space: XOR.",
+    "**Count set bits** or test for a **power of two**: `n & (n - 1)`.",
+    "Arithmetic **without `+` or `-`**: XOR plus a carry.",
+    "Every **subset** of a small set (n up to about 20): masks.",
+  ]}
+/>
 
 ## The core idea: one operator, every bit at once
 

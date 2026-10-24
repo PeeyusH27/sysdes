@@ -27,7 +27,7 @@ snippets/     templates as ES modules (export function …) + a sibling *.test.j
 ### page.mdx outline (follow the two-pointers page)
 
 1. `import { … } from './viz'` and `import { quiz } from './quiz'`, then `<TLDR>` (2–3 sentences: what it is, the key insight, the complexity win).
-2. `## When to reach for it`: a `<Callout kind="tip" title="Spot it in the problem statement">` list of signals, then a table of the pattern's **variants** (name, setup, when to move/branch, classic problems).
+2. `## When to reach for it`: one `<ReachFor signals={[…]} variants={[…]} howLabel="…" />`. `signals` are 3–5 short strings (**bold** the words worth remembering: they become the "Remember" chips and the highlighted keywords); `variants` are `{ name, how, extra }` objects, where `how` is labelled by `howLabel` (e.g. "Which pointer moves") and `extra` is the classic problems, comma separated (use `extraLabel` for anything else). No table.
 3. `## The core idea…`: why the pattern is correct (the invariant / the argument that makes it safe), then the first `<AlgoViz trace={…} />`.
 4. `## Step by step`: `<Steps>` with 4–6 `<Step title="…">` describing how to apply the pattern to a new problem.
 5. `## Template …` sections (one per variant): short explanation, `<AlgoViz>` for the variant where useful, and `<CodeTabs files={['snippets/x.js']} />`. Mention which problems each template solves.
@@ -48,6 +48,7 @@ The page automatically gets a **Practice problems** section listing every proble
 | `<RunCode src="snippets/try-it.js" python="snippets/python/try_it.py" java="snippets/java/TryIt.java" />` | highlighted snippet with **Run** (executes in a worker and shows console output) and **Edit**; `python` and `java` are optional and add a JavaScript / Java / Python switch (Python runs in the browser via Pyodide, sibling `.py` modules are importable; Java is read-only) |
 | `<JsRef to="map-set" />` | inline chip linking to a cheat sheet topic; `to={["a", "b"]}` renders a labelled row |
 | `<ProblemLink slug="…" />` | link to a practice problem with difficulty and solved tick |
+| `<ReachFor signals={[…]} variants={[…]} />` | the "When to reach for it" tick-list, keyword chips and variant cards |
 | `<CodeTabs>`, `<CodeBlock>`, `<Steps>`, `<Callout>`, `<FollowUps>`, `<Quiz>`, `<TLDR>`, tables | as in `docs/AUTHORING.md` |
 
 ### Snippets

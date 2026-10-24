@@ -1,4 +1,4 @@
-import { leaderReplication } from './diagrams'
+import { leaderReplication, pacelcRead, linearizableSeq, readYourWrites, causalOrder, eventualConverge, quorumFlow, sloppyQuorum, lwwLoss, vectorClocks, crdtCounter, raftCommit, twoPhaseCommit, sagaFlow, fencedLock, lockChoice, pickConsistency, splitBrain, ambiguousTimeout } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
@@ -11,28 +11,56 @@ When the network splits, a system must either refuse some requests (**consistenc
 
 Your data lives on three machines. A switch dies. Now two copies disagree, and users may see either.
 
-Copies survive dead servers, but they lag, and a split lets them drift apart.
+Copies survive dead servers, but they lag, and a split lets them drift apart. Every choice in this page is an answer to one question: **what should the system do when the copies disagree?**
 
 Play **Partition: CP choice**, then **Partition: AP choice**: one split, two opposite answers.
+
+Skip all of this if you run one database in one region and read from its primary. A single node is consistent by default, and most products never need more. The trouble starts with replicas, a second region, or a cache.
 
 <FlowDiagram spec={leaderReplication} />
 
 ## CAP, stated precisely
 
-When the network splits, each side cannot hear the other. Each side must choose:
+When the network splits, each side cannot hear the other, and each side must choose between **consistency** and **availability**.
 
 - **Consistency**: refuse or wait, so nobody reads old data.
 - **Availability**: keep answering, even if the answer is stale.
 
 A bank picks consistency. Two data centers lose their link while you and your partner each withdraw the last 100: if both sides pay, the bank loses 100. "Try again later" is cheaper. A like count picks availability: showing 1,204 instead of 1,207 hurts nobody.
 
-So "pick 2 of 3" is wrong. You choose only while the network is split. When it is healthy, you get both.
+So "pick 2 of 3" is wrong. You choose only while the network is split. When it is healthy, you get both. Partitions cannot be avoided in a real network, so the real choice is always between the other two.
+
+### CP: refuse and stay correct
+
+A **CP** system stops answering on the minority side of a split, so no two sides ever disagree. Play **Partition: CP choice**: Follower 2 holds 1 of 3 copies, cannot commit, and rejects Bob's booking.
+
+<FlowDiagram spec={leaderReplication} scenario="cp" />
+
+Use it when a wrong answer costs more than no answer: seats, balances, inventory at checkout, unique usernames. The cost is that some users get an error until the split heals, so the client must retry safely.
+
+### AP: answer now, reconcile later
+
+An **AP** system keeps every replica writable, so it always answers, and the replicas disagree until they merge. Play **Partition: AP choice**: both sides accept a cart edit, and the merge decides what survives.
+
+<FlowDiagram spec={leaderReplication} scenario="ap" />
+
+Use it when being down is worse than being briefly wrong: carts, likes, feeds, presence. The cost is conflict handling, which is the work of the [conflict resolution](#conflict-resolution) section.
+
+### What the letters actually mean
+
+In CAP, **C** means linearizable (one copy, always current) and **A** means every non-failed node answers every request. Both are strict. Real systems sit between: a quorum store stays "mostly available" and "mostly consistent" and lets you tune it per request.
+
+That is why the better question in an interview is not "CP or AP?" but "what does this feature do when the answer might be wrong?"
 
 ## PACELC: the trade-off you pay every day
 
-Splits are rare. Waiting on another region happens on every request: about 70 to 100 ms across the Atlantic.
+Splits are rare, but waiting on another region happens on every request: about 70 to 100 ms across the Atlantic.
 
-So even on a good day you choose: a fast answer from a nearby copy that may be stale, or a slower answer that is always fresh. This extra rule is **PACELC**.
+So even on a good day you choose: a fast answer from a nearby copy that may be stale, or a slower answer that is always fresh. This extra rule is **PACELC**: if Partitioned, choose Availability or Consistency; Else, choose Latency or Consistency.
+
+Play **Five reads in a row**, then compare with **Local read**.
+
+<FlowDiagram spec={pacelcRead} />
 
 Do the sum: a page that makes 5 reads from a far-away leader waits roughly 5 × 80 = 400 ms. Reading a local copy costs a few ms each. Pay that wait for balances, not for like counts.
 
@@ -41,6 +69,8 @@ Do the sum: a page that makes 5 reads from a far-away leader waits roughly 5 × 
 | Cassandra, Dynamo-style | Stays available | Fast |
 | Spanner, etcd | Stays consistent | Consistent |
 | Postgres + async replicas | Leader side works | Fast, may lag |
+
+Many stores let you choose per request, which is how a single system serves both a balance and a like count. DynamoDB reads are eventually consistent by default, and a strongly consistent read costs twice the read capacity. Cassandra lets each query pick `ONE` or `QUORUM`.
 
 ## Consistency models: a ladder
 
@@ -54,19 +84,98 @@ Do the sum: a page that makes 5 reads from a far-away leader waits roughly 5 × 
 | **Read-your-writes** | You see your own writes | Your profile edit |
 | **Eventual** | Converge once writes stop | Likes, DNS |
 
+Sequential sits between linearizable and causal: everyone sees one order, but it need not match real time. You will rarely name it out loud. The other four each answer a different question, and each gets its own picture below.
+
+### Linearizable: behave like one copy
+
+**Linearizable** means that once a write is acknowledged, every later read from any client returns it. Play both tabs: the second one is what a lagging replica does to Bob.
+
+<SequenceDiagram spec={linearizableSeq} />
+
+Use it for money, seat and stock counts, unique usernames and leader election. It costs a round trip to the leader or to a majority on every read (about 80 ms across the Atlantic), and the minority side of a split refuses requests. Spanner and etcd give it by default; in DynamoDB you ask for it per read.
+
+### Read-your-writes: the default for user data
+
+**Read-your-writes** promises that you always see your own changes, even if other people's changes lag. It is the cheapest guarantee that stops an app from looking broken. Compare the two tabs in the diagram.
+
+<SequenceDiagram spec={readYourWrites} />
+
+There are three ways to get it:
+
+- **Pin to the leader.** After a write, read that user from the leader for longer than the replica lag (5 s is a safe default).
+- **Pass a position.** Return the write's log position, and read only from a replica that has reached it.
+- **Sticky replica.** Send the user to one replica that you also write through.
+
+Pinning is the default. The arithmetic is mild: if 1,000 users save per second and each is pinned for 5 s, about 5,000 users read from the leader at any moment. Use it for profiles, settings, and the comment you just posted.
+
+### Causal: causes before effects
+
+**Causal** consistency promises that if one write was made after seeing another, nobody sees the effect without its cause. Unrelated writes may show in any order. Play both tabs: Carol sees Bob's reply with no question, or sees them in order.
+
+<SequenceDiagram spec={causalOrder} />
+
+Use it for chat threads, comments and collaborative editing. It needs a little metadata per write (a dependency id or a vector clock). It is the strongest model that still works on both sides of a partition, which makes it a good fit for AP systems that cannot allow nonsense.
+
+### Eventual: the cheapest rung
+
+**Eventual** consistency promises only this: if writes stop, all replicas converge. Play **Stale, then fresh**: the reader sees 1,204, then 1,207.
+
+<FlowDiagram spec={eventualConverge} />
+
+It is the default for anything where off by a few for some seconds is harmless: likes, views, follower counts, DNS, search indexes. It costs surprises and conflicts, which the next two sections tame. Do not use it for balances or stock.
+
 ## Quorums
 
 Each fact is saved on N copies. How many must answer before you trust a read?
 
-A write waits for **W** copies. A read asks **R** copies and keeps the newest. If **R + W is more than N**, every read touches at least one copy with the latest write.
+A write waits for **W** copies. A read asks **R** copies and keeps the newest. If `R + W > N`, every read touches at least one copy with the latest write. Play the three tabs: **Write, W = 2**, **Read, R = 2: overlap**, then **Read, R = 1: stale**.
+
+<FlowDiagram spec={quorumFlow} />
 
 | N, W, R | Good for |
 |---|---|
 | 3, 2, 2 | The balanced default; one node can be down |
+| 3, 3, 1 | Fast reads; but no write survives a dead node |
 | 3, 1, 1 | Speed; reads may be stale |
 | 5, 3, 2 | A trap: 3 + 2 is not more than 5 |
 
-A **sloppy quorum** lets stand-in nodes take writes during failures. Writes stay up, but the overlap guarantee is gone.
+### The default: N = 3, W = 2, R = 2
+
+**Three copies, write to two, read from two** is the answer to give first. 2 + 2 = 4 is more than 3, so the read set and the write set always share a replica, and either side survives one node down.
+
+<FlowDiagram spec={quorumFlow} scenario="read" />
+
+Use it for user data that must not be stale but need not be strictly linearizable. Cassandra calls the same thing `QUORUM`, which is `floor(N / 2) + 1` replicas. Reads and writes each cost the second-fastest of three replicas, not the slowest.
+
+### Fast and loose: W = 1, R = 1
+
+With **W = 1 and R = 1** the coordinator answers as soon as one replica does, so latency is the fastest replica. The price is that 1 + 1 = 2 is not more than 3, so a read can land on a replica that never saw the write.
+
+<FlowDiagram spec={quorumFlow} scenario="stale" />
+
+Use it for data where staleness is harmless: view counts, feeds, sensor readings. It also keeps working with 2 of 3 nodes down.
+
+### The trap: N = 5, W = 3, R = 2
+
+A common slip is to pick a majority for the write and a minority for the read. With N = 5, W = 3 and R = 2, 3 + 2 = 5 is not more than 5, so the 2 replicas you read can both be the 2 that missed the write. Fix it with R = 3 (3 + 3 = 6) or W = 4.
+
+### Sloppy quorums and hinted handoff
+
+A **sloppy quorum** lets a stand-in node take a write when a key's home replica is down, and hand it back later. Writes stay up through failures, but the overlap rule is gone: a read of the home replicas will not see the write until the handoff.
+
+<FlowDiagram spec={sloppyQuorum} />
+
+Use it when write availability matters more than read freshness, as in a shopping cart. Repair processes (read repair, and comparing Merkle trees in the background) close the gap afterwards.
+
+### What a quorum costs in availability
+
+Waiting for more replicas makes writes fail more often. Say each node is up 99% of the time and failures are independent. A write with W = 3 needs all three up: 0.99 × 0.99 × 0.99 = 97.03%. With W = 2 it needs any two: 3 × 0.99² × 0.01 + 0.99³ = 99.97%. With W = 1 it needs any one: 1 − 0.01³ = 99.9999%.
+
+<BarChart title="Write downtime per year, N = 3, nodes 99% up" unit="minutes" scale="log" data={[{ label: "W = 3", value: 15611, display: "260 h" }, { label: "W = 2", value: 157, display: "2.6 h" }, { label: "W = 1", value: 0.53, display: "32 s" }]} />
+
+Real failures are correlated (one rack, one switch, one bad deploy), so treat these as best cases. The shape holds: every extra ack you wait for buys consistency and sells availability.
+
+### Try it: break the rule
 
 Set R + W equal to N, write, then read a few times. The guarantee is gone.
 
@@ -74,16 +183,53 @@ Set R + W equal to N, write, then read a few times. The guarantee is gone.
 
 ## Conflict resolution
 
-Two replicas took writes to the same key. Who wins?
+Two replicas took writes to the same key. Who wins? Four answers, from simplest to safest.
 
-- **Last-writer-wins.** Highest timestamp wins; the other write silently vanishes. Fine for "last seen", wrong for carts.
-- **Vector clocks.** Spot "at the same time" writes. They detect conflicts; they do not fix them.
-- **CRDTs.** Data types that merge to the same result in any order: counters, carts, co-edited text.
-- **App-level merge.** Union the cart, or ask a human.
+**Default:** a CRDT or an app-level merge for user data, and last-writer-wins only where losing one write costs nothing.
+
+### Last-writer-wins
+
+**Last-writer-wins** keeps the write with the highest timestamp and silently drops the other. Play **Concurrent cart edits**: the book disappears with no error.
+
+<FlowDiagram spec={lwwLoss} />
+
+Use it for values where only the newest matters and the old one is worthless: last-seen time, a cached copy, a sensor reading. Never use it for carts, counters or documents. It also trusts clocks, which is its own failure mode (see [failure modes](#failure-modes)).
+
+### Vector clocks
+
+**Vector clocks** detect conflicts; they do not fix them. Each node counts its own writes, and comparing two clocks says whether one write came before the other or whether they were concurrent. Play both tabs.
+
+<SequenceDiagram spec={vectorClocks} />
+
+Use them in Dynamo-style stores when you want to know that a conflict happened so the application can resolve it. They cost metadata that grows with the number of writers, and a merge that someone still has to write. The sample `vector-clock.js` is below.
+
+### CRDTs
+
+A **CRDT** is a data type designed so that merging in any order gives the same result: counters, sets, carts, co-edited text. Play **Two sides keep counting**: nothing is lost, and a repeated merge changes nothing.
+
+<FlowDiagram spec={crdtCounter} />
+
+Use them when both sides must keep accepting writes and nothing may vanish: like counts, shopping carts, collaborative documents. Riak and Redis Enterprise's active-active mode ship CRDT types. The cost is that the data type fixes the semantics (a removed item may reappear unless the set tracks removals), so the type has to match the feature.
+
+### App-level merge
+
+Sometimes the business rule is the only right answer: union the two carts, keep the larger quantity, or ask a human. Play **Partition: AP choice** again and watch the merge step: the app keeps both items.
+
+<FlowDiagram spec={leaderReplication} scenario="ap" />
+
+Use it when no generic type captures the rule, such as merging two edits to an address. It costs code you must test, and a user-visible choice for the cases you cannot automate.
 
 ## Consensus
 
 Some questions need exactly one answer: who leads, who holds the lock. **Raft** picks a leader by majority vote and keeps one ordered log. An entry is safe once a majority stores it, so any minority can be lost.
+
+Play **Commit on 2 of 3**, **One node down**, then **Leader cut off**.
+
+<FlowDiagram spec={raftCommit} />
+
+### Why a majority works
+
+Any two majorities of the same cluster share at least one node. So two leaders can never both gather a majority, and a committed entry is always known to the next leader. That one overlap is the whole safety argument.
 
 | Nodes | Majority | Failures tolerated |
 |---|---|---|
@@ -92,17 +238,41 @@ Some questions need exactly one answer: who leads, who holds the lock. **Raft** 
 | 5 | 3 | 2 |
 | 7 | 4 | 3 |
 
-So use **odd cluster sizes**: a 4th node tolerates no more failures than 3. You will use consensus (etcd, ZooKeeper), not build it.
+### Odd cluster sizes
 
-Press **Kill leader** and watch a new term begin. Then **Partition a node**: alone, it cannot win.
+So use **odd cluster sizes**: a 4th node tolerates no more failures than 3, and it makes every commit wait for one more ack. Run 3 nodes to survive 1 failure and 5 to survive 2. etcd's own guidance is no more than 7, because every extra node slows each commit.
+
+### Elections and terms
+
+Followers expect a heartbeat. If none arrives before a random timeout (the Raft paper suggests 150 to 300 ms), a follower becomes a candidate, bumps the **term** and asks for votes. Press **Kill leader** and watch a new term begin. Then **Partition a node**: alone, it cannot win.
 
 <RaftElection />
 
+### Use it, do not build it
+
+You will use consensus through etcd, ZooKeeper or Consul, not write it. Reach for it for leader election, locks, configuration and cluster metadata: small data where a wrong answer is expensive. Keep it off the data path. Each commit is a round trip to a majority: a few ms inside one data center, and tens of ms if the majority spans regions.
+
 ## Distributed transactions: 2PC or sagas
 
-One order touches payments, stock and shipping.
+One order touches payments, stock and shipping, and each lives in a different place.
 
-**Two-phase commit (2PC):** a coordinator asks everyone to prepare (lock rows, vote), then to commit if all said yes. **Sagas** chain local steps with undo steps (refund, release stock), as in [Step 5](/learn/async-messaging).
+The best answer is to avoid the problem: keep data that must change together in one database and use an ordinary transaction. When you cannot, choose between two tools.
+
+### Two-phase commit
+
+**Two-phase commit (2PC)** has a coordinator ask everyone to prepare (lock rows, vote), then commit only if all said yes. Play all three tabs, especially **coordinator dies**.
+
+<SequenceDiagram spec={twoPhaseCommit} />
+
+Use it inside one database cluster, where the coordinator is part of the system and recovers fast. It gives all or nothing. The cost is blocking: if the coordinator dies between the phases, participants hold locks and cannot decide until it returns.
+
+### Sagas
+
+A **saga** chains local transactions, each with an undo step (refund, release stock). If a step fails, the saga runs the undo steps in reverse. Play **last step fails**.
+
+<SequenceDiagram spec={sagaFlow} />
+
+Use it across services, as in [Step 5](/learn/async-messaging). Nothing blocks and a crashed saga resumes from its log. The cost is that it is only eventually all or nothing: the customer briefly saw a charge, and every step needs an undo and an idempotency key.
 
 | | 2PC | Saga |
 |---|---|---|
@@ -118,7 +288,27 @@ A lock with an expiry is not enough:
 2. Client 2 takes the lock and writes.
 3. Client 1 wakes, still thinks it holds the lock, and overwrites Client 2.
 
-Client 1 cannot see its own pause, so **storage** checks. Each grant carries an ever-increasing **fencing token**, and storage rejects any older one. A Redis lock is fine to avoid duplicate work. For correctness, fence the storage.
+Play both tabs of the diagram: **no fencing** is the bug, **with fencing** is the fix.
+
+<SequenceDiagram spec={fencedLock} />
+
+### The fix: a token the storage checks
+
+Client 1 cannot see its own pause, so **storage** checks. Each grant carries an ever-increasing **fencing token**, and storage rejects any older one. A write that carries token 33 after token 34 was seen gets zero rows updated.
+
+```sql
+UPDATE files SET body = $1, fence = $2
+WHERE id = $3 AND fence <= $2;
+-- 0 rows updated: a newer holder already wrote, so reject
+```
+
+etcd revisions and ZooKeeper's zxid work as tokens. The `fenced-lock.js` sample issues them from a Redis counter.
+
+### Which lock do I need?
+
+A Redis lock is fine to avoid duplicate work. For correctness, fence the storage, or let the database arbitrate with a conditional write. Answer the two questions in the tree.
+
+<DecisionTree spec={lockChoice} />
 
 ## What each feature needs
 
@@ -131,7 +321,73 @@ Do not pick one level for the whole product. Pick per feature.
 | Chat in one conversation | Same order for everyone | A reply before its question confuses |
 | Likes and views | Eventual | Off by a few for seconds is harmless |
 
+Walk the tree with a feature of your own: ask what a wrong answer costs, then whether users see their own edit, then whether order matters.
+
+<DecisionTree spec={pickConsistency} />
+
 The [movie booking question](/questions/movie-booking) applies this to seats.
+
+## Failure modes
+
+Distributed systems fail in ways one machine cannot. At 2:14 on a Friday afternoon a switch between two data centers drops for 40 seconds; what happens next is decided by the choices above.
+
+| Failure | What happens | Fix |
+|---|---|---|
+| **Split brain** | Two nodes both think they lead | Majority vote, a witness, fencing |
+| **Stale read after write** | You save, reload, see the old value | Pin to the leader for a few seconds |
+| **Clock skew** | Last-writer-wins drops the newer write | Logical clocks, CRDTs, or no LWW |
+| **Ambiguous timeout** | The write happened but the reply was lost | Idempotency keys |
+| **Lock expiry** | A paused holder overwrites the new one | Fencing tokens |
+
+### Split brain
+
+**Split brain** is two leaders accepting writes at once because each half of a partition thinks the other is dead. A standby waits 30 s for a heartbeat, promotes itself, and the old leader is still alive: now Alice and Bob both book seat 12A. Play **Two leaders**.
+
+<FlowDiagram spec={splitBrain} />
+
+Fix it with a majority. Run an odd number of voters, let a node lead only while it can reach more than half, and make the old leader step down when it cannot. Play **A majority decides**. Add fencing tokens so a stale leader's writes are rejected downstream.
+
+### Stale read after your own write
+
+You change your display name, the page reloads from a replica 200 ms behind, and it shows the old name. You type it again, certain the save failed. This is the commonest consistency bug users actually see.
+
+Drag **Replication lag** up, switch read-your-writes on, then write and read: the same read is fresh when it is pinned to the primary.
+
+<ReplicationLag />
+
+Fix it with the read-your-writes recipes above. Do not fix it by making every read go to the leader, which just moves the load.
+
+### Clock skew eats a write
+
+**Clock skew** is two machines disagreeing about the time, which breaks any rule that trusts timestamps. A laptop whose clock is 3 s slow writes a new photo 2 s after the old one, stamps it lower, and last-writer-wins keeps the old photo. Play **Clock skew**.
+
+<FlowDiagram spec={lwwLoss} scenario="skew" />
+
+Fix it by not ordering writes by wall clocks: use version numbers, vector clocks, a CRDT, or a single leader that stamps writes in order.
+
+### A timeout is not a failure
+
+A **timeout** tells you the reply did not arrive, not that the write did not happen. A payment commits, the acknowledgement is lost, the client retries after 3 s, and the customer is charged twice. Play both tabs.
+
+<SequenceDiagram spec={ambiguousTimeout} />
+
+Fix it with an **idempotency key** on every write that must happen once, so a retry returns the first result. The same idea protects queue consumers, as in [Step 5](/learn/async-messaging).
+
+## The numbers: what each choice costs
+
+Every rung up the consistency ladder is paid for in latency and availability. These are the numbers to have in your head.
+
+| Choice | What it costs | Rough figure |
+|---|---|---|
+| Read a local replica | A few ms, may be stale | A few ms |
+| Read the far leader | A cross-region round trip | 70 to 100 ms |
+| Majority write, one data center | Network plus disk flush | A few ms |
+| Majority write, across the Atlantic | A round trip to the nearest peer in the majority | Tens of ms |
+| DynamoDB strong read | Double the read capacity | 1 unit per 4 KB, against 0.5 |
+
+Do the sum for a checkout page that makes 3 reads and 1 write across regions. If all 3 reads go to the far leader: 3 × 80 + 80 = 320 ms of waiting. If 2 of them are catalogue reads served by a local replica at a few ms each: 80 + 80 + 2 × 3 = about 170 ms. Pay the cross-region trip for the balance and the stock check only.
+
+Quorum availability is in the [quorum section](#quorums): each extra ack buys consistency and sells uptime.
 
 ## Code
 
@@ -143,6 +399,44 @@ In `crdt.js`, last-writer-wins loses data; the counter CRDT does not. `fenced-lo
 - Saying "pick 2 of 3" in the interview.
 - Even-sized consensus clusters.
 - Last-writer-wins on carts or counters.
+</Callout>
+
+## Consistency and CAP in the interview
+
+Bring this up the moment your design has more than one copy of the data: replicas, a second region, a cache, or a multi-service write. Then walk through five decisions in order.
+
+<Steps>
+  <Step title="Ask what a wrong answer costs">
+    For each feature, ask: does a stale read lose money or break a rule? Seats and balances do; likes do not.
+  </Step>
+  <Step title="Say CAP precisely, then choose per feature">
+    "CAP only bites during a partition. Strong for money, read-your-writes for a user's own edits, eventual for counters."
+  </Step>
+  <Step title="Pick the replication and read path">
+    A leader with async replicas by default. Pin a user to the leader for about 5 s after a write, and send everything else to local replicas.
+  </Step>
+  <Step title="Set the quorum or the consensus">
+    N = 3, W = 2, R = 2 for a leaderless store. For a leader, a lock or a config, use etcd or ZooKeeper, with an odd cluster size.
+  </Step>
+  <Step title="Own the downsides">
+    Name conflicts and how you merge them, split brain, the ambiguous timeout, and fencing tokens on any lock that guards correctness.
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "Two data centers lose their link" | CP for money (the minority refuses), AP for likes (merge later) |
+| "A user saved, then saw the old value" | Read-your-writes: pin to the leader for 5 s |
+| "Two people edit the same cart" | A CRDT or app merge, not last-writer-wins |
+| "Charge the card and reserve stock" | A saga with undo steps and idempotency keys |
+| "Only one worker may run this job" | A lease lock; add a fencing token if it guards data |
+
+<Callout kind="interview" title="Say it out loud">
+"CAP only bites during a partition, so I choose per feature. Balances and seat counts go through the leader and refuse on the minority side. Profile edits get read-your-writes by pinning that user to the leader for five seconds. Likes are eventual. Across services I'd use a saga with idempotency keys, not two-phase commit."
+</Callout>
+
+<Callout kind="warning">
+Do not make everything strongly consistent. Every strong read pays a round trip and can refuse during a split. Say which data you leave eventual, and why that is safe.
 </Callout>
 
 ## Interview questions

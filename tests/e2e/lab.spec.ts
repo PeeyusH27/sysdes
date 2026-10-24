@@ -56,7 +56,8 @@ test("the architecture lab: grow it, click a box, break it, follow a request", a
 
 test("a question page opens on its core, with the 30-second card, and Everything shows the rest", async ({ page }) => {
   await page.goto("/questions/parking-lot");
-  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("sds-view", "read"); });
+  // Cards is the default; this spec counts the cards of the scrolling page, so it asks for Scroll.
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("sds-view", "read"); localStorage.setItem("sds-progress", JSON.stringify({ state: { readerMode: "scroll" }, version: 2 })); });
   await page.reload();
   await expect(page.getByRole("region", { name: "Say it in 30 seconds" })).toContainText("SKIP LOCKED");
   const visible = () => page.locator(".sec-card:visible").count();

@@ -26,7 +26,6 @@ export function SayItCard({ title, say }: { title: string; say: SayIt }) {
         <span className="eyebrow">Say it in 30 seconds</span>
         <CopyButton text={asText(title, say)} label="the 30-second answer" />
       </header>
-      <p className="saycard-answer">&ldquo;{say.answer}&rdquo;</p>
       <ul className="saycard-numbers" aria-label="Numbers to know">
         {say.numbers.map((n) => (
           <li key={n.label}>
@@ -35,20 +34,24 @@ export function SayItCard({ title, say }: { title: string; say: SayIt }) {
           </li>
         ))}
       </ul>
-      <div className="saycard-cols">
-        <div>
-          <h4>Trade-offs</h4>
-          <ul>
-            {say.tradeoffs.map((t) => (
-              <li key={t}>{t}</li>
-            ))}
-          </ul>
+      <details className="saycard-more">
+        <summary>Show what to say</summary>
+        <p className="saycard-answer">&ldquo;{say.answer}&rdquo;</p>
+        <div className="saycard-cols">
+          <div>
+            <h4>Trade-offs</h4>
+            <ul>
+              {say.tradeoffs.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="saycard-mention">
+            <h4>Bring it up before they ask</h4>
+            <p>{say.mention}</p>
+          </div>
         </div>
-        <div className="saycard-mention">
-          <h4>Bring it up before they ask</h4>
-          <p>{say.mention}</p>
-        </div>
-      </div>
+      </details>
     </section>
   );
 }

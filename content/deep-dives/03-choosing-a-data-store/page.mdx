@@ -1,13 +1,22 @@
-import { storeChooser, polyglotShop } from './diagrams'
+import {
+  storeChooser, polyglotShop, relationalAcid, documentModel, keyValueLookups, wideColumnRing, columnarEvents,
+  graphHops, searchPipeline, objectUpload, oneStoreForAll, dualWrite, hypePick, hotPartition, postgresEnough,
+} from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Start from the **access pattern**, not the product: how is data written and read, and what must never go wrong? Use Postgres for anything transactional. Add another store only where it is the wrong shape.
+Start from the **access pattern**, not the product: how is data written and read, and what must never go wrong? Use Postgres for anything transactional. Add another store only where a number says Postgres is the wrong shape.
 </TLDR>
 
 ## Why one database isn't enough
 
 A kitchen has a knife, a pot and a fridge, because no one tool does every job. A normal database is great at "move money correctly" and hopeless at "store a 2 GB video". So big systems use several stores, and keeping them in step is the hard part.
+
+<StatTiles items={[
+  { label: "10M users at 1 KB", value: "10 GB", sub: "fits in RAM on one machine" },
+  { label: "100K orders a day", value: "1.2 / s", sub: "average write rate" },
+  { label: "At a 10x peak", value: "12 / s", sub: "a rounding error for Postgres" },
+]} />
 
 For each kind of data, ask:
 
@@ -19,11 +28,11 @@ For each kind of data, ask:
 
 ## Pick a store, step by step
 
-Walk the tree.
+Walk the tree. Transactions come first, since they are hard to add later, and most paths end at Postgres.
 
 <DecisionTree spec={storeChooser} />
 
-Transactions come first, since they are hard to add later. Most paths end at Postgres, and that is fine. Some real jobs:
+Some real jobs:
 
 | Job | Store | Why |
 |---|---|---|
@@ -32,15 +41,138 @@ Transactions come first, since they are hard to add later. Most paths end at Pos
 | 200M click events a day, dashboards | ClickHouse | Scans a few columns fast |
 | 2 GB product videos | S3 | Blobs bloat a database and its backups |
 
+The default is **Postgres first, unless a number says otherwise**. These are the numbers that say otherwise. They are rules of thumb, so measure before you move.
+
+| Signal | Rough line | Move |
+|---|---|---|
+| Sustained writes on one primary | About 10K a second | Shard it, or Cassandra and DynamoDB |
+| Reports beside live traffic | Scans of 100M rows | A replica, then ClickHouse |
+| Search with typos and facets | 1M+ documents | Elasticsearch |
+| Files | Over about 1 MB | S3, with the key in Postgres |
+| Lookups by one key | 100K+ reads a second | Redis in front |
+
+## Stores for entities and transactions
+
+Three stores hold your core entities, and the choice is about how the data is read: with rules and joins (relational), as a whole (document), or by one key (key-value).
+
+### Relational (PostgreSQL, MySQL): the default
+
+A **relational** database keeps data in tables with constraints and wraps changes in transactions, so money, stock and users stay correct. Play **Checkout commits**, then **Out of stock**.
+
+<FlowDiagram spec={relationalAcid} />
+
+**Use it when** the data has relationships, rules or ad-hoc questions: orders, payments, bookings, users. It is also the answer when you do not yet know the access patterns, because SQL lets you ask a new question tomorrow. One primary serves thousands of simple queries a second, and replicas add read capacity.
+
+**What it is bad at:** write scale. Every write goes to one primary, so past roughly 10K sustained writes a second or a few terabytes you shard (Citus, Vitess) or move that data elsewhere. It is also a poor home for blobs, and it has no typo-tolerant search.
+
+### Document (MongoDB)
+
+A **document** store keeps one self-contained, JSON-like record per entity, so what is read together is stored together. Play **One read**, then **Unbounded children**.
+
+<FlowDiagram spec={documentModel} />
+
+**Use it when** each entity is read whole and its shape varies: a product catalog where a shirt has a size and a laptop has RAM. The rule is to **embed** children that are bounded and read together (an order and its 5 to 10 line items) and to **reference** children that grow without limit (reviews), since a document is capped at 16 MB. A catalog of 2M items at 5 KB each is 10 GB, which is easy for either a document store or Postgres.
+
+**What it is bad at:** joins and relationships across documents. Multi-document transactions exist but cost more, so data with many cross-references wants Postgres. For an occasional flexible field, a Postgres `JSONB` column is enough.
+
+### Key-value (Redis, DynamoDB)
+
+A **key-value** store answers one question, the value for this key, and answers it fast at any size. Play **Session lookup**, **Latest orders** and **No key for it**.
+
+<FlowDiagram spec={keyValueLookups} />
+
+**Use it when** access is always by a known key, at a scale or speed a relational database cannot match. Redis keeps data in memory (about 1 ms): sessions, carts, counters, rate limits. 1M sessions at 1 KB is 1 GB of RAM. DynamoDB is durable at any size: design the table around the question ("latest 20 orders for a user"), and it answers in single-digit milliseconds. An item is capped at 400 KB.
+
+**What it is bad at:** any question you did not design a key for. There are no joins and no ad-hoc reports, and the fallback is a full Scan. Redis also costs RAM, so it is not the place for data you only read once a day.
+
+## Stores for volume, time and links
+
+Three stores exist for shapes that strain Postgres: a write stream too big for one machine, a pile of events to aggregate, and relationships to walk.
+
+### Wide-column (Cassandra, ScyllaDB)
+
+A **wide-column** store spreads a huge write stream across many machines by partition key and keeps each partition sorted, so appends are cheap and one entity's history is one sequential read. Play **Write a message**, then **No partition key**.
+
+<FlowDiagram spec={wideColumnRing} />
+
+**Use it when** sustained writes outgrow one primary (about 10K a second and up) and reads are "latest N for this entity". Worked example: 5 billion chat messages a day is 5,000,000,000 / 86,400, about 58K writes a second, and about 174K at a 3x peak. Partition by (chat, day), sort by time, and keep each partition well under about 100 MB.
+
+**What it is bad at:** everything ad hoc. No joins, weak secondary indexes, and you model one table per query. It is not the default: at 600 writes a second Postgres does the same job and gives you transactions as well.
+
+### Time-series and columnar (ClickHouse, TimescaleDB)
+
+A **columnar** store keeps each column together, so a query that touches 2 of 8 columns reads about a quarter of the bytes. Play **Batched ingest**, then **Point update**.
+
+<FlowDiagram spec={columnarEvents} />
+
+**Use it when** you have append-only events and questions that aggregate millions of rows: dashboards, metrics, audit analytics. Worked example: 200M events a day at 100 B is 20 GB a day, or about 7.3 TB a year. An hourly dashboard that needs 2 of 8 equal columns reads 5 GB instead of 20 GB, before compression.
+
+<BarChart title="Bytes read for one day of events (assumed 100 B rows, 8 equal columns)" data={[{ label: "Row store", value: 20, display: "20 GB" }, { label: "Columnar, 2 columns", value: 5, display: "5 GB" }]} unit="GB" />
+
+**What it is bad at:** point updates, deletes and transactions. Insert in batches of thousands of rows, never one at a time. If your volume is modest and you already run Postgres, TimescaleDB keeps time-series inside it.
+
+### Graph (Neo4j)
+
+A **graph** store keeps relationships as first-class links, so walking friends of friends of friends follows pointers instead of joining a table to itself three times. Click through the three tabs.
+
+<SequenceDiagram spec={graphHops} />
+
+**Use it when** the query is the traversal and runs 3 or more hops deep: fraud rings, recommendations, permission inheritance. With 200 friends each, 2 hops is 40,000 paths and 4 hops is up to 1.6 billion before dedupe.
+
+**What it is bad at:** whole-graph analytics, and sharding, because traversals cross machines. Most social features are one or two hops (a friends list, followers), and an edge table in Postgres handles those. Do not buy a graph store for a friends list.
+
+## Stores for finding things and holding files
+
+Two stores serve users directly but never hold the truth: a search engine finds records, and object storage holds the bytes. Both hang off a row in Postgres.
+
+### Search (Elasticsearch, OpenSearch)
+
+A **search engine** builds an inverted index from words to documents, so it can rank results and forgive typos in a way a SQL `LIKE` never can. Play **A typo search**, then **A price change**.
+
+<FlowDiagram spec={searchPipeline} />
+
+**Use it when** users type free text and expect relevance, typo tolerance and facet counts, usually over a million or more documents. Below that, try Postgres full-text search first. Worked example: 10M products at 2 KB is 20 GB, which fits in one or two shards (a common guide is 10 to 50 GB per shard). New documents appear after the next refresh, about 1 second.
+
+**What it is bad at:** being the source of truth. It has no transactions, and a bad mapping means a reindex. Feed it from the database with CDC or an outbox, and treat it as a copy you can rebuild.
+
+### Object storage (S3, GCS)
+
+**Object storage** holds files by key for little money and almost never loses one: S3 is designed for 99.999999999% durability. Play **Upload a photo**, then **View it later**.
+
+<FlowDiagram spec={objectUpload} />
+
+**Use it when** the data is a blob: images, video, backups, exports, logs. Worked example: 1M photos at 3 MB is 3 TB. In Postgres that bloats every backup and the buffer cache. In S3 it is one key per photo, and the row stores the key. Put a CDN in front for reads.
+
+**What it is bad at:** small, low-latency reads (first byte in tens of milliseconds, not one) and in-place edits, since an object is replaced whole. You cannot query inside it. For that, keep the searchable fields in Postgres.
+
+## Walking the tree on a real product
+
+Take a food-delivery app and ask the tree's questions of each fact, one at a time, and the architecture falls out. Assume 200K orders a day, 100K restaurants and 50K drivers online.
+
+| Fact | Deciding question | Store |
+|---|---|---|
+| Orders and payments | Transactions? Yes. 200K a day is 2.3 a second | Postgres |
+| Menus | Read whole, varying shape? | Postgres JSONB, or MongoDB |
+| Driver location now | Key lookup, 50K pings / 4 s = 12.5K writes/s | Redis |
+| Driver location history | Aggregated later? | ClickHouse |
+| Dish search with typos | Full text and facets? | Elasticsearch |
+| Restaurant photos | A file over 1 MB? | S3 and a CDN |
+
+Notice what stayed in Postgres: orders, and probably menus. The tree sends only the shapes that break Postgres elsewhere. Now check any single fact against the numbers.
+
+<DecisionTree spec={postgresEnough} />
+
 ## One shop, many stores
 
 A typical shop runs six stores, each owning different facts. Step through a page view, a price change and a checkout.
 
 <FlowDiagram spec={polyglotShop} />
 
-Postgres, MongoDB, Redis and S3 are written directly. Elasticsearch and ClickHouse are **derived** from the change stream. Lose either and you rebuild it from the source.
+Postgres, MongoDB, Redis and S3 are written directly. Elasticsearch and ClickHouse are **derived** from the change stream. Lose either and you rebuild it from the source. At an assumed 20 MB a second of bulk indexing, rebuilding 20 GB of search index takes 20,000 / 20 = 1,000 seconds, about 17 minutes. That is the price of a copy, and the reason it is safe to have one.
 
 ## Stores compared
+
+Every store is a trade: the first column is why you buy it and the last is what it costs you.
 
 | Store | Strong at | Weak at | How it scales |
 |---|---|---|---|
@@ -52,6 +184,42 @@ Postgres, MongoDB, Redis and S3 are written directly. Elasticsearch and ClickHou
 | Search (Elasticsearch, OpenSearch) | Full text, relevance, facets | Being the source of truth | Shards + replicas |
 | Time-series / columnar (ClickHouse, TimescaleDB) | Aggregations over time and events | Point updates | Partition by time |
 | Graph (Neo4j) | Multi-hop relationship queries | Bulk analytics | Hard to shard well |
+
+## What goes wrong
+
+Storage mistakes are quiet: they pass the demo and fail in month six, usually at the worst moment. Four show up again and again.
+
+### One store for everything
+
+Using one database for every workload works until two workloads collide. At 9:00 on a Monday an analyst scans 100M rows in the same Postgres that takes payments, and checkout times out. Play **Monday 9 am**, then **The fix**.
+
+<FlowDiagram spec={oneStoreForAll} />
+
+Stream changes to a store built for scans (a replica for a small report, ClickHouse for the real thing). Reports and checkout then stop sharing disk and CPU.
+
+### Dual writes that drift
+
+Writing the database and the search index in one request guarantees that one day only one of them succeeds. The order commits, the index call times out, and the order never appears in search. Play **Dual write**, then **Outbox**.
+
+<FlowDiagram spec={dualWrite} />
+
+Write one source of truth, and derive the rest through CDC or an outbox. A relay retries until the index catches up, and a full reindex is the repair of last resort.
+
+### Picking by hype
+
+Choosing a store for its scale story, before you know the questions, buys scale you do not need and loses the queries you do. A team picks DynamoDB "to scale", then the first report is revenue by category. Click through both tabs.
+
+<SequenceDiagram spec={hypePick} />
+
+Name the access patterns first, then the store. If you cannot name them yet, that is the argument for Postgres, which answers questions you have not thought of.
+
+### The hot partition
+
+A partition key that is the same for most writes sends them all to one partition, however large the cluster. With the date as the key, 5,000 writes a second hit one partition that takes about 1,000. Play **Date as the key**, then **User id as the key**.
+
+<FlowDiagram spec={hotPartition} />
+
+Pick a key that varies on every request (user id, chat id plus day). For a single hot counter, split it into N keys and add them on read. The code section shows both.
 
 ## Principles
 
@@ -95,6 +263,10 @@ CREATE TABLE readings (
 ) WITH CLUSTERING ORDER BY (ts DESC);
 ```
 
+### Partition keys that stay even
+
+<CodeBlock src="snippets/partition-keys.js" />
+
 ### Object storage (S3)
 
 <CodeTabs files={['snippets/presign-server.js', 'snippets/presign-browser.js']} titles={['Server: sign the URL', 'Browser: upload']} />
@@ -118,8 +290,52 @@ WHERE type = 'order_placed' AND ts > now() - INTERVAL 1 DAY
 GROUP BY hour ORDER BY hour;
 ```
 
+### The chooser, as code
+
+<CodeBlock src="snippets/pick-store.js" />
+
 <Callout kind="warning" title="Common mistakes">
 - Picking a NoSQL store "for scale" before you know the access patterns.
+- Reaching for a graph or search store when Postgres handles one or two hops, or a small text corpus.
+</Callout>
+
+## Choosing a data store in the interview
+
+Bring storage up when you reach the data model, and let each store earn its place with a number. Walk five decisions in this order.
+
+<Steps>
+  <Step title="Write down the access patterns">
+    For each entity, say writes per second, how it is read (by key, by text, summed) and what must never be wrong.
+  </Step>
+  <Step title="Start with Postgres and say why">
+    "10 GB fits one machine and 12 orders a second is nothing." This shows you do not add stores for decoration.
+  </Step>
+  <Step title="Name the number that breaks it">
+    Tens of thousands of writes a second, 100M-row scans, typo-tolerant search or large files. Each one names the second store.
+  </Step>
+  <Step title="Keep one source of truth">
+    Everything else is derived through CDC or an outbox and can be rebuilt. Never write two stores in one request.
+  </Step>
+  <Step title="Own the cost of each store">
+    Say what each extra store adds: another backup, a sync lag of about a second, and a rebuild plan.
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "Billions of chat messages a day" | Cassandra, partitioned by chat and day, sorted by time |
+| "Users upload photos and video" | S3 with a presigned URL and a CDN; the key in Postgres |
+| "Search by keyword, with typos" | Elasticsearch fed by CDC |
+| "A dashboard over events" | ClickHouse, never the transactional database |
+| "Carts and sessions" | Redis, with a TTL |
+| "Friends of friends of friends" | Postgres to 2 hops, a graph store beyond |
+
+<Callout kind="interview" title="Say it out loud">
+"Orders and payments need transactions, and 100K orders a day is about one a second, so Postgres owns them. Photos go to S3 with the key in a row, search comes from Elasticsearch fed by CDC, and dashboards come from ClickHouse. Each extra store is a copy I can rebuild, never a second place to write."
+</Callout>
+
+<Callout kind="warning">
+Do not draw six stores for a to-do app. Every store is a backup, a failure mode and a sync to own, so say which stores you left out, and why Postgres is enough for them.
 </Callout>
 
 ## Interview questions
@@ -139,6 +355,12 @@ GROUP BY hour ORDER BY hour;
   </FollowUp>
   <FollowUp q="When would you pick DynamoDB over Postgres?">
     When access is few, known and key-based at huge scale (carts, sessions). Not for joins or ad-hoc reports.
+  </FollowUp>
+  <FollowUp q="600 writes a second of messages: Cassandra or Postgres?">
+    Postgres. That rate is far below its limit, and you keep transactions and ad-hoc queries. Cassandra pays off from tens of thousands of writes a second.
+  </FollowUp>
+  <FollowUp q="A DynamoDB table is throttled but mostly idle. Why?">
+    A hot partition: the partition key sends most writes to one key. Pick a key that varies, or split one hot key into N.
   </FollowUp>
 </FollowUps>
 

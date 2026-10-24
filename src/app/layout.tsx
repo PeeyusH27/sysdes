@@ -18,6 +18,7 @@ import "./hubs.css";
 import "./prep.css";
 import "./refresh.css";
 import "./story.css";
+import "./reach.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });

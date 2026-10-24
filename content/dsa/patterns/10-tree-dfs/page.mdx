@@ -7,22 +7,23 @@ A tree is a root plus two smaller trees, so **solve both subtrees, then combine 
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- A **binary tree or BST** whose answer depends on whole subtrees: height, size, balance.
-- **Root-to-leaf paths**: a path sum, every path.
-- The **longest path anywhere** (diameter, maximum path sum): it may bend at any node.
-- Where two nodes' paths from the root split (lowest common ancestor).
-
-</Callout>
-
-| Variant | Information flows | The node works |
-|---|---|---|
-| Return a value up | children → parent | post-order, after both children |
-| Carry state down | parent → children, as parameters | pre-order, before the children |
-| Global best | return one value, record another | post-order, plus an outer variable |
-| BST walk | compare, then one branch only | top-down |
-| Explicit stack | an array replaces the call stack | any order |
+<ReachFor
+  signals={[
+    "A **binary tree or BST** whose answer depends on whole subtrees: height, size, balance.",
+    "**Root-to-leaf paths**: a path sum, every path.",
+    "The **longest path anywhere** (diameter, maximum path sum): it may bend at any node.",
+    "Where two nodes' paths from the root split (lowest common ancestor).",
+  ]}
+  variants={[
+    {"name": "Return a value up", "how": "children → parent", "extra": "post-order, after both children"},
+    {"name": "Carry state down", "how": "parent → children, as parameters", "extra": "pre-order, before the children"},
+    {"name": "Global best", "how": "return one value, record another", "extra": "post-order, plus an outer variable"},
+    {"name": "BST walk", "how": "compare, then one branch only", "extra": "top-down"},
+    {"name": "Explicit stack", "how": "an array replaces the call stack", "extra": "any order"},
+  ]}
+  howLabel="Information flows"
+  extraLabel="The node works"
+/>
 
 ## The core idea: trust the recursive call
 

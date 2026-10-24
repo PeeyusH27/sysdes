@@ -19,4 +19,16 @@ export const quiz: QuizItem[] = [
     answer: 1,
     explain: "1M × 2 KB = 2 GB a day, × 365 = 730 GB a year, × 3 replicas ≈ 2.2 TB. 730 GB is what you get if you forget replication.",
   },
+  {
+    q: "A photo feed needs 5.8 GB/s of egress. Roughly how many Gbps is that?",
+    options: ["5.8", "46", "580"],
+    answer: 1,
+    explain: "Network links are rated in bits, and 1 byte is 8 bits: 5.8 GB/s × 8 ≈ 46 Gbps. Forgetting the 8 under-sizes the link by a factor of 8.",
+  },
+  {
+    q: "Two components in series are each 99.9% available. The pair is about:",
+    options: ["99.8%", "99.9%", "99.99%"],
+    answer: 0,
+    explain: "Availabilities multiply in series: 0.999 × 0.999 ≈ 0.998, about 17.5 hours of downtime a year. Redundant copies in parallel are what raise the number.",
+  },
 ];

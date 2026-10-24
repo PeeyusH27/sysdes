@@ -1,4 +1,4 @@
-import { interviewFlow, interviewTimeline } from './diagrams'
+import { interviewFlow, interviewTimeline, clarifyDialog, scopeFunnel, nfrTree, consistencyFlow, estimatePipeline, scaleTree, readHeavy, chatPartition, writeHeavy, estimateMistakes } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
@@ -7,9 +7,13 @@ Spend the first 10 minutes on **what** to build and **how big** it is. Then roun
 
 ## Why it matters
 
-One server or fifty? A cache or a shard? The numbers decide. "Add a cache" is a guess until you know reads outnumber writes 100 to 1.
+One server or fifty? A cache or a shard? The numbers decide. "Add a cache" is a guess until you know reads outnumber writes 50 to 1.
+
+Play **Numbers drive the design**: five numbers from one estimate become five design choices. Candidate A says "add a cache" at minute 12. Candidate B says "35K reads a second against 700 writes, so cache the feed". Same box, but only B can defend it.
 
 Written scope helps too. When "and video" arrives at minute 30, say "that changes the storage estimate".
+
+<FlowDiagram spec={interviewFlow} scenario="numbers" />
 
 ## The interview flow
 
@@ -21,17 +25,41 @@ Play **Walkthrough** to see what goes on the board at each stage.
 
 <FlowDiagram spec={interviewFlow} />
 
+Behind at minute 10? Cut the estimate to one number, usually peak QPS, say so, and start drawing. A rough number you used beats a precise one you never reached.
+
 <Callout kind="interview">
 "Before I draw anything, let me pin down the core features and the scale. I'll write my assumptions here."
 </Callout>
 
 ## Functional requirements
 
-"Design Twitter" is vague on purpose. Narrow it to **what users can do** by asking three things:
+"Design Twitter" is vague on purpose. Narrow it to **what users can do** in about five minutes, in three moves: ask, cut, write.
+
+### Ask three questions
+
+Three questions turn a vague prompt into a scope you can defend.
 
 - **Who are the users?** Readers, writers, admins?
 - **What are the 3 core actions?** Post, follow, read the timeline.
 - **What can I cut?** "I'll skip DMs and ads unless you want them." Cutting shows seniority.
+
+<SequenceDiagram spec={clarifyDialog} />
+
+Click both tabs. Use it every time: the dialogue takes under two minutes, and the interviewer's answers become the first lines on your board.
+
+### Cut scope out loud
+
+Cutting scope is a decision, so say it and write it down. A prompt has 10 to 15 plausible features and you have time for 3 to 5.
+
+<FlowDiagram spec={scopeFunnel} />
+
+Play **A late request** to see why this pays off. Written scope lets you say what a new feature changes. Video at 1% of tweets is 100 times the text storage, which turns object storage and a CDN from optional into required.
+
+Use it when the prompt is a product name ("Design Uber"). Skip the long list when the prompt is already narrow ("Design a rate limiter"): confirm two things and move on. The cost of cutting is small: if the interviewer wants a feature back, you add it.
+
+### Write it on the board
+
+Write the result in three short lists: functional, non-functional, out of scope. Stop at 3 to 5 core actions. More than five and you will not finish the design in 45 minutes.
 
 The board for Twitter-lite:
 
@@ -43,7 +71,47 @@ The board for Twitter-lite:
 
 ## Non-functional requirements
 
-"Fast" is not a requirement. "p99 under 200 ms" is. These say **how well** the system works, each with a number. No number given? Propose one and say it out loud.
+"Fast" is not a requirement. "p99 under 200 ms" is. These say **how well** the system works, each with a number, and each one pushes the design in a different direction.
+
+Start from the sentence you heard and walk the tree to find which requirement it becomes. Try "users must see their own post at once" and "recommendations can be slow to update".
+
+<DecisionTree spec={nfrTree} />
+
+### Latency: ask for the percentile
+
+**Latency** is how long a request takes, and you set it as a percentile: p99 is the slowest 1% of requests. The average hides them, and users meet them far more often than 1%.
+
+A page that makes 10 backend calls hits at least one slow call about 1 time in 10. At 100 calls it is nearly 2 in 3. That is why you set p99, not the average.
+
+<LineChart title="Chance a page hits a slow call (p99)" x={[1, 10, 25, 50, 100]} series={[{ id: "slow", name: "At least one slow call", values: [1, 9.6, 22.2, 39.5, 63.4] }]} xLabel="Backend calls per page" yUnit="%" xFormat="number" />
+
+The arithmetic: the chance that all n calls are fast is 0.99 to the power n, so the chance of one slow is `1 − 0.99^n`. For n = 10 that is 1 − 0.904 = 9.6%. Use it when the interviewer asks "how fast?": propose p99 under 200 ms for a page, and a tighter number for internal calls. It forces caches, a CDN and fewer calls per page.
+
+### Availability: count the nines
+
+**Availability** is the share of time the system answers, written as nines. Each extra nine cuts the allowed downtime by 10.
+
+99.9% is about 8.8 hours a year, 99.99% about 53 minutes, 99.999% about 5 minutes. Add a serial dependency and watch the total fall: a chain of components multiplies their availability, so two parts at 99.9% in series give 99.8%, about 17.5 hours a year. Add a redundant pair and it rises: two copies in parallel give 99.9999%, if their failures are independent.
+
+<AvailabilityCalc />
+
+Use 99.9% for most products and 99.99% for login, payments and APIs others depend on. Each nine costs more redundancy: more zones, no single point of failure, automatic failover. Do not promise 99.999% unless the interviewer asks; say what it costs.
+
+### Consistency: who may see stale data
+
+**Consistency** asks whether every reader must see the latest write. Strong consistency reads from one authoritative copy. Eventual consistency lets a replica be a moment behind, and in return reads scale out.
+
+<FlowDiagram spec={consistencyFlow} />
+
+Play both scenarios. Use strong consistency for money, inventory and permissions: a follow button that says "not following" after you tapped it feels broken. Use eventual consistency for timelines, likes and counts: a few seconds of lag is invisible, and the replicas carry the read load. Decide per feature, not per system.
+
+### Durability: never lose an acknowledged write
+
+**Durability** means a write the system confirmed survives a crash. "Never lose an order" translates to a concrete rule: acknowledge only after the write is on at least two disks in different zones, and take backups. Likes can be lost occasionally; payments cannot. Say which of your data is which.
+
+### No number given? Propose one
+
+If the interviewer gives no target, propose a number and say it out loud. They will correct it, and you have shown you know what matters.
 
 | Requirement | Example target | What it forces |
 |---|---|---|
@@ -52,11 +120,19 @@ The board for Twitter-lite:
 | Consistency | Strong for payments | Different stores per feature |
 | Durability | Never lose an order | Replication, backups |
 
-**p99** is the slowest 1% of requests. A page that makes 10 calls hits a slow one about 1 time in 10, so p99 is what users feel. 99.99% means about 53 minutes of downtime a year. Set targets per feature: a timeline can be a little stale, a follow button cannot.
+Set targets per feature: a timeline can be a little stale, a follow button cannot.
 
 ## Back-of-envelope math
 
-You want the right order of magnitude in five minutes. Round hard: 86,400 becomes 100,000.
+You want the right order of magnitude in five minutes, not the right answer. Round hard: 86,400 becomes 100,000, and the result is off by about 16%, which does not change any decision.
+
+Play **QPS to servers**, then **Storage** and **Bandwidth**. Each box is one line on the board.
+
+<FlowDiagram spec={estimatePipeline} />
+
+### Average and peak QPS
+
+**QPS** (queries per second) is daily actions divided by the seconds in a day, then multiplied for the busy hour. It is the first number because every other number builds on it.
 
 | Quantity | How | 10M DAU, 10 actions each |
 |---|---|---|
@@ -65,15 +141,41 @@ You want the right order of magnitude in five minutes. Round hard: 86,400 become
 | Storage | writes/s × 86,400 × days × bytes × replicas | ~50 TB over 5 years |
 | Servers | `peak ÷ (per-server QPS × 0.6)` | 6 at 1,000 req/s each |
 
-Every 10× in users changes the architecture:
+Shortcut: 1M requests a day is about 12 a second, so 100M actions a day is about 1,200 a second. Use a peak factor of 2 to 5 for daily traffic and 10 or more for events such as a sale or a live match. Always size for the peak: 1,160 a second looks calm until the evening spike.
+
+<FlowDiagram spec={estimatePipeline} scenario="qps" />
+
+### Storage
+
+**Storage** is writes per second, times bytes per write, times time, times copies. Do it in one line so the copies cannot be forgotten.
+
+<FlowDiagram spec={estimatePipeline} scenario="storage" />
+
+Worked line: 105 writes/s × 86,400 s × 1 KB ≈ 9 GB a day. Over 5 years that is 16.6 TB, and with 3 replicas 49.8 TB. Use object storage for photos and video and keep only metadata in the database. Tweets and rows are small; media is what fills disks.
+
+### Bandwidth
+
+**Bandwidth** is requests per second times bytes per response, then times 8 to get bits. For text it is almost nothing; for photos and video it decides the architecture.
+
+<FlowDiagram spec={estimatePipeline} scenario="bandwidth" />
+
+When media pushes the origin past about 1 Gbps, a CDN is the usual answer, and it is faster for far-away users too. Network links are rated in bits per second (Gbps), disks and files in bytes, so convert once and write the unit on every line.
+
+### Servers and memory
+
+**Servers** needed = peak QPS divided by what one server really does. Assume about 1,000 requests a second for a simple API, run at 60% busy, and say you would load-test that number.
+
+Memory for a cache follows the 80/20 rule: the hottest 20% of items serve most reads. 1,050 reads/s × 86,400 s × 20% × 1 KB is an upper bound of about 18 GB, which fits in one Redis node. Every 10× in users changes the architecture:
 
 <StatTiles items={[{ label: "1M DAU", value: "~350", sub: "peak QPS: one small server" }, { label: "10M DAU", value: "~3,500", sub: "peak QPS: a handful of servers" }, { label: "100M DAU", value: "~35,000", sub: "peak QPS: caches, replicas, maybe shards" }]} />
 
-**Do the sum first.** At 350 peak QPS one server copes; a second is for failover, not load. At 3,500, a handful behind a balancer. At 35,000, one database can't serve every read, so add a cache and replicas. Size for the peak: 1,160/s looks calm until the evening spike. Don't shard at 350.
+**Do the sum first.** At 350 peak QPS one server copes; a second is for failover, not load. At 3,500, a handful behind a balancer. At 35,000, one database can't serve every read, so add a cache and replicas. Don't shard at 350. The thresholds are rules of thumb, so walk the tree and say them as such.
+
+<DecisionTree spec={scaleTree} />
 
 ## Read vs write ratio
 
-Same QPS, different design. Reads scale with caches and replicas; writes with sharding and queues. So always split them.
+Same QPS, different design: reads scale with caches and replicas, writes with sharding and queues, so always split them. Work out the ratio, then pick the row.
 
 | Ratio (reads:writes) | Typical products | Consequence |
 |---|---|---|
@@ -82,9 +184,41 @@ Same QPS, different design. Reads scale with caches and replicas; writes with sh
 | ~1:1 | Chat, collaborative editing | Writes are the hot path: partition by conversation, append-only storage |
 | Write-heavy | Metrics, logs, IoT, click streams | Queues for bursts, LSM stores (Cassandra), batched writes, downsampling |
 
+### Read-heavy: cache and replicate
+
+**Read-heavy** (50:1 or more) is the easy case, because reads can be copied. Put a cache in front, add read replicas, and precompute results such as feeds.
+
+<FlowDiagram spec={readHeavy} />
+
+Play both scenarios. Use it when reads outnumber writes 50 to 1 or more: feeds, product pages, redirects. The arithmetic is the point: 35,000 reads a second with a 99% hit ratio leaves 350 for the database. The cost is staleness, and a second of replica lag is normal.
+
+### About 10 to 1: the default web app
+
+**Around 10 to 1** is a typical web app or shop. Cache the hot entities, add a replica or two for reporting and failover, and keep one primary. Nothing special is needed until a number says otherwise, which is why this is the right default when you have no ratio yet.
+
+### About 1 to 1: partition the writes
+
+**Balanced traffic** such as chat makes the write path the hot path, so caching does not rescue you. Partition by a key that keeps related data together, such as the conversation id, and store messages append-only.
+
+<FlowDiagram spec={chatPartition} />
+
+Use it when each action writes as much as it reads: chat, collaborative editing, multiplayer state. 23K writes a second becomes 64 partitions of about 360 each on average. The cost is that a hot partition, such as a huge group chat, needs its own handling.
+
+### Write-heavy: queue, batch, append
+
+**Write-heavy** traffic (metrics, logs, clicks) arrives in bursts bigger than the database can take. Put a queue in front, batch the writes and store them in an append-friendly engine such as an LSM tree.
+
+<FlowDiagram spec={writeHeavy} />
+
+Use it when writes outnumber reads or arrive in spikes. The cost is delay: data is visible after the batch lands, so it fits dashboards and analytics, not "show me my own click now". Downsample old data (keep hourly averages, not every second) so storage stays bounded.
+
 ## Worked example: Instagram-lite
 
 **100M DAU**, 10% upload 2 photos a day, everyone opens the feed 10 times a day, peak is 3× average.
+
+The chart shows the result in one picture: peak feed reads are 50 times the peak uploads.
+
+<BarChart title="Peak requests per second" unit="req/s" scale="log" data={[{ label: "Uploads", value: 700, display: "~700" }, { label: "Feed loads", value: 35000, display: "~35K" }]} />
 
 <Steps>
   <Step title="Uploads per second">
@@ -104,22 +238,51 @@ Same QPS, different design. Reads scale with caches and replicas; writes with sh
   </Step>
 </Steps>
 
+### Check the CDN effect
+
+A CDN turns the 46 Gbps into a number your origin can serve. If the CDN answers 95% of thumbnail requests, the origin carries the other 5%: 46 Gbps × 0.05 ≈ 2.3 Gbps. Say that in one sentence and the interviewer sees why bandwidth was the deciding number.
+
+### Check storage on a second product
+
+Twitter-lite stores small rows, so the media decides everything. 200M DAU × 2 tweets × 1 KB = **400 GB a day**, 730 TB over 5 years, about 2.2 PB with 3 replicas. If 1 tweet in 10 has a 500 KB image, that adds 40M × 500 KB = **20 TB a day**, 50 times the text.
+
+<StatTiles items={[{ label: "Tweet text", value: "400 GB/day", sub: "400M tweets × 1 KB" }, { label: "Images (1 in 10)", value: "20 TB/day", sub: "40M × 500 KB, 50× the text" }, { label: "Five years of text", value: "~730 TB", sub: "about 2.2 PB with 3 replicas" }]} />
+
+So the text goes in a database and the images go to object storage. The estimate told you that before you drew anything.
+
 ## Numbers to remember
 
 Memory is about 1,000× faster than an SSD read. One cross-continent round trip costs as much as 10 to 100 indexed database reads. The [cheatsheet](/cheatsheet) repeats these.
+
+### Latency, on one scale
+
+Latencies span six orders of magnitude, so each step down the list is a design decision. Memory is 100 ns, a datacenter hop 500 µs, a cross-continent trip 150 ms.
+
+<BarChart title="Typical latencies" unit="ns" scale="log" data={[{ label: "Memory", value: 100, display: "100 ns" }, { label: "SSD read", value: 100000, display: "~100 µs" }, { label: "Same-DC hop", value: 500000, display: "~0.5 ms" }, { label: "DB read", value: 5000000, display: "1 to 10 ms" }, { label: "HDD seek", value: 10000000, display: "~10 ms" }, { label: "Across continents", value: 150000000, display: "100 to 150 ms" }]} />
+
+Use it to justify choices: a cache hit at about 1 ms against a database read at about 5 to 50 ms is why you cache. A cross-continent round trip is why you put data near users.
+
+### Time and size
 
 | Quantity | Value |
 |---|---|
 | Seconds per day | 86,400 ≈ 10⁵, so 1M requests/day ≈ 12/s |
 | Seconds per month / year | ≈ 2.6M (100M/month ≈ 40/s) / ≈ 31.5M |
 | 2¹⁰ / 2²⁰ / 2³⁰ / 2⁴⁰ | ≈ thousand / million / billion / trillion: KB, MB, GB, TB |
-| Main memory / SSD random read | ~100 ns / ~100 µs |
-| Datacenter round trip / Redis GET | ~0.5 ms / ~0.5–1 ms over the network |
-| Indexed database read / HDD seek | ~1–10 ms / ~10 ms |
-| Cross-continent round trip | ~100–150 ms |
+| Typical sizes to assume | tweet or row ~1 KB, thumbnail ~50 KB, photo ~500 KB, a minute of 720p video ~20 to 40 MB |
+
+State sizes as assumptions ("I'll assume 500 KB a photo"). The interviewer cares that you chose one and used it.
+
+### Throughput of one machine
+
+| Component | Rough capacity |
+|---|---|
 | Typical web API instance | hundreds to a few thousand req/s (assume, then say "I'd measure") |
 | One Redis instance | ~100K simple ops/s |
 | One Postgres primary | thousands to tens of thousands of simple queries/s, depending heavily on the query |
+| Redis GET over the network | ~0.5–1 ms |
+
+These are order-of-magnitude figures and depend on hardware and query. Use them to decide how many boxes, then add "I'd load-test this".
 
 ## Capacity calculator
 
@@ -127,16 +290,86 @@ Pick a preset or drag the sliders. Every number moves together.
 
 <CapacityCalculator />
 
+Try this: choose **Instagram-lite** and watch egress bandwidth dominate. Choose **Chat** and note how few reads there are per write, so writes become the hot path. Open the extra controls and drop the replicas to 1: storage falls by two thirds.
+
 ## Code
 
 <CodeTabs files={['snippets/estimate.js', 'snippets/instagram-lite.js']} />
 
-`estimate.js` counts replicas: 10M DAU over 5 years is **17 TB** without them and **49.8 TB** with 3. Forgetting them is the most common storage mistake.
+`estimate.js` counts replicas: 10M DAU over 5 years is **17 TB** without them and **49.8 TB** with 3. Forgetting them is the most common storage mistake. `serversNeeded` applies the 60% headroom and `cacheGB` the 80/20 rule, so you can rerun your own scenario.
+
+## Where estimates go wrong
+
+Most estimates fail in the same three ways, and each one is cheap to avoid. Play **Forgot the peak**, **Forgot the copies** and **Bits and bytes**.
+
+<FlowDiagram spec={estimateMistakes} />
+
+### Sizing for the average
+
+**Sizing for the average** leaves no room for the busy hour. At 20:00 traffic is about 3 times the daily average, so two servers that looked comfortable at 1,160 a second are overrun at 3,500.
+
+<FlowDiagram spec={estimateMistakes} scenario="peak" />
+
+Fix: write peak next to average on every traffic line and size for peak at 60% busy. For known events, use 10× or ask the interviewer for the peak.
+
+### Forgetting replicas
+
+**Forgetting replicas** under-counts storage by the replica factor. Planning 17 TB when production keeps 3 copies of everything means 49.8 TB are needed, and the disks fill in less than two years.
+
+<FlowDiagram spec={estimateMistakes} scenario="replicas" />
+
+Fix: multiply by the copies on the same line as the years, and add headroom for growth.
+
+### Mixing bits and bytes
+
+**Mixing bits and bytes** is a factor-of-8 error. 5.8 GB/s is 46 Gbps, not 5.8 Gbps, and a 10 Gbps link carries about a fifth of it.
+
+<FlowDiagram spec={estimateMistakes} scenario="bits" />
+
+Fix: write the unit on every number, convert once, and say "so we need a CDN" instead of ordering a bigger link.
+
+### Numbers that change nothing
+
+**An estimate that ends nowhere** is wasted time. Every line should end in "so we need": 35K reads a second, so a cache; 46 Gbps, so a CDN. If a number does not change a box on the board, drop it.
+
+The same goes for precision. Spending 10 minutes on arithmetic costs you the design. Round, state the result, move on, and revisit a number only if it turns out to decide something.
+
+## Requirements and estimation in the interview
+
+Do this at the very start, before any box is drawn, and keep it to about 10 minutes. Walk through five decisions in order, because the order shows you have done this before.
+
+<Steps>
+  <Step title="Ask who and what">
+    Name the users and agree 3 to 5 core actions. Say what you will skip: "no DMs, no ads, unless you want them."
+  </Step>
+  <Step title="Put numbers on quality">
+    Latency as a p99, availability as nines, and which data needs strong consistency. If no number is given, propose one.
+  </Step>
+  <Step title="Estimate on the board">
+    Average and peak QPS, the read:write split, storage with replicas, and bandwidth if media is involved. Round hard.
+  </Step>
+  <Step title="Say what each number means">
+    End every line with "so we need": a cache, a CDN, object storage, a shard. This is the step interviewers score.
+  </Step>
+  <Step title="Revisit when scope moves">
+    When a requirement changes, redo only the affected line out loud: "video changes the storage estimate by 100×."
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "Design Twitter" | Three core actions, two things out of scope, then the numbers |
+| "How many users?" | DAU, actions per user, peak factor of 3 |
+| "Reads dominate" | Split read and write QPS; cache and replicas |
+| "Do we need to shard?" | Compare peak QPS and storage to one machine first |
+| "We also need video" | Re-run storage and bandwidth; object storage and a CDN |
+
+<Callout kind="interview" title="Say it out loud">
+"I'll assume 10M daily users at 10 actions each, so about 1,160 requests a second, roughly 3,500 at peak. That is a handful of servers, not a fleet. Reads are 10 to 1, so a cache in front of one Postgres primary. Storage is about 50 TB over five years with replicas, so no sharding yet."
+</Callout>
 
 <Callout kind="warning">
-- Spending 10 minutes on arithmetic. Round, state the result, move on.
-- Mixing bits and bytes (Gbps vs GB/s: a factor of 8).
-- Never using the numbers. Every estimate should end in "so we need…".
+Do not estimate everything. Pick the three numbers that decide the design (usually peak QPS, storage and bandwidth), skip the rest, and never defend a figure to three digits.
 </Callout>
 
 ## Interview questions
@@ -156,6 +389,9 @@ Pick a preset or drag the sliders. Every number moves together.
   </FollowUp>
   <FollowUp q="How many app servers for 3,500 peak QPS?">
     At ~1,000 req/s each and 60% busy: 3,500 ÷ 600 → 6. Run 9 across three zones, so losing a zone still leaves 6.
+  </FollowUp>
+  <FollowUp q="The interviewer gives no numbers. What do you do?">
+    Propose them and say so: DAU, actions per user, peak 3×, 1 KB per record. They will correct what matters.
   </FollowUp>
 </FollowUps>
 

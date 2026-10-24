@@ -19,4 +19,16 @@ export const quiz: QuizItem[] = [
     answer: 1,
     explain: "Only misses reach the database: 4,000 × (1 − 0.95) = 200 reads/s. Easy for one Postgres.",
   },
+  {
+    q: "Two users submit the alias sale at the same instant. What decides the winner?",
+    options: ["The primary key on code", "A SELECT before the INSERT", "Whichever request is older in the queue"],
+    answer: 0,
+    explain: "Both SELECTs can say free. The primary key lets one INSERT succeed and rejects the other with a unique violation, returned as 409.",
+  },
+  {
+    q: "You store random 7-character codes and hold 6 billion links. How often does a new code collide?",
+    options: ["About 1 in 6", "About 1 in 3.5 trillion", "About 1 in 600"],
+    answer: 2,
+    explain: "6 billion ÷ 3.5 trillion is about 0.17%, roughly 1 insert in 590. At 40 writes a second that is one retry every 15 seconds.",
+  },
 ];

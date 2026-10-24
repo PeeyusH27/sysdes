@@ -7,20 +7,20 @@ Greedy takes whatever looks best **right now** and never takes it back: usually 
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- "Maximum or minimum number of…" with a natural **rule of thumb**: earliest deadline, cheapest so far, furthest reach.
-- "Can you reach the end?": one number (reach, fuel) sums up the past.
-- Scheduling and assignment, where **sorting** puts the obvious candidate first.
-- n up to 10^5 or more: O(n log n), not every combination.
-
-</Callout>
-
-| Variant | The greedy rule | Classic problem |
-|---|---|---|
-| Running best | keep the best so far | buy and sell stock |
-| Sort, then match | smallest item, smallest slot it fits | assign cookies |
-| Earliest end first | sort by end, keep what fits | non-overlapping intervals |
+<ReachFor
+  signals={[
+    "\"Maximum or minimum number of…\" with a natural **rule of thumb**: earliest deadline, cheapest so far, furthest reach.",
+    "\"Can you reach the end?\": one number (reach, fuel) sums up the past.",
+    "Scheduling and assignment, where **sorting** puts the obvious candidate first.",
+    "n up to 10^5 or more: O(n log n), not every combination.",
+  ]}
+  variants={[
+    {"name": "Running best", "how": "keep the best so far", "extra": "buy and sell stock"},
+    {"name": "Sort, then match", "how": "smallest item, smallest slot it fits", "extra": "assign cookies"},
+    {"name": "Earliest end first", "how": "sort by end, keep what fits", "extra": "non-overlapping intervals"},
+  ]}
+  howLabel="The greedy rule"
+/>
 
 ## The core idea: a choice you never regret
 

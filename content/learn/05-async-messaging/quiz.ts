@@ -19,4 +19,16 @@ export const quiz: QuizItem[] = [
     answer: 1,
     explain: "Brokers redeliver after crashes and timeouts, so duplicates are normal. Deduplicating by message id (or making the write idempotent) gives an effectively-once result.",
   },
+  {
+    q: "A worker charges a card, then crashes before acking. What does the broker do?",
+    options: ["Redelivers it, so the consumer must dedupe", "Forgets the message", "Marks it done"],
+    answer: 0,
+    explain: "No ack means the broker assumes the work did not finish and delivers the message again. That is at-least-once, so the charge needs a dedupe table or an idempotency key.",
+  },
+  {
+    q: "Why add jitter to exponential backoff?",
+    options: ["It makes each retry faster", "It skips the dead letter queue", "It spreads retries so clients don't hit the service together"],
+    answer: 2,
+    explain: "Without jitter, clients that failed together retry together at 1 s, 2 s and 4 s, and the recovering service sees synchronized waves. Random delays spread the load.",
+  },
 ];

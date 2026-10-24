@@ -7,19 +7,19 @@ Two fingers on a row replace a nested loop with one pass, because **every step r
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- The input is **sorted**, or you may sort it.
-- You need a **pair or triplet** that meets a sum or difference condition.
-- You must work **in place**, or compare something with its **mirror image**.
-
-</Callout>
-
-| Variant | Which pointer moves | Classic problems |
-|---|---|---|
-| Opposite ends | the end that can't be in the answer | pair sum, palindrome |
-| Read/write | `read` always, `write` when a value is kept | remove duplicates |
-| One per input | the one just used | merge sorted arrays |
+<ReachFor
+  signals={[
+    "The input is **sorted**, or you may sort it.",
+    "You need a **pair or triplet** that meets a sum or difference condition.",
+    "You must work **in place**, or compare something with its **mirror image**.",
+  ]}
+  variants={[
+    {"name": "Opposite ends", "how": "the end that can't be in the answer", "extra": "pair sum, palindrome"},
+    {"name": "Read/write", "how": "`read` always, `write` when a value is kept", "extra": "remove duplicates"},
+    {"name": "One per input", "how": "the one just used", "extra": "merge sorted arrays"},
+  ]}
+  howLabel="Which pointer moves"
+/>
 
 ## The core idea: every step discards something
 

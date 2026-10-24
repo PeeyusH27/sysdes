@@ -12,7 +12,19 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "retain-on-failure",
-    storageState: { cookies: [], origins: [{ origin: `http://localhost:${PORT}`, localStorage: [{ name: "sds-view", value: "read" }] }] },
+    // Most specs read the scrolling page, which is also the default; the explicit setting keeps them there whatever the default is.
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: `http://localhost:${PORT}`,
+          localStorage: [
+            { name: "sds-view", value: "read" },
+            { name: "sds-progress", value: JSON.stringify({ state: { readerMode: "scroll" }, version: 2 }) },
+          ],
+        },
+      ],
+    },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {

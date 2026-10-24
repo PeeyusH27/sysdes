@@ -111,7 +111,7 @@ const isHeading = (node) => node.type === "element" && /^h[2-6]$/.test(node.tagN
 const countWords = (nodes) => nodes.reduce((n, node) => n + (textOf(node).match(/[A-Za-z0-9][A-Za-z0-9'-]*/g)?.length ?? 0), 0);
 
 /** A first paragraph longer than this many words shows only its first sentence. */
-const LEAD_MAX = 30;
+const LEAD_MAX = 22;
 /** Words before a sentence end for it to count as the lead sentence (so "Two ways." is not the whole lead). */
 const LEAD_MIN = 6;
 const ABBREVIATION = /\b(?:e\.g|i\.e|vs|etc|approx|ca|cf)\.$/i;

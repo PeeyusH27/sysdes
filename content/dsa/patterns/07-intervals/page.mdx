@@ -7,20 +7,20 @@ Sort the intervals and most problems become one sweep. To count overlaps, sweep 
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- A list of **`[start, end]` pairs** (meetings, bookings) and a question about **overlap**: merge, clash, insert.
-- "Minimum number of **rooms**, platforms, arrows": you are counting overlaps.
-- "Remove the fewest so none overlap" or "attend the most".
-
-</Callout>
-
-| Variant | Sort by | Classic problems |
-|---|---|---|
-| Merge, insert or clash check | start | merge intervals, meeting rooms |
-| Count overlaps | event time, or start plus a heap | meeting rooms II |
-| Keep the most | end | non-overlapping intervals |
-| Two sorted lists | already sorted | interval list intersections |
+<ReachFor
+  signals={[
+    "A list of **`[start, end]` pairs** (meetings, bookings) and a question about **overlap**: merge, clash, insert.",
+    "\"Minimum number of **rooms**, platforms, arrows\": you are counting overlaps.",
+    "\"Remove the fewest so none overlap\" or \"attend the most\".",
+  ]}
+  variants={[
+    {"name": "Merge, insert or clash check", "how": "start", "extra": "merge intervals, meeting rooms"},
+    {"name": "Count overlaps", "how": "event time, or start plus a heap", "extra": "meeting rooms II"},
+    {"name": "Keep the most", "how": "end", "extra": "non-overlapping intervals"},
+    {"name": "Two sorted lists", "how": "already sorted", "extra": "interval list intersections"},
+  ]}
+  howLabel="Sort by"
+/>
 
 ## The core idea: sorting makes overlap local
 

@@ -19,4 +19,16 @@ export const quiz: QuizItem[] = [
     answer: 1,
     explain: "LWW keeps the write with the highest timestamp and throws the other away, silently. If clocks drift, it can even drop the write that came last.",
   },
+  {
+    q: "A user saves a profile edit, reloads, and sees the old value. The cheapest fix?",
+    options: ["Make every read strongly consistent", "Pin that user's reads to the leader for a few seconds", "Retry the write"],
+    answer: 1,
+    explain: "The write worked; the replica was behind. Reading from the leader for a few seconds after a write gives read-your-writes without sending all traffic to the leader.",
+  },
+  {
+    q: "A payment request times out. What should the client do?",
+    options: ["Retry with the same idempotency key", "Assume it failed and send a new payment", "Never retry"],
+    answer: 0,
+    explain: "A timeout only means the reply is missing; the write may have committed. The same key lets the server return the first result instead of charging twice.",
+  },
 ];

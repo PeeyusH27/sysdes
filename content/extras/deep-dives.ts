@@ -3,7 +3,7 @@ import type { PageExtras } from "./types";
 export const extras: Record<string, PageExtras> = {
   "caching-techniques": {
     primer: "cache",
-    detail: ["why-the-technique-matters", "code"],
+    detail: ["the-read-path-cache-aside", "the-write-path-update-then-delete", "six-patterns-compared", "races-the-delete-does-not-fix", "two-levels-of-cache", "stampede-one-rebuild-many-waiters", "penetration-ids-that-do-not-exist", "when-the-cache-dies-or-restarts", "code"],
     doodle: "cache",
     sayIt: {
       answer:
@@ -25,7 +25,7 @@ export const extras: Record<string, PageExtras> = {
 
   "sharding-strategies": {
     primer: "sharding",
-    detail: ["cross-shard-queries-and-transactions", "hot-keys", "resharding-without-downtime", "ids-across-shards", "code"],
+    detail: ["choosing-the-shard-key", "strategies-compared", "consistent-hashing-interactively", "cross-shard-queries-and-transactions", "hot-keys", "resharding-without-downtime", "ids-across-shards", "code"],
     doodle: "shard",
     sayIt: {
       answer:
@@ -47,7 +47,7 @@ export const extras: Record<string, PageExtras> = {
 
   "choosing-a-data-store": {
     primer: "sql-nosql",
-    detail: ["stores-compared", "code"],
+    detail: ["pick-a-store-step-by-step", "stores-for-entities-and-transactions", "stores-for-volume-time-and-links", "stores-for-finding-things-and-holding-files", "walking-the-tree-on-a-real-product", "one-shop-many-stores", "stores-compared", "what-goes-wrong", "principles", "code"],
     doodle: "database",
     sayIt: {
       answer:
@@ -69,7 +69,7 @@ export const extras: Record<string, PageExtras> = {
 
   "polling-sse-websockets": {
     primer: "realtime",
-    detail: ["short-and-long-polling", "webhooks", "code"],
+    detail: ["short-and-long-polling", "server-sent-events", "websockets", "scaling-the-connection-tier", "webhooks", "what-goes-wrong", "code"],
     doodle: "websocket",
     sayIt: {
       answer:
@@ -77,7 +77,7 @@ export const extras: Record<string, PageExtras> = {
       numbers: [
         { value: "20,000 req/s", label: "100K clients polling every 5 s" },
         { value: "~30 s", label: "WebSocket ping interval to catch dead peers" },
-        { value: "~50K sockets", label: "per gateway node; 1M needs about 20 nodes" },
+        { value: "~50K sockets", label: "per node; 1M needs about 20 to 29 nodes" },
       ],
       tradeoffs: [
         "Short polling vs SSE: polling is trivial but delay averages half the interval, with many empty requests; SSE is real time on one open stream.",
@@ -91,16 +91,7 @@ export const extras: Record<string, PageExtras> = {
 
   "connections-pooling": {
     primer: "connection-pool",
-    detail: [
-      "what-each-connection-costs",
-      "pgbouncer",
-      "keep-alive",
-      "concurrency-limits",
-      "file-descriptors-and-ulimit",
-      "graceful-shutdown",
-      "http2-multiplexing-and-http3",
-      "code",
-    ],
+    detail: ["try-it-the-handshake-tax", "pool-sizing", "pgbouncer", "keep-alive", "timeouts-and-deadlines", "concurrency-limits", "file-descriptors-and-ulimit", "graceful-shutdown", "http2-multiplexing-and-http3", "what-goes-wrong-with-connections", "code"],
     doodle: "database",
     sayIt: {
       answer:
@@ -121,7 +112,7 @@ export const extras: Record<string, PageExtras> = {
   },
 
   "request-flows": {
-    detail: ["latency-budgets", "read-path", "async-path", "trace-context-propagation", "code"],
+    detail: ["latency-budgets", "read-path", "write-path", "async-path", "failure-path", "retries-and-amplification", "idempotent-retries", "partial-failure-and-lost-replies", "trace-context-propagation", "code"],
     doodle: "api-gateway",
     sayIt: {
       answer:

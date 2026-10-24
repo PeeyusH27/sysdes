@@ -19,6 +19,7 @@ import { JsRef, ProblemLink } from "@/components/dsa/ContentBits";
 import { RunCode } from "@/components/dsa/RunCode";
 import { Doodle } from "@/components/doodle/Doodle";
 import { Term } from "@/components/content/Term";
+import { ReachFor } from "@/components/content/ReachFor";
 
 const components = {
   a: ({ href = "", children, ...rest }) =>
@@ -61,6 +62,7 @@ const components = {
   FlowDiagram,
   Doodle,
   Term,
+  ReachFor,
   SequenceDiagram,
   ClassDiagram,
   DecisionTree,

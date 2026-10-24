@@ -7,21 +7,21 @@ Binary search keeps a range that **must contain the answer** and halves it with 
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- The input is **sorted**, or sorted and then **rotated**.
-- "Find the **first** / **last** position", "where would it be inserted?"
-- "**Minimum** speed / capacity / time such that…", "**minimize the maximum**".
-- **O(log n)** is required, or the answer can reach 10^9.
-
-</Callout>
-
-| Variant | Search range | Classic problems |
-|---|---|---|
-| Exact match | indices `[0, n - 1]` | binary search |
-| First true (lower bound) | indices `[0, n]` | insert position |
-| Rotated array | indices `[0, n - 1]` | search rotated |
-| On the answer | smallest to largest answer | Koko, ship capacity |
+<ReachFor
+  signals={[
+    "The input is **sorted**, or sorted and then **rotated**.",
+    "\"Find the **first** / **last** position\", \"where would it be inserted?\"",
+    "\"**Minimum** speed / capacity / time such that…\", \"**minimize the maximum**\".",
+    "**O(log n)** is required, or the answer can reach 10^9.",
+  ]}
+  variants={[
+    {"name": "Exact match", "how": "indices `[0, n - 1]`", "extra": "binary search"},
+    {"name": "First true (lower bound)", "how": "indices `[0, n]`", "extra": "insert position"},
+    {"name": "Rotated array", "how": "indices `[0, n - 1]`", "extra": "search rotated"},
+    {"name": "On the answer", "how": "smallest to largest answer", "extra": "Koko, ship capacity"},
+  ]}
+  howLabel="Search range"
+/>
 
 ## The core idea: a range that must contain the answer
 

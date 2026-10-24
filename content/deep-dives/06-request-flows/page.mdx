@@ -1,4 +1,4 @@
-import { requestFlows } from './diagrams'
+import { requestFlows, chooseFlow, serialVsParallel, deadlineFlow, readPath, writePath, asyncPath, asyncResult, failurePath, retryAmplify, idempotency, partialFailure, traceFlow } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
@@ -7,13 +7,17 @@ Know five flows cold: **read**, **write**, **async**, **failure** and **idempote
 
 ## Why it matters
 
-"Walk me through what happens when…" is the most common follow-up in a design interview. It tests whether every box on your diagram has a job. Five flows cover almost every system.
+"Walk me through what happens when…" is the most common follow-up in a design interview. It tests whether every box on your diagram has a job. Five flows cover almost every system, and each one answers a different question: where does the answer come from, what is saved, what can wait, what breaks, and what if it runs twice.
 
 Pick a flow in the diagram. In **Read**, try a CDN miss, then a Redis miss.
 
 <SequenceDiagram spec={requestFlows} />
 
 ## The flows side by side
+
+Every request takes one of four routes, and picking the route is the first design decision. The tree below picks it from three questions; the table says what each route answers with.
+
+<DecisionTree spec={chooseFlow} />
 
 | Flow | Responds with | Protected by |
 |---|---|---|
@@ -22,11 +26,11 @@ Pick a flow in the diagram. In **Read**, try a CDN miss, then a Redis miss.
 | Async | 202 + `Location` | A queue, retries |
 | Failure | 200 degraded, or a fast 503 | Timeouts, breaker, fallback |
 
-Idempotent retries get their own section below.
+Idempotent retries get their own section below. The default answer is the cached read for anything shared, and a transactional write for anything that changes data.
 
 ## Latency budgets
 
-Split the user-facing p99 target across the hops, and keep headroom. A 200 ms budget:
+A request that has no budget gets as slow as its slowest hop. Split the user-facing p99 target across the hops, and keep headroom. A 200 ms budget:
 
 | Hop | p99 budget | Enforced by |
 |---|---|---|
@@ -39,7 +43,25 @@ Split the user-facing p99 target across the hops, and keep headroom. A 200 ms bu
 | Headroom | 40 ms | Retries, GC pauses |
 | **Total** | **200 ms** | |
 
-Slow calls add up: make 10 parallel calls, each 1% likely to be slow, and about **10%** of page loads hit a slow one. So per-hop budgets must be tighter than the page's.
+The arithmetic: 30 + 10 + 20 + 5 + 50 + 45 + 40 = 200. Adding p99s is a conservative sum, because all hops are rarely slow at once. That is the point: the headroom pays for the bad day.
+
+Slow calls add up: make 10 parallel calls, each 1% likely to be slow, and about **10%** of page loads hit a slow one. The exact figure is 1 - 0.99^10 = 9.6%. So per-hop budgets must be tighter than the page's.
+
+### Serial or parallel calls
+
+Calls that do not depend on each other should run together, because parallel calls cost the slowest one and serial calls cost the sum. Profile (20 ms), prices (30 ms) and stock (45 ms) take 20 + 30 + 45 = **95 ms** in a row and **45 ms** together.
+
+<Timeline spec={serialVsParallel} />
+
+Use parallel calls whenever the inputs are known up front. Keep them serial only when one call needs the previous answer, such as loading a cart and then pricing its items. The cost of parallel calls is the tail: with 3 parallel calls the page is as slow as the unluckiest of three.
+
+### Deadline propagation
+
+A **deadline** is a budget that travels with the request, so every hop knows how long it has left. The gateway sets 200 ms, and each hop passes on what remains. gRPC does this natively; over HTTP you pass a header of your own. Play **Deadline shrinks**, then **Already too late**.
+
+<FlowDiagram spec={deadlineFlow} />
+
+Use it on any chain of three or more services. Without it, a service keeps working 400 ms after the client gave up, and the retry that follows doubles the load. The cost is discipline: every service must read the header and honour it.
 
 ## Watch the budget
 
@@ -49,11 +71,37 @@ Each span runs against a 200 ms budget line. Turn off the CDN and cache hits, sl
 
 ## Read path
 
-CDN, cache, database: each layer soaks up traffic. At 80% CDN hits and 90% Redis hits, only 0.2 × 0.1 = **2%** of reads reach the database. See the [caching lesson](/learn/caching).
+A read should stop at the first layer that has the answer. CDN, cache, database: each layer soaks up traffic. At 80% CDN hits and 90% Redis hits, only 0.2 × 0.1 = **2%** of reads reach the database. See the [caching lesson](/learn/caching).
+
+### CDN hit
+
+A **CDN hit** answers from an edge near the user in about 20 ms, and the origin never sees the request. It is the cheapest read there is.
+
+<FlowDiagram spec={readPath} scenario="cdn-hit" />
+
+Use it for anything identical for every user and fine to be 60 s old: product pages, images, public API responses. Never put per-user data here. It costs staleness: after an edit, the edge keeps the old copy until `max-age` ends or you purge it.
+
+### Redis hit
+
+A **Redis hit** is the second line: the request reached the origin, but the database stays idle. The trip costs about 20 + 30 + 1 = **51 ms**.
+
+<FlowDiagram spec={readPath} scenario="redis-hit" />
+
+Use it for shared data that many users read and few change, with cache-aside as the default. The cost is a copy that can be stale until the TTL ends or a write deletes the key.
+
+### Database read
+
+A **full miss** reaches the database and pays everything: about 20 + 30 + 1 + 20 + 1 = **72 ms**, and it refills Redis for the next reader.
+
+<FlowDiagram spec={readPath} scenario="full-miss" />
+
+Weigh the layers by how often each answers. At 80% CDN hits and 90% Redis hits the average read is 0.8 × 20 + 0.2 × 0.9 × 51 + 0.2 × 0.1 × 72 = 16 + 9.2 + 1.4 = about **27 ms**, and only 2% of reads touch the database. At 10,000 reads/s that is 200 reads/s for Postgres, not 10,000.
+
+What goes wrong: at 9:00 on Monday the hot key expires and thousands of requests miss at once. That is a stampede; the fix (one rebuilder, the rest wait) is in the caching lesson. Also set a timeout on both Redis (5 ms) and the database (50 ms), so a slow layer becomes a fast fallback, not a stuck request.
 
 ## Write path
 
-Save the truth in **one transaction**, answer, and let the rest catch up:
+A write has one job: make the truth durable once, then let everything else catch up. Save the truth in **one transaction**, answer, and let the rest catch up:
 
 1. Validate input first.
 2. In one transaction, insert the order **and** an outbox row for the event.
@@ -61,13 +109,67 @@ Save the truth in **one transaction**, answer, and let the rest catch up:
 4. A relay publishes `order.created` from the outbox.
 5. Consumers update caches, search and email, ignoring duplicates.
 
-Save, then publish separately, and a crash in between leaves an order with no confirmation email, ever. The outbox makes the event part of the commit. For a page-view counter, losing one event is fine: skip it.
+Play **Outbox commit** to see the order of events.
+
+<FlowDiagram spec={writePath} scenario="outbox" />
+
+### Save, then publish
+
+The obvious design writes the row and then publishes the event from the app. It has a gap: a crash between the two steps leaves an order with no confirmation email, ever. Play **Save, then publish**.
+
+<FlowDiagram spec={writePath} scenario="dual-write" />
+
+Use it only for events you can afford to lose, such as a page-view counter: losing one is fine, so skip the outbox. The cost of the gap is silent, which is the worst kind: no error, no retry, no alert.
+
+### The outbox
+
+The **outbox** makes the event part of the commit. The order and the event are two rows in one transaction, so both exist or neither does. The request answers `201` in about 30 ms and a relay does the publishing.
+
+Use it for orders, payments and anything another service must hear about. It costs a relay process, an `outbox` table to clean up, and a delay of a few hundred milliseconds before consumers see the event. The relay in the code below polls every 200 ms when idle, so the delay is at most 200 ms plus the publish.
+
+### Relay crashes and duplicates
+
+The relay delivers **at least once**, never exactly once. If it publishes event 812 and crashes before marking the row sent, it publishes 812 again after a restart. That is the right trade: a duplicate is easy to handle, a lost event is not.
+
+<FlowDiagram spec={writePath} scenario="relay-crash" />
+
+Every consumer therefore keeps the ids it has handled and skips repeats. Size the relay by arithmetic: at 500 orders/s with batches of 100, it needs 5 batches a second, and if a batch takes 50 ms, one relay drains 2,000 events/s, so there is plenty of room.
 
 ## Async path
 
 Slow work (reports, video) leaves the request: enqueue a job and answer `202 Accepted` with a status URL. The client finds out by polling, a webhook, or SSE.
 
 Workers retry with backoff. Repeat failures land in a **dead letter queue** for a human. A job can run twice, so make it idempotent.
+
+Play **Submit and poll**: the client is released in a few milliseconds, though the work takes about 40 s.
+
+<FlowDiagram spec={asyncPath} scenario="poll" />
+
+Use it when the work takes longer than a second or two, when it can fail and be retried, or when a burst should wait in a queue instead of overloading the database. Skip it when the user needs the result to continue and the work takes 100 ms: an extra queue just adds latency.
+
+### Retry with backoff
+
+A failed job should wait before trying again, with a growing delay. With `attempts: 3` and a 5 s exponential backoff, attempt 2 starts 5 s after the first failure and attempt 3 starts 10 s after the second. Retrying at once would hammer a dependency that just said 503.
+
+<FlowDiagram spec={asyncPath} scenario="retry" />
+
+The cost is latency on the bad day: a job that fails twice finishes at least 15 s late. Retry only transient errors (timeouts, 503). A 400 will fail the same way every time.
+
+### Poison jobs and the dead letter queue
+
+A **poison job** fails every time, for instance because its input is malformed. Without a limit, it retries forever and fills the queue with noise. After 3 attempts it parks in the **dead letter queue**.
+
+<FlowDiagram spec={asyncPath} scenario="poison" />
+
+Alert when the dead letter queue is not empty. Someone fixes the input or the code and replays the job. Because replays happen, the worker must be idempotent.
+
+### Telling the client it is done
+
+Pick the way the client learns the result by who is waiting. Answer the questions in the tree.
+
+<DecisionTree spec={asyncResult} />
+
+Poll by default: the status endpoint is a simple read. The numbers show the cost: 1,000 users waiting on 40 s jobs and polling every 2 s send 500 requests a second and 20 per job. A `Retry-After` of 5 s cuts that to 200 a second and 8 per job.
 
 ## Failure path
 
@@ -80,6 +182,50 @@ A dependency's outage shouldn't become yours. In a flash sale the recommendation
 - A **circuit breaker**: after repeated failures, fail fast for a cooldown, then let one trial through.
 - A **fallback**: cached data or a smaller page. Slightly worse beats an error page.
 
+Play the three scenarios in order: **No timeout**, **Timeout + fallback**, **Breaker open**.
+
+<FlowDiagram spec={failurePath} />
+
+### Timeouts
+
+A **timeout** turns an unbounded wait into a bounded one. By Little's law, requests in flight equal arrival rate times time spent: 100 req/s × 5 s = **500** stuck requests, against 100 × 0.045 = **4.5** with a 45 ms timeout. A pool of 200 threads fills in 200 / 100 = 2 s without one.
+
+Use a timeout on every network call, sized from the hop's p99, never the default (many clients wait 30 s or forever). The cost is false alarms: set it below the real p99 and healthy calls get cut.
+
+### Circuit breaker
+
+A **circuit breaker** stops calling a service that keeps failing, so it can recover and so you stop wasting time on it. Closed means calls pass; open means they fail at once; half-open lets one trial through. Raise the error rate in the simulator until it trips.
+
+<CircuitBreakerSim />
+
+Use it on any call to a dependency that has a fallback. After 5 failures in 10 s it opens for 30 s, and calls cost about 1 ms instead of 45 ms. The cost is a short window where good calls are refused, and one more thing to monitor.
+
+### Fallback
+
+A **fallback** is the degraded answer you give when the real one is unavailable: popular items instead of personal ones, a cached price, an empty recommendations strip. Use it for anything the page can live without. Never use it for the payment itself; failing fast with a clear error beats guessing. Say out loud what the fallback is, because "it degrades gracefully" with no detail earns no credit.
+
+## Retries and amplification
+
+A retry fixes a blip and deepens an outage. One lost packet and the second try works; a database already failing gets hit by every retry on top of the original traffic. Retries are the most common way an outage grows.
+
+### Layers multiply
+
+Retries multiply across layers. A client that tries 3 times, a gateway that tries 3 times and a service that tries 3 times send 3 × 3 × 3 = **27** attempts at the database for one user action. Normal load of 1,000 calls/s becomes 27,000/s at the worst moment. Play both scenarios.
+
+<FlowDiagram spec={retryAmplify} />
+
+Retry in **one layer only**, usually the one closest to the failing call. The others pass the error up.
+
+### Backoff, jitter and budgets
+
+Wait a growing, random time between tries, and cap the total. Without jitter, 1,000 clients that failed together retry together: at 100 ms, then 200 ms, 1,000 requests land in the same millisecond. With full jitter (a random wait between 0 and the cap) the same 1,000 spread across the window, about 10 per millisecond over 100 ms.
+
+Add a **retry budget**: retries may be at most 10% of calls. At 1,000 req/s that allows 100 extra calls a second, so the database sees 1,100 at worst, not 3,000. Try it in the simulator and compare no retries, fixed delay and jitter.
+
+<RetryStorm />
+
+Only retry what is safe to repeat: reads, `PUT`, `DELETE`, and a `POST` that carries an idempotency key (next section). A card charge without a key is not safe to repeat.
+
 ## Idempotent retries
 
 <Doodle name="idempotency" size={150} caption />
@@ -87,6 +233,40 @@ A dependency's outage shouldn't become yours. In a flash sale the recommendation
 A phone on weak signal taps Pay. The charge succeeds, the reply is lost, the app times out, and the user taps again. Without a key, that is two charges. Reads are safe to repeat, but every payment or order write needs an **idempotency key**: an id made once per operation and reused on every retry.
 
 The server claims the key atomically (`SET key pending NX`), stores the result, and replays it for repeats. A duplicate arriving mid-flight gets `409 Conflict`, not a second charge.
+
+Play **Lost reply**, then **Retry replays**, then **Duplicate in flight**.
+
+<FlowDiagram spec={idempotency} />
+
+### Where the key comes from
+
+The **client** makes the key, once per user intent, and reuses it for every retry of that intent. A UUID made when the user opens the Pay screen works. A key made fresh on each retry is useless, because the server sees a new request each time. Scope the stored key by user (`idem:userId:key`), as the code below does, so one user's key can never collide with another's.
+
+### How long to keep it
+
+Keep the stored result for about 24 h. It must outlive the longest retry window (a mobile app may retry for minutes, a queue for hours), but not forever: at 100 payments a minute, 24 h of keys is 144,000 entries of a few hundred bytes each, a small cost for Redis.
+
+### When the first attempt failed
+
+If the charge threw an error, delete the key so the client can retry, which the code does in its `catch`. If you keep a stored failure, the client replays the failure forever. Also reject a reused key with a different body: the same key must always mean the same request.
+
+## Partial failure and lost replies
+
+A multi-step request can finish half its steps and fail on the rest, and the caller cannot see which half. The worst case in a shop: the card is charged and the order is not saved. Pick a tab in the diagram to see three versions.
+
+<SequenceDiagram spec={partialFailure} />
+
+### Charge, then save
+
+Charging first and saving second leaves a hole. If the database times out after the charge, the customer paid 49.00 and has no order, and the error page invites them to pay again. Never do the irreversible step before the durable one.
+
+### Intent first, then reconcile
+
+Write the order as `pending` first, charge using the order id as the key, then mark it `paid`. If the API dies in between, the order stays `pending`. A sweeper job looks for pending orders older than 5 minutes, asks the provider what happened to that key, and finishes the order or cancels it. Use it for anything that spans your database and an outside system, which cannot share one transaction.
+
+### Unknown outcome
+
+A timeout does not mean failure. After 45 ms with no reply you do not know whether the charge happened, so do not guess. Retry with the same key and let the provider return the original result. Also report the real state to the user: "we are checking your payment", not "payment failed".
 
 ## Trace context propagation
 
@@ -96,7 +276,15 @@ One id must tie five services' logs together. That is the `traceparent` header.
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
 
-OpenTelemetry handles it for HTTP, gRPC and database clients. You put the trace id in every log line and copy the header into queue messages.
+It has four parts: a version (`00`), a 32-character trace id shared by every hop, a 16-character id of the calling span, and flags (`01` means sampled). Each service keeps the trace id and swaps in its own span id.
+
+OpenTelemetry handles it for HTTP, gRPC and database clients. You put the trace id in every log line and copy the header into queue messages. Play **Across calls**, then **Across a queue**.
+
+<FlowDiagram spec={traceFlow} />
+
+### Sampling
+
+Tracing every request costs money: at 10,000 req/s with 20 spans each, that is 200,000 spans a second. Keeping 1% (head sampling) cuts it to 2,000 spans/s, but 99% of the rare slow requests are dropped too. **Tail-based sampling** decides after the trace ends and keeps all the errors and the slowest few percent, which are the ones you need.
 
 ## Code
 
@@ -126,6 +314,44 @@ OpenTelemetry handles it for HTTP, gRPC and database clients. You put the trace 
 
 <Callout kind="warning" title="Common mistakes">
 - Checking, then claiming, an idempotency key in two steps (the original code did): two concurrent requests both pass the check and both charge.
+</Callout>
+
+## Request flows in the interview
+
+Bring request flows up when the interviewer says "walk me through" a request, or once your boxes are on the board. Say the decisions in this order; it shows each box has a job.
+
+<Steps>
+  <Step title="Pick the route for each request">
+    Say which requests are reads, writes, async jobs or payments, and that each takes a different path. "Browsing is a cached read; checkout is a write with an idempotency key."
+  </Step>
+  <Step title="Walk the read path with numbers">
+    CDN, Redis, then the database, with hit rates: "80% CDN and 90% Redis leave 2% of reads for Postgres."
+  </Step>
+  <Step title="Make the write durable once">
+    One transaction for the row and an outbox event, a 201, and consumers that skip duplicates. Name what you do not do: no publish after commit.
+  </Step>
+  <Step title="Give every hop a budget">
+    A p99 target, a timeout per hop with headroom, and a propagated deadline. Then name the fallback for the one dependency that may fail.
+  </Step>
+  <Step title="Own retries and tracing">
+    Retries in one layer, with jitter and a budget, safe because of idempotency keys. Finish with a trace id in every log line.
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "Walk me through a purchase" | Gateway, idempotency key, one transaction with an outbox row, then a 201 |
+| "The report takes 40 seconds" | 202 with a status URL, a queue, a worker, a dead letter queue |
+| "A downstream service is slow" | A timeout, a breaker, and a fallback |
+| "The user paid twice" | Idempotency key claimed with SET NX |
+| "Which hop makes it slow?" | Distributed tracing: the widest span |
+
+<Callout kind="interview" title="Say it out loud">
+"Browsing is a cached read, CDN then Redis, so about 2% of reads reach Postgres. Checkout is a write: one transaction saves the order and an outbox row, I answer 201, and a relay publishes the event at least once. Every call has a timeout inside a 200 ms budget, retries happen in one layer with an idempotency key, and a trace id follows the request."
+</Callout>
+
+<Callout kind="warning">
+Do not draw all five flows for every feature. A read-only feed needs the read path and a budget, not an outbox. Say which flows you skipped, and why.
 </Callout>
 
 ## Interview questions

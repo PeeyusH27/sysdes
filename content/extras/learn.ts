@@ -2,7 +2,7 @@ import type { PageExtras } from "./types";
 
 export const extras: Record<string, PageExtras> = {
   "requirements-estimation": {
-    detail: ["why-it-matters", "read-vs-write-ratio", "worked-example-instagram-lite", "numbers-to-remember", "code"],
+    detail: ["functional-requirements", "non-functional-requirements", "back-of-envelope-math", "read-vs-write-ratio", "worked-example-instagram-lite", "numbers-to-remember", "capacity-calculator", "code", "where-estimates-go-wrong"],
     sayIt: {
       answer:
         "I spend the first five minutes on what to build and how big it is: three to five core features, then targets with numbers, like p99 under 200 ms. Then I estimate on the board: average QPS is daily users times actions divided by 86,400, peak about three times that, with reads and writes split. Every number has to end in a design decision.",
@@ -23,14 +23,7 @@ export const extras: Record<string, PageExtras> = {
 
   "api-load-balancing": {
     primer: "load-balancer",
-    detail: [
-      "why-it-matters",
-      "l4-vs-l7-load-balancing",
-      "rest-api-design",
-      "pagination-and-safe-retries",
-      "api-styles-compared",
-      "api-gateway-and-bff",
-    ],
+    detail: ["stateless-services", "l4-vs-l7-load-balancing", "balancing-algorithms", "health-checks", "when-load-balancing-goes-wrong", "sizing-the-fleet", "rest-api-design", "pagination-and-safe-retries", "api-styles-compared", "api-gateway-and-bff", "place-the-load-balancer"],
     doodle: "load-balancer",
     sayIt: {
       answer:
@@ -52,14 +45,7 @@ export const extras: Record<string, PageExtras> = {
 
   "databases-scaling": {
     primer: "replication",
-    detail: [
-      "how-storage-engines-work",
-      "transactions-and-isolation-levels",
-      "indexes",
-      "modeling-normalize-then-denormalize",
-      "failover",
-      "backups-and-point-in-time-recovery",
-    ],
+    detail: ["how-storage-engines-work", "transactions-and-isolation-levels", "indexes", "connection-pooling", "modeling-normalize-then-denormalize", "sql-vs-nosql", "replication", "failover", "sharding", "backups-and-point-in-time-recovery"],
     doodle: "replica",
     sayIt: {
       answer:
@@ -81,14 +67,7 @@ export const extras: Record<string, PageExtras> = {
 
   caching: {
     primer: "cache",
-    detail: [
-      "where-caches-live",
-      "what-to-cache-and-how-to-name-it",
-      "eviction-and-ttl",
-      "http-caching-for-frontend-developers",
-      "code",
-      "sizing-and-monitoring",
-    ],
+    detail: ["where-caches-live", "what-to-cache-and-how-to-name-it", "caching-patterns", "eviction-and-ttl", "invalidation-and-the-classic-race", "the-numbers-hit-ratio-vs-latency", "http-caching-for-frontend-developers", "code", "sizing-and-monitoring"],
     doodle: "cache",
     sayIt: {
       answer:
@@ -110,15 +89,7 @@ export const extras: Record<string, PageExtras> = {
 
   "async-messaging": {
     primer: "queue",
-    detail: [
-      "sync-or-async",
-      "kafka-basics",
-      "ordering",
-      "backpressure-and-littles-law",
-      "sagas-transactions-across-services",
-      "delayed-and-scheduled-jobs",
-      "code",
-    ],
+    detail: ["sync-or-async", "why-queues", "kafka-basics", "delivery-semantics", "ordering", "retries-and-dead-letter-queues", "backpressure-and-littles-law", "the-dual-write-problem-and-the-transactional-outbox", "sagas-transactions-across-services", "delayed-and-scheduled-jobs", "code"],
     doodle: "queue",
     sayIt: {
       answer:
@@ -140,14 +111,7 @@ export const extras: Record<string, PageExtras> = {
 
   "consistency-cap": {
     primer: "cap",
-    detail: [
-      "consistency-models-a-ladder",
-      "conflict-resolution",
-      "consensus",
-      "distributed-transactions-2pc-or-sagas",
-      "distributed-locks-need-fencing-tokens",
-      "code",
-    ],
+    detail: ["cap-stated-precisely", "pacelc-the-trade-off-you-pay-every-day", "consistency-models-a-ladder", "quorums", "conflict-resolution", "consensus", "distributed-transactions-2pc-or-sagas", "distributed-locks-need-fencing-tokens", "failure-modes", "the-numbers-what-each-choice-costs", "code"],
     doodle: "cap",
     sayIt: {
       answer:
@@ -169,14 +133,7 @@ export const extras: Record<string, PageExtras> = {
 
   "reliability-observability": {
     primer: "circuit-breaker",
-    detail: [
-      "load-shedding-and-prioritisation",
-      "redundancy-and-failover",
-      "safe-deploys",
-      "observability",
-      "incident-basics",
-      "code",
-    ],
+    detail: ["slis-slos-slas-and-error-budgets", "how-failures-spread", "timeouts-retries-and-jitter", "circuit-breakers-and-bulkheads", "load-shedding-and-prioritisation", "graceful-degradation", "redundancy-and-failover", "safe-deploys", "observability", "incident-basics", "code"],
     doodle: "circuit-breaker",
     sayIt: {
       answer:
@@ -197,16 +154,7 @@ export const extras: Record<string, PageExtras> = {
   },
 
   "case-url-shortener": {
-    detail: [
-      "requirements",
-      "api",
-      "data-model",
-      "making-sequential-ids-unguessable",
-      "expiry-and-cleanup",
-      "abuse-and-safety",
-      "code",
-      "build-it-in-the-playground",
-    ],
+    detail: ["estimation", "data-model", "generating-short-codes", "making-sequential-ids-unguessable", "301-vs-302", "scaling-the-reads", "click-analytics", "expiry-and-cleanup", "abuse-and-safety", "failure-modes", "code", "build-it-in-the-playground"],
     doodle: "cache",
     sayIt: {
       answer:
@@ -227,19 +175,7 @@ export const extras: Record<string, PageExtras> = {
   },
 
   "case-notification-system": {
-    detail: [
-      "requirements",
-      "api",
-      "data-model",
-      "templates-and-localisation",
-      "scheduling-and-quiet-hours",
-      "protecting-users",
-      "device-token-lifecycle",
-      "delivery-tracking",
-      "large-campaigns",
-      "code",
-      "build-it-in-the-playground",
-    ],
+    detail: ["estimation", "fan-out-with-queues", "priorities-the-otp-never-waits", "templates-and-localisation", "scheduling-and-quiet-hours", "reliability-providers-fail", "dedupe-and-idempotency", "protecting-users", "device-token-lifecycle", "delivery-tracking", "large-campaigns", "failure-modes", "code", "build-it-in-the-playground"],
     doodle: "queue",
     sayIt: {
       answer:
@@ -260,14 +196,7 @@ export const extras: Record<string, PageExtras> = {
   },
 
   "interview-playbook": {
-    detail: [
-      "why-it-matters",
-      "frontend-variant-radio",
-      "what-interviewers-look-for",
-      "drawing-conventions",
-      "practice-plan",
-      "printable-checklist",
-    ],
+    detail: ["the-45-minute-plan", "the-framework-as-a-checklist", "frontend-variant-radio", "practise-with-a-timer", "what-interviewers-look-for", "driving-the-conversation-and-getting-unstuck", "raising-the-core-topics-on-cue", "drawing-conventions", "common-mistakes", "practice-plan", "printable-checklist"],
     sayIt: {
       answer:
         "I use the same structure every time: requirements with numbers, an estimate, the API and data model, a high-level design, two deep dives, then trade-offs and a summary, in about 45 minutes. I say every choice as X because Y at the cost of Z, and if I'm stuck I go back to requirements and numbers.",

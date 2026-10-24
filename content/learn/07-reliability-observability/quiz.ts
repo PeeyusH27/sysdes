@@ -19,4 +19,16 @@ export const quiz: QuizItem[] = [
     answer: 1,
     explain: "After the cooldown, one probe reaches the dependency. Success closes the breaker; failure opens it again.",
   },
+  {
+    q: "A gateway retries 3 times and calls a service that also retries 3 times. One request can become…",
+    options: ["6 calls", "9 calls", "3 calls"],
+    answer: 1,
+    explain: "Retries multiply across layers: 3 × 3 = 9 calls at the bottom service. Add a third retrying layer and it is 27. Retry in one layer.",
+  },
+  {
+    q: "Three zones share the load equally. To survive losing one zone, each should run below about…",
+    options: ["50% busy", "66% busy", "90% busy"],
+    answer: 1,
+    explain: "Two survivors must carry 100% of the work, so each zone can use at most 2/3 of its capacity before the failure.",
+  },
 ];

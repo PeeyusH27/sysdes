@@ -1,4 +1,4 @@
-import { queueWithDlq, outboxSequence, signupEmail } from './diagrams'
+import { queueWithDlq, outboxSequence, signupEmail, syncAsyncChooser, requestSplit, workQueue, pubSubFanout, logReplay, brokerChooser, consumerGroups, ackTiming, dedupeSequence, keyOrdering, retryReorder, failureTriage, backpressure, dualWrite, cdcFlow, sagaChoreography, sagaOrchestration, delayedJobs } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
@@ -15,7 +15,9 @@ The price: work happens **later**, maybe **twice**, maybe **out of order**. Skip
 
 ## Sync or async?
 
-If the user needs the answer to carry on ("was my card accepted?"), keep it sync. Go async when work is **slow**, **unreliable**, **spiky** or **fans out** to many reactions. Most flows split in two:
+If the user needs the answer to carry on ("was my card accepted?"), keep it sync. Go async when work is **slow**, **unreliable**, **spiky** or **fans out** to many reactions. Walk the tree with your own example.
+
+<DecisionTree spec={syncAsyncChooser} />
 
 | Request | Sync part (user waits) | Async part (worker) |
 |---|---|---|
@@ -24,47 +26,107 @@ If the user needs the answer to carry on ("was my card accepted?"), keep it sync
 | Place an order | Reserve stock, authorise the card | Confirmation email, invoice PDF, analytics |
 | Publish a post | Save the post | Fan out to followers' feeds |
 
-Long jobs return `202 Accepted` and a job id to poll.
+### Split the request in two
+
+Most flows are a short synchronous part the user waits for and a long asynchronous part a worker finishes. The API saves what it must, publishes a job, and returns `202 Accepted` with a job id.
+
+<FlowDiagram spec={requestSplit} />
+
+Use it when the work takes more than about a second, or depends on something you do not control (an email provider, a card network, a transcoder). The client either polls `GET /jobs/8841` every couple of seconds or gets a push when the job ends. The cost is a status endpoint to build, and a failure that arrives after the user has left, so you also need a way to tell them (an email, a notification, a status badge).
 
 ## Why queues
 
-With a queue in between, the consumer can be slow, mid-deploy or briefly down and nothing is lost. That is **decoupling**: each side scales and fails on its own. "Queue" covers three tools:
-
-| Tool | Each message goes to | Best for |
-|---|---|---|
-| Work queue (SQS, RabbitMQ) | One consumer | Jobs, emails, image processing |
-| Pub/Sub (SNS) | Every subscriber, right now | Fire-and-forget fan-out |
-| Log (Kafka) | Every consumer group, replayable | Event streams, analytics |
+With a queue in between, the consumer can be slow, mid-deploy or briefly down and nothing is lost. That is **decoupling**: each side scales and fails on its own. "Queue" covers three different tools, and the difference is **who gets each message**. First, put the missing box back.
 
 Which box lets signup succeed while the email provider is down?
 
 <DiagramQuiz spec={signupEmail} slot="queue" options={["cache", "queue", "lb", "database"]} answer="queue" explain="The email is slow and the provider can fail, so the API publishes a job and answers immediately. The worker sends it later and retries on failure. A cache or a load balancer doesn't hold work for later." />
 
+### Work queue (the default)
+
+A **work queue** hands each message to exactly one consumer, so adding workers adds throughput. It is the answer for jobs: emails, thumbnails, webhooks, invoice PDFs. A worker takes a message, the broker hides it for a **visibility timeout** (30 s by default in SQS), and the message is deleted only when the worker acks. No ack means it reappears for another worker.
+
+<FlowDiagram spec={workQueue} />
+
+Use it when each job should run once and you never need to look at old messages again. SQS if you are on AWS and want no servers; RabbitMQ when you need routing rules or priorities. The cost: once a message is acked it is gone, so there is no replay, and a standard SQS queue only promises best-effort order.
+
+### Pub/Sub
+
+**Pub/sub** delivers every message to every subscriber, so one event can trigger many independent reactions. The publisher does not know who listens, which is the point: adding a search indexer touches no existing code.
+
+<FlowDiagram spec={pubSubFanout} />
+
+Use it when one thing happened and several services care: order placed, then email, analytics and search. The catch is that plain pub/sub is fire-and-forget. A subscriber that is down when the event fires misses it. The fix is a queue behind each subscriber (SNS topic to one SQS queue per consumer), which keeps a copy until it is read.
+
+### Log (Kafka)
+
+A **log** appends messages and keeps them. Reading does not delete, and each consumer group tracks its own position, so many groups read the same data and any of them can rewind. Kafka is the standard one.
+
+<FlowDiagram spec={logReplay} />
+
+Use it for event streams, analytics, change feeds and anything where a second consumer may show up next month and need history. The cost: you run a cluster (or pay for a managed one), order holds only inside a partition, and consumers manage their own offsets.
+
+### Which one to pick
+
+Decide on one question first: does anyone besides the consumer need these messages, or need to replay them? If yes, a log. If no, a work queue. The default answer in an interview is "a queue for jobs, Kafka for event streams".
+
+<DecisionTree spec={brokerChooser} />
+
 ## Kafka basics
 
 Kafka is a log, not a mailbox: reading doesn't delete. A topic splits into **partitions**; a key always lands in the same partition, and order holds only within it. In a **consumer group** each partition has one consumer. Other groups read the same topic independently.
 
-- **Replay.** Consumers commit their position, so a group can rewind after a bug fix.
-- **Retention.** Messages stay for a set time (7 days by default), read or not.
-- **The parallelism cap.** 6 partitions and 8 consumers leave 2 idle.
+### Partitions and keys
 
-Add consumers past the partition count in the simulator.
+The partition is the unit of order and of parallelism. The producer hashes the key to pick one, so every message with the same key lands together. The cap: 6 partitions and 8 consumers leave 2 idle. Add consumers past the partition count in the simulator.
 
 <KafkaPartitions />
+
+Choose the partition count for the consumers you expect at peak, with headroom. You can add partitions later but never remove them, and adding them changes which partition a key maps to, which breaks per-key order for in-flight data.
+
+### Consumer groups
+
+A **consumer group** shares a topic's partitions among its consumers, one consumer per partition. When a consumer joins, leaves or crashes, Kafka reassigns partitions (a **rebalance**) and reads pause briefly. Play **A consumer joins**.
+
+<FlowDiagram spec={consumerGroups} />
+
+Use one group per application: billing is a group, analytics is another group, and each sees every message. Scale a group by adding consumers up to the partition count, not past it.
+
+### Replay and retention
+
+The log keeps messages for a set time (7 days by default), read or not. Consumers commit their position (an **offset**), so a group can rewind after a bug fix and rebuild its state. Play **Replay after a bug**.
+
+<FlowDiagram spec={logReplay} scenario="replay" />
+
+Retention is a disk bill. A topic taking 5 MB/s writes 432 GB a day (5 MB × 86,400 s). Seven days is about 3 TB, and with 3 replicas about 9 TB. Shorten retention, compact by key, or compress before you buy disks.
 
 ## Delivery semantics
 
 <Doodle name="idempotency" size={150} caption />
 
-Your consumer will see the same message twice. Brokers redeliver after crashes: that is **at-least-once**, the default. "Exactly once" really means at-least-once plus **idempotent** work: doing it twice has the effect of doing it once.
+Your consumer will see the same message twice. Brokers redeliver after crashes: that is **at-least-once**, the default. "Exactly once" really means at-least-once plus **idempotent** work: doing it twice has the effect of doing it once. When you ack decides what a crash costs.
 
-| Semantics | How | What goes wrong |
-|---|---|---|
-| At-most-once | Ack before processing | A crash loses the message |
-| At-least-once | Ack after processing | A crash before the ack delivers it again |
-| Effectively once | At-least-once + idempotent work | Nothing |
+### At-most-once: ack first
 
-At-most-once is fine for a metrics ping, where one lost point costs nothing. An email or a card charge needs its own idempotency. Two ways. **A dedupe table**: record the message id under a unique constraint, in the same transaction.
+**At-most-once** acks before processing, so a crash loses the message. Nothing is ever repeated, and sometimes nothing happens at all.
+
+<FlowDiagram spec={ackTiming} scenario="ack-first" />
+
+Use it only for data where one lost item costs nothing: a metrics ping, a debug log line, a position update that will be replaced in a second. Never for emails, orders or money, because a loss is silent.
+
+### At-least-once: ack after (the default)
+
+**At-least-once** acks after processing. A crash before the ack means the broker redelivers, so the work can run twice but never zero times. This is what SQS, RabbitMQ and Kafka give you by default.
+
+<FlowDiagram spec={ackTiming} scenario="ack-after" />
+
+The scene: at 9:03 a worker charges a card, then its pod is evicted before the ack. The broker redelivers after the visibility timeout and a second worker charges the card again. The fix is the next subsection, because you cannot prevent redelivery, only make it harmless.
+
+### Effectively once: make the work idempotent
+
+**Idempotent** means doing it twice has the effect of doing it once. Two ways. **A dedupe table**: record the message id under a unique constraint, in the same transaction as the effect. A redelivery inserts zero rows and is skipped.
+
+<SequenceDiagram spec={dedupeSequence} />
 
 ```sql
 BEGIN;
@@ -75,55 +137,151 @@ UPDATE accounts SET balance = balance + $2 WHERE id = $3;
 COMMIT;
 ```
 
-**Idempotent writes**: `SET status = 'shipped'` is safe twice; `balance = balance + 10` isn't.
+**Idempotent writes**: `SET status = 'shipped'` is safe twice; `balance = balance + 10` isn't. For a call to another system, send an idempotency key (payment providers accept one) so the same key never charges twice. The dedupe table needs a clean-up job: keep ids for longer than the broker can redeliver, for example 7 days.
+
+### Where "exactly once" is real
+
+Kafka transactions and SQS FIFO deduplication exist, but they cover less than the name suggests. Kafka's exactly-once works for read, process, write that stays inside Kafka. SQS FIFO drops a duplicate send that has the same dedupe id within 5 minutes. Neither can stop your worker from sending an email twice, so you still need an idempotent consumer.
 
 ## Ordering
 
-"Order shipped" before "order paid" is a bug, and Kafka orders only within a partition. So:
+"Order shipped" before "order paid" is a bug, and Kafka orders only within a partition. So the design question is which messages must be ordered against each other, and the answer is almost never "all of them".
 
-- **Key by the entity** that needs order (`userId`, `orderId`): one partition, one consumer.
-- **Retries can reorder.** Where order matters, retry in place.
-- **Sequence numbers.** A per-key `seq` lets the consumer drop duplicates and spot gaps.
-- **Global order is rarely needed.** One user's events, not two strangers'.
+### Key by the entity (the default)
+
+**Key by the entity** that needs order (`userId`, `orderId`): one key, one partition, one consumer, so events apply in the order they were sent. Different users spread over other partitions and run in parallel. Play **With a key**, then **Without a key**.
+
+<FlowDiagram spec={keyOrdering} />
+
+Use it for anything with a lifecycle: an order going created, paid, shipped; an account going opened, frozen, closed. The cost is a hot partition if one key is huge: a celebrity user whose events are 40% of the traffic pins one consumer while the others idle. Split the key (`user:7#0` to `#3`) only if order inside that user does not matter.
+
+### What goes wrong: retries reorder
+
+A retry can overtake or be overtaken. If a failed message is parked on a retry topic for 30 s, the next message runs first: the order ships before it is paid. Where order matters, retry in place and let the messages behind it wait.
+
+<SequenceDiagram spec={retryReorder} />
+
+In place has its own price: one stuck message blocks its partition. Cap the attempts (say 5), then move it to the dead letter queue and carry on. The producer matters too: enable the idempotent producer (`idempotent: true` in the snippet) so a producer retry cannot duplicate or reorder a send.
+
+### Sequence numbers
+
+A per-key `seq` lets the consumer drop duplicates and spot gaps, without relying on the broker alone. Keep the last applied `seq` per key.
+
+```js
+if (event.seq <= last) return;               // duplicate or stale: drop it
+if (event.seq > last + 1) return parkUntil(last + 1); // gap: wait for the missing one
+apply(event); last = event.seq;
+```
+
+Global order is rarely needed. It needs one partition and one consumer, which caps throughput at what a single consumer can do. Ask what the business really needs: one user's events in order, not two strangers'.
 
 ## Retries and dead letter queues
 
 <Doodle name="backoff" size={150} caption />
 
-Some failures heal; some never will. Retry the first, waiting longer each time (**backoff**). Park the second in a **dead letter queue (DLQ)**.
+Some failures heal; some never will. Retry the first, waiting longer each time (**backoff**). Park the second in a **dead letter queue (DLQ)**. The triage is one question: could this exact message ever succeed?
 
-- **Transient errors** (timeouts, 503s): backoff with jitter, 1 s, 2 s, 4 s, 8 s.
-- **Permanent errors** (bad payloads) go straight to the DLQ.
-- **Poison messages** always fail. Without a DLQ, one bad message retries forever and blocks the ones behind it.
-- **Alert** when the DLQ is not empty. Fix the bug, then redrive it.
+<DecisionTree spec={failureTriage} />
+
+### Transient errors: backoff with jitter
+
+**Transient errors** (timeouts, 503s, deadlocks) usually heal if you wait. Back off exponentially and add **jitter**: 1 s, 2 s, 4 s, 8 s is 15 s of waiting over four retries. Without jitter, 1,000 consumers that failed together retry together at 1 s, 2 s and 4 s, and the recovering service sees synchronized waves.
 
 <FlowDiagram spec={queueWithDlq} scenario="retry" />
+
+```js
+const delay = Math.random() * Math.min(capMs, baseMs * 2 ** attempt); // full jitter
+```
+
+Use it by default for any call to another service. Cap the attempts at about 5 and cap the delay at tens of seconds. Try the simulator and compare no retries, fixed, exponential and jittered.
+
+<RetryStorm />
+
+### Poison messages: the dead letter queue
+
+A **poison message** always fails, because the payload is bad or the code has a bug. Without a DLQ, it retries forever and burns worker time. Send permanent errors straight to the DLQ; send the rest after the last attempt.
+
+<FlowDiagram spec={queueWithDlq} scenario="poison" />
+
+In SQS you set `maxReceiveCount` on the redrive policy (for example 5) and a DLQ takes the message after that many receives. **Alert when the DLQ is not empty.** Fix the bug, then redrive the messages. Kafka has no built-in DLQ: your consumer publishes the bad record to a dead letter topic.
+
+### What goes wrong: the visibility timeout is too short
+
+A job takes 60 s and the visibility timeout is 30 s. At second 30 the broker decides the worker died and gives the job to another worker, so it runs twice at once. The fix: set the timeout above the slowest job (for example the p99 time plus margin), or extend it while the worker is still busy. Play **Timeout too short**.
+
+<FlowDiagram spec={workQueue} scenario="slow" />
+
+### What goes wrong: one bad message blocks a partition
+
+Kafka commits offsets in order, so a message that fails forever at offset 100 stops the partition: offsets 101 and up never run, and lag grows. After the attempt limit, publish the record to a dead letter topic and commit past it. A blocked partition looks like a healthy consumer that processes nothing, so alert on consumer lag too.
 
 ## Backpressure and Little's law
 
 1,000 messages arrive each second and workers handle 800. The backlog grows to **720,000 after an hour**, and a new arrival waits 15 minutes.
 
-**Little's law**: items in a system = arrival rate × time in it. It sizes fleets: 1,000 jobs/s × 200 ms = 200 jobs in progress, so at least 200 worker slots.
+### Little's law sizes the fleet
+
+**Little's law**: items in a system = arrival rate × time in it. It sizes fleets: 1,000 jobs/s × 200 ms = 200 jobs in progress, so at least 200 worker slots. Add margin: at 70% utilisation you want about 290.
 
 <StatTiles items={[{ label: "Arriving", value: "1,000/s" }, { label: "Processed", value: "800/s" }, { label: "Backlog growth", value: "+200/s" }, { label: "After 1 hour", value: "720K", sub: "messages waiting" }]} />
 
-**Backpressure** is your answer when consumers can't keep up:
+The backlog arithmetic: 200 extra per second × 3,600 s = 720,000. A new arrival waits 720,000 ÷ 800 per second = 900 s, which is 15 minutes. A queue never fixes a rate mismatch; it only hides it for a while.
 
-- **Bound the queue**: slow producers when it is full.
-- **Push back** on callers: `429` or `503` with `Retry-After`.
-- **Autoscale consumers on queue depth**, not CPU.
-- **Drop low-value work** first.
+**Backpressure** is your answer when consumers can't keep up. Four tools, and you often use two.
+
+### Bound the queue and push back
+
+**Bound the queue** and slow producers when it is full: the API answers `429` or `503` with `Retry-After`. The backlog stops growing and the pain lands on callers who can wait or retry, not on the whole system.
+
+<FlowDiagram spec={backpressure} scenario="bound" />
+
+Use it for public APIs and any producer you do not control. The cost: some requests are refused. That is the point.
+
+### Autoscale on queue depth
+
+**Autoscale consumers on queue depth** (or the age of the oldest message), not on CPU. Workers that wait on a slow downstream look idle on CPU while the backlog climbs.
+
+<FlowDiagram spec={backpressure} scenario="scale" />
+
+Use it for bursts you can outrun. A new worker takes a minute to start, so it cannot save a one-second spike, but the queue can hold that spike while you scale. Cap the fleet so you do not stampede the database behind it.
+
+### Shed low-value work
+
+**Drop or delay the cheap work first.** A marketing push can wait an hour; a password reset cannot. Decide the order before the incident, not during it.
+
+<FlowDiagram spec={backpressure} scenario="shed" />
+
+### One queue per priority
+
+One shared queue lets a bulk job bury the urgent ones: a million-message campaign sits in front of every login code. Give urgent and bulk work separate queues and separate workers. Run the lanes.
+
+<PriorityLanes />
+
+### Absorb a burst, then drain it
+
+A queue turns a spike into delay instead of errors. Say workers handle 2,000/s, normal traffic is 1,000/s, and a flash sale sends 5,000/s for 60 s. The backlog grows by 3,000/s × 60 = 180,000. After the sale it drains at 2,000 − 1,000 = 1,000/s net, so it takes 180 s to clear. At the peak, a new job waits 180,000 ÷ 2,000 = 90 s.
+
+<LineChart title="Backlog during a 60 s flash sale (messages waiting)" x={[0, 30, 60, 120, 180, 240, 300]} series={[{ id: "backlog", name: "Backlog", values: [0, 90000, 180000, 120000, 60000, 0, 0] }]} xLabel="Seconds" yUnit="msgs" xFormat="number" marker={60} />
+
+Add workers or make jobs faster in the simulator, then hit the spike.
 
 <QueueSim />
 
 ## The dual-write problem and the transactional outbox
 
-"Save the order, then publish `order.created`" can't be atomic: the database and the broker share no transaction.
+"Save the order, then publish `order.created`" can't be atomic: the database and the broker share no transaction. Any ordering of the two writes leaves a window where a crash makes them disagree.
 
-- **Crash in between**: the order exists, the event is lost.
-- **Publish first**: if the transaction rolls back, consumers act on an order that doesn't exist.
+### The problem: two systems, no shared transaction
 
-The **transactional outbox** writes the order and an `outbox` row in one local transaction. A **relay** then publishes unpublished rows. A crash can send a row twice, so consumers dedupe by event id.
+Two ways to get it wrong. **Crash in between**: the order exists, the event is lost, and nothing is charged or shipped. **Publish first**: if the transaction rolls back, consumers act on an order that does not exist. Play both scenarios.
+
+<FlowDiagram spec={dualWrite} />
+
+At 100 orders per second, if just 0.01% of requests die in that window, you lose about 1 order every 100 seconds. It never throws an error, which is why it survives to production.
+
+### Transactional outbox (the default)
+
+The **transactional outbox** writes the order and an `outbox` row in one local transaction. A **relay** then publishes unpublished rows. A crash can send a row twice, so consumers dedupe by event id. The event is late at worst, never lost.
 
 <SequenceDiagram spec={outboxSequence} />
 
@@ -142,7 +300,21 @@ INSERT INTO outbox (topic, payload) VALUES ('order.created', $4);
 COMMIT;
 ```
 
-**CDC** (Debezium) is the alternative: it tails the write-ahead log instead of polling.
+Use it whenever a state change must also produce an event: orders, payments, account changes. The relay polls every 100 ms to 1 s, so events trail the commit by about that much.
+
+### CDC: tail the log instead of polling
+
+**Change data capture (CDC)**, for example Debezium, reads the database write-ahead log and publishes each committed outbox row. There is no polling query and no `published_at` to update, and events follow commit order.
+
+<FlowDiagram spec={cdcFlow} scenario="tail" />
+
+Use it when you need events within milliseconds, or the polling load on a busy table hurts. The cost is more infrastructure (a connector, usually on Kafka Connect) and an operational trap. Play **Connector stops**: a dead connector's replication slot makes Postgres keep all WAL, and the disk fills.
+
+<FlowDiagram spec={cdcFlow} scenario="stuck" />
+
+### What goes wrong with an outbox
+
+Three habits keep it healthy. **Duplicates**: the relay can publish a row twice after a crash, so consumers dedupe by event id. **Growth**: delete published rows after a day or so, or the table and its index bloat. **Lag**: alert on the age of the oldest unpublished row; if it passes a minute, the relay is stuck. With several relays, claim rows with `FOR UPDATE SKIP LOCKED` and key the events by entity so order still holds per key.
 
 ## Sagas: transactions across services
 
@@ -163,22 +335,74 @@ A purchase spans orders, inventory, payments and shipping, each with its own dat
   </Step>
 </Steps>
 
-| | Choreography | Orchestration |
-|---|---|---|
-| How it works | Each service reacts to the previous one's event | A coordinator tells each service what to do next |
-| Strength | Loose coupling, no central component | Flow in one place: easy to read, time out, monitor |
-| Weakness | Flow is scattered and hard to follow | One more service to run |
-| Fits | 2–3 steps | Longer flows (Temporal, AWS Step Functions) |
+Who drives the steps is the choice. Two styles, and the second is the one to reach for as the flow grows.
 
-Compensations must be idempotent: a business undo (a refund), not a delete.
+### Choreography
+
+In **choreography** there is no coordinator: each service reacts to the previous service's event and publishes its own. Loose coupling, no central component to run.
+
+<FlowDiagram spec={sagaChoreography} />
+
+Use it for 2 or 3 steps with simple failures. The cost shows up later: the flow lives in many services, so to answer "where is order 17 stuck?" you read several codebases and trace events.
+
+### Orchestration
+
+In **orchestration** a coordinator holds the whole flow, calls each service in turn and runs the compensations in reverse on failure. The flow reads like one function and you can time out, retry and monitor it in one place.
+
+<FlowDiagram spec={sagaOrchestration} />
+
+Use it for 4 or more steps, or whenever you need to answer for the state of every order. The cost is one more service to run, and it can become a god object if business rules leak into it. Tools: Temporal, AWS Step Functions.
+
+### What goes wrong in a saga
+
+A saga has no isolation. Between reserve stock and charge card, another shopper sees the item as out of stock. Show a PENDING state, and expire reservations. Compensations can fail too, so make them **idempotent** and retry them until they succeed: a business undo (a refund), not a delete.
+
+The numbers: if each of 4 steps succeeds 99.9% of the time, the saga completes 0.999 to the fourth, about 99.6%. One order in 250 needs at least one compensation, so compensation is a normal path, not an edge case. Two-phase commit across services is the alternative, but it blocks while the coordinator is down, so teams rarely use it.
 
 ## Delayed and scheduled jobs
 
-Cancel unpaid orders after 15 minutes.
+Cancel unpaid orders after 15 minutes. The idea is a job that is invisible until its time, and three tools cover the range of delays.
 
-- **Short delays**: SQS `DelaySeconds` (up to 15 minutes), BullMQ's `delay`.
-- **Long delays**: a `run_at` column polled with `FOR UPDATE SKIP LOCKED`, or a Redis sorted set.
-- **Cron-style schedules**: make the job idempotent, since it will sometimes run twice.
+### Short delays: the broker does it
+
+Use the broker's own delay for short waits: SQS `DelaySeconds` (up to 15 minutes) or BullMQ's `delay`. It is one line of code and needs no extra table.
+
+Use it when the delay is under 15 minutes and you can tolerate that the job is stored in the broker. A Redis-backed delay survives a restart only if you enabled persistence.
+
+### Long delays: a run_at table and a poller
+
+For hours or days, store a `run_at` column and poll for due rows with `FOR UPDATE SKIP LOCKED`, or keep a Redis sorted set scored by run time. The job re-reads the state when it fires, so a paid order is simply left alone.
+
+<FlowDiagram spec={delayedJobs} />
+
+```sql
+SELECT id, payload FROM jobs
+WHERE run_at <= now() AND done_at IS NULL
+ORDER BY run_at
+LIMIT 50
+FOR UPDATE SKIP LOCKED;
+```
+
+Use it as the default for anything longer than the broker delay: it is durable, queryable and cancelable. Precision is one poll interval, about a second. The cost is a poller to run and a partial index on pending rows.
+
+### Cron-style schedules
+
+**Cron-style schedules** will sometimes run twice, because two scheduler instances can fire at once after a deploy. Make the job idempotent by keying it on the period (`report:2026-10-24`) and recording that key under a unique constraint.
+
+## What to monitor in a queue
+
+Four numbers tell you whether async work is healthy: depth, age of the oldest message, error rate and DLQ depth. Depth alone misleads, because 10,000 waiting messages is fine at 5,000/s and an outage at 5/s.
+
+| Signal | Alert when | It means |
+|---|---|---|
+| Age of oldest message | Above your deadline (say 60 s for email) | Consumers cannot keep up |
+| Queue depth (Kafka: lag) | Rising for 5 minutes | Backlog growing |
+| DLQ depth | Above zero | A poison message needs a human |
+| Consumer error rate | Above baseline | A dependency is failing |
+
+Age is the one users feel. With the flash sale above, the peak depth is 180,000 but the number to alert on is the 90 s wait.
+
+<StatTiles items={[{ label: "Peak backlog", value: "180K", sub: "messages" }, { label: "Oldest wait at peak", value: "90 s" }, { label: "Drain time", value: "180 s", sub: "at +1,000/s net" }, { label: "DLQ depth", value: "0", sub: "target" }]} />
 
 ## Code
 
@@ -190,6 +414,45 @@ Cancel unpaid orders after 15 minutes.
 - One queue for everything, so a slow job type blocks the fast ones.
 - A DLQ nobody alerts on.
 - Believing "it's only delivered once". It isn't.
+</Callout>
+
+## Async messaging in the interview
+
+Bring a queue up the moment you see slow, flaky or spiky work in the request path, then walk five decisions in order. The order shows you have run one of these.
+
+<Steps>
+  <Step title="Decide what leaves the request path">
+    Only what the user does not need in the response: the email, the transcode, the fan-out. Say what stays sync and why.
+  </Step>
+  <Step title="Pick the tool">
+    A work queue (SQS) for jobs; Kafka when several services read the events or need replay. Name the default and stop there.
+  </Step>
+  <Step title="State the delivery guarantee">
+    At-least-once with ack after processing, and idempotent consumers: a dedupe table keyed by message id.
+  </Step>
+  <Step title="Plan for failure">
+    Backoff with jitter, about 5 attempts, a DLQ with an alert, and backpressure (bounded queue, autoscale on depth).
+  </Step>
+  <Step title="Close the dual write">
+    An outbox for any event that must go with a database change; a saga with compensations if it spans services.
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "Send a notification after signup" | A queue and a worker; API returns fast, worker retries |
+| "Millions of events, many consumers" | Kafka, partitions keyed by entity, one group per consumer |
+| "What if the consumer crashes mid-job?" | At-least-once redelivery, so an idempotent consumer |
+| "Events for one order must be in order" | Key by orderId; retry in place |
+| "Traffic spikes 5x on a sale" | The queue absorbs it; autoscale on depth; 429 at the edge |
+| "Save the order and tell other services" | Transactional outbox, not write then publish |
+
+<Callout kind="interview" title="Say it out loud">
+"Signup only needs the user row, so the API writes it, publishes a welcome-email job to SQS and returns 201. A worker sends the email, acks after success and retries with backoff; after five attempts the job goes to a dead letter queue with an alert. Delivery is at-least-once, so the worker checks a processed-ids table first. If other services need an order event, I'd write it through an outbox so a crash can't lose it."
+</Callout>
+
+<Callout kind="warning">
+Do not queue everything. A broker is one more thing to run, monitor and explain. If the user needs the answer in the response, call it synchronously, and say that is a choice.
 </Callout>
 
 ## Interview questions
@@ -209,6 +472,12 @@ Cancel unpaid orders after 15 minutes.
   </FollowUp>
   <FollowUp q="Why an outbox instead of “write the DB, then publish”?">
     A crash in between loses the event. The outbox commits it with the data.
+  </FollowUp>
+  <FollowUp q="A message fails every time. What happens to it?">
+    Retry with backoff up to about 5 attempts, then move it to a dead letter queue and alert. Fix the bug, then redrive it.
+  </FollowUp>
+  <FollowUp q="Your consumer crashes after processing but before the ack. What now?">
+    The broker redelivers, so the consumer sees it twice. A dedupe table or an idempotent write makes the second pass harmless.
   </FollowUp>
 </FollowUps>
 

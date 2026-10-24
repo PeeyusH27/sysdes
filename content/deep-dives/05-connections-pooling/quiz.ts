@@ -25,4 +25,10 @@ export const quiz: QuizItem[] = [
     answer: 1,
     explain: "Each transaction may run on a different server connection, so session state is lost. Use SET LOCAL inside the transaction instead.",
   },
+  {
+    q: "A handler runs BEGIN, calls a payment API that stalls for 30 s, then COMMITs. What is the main risk?",
+    options: ["Nothing: the transaction is atomic", "It holds a pool connection and row locks while idle", "PgBouncer closes the connection"],
+    answer: 1,
+    explain: "The session is idle in transaction: it keeps its connection and locks for 30 s. Do network calls outside the transaction and set idle_in_transaction_session_timeout.",
+  },
 ];

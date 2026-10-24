@@ -1,4 +1,4 @@
-import { interviewPlan, interviewFramework } from './diagrams'
+import { interviewPlan, interviewFramework, scopingDialog, estimationChain, requestFlow, deepDivePicker, wrapUp, radioFlow, scaleLadder, pushbackDialog, failureQuestion, driveConversation, stuckTree, catchUp, topicCaching, topicQueues, topicSharding, topicConsistency, overEngineer, failureWalk } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
@@ -7,7 +7,9 @@ Use the same steps every time: **requirements, numbers, API and data model, desi
 
 ## Why it matters
 
-Knowing the pieces is half the job. Interviewers score scope, numbers, a working design, depth and trade-offs. Fixed steps cover every row even when you are nervous.
+Knowing the pieces is half the job; the other half is showing them in order under a clock. Interviewers score scope, numbers, a working design, depth and trade-offs. Fixed steps cover every row even when you are nervous.
+
+A round is only 45 minutes. Without a plan, the first 20 go to boxes and the deep dives never happen.
 
 ## The 45-minute plan
 
@@ -16,6 +18,48 @@ Five phases: **5, 5, 15, 15 and 5 minutes**. Press play to fill them in.
 Behind? Say so and move on: "I'll keep the data model brief so we have time for the deep dives."
 
 <Timeline spec={interviewPlan} />
+
+### Minutes 0 to 5: scope before boxes
+
+Spend the first five minutes asking, not drawing: four good questions turn an open prompt into a problem you can finish. Play the **Weak** and **Strong** tabs.
+
+<SequenceDiagram spec={scopingDialog} />
+
+Ask about **who** uses it and how many, **which** 3 to 5 features, **what** targets matter (speed, uptime, consistency), and **what is out** of scope. Write the answers in a corner of the board. If the interviewer says "you decide", pick, say the assumption aloud, and move on.
+
+### Minutes 5 to 10: numbers that pick a design
+
+Estimation is not arithmetic for its own sake; each number must end in a sentence that starts with "so". Play **Traffic**, then **Weak vs strong**.
+
+<FlowDiagram spec={estimationChain} />
+
+The chain is always the same: a volume per day or month, divided by about 100,000 seconds a day (86,400, rounded) gives writes per second; times the read ratio gives reads per second; times bytes per row gives storage. Round hard. Being 2 times off is fine; 100 times off changes the design.
+
+Then spend two minutes on the API: the 3 to 5 endpoints that matter, with status codes, and the main entity with its key.
+
+### Minutes 10 to 25: the design, with a numbered flow
+
+Draw the simplest boxes that meet the requirements, then **walk one request through them with numbered steps**. Switch between **Create a link** and **Redirect** in the diagram.
+
+<SequenceDiagram spec={requestFlow} />
+
+Do the write path and the read path separately; they usually look different. The numbers let the interviewer interrupt precisely ("go back to step 3"), and they prove the design works end to end before you go deep. Keep this at 15 minutes: if you are still adding boxes at minute 25, you have no time left for the part that scores most.
+
+### Minutes 25 to 40: two deep dives on the risk
+
+A deep dive is a pair of questions answered out loud: what breaks first here, and what does it cost to fix? Use the tree to choose the two areas.
+
+<DecisionTree spec={deepDivePicker} />
+
+For each area, use one pattern: state the problem with a number, name two options, pick one and say why, then say what happens when it fails. Eight minutes per area is about right.
+
+### Minutes 40 to 45: wrap-up
+
+Use the last five minutes to leave the interviewer with a clear picture: **two choices and their cost, the next bottleneck, then a summary**.
+
+<Timeline spec={wrapUp} />
+
+The summary is 30 seconds: "Reads dominate, so a Redis cache in front of one Postgres. Codes come from ranges, not a global counter. The next bottleneck is write volume, and I would shard by code hash. I'd also add per-code metrics." Never trail off; end on your own sentence.
 
 ## The framework as a checklist
 
@@ -53,7 +97,9 @@ Estimation is four formulas, in `back-of-envelope.js`. Practise them aloud.
 
 ## Frontend variant: RADIO
 
-Frontend rounds use the same idea in five stages.
+Frontend rounds use the same idea in five stages, **Requirements, Architecture, Data model, Interface, Optimizations**. Play **Typeahead** to see what you say at each one.
+
+<FlowDiagram spec={radioFlow} />
 
 | Letter | Stage | What to cover |
 |---|---|---|
@@ -63,7 +109,7 @@ Frontend rounds use the same idea in five stages.
 | I | Interface | Props, events, endpoints |
 | O | Optimizations | Virtualisation, splitting, accessibility |
 
-Try it on the [typeahead](/questions/typeahead) and [infinite feed](/questions/infinite-feed) questions.
+The order matters because optimizations only make sense once the data flow is clear. Naming debounce before the component tree is the frontend version of naming Kafka before the requirements. Try it on the [typeahead](/questions/typeahead) and [infinite feed](/questions/infinite-feed) questions.
 
 ## Practise with a timer
 
@@ -82,6 +128,18 @@ Every level gets the same question. The bar is what moves.
 | Deep dive | One area | Two areas, with failures | The riskiest area, quantified |
 | Trade-offs | Names some | Justifies each | Cost and team impact |
 
+### One answer at three levels
+
+The same sentence gets a different score depending on how much it carries. Take the prompt "the database is the bottleneck".
+
+| Level | What it sounds like |
+|---|---|
+| Mid | "I'd add a cache." |
+| Senior | "Reads are 4,000 a second, so Redis with cache-aside. At 95% hits the database sees 200 reads a second." |
+| Staff | "Same, but I'd watch the hit ratio and evictions, set an alert on both, and cost the Redis cluster against two read replicas before committing." |
+
+Each step up adds a number, a failure or a cost, never a longer list of tools.
+
 ## Talking through trade-offs
 
 Interviewers score reasoning, not a perfect answer. Use this shape:
@@ -90,7 +148,13 @@ Interviewers score reasoning, not a perfect answer. Use this shape:
 
 For example: "I'll return a **302** because we promised click analytics. The cost: every click reaches our servers."
 
-Let the numbers pick the moment to stop. 40 writes a second: "One Postgres is enough, so no sharding." Roughly 40,000: "Now I'd shard by a hash of the code."
+### Let the numbers pick the stopping point
+
+The numbers tell you when to stop adding machinery: 40 writes a second needs one Postgres, roughly 40,000 needs shards. Play the three scenarios in order.
+
+<FlowDiagram spec={scaleLadder} />
+
+At 40 writes a second say: "One Postgres is enough, so no sharding." At roughly 40,000 say: "Now I'd shard by a hash of the code." The skill is naming both the choice and the load that would change it. Stopping early is not a gap; it is the signal that you read the numbers.
 
 | When | Say |
 |---|---|
@@ -98,6 +162,108 @@ Let the numbers pick the moment to stop. 40 writes a second: "One Postgres is en
 | Your numbers come out small | "One database is enough. I'll skip sharding." |
 | You are asked about failure | "If this box dies, X takes over, detected by Y." |
 | You are behind | "I'll keep this brief so we reach the deep dives." |
+
+## Weak answer, strong answer
+
+A weak answer states a fact; a strong answer gives a reason, a number and a switch point. Two moments decide most rounds, so rehearse them: pushback, and a failure question.
+
+### When the interviewer pushes back
+
+Pushback is a hint, not an attack: they want to see whether you can weigh a concern. Click through the three replies.
+
+<SequenceDiagram spec={pushbackDialog} />
+
+Digging in sounds defensive and giving in sounds like the first choice was a guess. The strong reply has three moves: restate the concern ("you are pointing at write scale"), tie it to a number, and name the point where you would change your mind.
+
+### When they ask what breaks
+
+Answer a failure question in four parts: what breaks, the number that changes, what you do about it, and how you would know. Compare **Weak** and **Strong**.
+
+<SequenceDiagram spec={failureQuestion} />
+
+"It should not go down" is the one answer that always loses points, because every box can die. The arithmetic does the work here: a cache that absorbs 95% of 4,000 reads a second leaves 200; without it, the database sees 20 times more.
+
+### Phrases to keep ready
+
+Short, concrete phrases beat long improvised ones when you are nervous.
+
+| Moment | Weak | Strong |
+|---|---|---|
+| A choice | "We use Kafka." | "Kafka, because we need replay. The cost is running it." |
+| A number | "It's a lot of traffic." | "About 12K reads a second at peak." |
+| A gap | "Um, I'm not sure." | "I don't know X in detail, but I'd reason like this." |
+| Switch point | "This scales." | "Fine at 40 writes a second; at 40K I'd shard." |
+
+## Driving the conversation and getting unstuck
+
+You hold the marker, so you set the agenda; an interview where the candidate leads is easier to score. A silent candidate hands control to the interviewer, who must then rescue the round.
+
+### Signpost, then check in
+
+Say where you are and what comes next at every boundary, and hand the interviewer a choice at every fork. Compare **Passive** and **Driving**.
+
+<SequenceDiagram spec={driveConversation} />
+
+Three phrases cover most of it. **Signpost**: "Scope is agreed, next I'll size it." **Check in**: "Does this match what you had in mind?" **Offer a menu**: "I see two risks, the id generator and the read path. Which first?" A menu lets the interviewer steer while you still choose the options.
+
+### When you are stuck
+
+Being stuck is normal and visible; what scores is how you recover. Walk the tree from the top and stop at the first answer that fits.
+
+<DecisionTree spec={stuckTree} />
+
+Never go quiet for more than about 10 seconds; think aloud instead ("I'm weighing two options"). The **Getting unstuck** scenario of the framework diagram plays the same recovery with numbers.
+
+### When you are behind
+
+If the design is not done at minute 25, say so and compress; do not speed up everything. Look at the **Behind** lane.
+
+<Timeline spec={catchUp} />
+
+Finish the design in three minutes, take one deep dive for ten, and name the second in one sentence ("I'd also look at code collisions, using a retry on conflict"). The interviewer still sees that you know it is there.
+
+## Raising the core topics on cue
+
+The four topics every round touches are caching, queues, sharding and consistency, and each has a trigger that tells you when to speak. Raise one too early and it sounds memorised; raise it on the trigger and it sounds earned.
+
+| If you hear or compute | You raise | Your first sentence |
+|---|---|---|
+| Reads far above what the database serves | Caching | "The database is 20 times short, so I'd cache." |
+| Work the user should not wait for | A queue | "I'd accept it, return 202, and process behind a queue." |
+| Writes or data beyond one primary | Sharding | "One primary tops out, so I'd shard by user id." |
+| A replica or cache read after a write | Consistency | "Which reads must be fresh, and which may lag?" |
+
+### Caching: when reads outrun the database
+
+Raise caching only after a number shows the database is short. Play **The trigger**, then **The move**.
+
+<FlowDiagram spec={topicCaching} />
+
+Say the number first, then the pattern (cache-aside with Redis), then what you leave uncached, then the risk. The full chain is in [Caching](/learn/caching).
+
+### Queues: when the user should not wait
+
+Raise a queue when work is slow, bursty or flaky, and the user does not need the result in the same request. Play both scenarios.
+
+<FlowDiagram spec={topicQueues} />
+
+The trigger phrase is "this can happen later": emails, thumbnails, fan-out. Always follow with the cost, which is at-least-once delivery and so idempotent workers. More in [Async messaging](/learn/async-messaging).
+
+### Sharding: when one primary is out of room
+
+Raise sharding last, and only when the numbers force it; the real decision is the key, not the word. Compare **Good key** and **Bad key**.
+
+<FlowDiagram spec={topicSharding} />
+
+Say the key and why it spreads load, then what you give up: cross-shard joins and easy resharding. See [sharding strategies](/deep-dives/sharding-strategies).
+
+### Consistency: where a stale read hurts
+
+Raise consistency by asking which reads must be fresh; that question alone shows you see the trade-off. Play **Where it bites**, then **The answer**.
+
+<FlowDiagram spec={topicConsistency} />
+
+Money and ownership checks read the primary; feeds and counters can lag. Say it per read, not for the whole system. More in [consistency and CAP](/learn/consistency-cap).
 
 ## Drawing conventions
 
@@ -110,11 +276,29 @@ Your board is how the interviewer follows you.
 
 ## Common mistakes
 
-<Callout kind="warning">
-- Jumping to tools ("Kafka, Cassandra") before the requirements.
-- Over-engineering: multi-region for 40 writes a second.
-- Ignoring failure: every box can die, every call can time out.
-</Callout>
+Most lost rounds come from four habits, each fixable in advance.
+
+### Jumping to tools
+
+Naming a tool before the requirements is the commonest miss: "Kafka, Cassandra" in minute 2 invites "why?", and you have no numbers to answer. Hold every tool name until a requirement or a number asks for it. The scoping diagram's **Weak: draw first** tab shows how it sounds.
+
+### Over-engineering
+
+Multi-region for 40 writes a second is not depth, it is a missed read of your own numbers. Ask the tree before adding any machinery.
+
+<DecisionTree spec={overEngineer} />
+
+### Ignoring failure
+
+Every box can die and every call can time out, so walk the request path and kill each box in turn. Play **Happy path only**, then **Kill each box**.
+
+<FlowDiagram spec={failureWalk} />
+
+For each box say what takes over, how you detect it, and what the user sees. A timeout on every call is the cheapest answer, and it is the one most candidates forget.
+
+### Going silent
+
+Silence reads as stuck, even when you are thinking. Narrate: "I'm choosing between a counter and ranges." If you need real quiet, say so ("give me ten seconds to think") and keep it short.
 
 Prepare two lines:
 
@@ -140,6 +324,8 @@ Work in this order, aloud and on a timer: [URL shortener](/learn/case-url-shorte
 | Failure modes | Not mentioned | What breaks, how it is detected and recovers |
 | Trade-offs | Choices stated as facts | Each choice's cost, and when to switch |
 | Communication | Draws in silence | Thinks aloud, manages the clock |
+
+When you play a recording back, check three things first: the minute you finished the design (target 25), the count of numbers you said (target 10 or more), and the longest silence (target under 10 seconds).
 
 ## Printable checklist
 
@@ -169,6 +355,9 @@ It is also on the [cheatsheet](/cheatsheet).
   </FollowUp>
   <FollowUp q="What if you get stuck?">
     Back to requirements and numbers, simplify, then scale step by step out loud.
+  </FollowUp>
+  <FollowUp q="You are at minute 25 and the design is not finished. What now?">
+    Say so, finish it in about three minutes, take one deep dive, and name the second in a sentence.
   </FollowUp>
 </FollowUps>
 

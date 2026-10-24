@@ -7,20 +7,20 @@ Keep **running totals** as you walk a row, and any range sum is one subtraction.
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- You need the **sum of a range** many times, on data that doesn't change.
-- "**Subarray sums to k**", "divisible by k", "equal 0s and 1s", often with negative numbers.
-- Many **range updates** come before one read.
-
-</Callout>
-
-| Variant | What you store | Classic problems |
-|---|---|---|
-| 1D prefix sums | `prefix[i]` = sum of the first i values | range sum query |
-| Prefix sum + hash map | running sum → count or index | subarray sum equals k |
-| 2D prefix sums | sum of the top-left rectangle | range sum query 2D |
-| Difference array | where values change | car pooling |
+<ReachFor
+  signals={[
+    "You need the **sum of a range** many times, on data that doesn't change.",
+    "\"**Subarray sums to k**\", \"divisible by k\", \"equal 0s and 1s\", often with negative numbers.",
+    "Many **range updates** come before one read.",
+  ]}
+  variants={[
+    {"name": "1D prefix sums", "how": "`prefix[i]` = sum of the first i values", "extra": "range sum query"},
+    {"name": "Prefix sum + hash map", "how": "running sum → count or index", "extra": "subarray sum equals k"},
+    {"name": "2D prefix sums", "how": "sum of the top-left rectangle", "extra": "range sum query 2D"},
+    {"name": "Difference array", "how": "where values change", "extra": "car pooling"},
+  ]}
+  howLabel="What you store"
+/>
 
 ## The core idea: a range is the difference of two prefixes
 

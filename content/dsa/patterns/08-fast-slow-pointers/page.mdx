@@ -7,19 +7,19 @@ Two runners on one list: `slow` takes one step, `fast` takes two. When `fast` ru
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- A **linked list** might have a **cycle**, or you need its **middle** without counting first.
-- A **sequence defined by a rule** (sum of digit squares, `i → nums[i]`) may repeat forever.
-- **O(1) extra space** is required, so a visited `Set` is out.
-
-</Callout>
-
-| Variant | Pointers | Classic problems |
-|---|---|---|
-| Find the middle | slow +1, fast +2 | middle of the list |
-| Cycle and its entry | +1 and +2 until they meet; then both +1 | linked list cycle I and II |
-| Implicit sequence | `x → f(x)` instead of `node.next` | happy number, find the duplicate |
+<ReachFor
+  signals={[
+    "A **linked list** might have a **cycle**, or you need its **middle** without counting first.",
+    "A **sequence defined by a rule** (sum of digit squares, `i → nums[i]`) may repeat forever.",
+    "**O(1) extra space** is required, so a visited `Set` is out.",
+  ]}
+  variants={[
+    {"name": "Find the middle", "how": "slow +1, fast +2", "extra": "middle of the list"},
+    {"name": "Cycle and its entry", "how": "+1 and +2 until they meet; then both +1", "extra": "linked list cycle I and II"},
+    {"name": "Implicit sequence", "how": "`x → f(x)` instead of `node.next`", "extra": "happy number, find the duplicate"},
+  ]}
+  howLabel="Pointers"
+/>
 
 ## The core idea: a faster runner laps a slower one
 

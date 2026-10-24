@@ -1,4 +1,4 @@
-import { primaryReplica, replicaQuiz } from './diagrams'
+import { primaryReplica, replicaQuiz, scaleLadder, btreeEngine, lsmEngine, writeSkew, lostUpdate, queryPlan, indexChoice, connectionPool, denormCopy, nPlusOne, storePick, relationalTxn, keyValueStore, wideColumn, documentStore, commitModes, monotonicReads, failoverTimeline, splitBrain, hashShards, rangeShards, directoryShards, shardKeyPick, scatterGather, pitrFlow } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
@@ -9,7 +9,7 @@ Pick a store by **access pattern**, index the queries you run, and scale reads w
 
 Lost orders and double bookings happen in the database. Copies of data must agree, so it is the hardest part to scale.
 
-Take the cheapest move first: **indexes → a bigger machine → a cache → read replicas → sharding**.
+Take the cheapest move first: **indexes → a bigger machine → a cache → read replicas → sharding**. Each step costs more code and more ways to fail than the one before, so climb only as far as the numbers force you.
 
 | You see | Try first |
 |---|---|
@@ -17,7 +17,15 @@ Take the cheapest move first: **indexes → a bigger machine → a cache → rea
 | 10,000 reads/s, 95% of them reads | A cache, then replicas |
 | Several TB, or writes one primary can't take | Shard |
 
+Work the arithmetic before you choose. At 10,000 queries/s with 95% reads, the primary sees 9,500 reads and 500 writes. A cache at a 90% hit ratio leaves 950 reads, so the primary now handles 1,450 queries/s. Two replicas instead would leave it with only the 500 writes. Neither move touches the write rate: only sharding does.
+
+Play the three scenarios: a **Write** streams to replicas, a **Read** is spread across them, and the primary stays the only node that accepts writes.
+
 <FlowDiagram spec={primaryReplica} />
+
+The decision tree walks the same ladder as a set of questions.
+
+<DecisionTree spec={scaleLadder} />
 
 ## How storage engines work
 
@@ -28,6 +36,24 @@ Two designs, opposite bets. A **B-tree** updates sorted pages in place, so reads
 | Best at | Read-heavy and mixed workloads, range scans | Write-heavy ingest: events, messages, time series |
 | Costs | Random writes, page splits | Compaction work; slower, less predictable reads |
 | Used by | Postgres, MySQL InnoDB, SQL Server | Cassandra, RocksDB, ScyllaDB, HBase |
+
+You rarely pick an engine on its own: you pick a database and inherit its engine. Knowing the bet explains why Postgres is a good default and why Cassandra eats a firehose of writes.
+
+### B-tree: the default
+
+A **B-tree** keeps rows in sorted 8 KB pages and edits a page in place. A lookup walks root, branch, leaf: 3 or 4 pages even for hundreds of millions of rows, so read latency barely moves as data grows.
+
+<FlowDiagram spec={btreeEngine} />
+
+Use it for almost everything: orders, users, payments, any mix of reads and writes. It is the default engine in Postgres, MySQL InnoDB and SQL Server. What it costs: every write is a random write somewhere on disk, plus a log write, and a full page must be split in two when it overflows.
+
+### LSM tree: built for writes
+
+An **LSM tree** never edits in place. A write goes to a commit log and an in-memory sorted table; when the table fills it is flushed as one immutable sorted file, and background **compaction** merges files.
+
+<FlowDiagram spec={lsmEngine} />
+
+Use it when writes dominate and you read mostly by key: chat messages, event streams, metrics, time series, at tens of thousands of writes per second per node and up. The costs are three: a read may check several files (softened by Bloom filters), compaction rewrites the same bytes several times (write amplification), and a compaction that falls behind slows everything down.
 
 ## Transactions and isolation levels
 
@@ -48,7 +74,25 @@ Two doctors on call each check "is anyone else on call?", see yes, and both go o
 
 For rules across rows, use **SERIALIZABLE** or `SELECT … FOR UPDATE`, and retry failures. Often a constraint is simpler: `UNIQUE (room_id, slot)`.
 
+Pick the cheapest tool that closes the gap: a **constraint** if the rule is "no duplicates" or "stay in range", an **atomic UPDATE** for counters, a **row lock** (`FOR UPDATE`) when you know which rows to protect, **SERIALIZABLE** when the rule spans rows you cannot name in advance. Default to read committed and add exactly one of these.
+
 <CodeBlock src="snippets/serializable-retry.js" />
+
+### Write skew: two doctors, different rows
+
+**Write skew** is two transactions that each read a rule, see it hold, and then update different rows. No row is written twice, so row locks never fire and read committed lets both through.
+
+<SequenceDiagram spec={writeSkew} />
+
+Open the **serializable** tab: the database notices that each transaction read what the other one wrote, aborts the second with error `40001`, and the retry sees the new count. Use SERIALIZABLE for rules like "at least one on call" or "no overlapping bookings", and always retry on `40001` and deadlock `40P01`.
+
+### What goes wrong: the lost update
+
+The **lost update** is the commonest bug here: two requests read stock 10, each subtract one, each write 9. Two sales, one decrement, and an oversell at 3 a.m. when a flash sale starts.
+
+<SequenceDiagram spec={lostUpdate} />
+
+Fix it in the database, not in the app. `UPDATE stock = stock - 1 WHERE stock > 0` is atomic and needs no isolation upgrade. When the new value depends on app logic, add a `version` column and update `WHERE version = 3`: zero rows changed means someone beat you, so re-read and retry. **Deadlocks** are the other classic: two transactions lock rows in opposite order. Lock rows in a fixed order (by id) and retry on `40P01`.
 
 ## Indexes
 
@@ -62,6 +106,38 @@ An index buys fast reads with slower writes. Index the queries you run, not the 
 
 <CodeBlock src="snippets/indexes.sql" />
 
+### Seek, don't scan
+
+An index is a sorted B-tree beside the table, so the database seeks to the matching rows instead of reading all of them. Play **No index**, then **With an index**: with 10 million rows and 20 matches, the scan reads about 500,000 times more rows than the seek needs.
+
+<FlowDiagram spec={queryPlan} />
+
+Add an index when a query you run often shows a `Seq Scan` on a table over a few thousand rows. Do not index a column with two or three values (`is_active`): the planner will scan anyway. Use a partial index on the rare value instead.
+
+### Composite, covering and partial
+
+A **composite index** is sorted by its first column, then the second inside it, like a phone book sorted by last name then first name. The query must test the leading column, equality columns first, then the range or sort column.
+
+<DecisionTree spec={indexChoice} />
+
+Walk the questions with a query in mind. A **covering** index stores extra columns (`INCLUDE (total)`) so the query never visits the table. A **partial** index covers only the rows you query (`WHERE status = 'pending'`), which can be 1% of the table: small, cheap to write, and fast.
+
+### What goes wrong: too many, or ignored
+
+Every insert updates every index. A table with 8 indexes does 9 writes per insert (the table and each index), so a 5,000-inserts-per-second table is really 45,000 page writes a second. Index the queries you run, and check `pg_stat_user_indexes` for indexes with zero scans.
+
+The other failure is an index that exists but is not used: a function on the column (`lower(email)`), a type cast, or a leading `%` in `LIKE`. Play **Index ignored**. Always confirm with `EXPLAIN ANALYZE`, and on a live table build with `CREATE INDEX CONCURRENTLY` so writes keep flowing (if it fails, drop the invalid index and retry).
+
+## Connection pooling
+
+A database holds a few hundred connections well, not thousands, so many app servers need a pooler between them and it. In Postgres each connection is a separate server process, and `max_connections` defaults to 100.
+
+Work the numbers: 50 app servers each keep a pool of 20 connections, which is 1,000 connections against a limit of about 100. Play **No pooler**, then **With a pooler**.
+
+<FlowDiagram spec={connectionPool} />
+
+Use a pooler (PgBouncer, RDS Proxy) as soon as app servers autoscale or you run serverless functions, which open a new connection per invocation. A database works best with roughly 2 × its CPU cores of active queries, so an 8-core machine wants about 16 busy connections, not 1,000. What goes wrong: a pool that is too big hurts the database, and one that is too small queues requests. Size from the database outward. The full treatment is in [connections and pooling](/deep-dives/connections-pooling).
+
 ## Modeling: normalize, then denormalize
 
 Store each fact once, then copy the hot ones on purpose.
@@ -71,6 +147,22 @@ Store each fact once, then copy the hot ones on purpose.
 The commonest bug is the **N+1 query**: 20 posts (1 query), then each author (20 more). Fix it with a join or one batched query:
 
 <CodeBlock src="snippets/dataloader.js" />
+
+### Denormalize one hot number
+
+Denormalize only after a measured read is too slow, and copy the smallest thing that fixes it. A `comment_count` on `posts` replaces a `COUNT(*)` over millions of comments on every feed load with a single column read.
+
+<FlowDiagram spec={denormCopy} />
+
+Write the comment and the counter in one transaction so they cannot disagree. The cost is real: every write now touches two places, and a missed update means the copy lies. Run a periodic job that recounts and repairs. For copies in another store (a cache, a search index), see [Caching](/learn/caching).
+
+### What goes wrong: the N+1 query
+
+An **N+1** shows up when a loop issues a query per row. Twenty posts and their authors is 21 queries; at 2 ms a round trip that is 42 ms of waiting, against 4 ms for the two-query version, and it gets worse with page size. Play **N+1: 21 queries**, then **Batched**.
+
+<FlowDiagram spec={nPlusOne} />
+
+Spot it by logging the query count per request, and fix it with a join, `WHERE id = ANY(ids)`, or a DataLoader that batches the lookups made in one tick. ORMs hide this: turn on eager loading deliberately.
 
 ## SQL vs NoSQL
 
@@ -84,6 +176,42 @@ Pick by access pattern. SQL gives joins and transactions. NoSQL gives flexible s
 | Document | Nested records read whole: profiles | MongoDB |
 
 Bad fits: a money transfer on a store with no multi-row transactions, or a sensor firehose of 100K writes/s on one Postgres primary. Real systems mix them: Postgres for orders, Redis for sessions, a search index for the catalog.
+
+Start from the question you must answer, then walk the tree.
+
+<DecisionTree spec={storePick} />
+
+### Relational: the default
+
+A **relational** database stores rows in tables with constraints, joins and multi-row transactions. In an interview, start here and say why you would leave. It handles most products to a very large scale.
+
+<FlowDiagram spec={relationalTxn} />
+
+Use it when data has rules (an order needs a user; a payment is unique per order), when you need ad hoc queries, or when you are not sure how the data will be read. It costs you horizontal write scaling: one primary takes all writes until you shard.
+
+### Key-value: one key, one answer
+
+A **key-value** store maps a key to a value and nothing more. The key is hashed to a partition, so a lookup is one hop and capacity grows by adding partitions.
+
+<FlowDiagram spec={keyValueStore} />
+
+Use it for sessions, carts, feature flags and counters, anything read by one known id. Redis does on the order of 100K operations a second per node; DynamoDB spreads items across partitions and documents a per-partition limit of about 1,000 writes a second, so a hot key is the failure to plan for. Play **Not a key lookup** to see what it cannot do.
+
+### Wide-column: the write firehose
+
+A **wide-column** store partitions rows by a key and keeps them sorted inside the partition, with copies on several nodes and no single leader. Cassandra and Bigtable work this way.
+
+<FlowDiagram spec={wideColumn} />
+
+Use it for huge, append-heavy data read by partition: chat history, activity feeds, time series, device telemetry. You design the table for the query (one table per question), you give up joins and ad hoc filters, and consistency is tunable (write to 2 of 3 nodes and read from 2 of 3 and you get the latest write).
+
+### Document: nested records read whole
+
+A **document** store keeps a nested record as one JSON-like document. Profiles, catalog items and CMS pages that vary in shape and are read whole fit well.
+
+<FlowDiagram spec={documentStore} />
+
+Use it when a record is read and written as a unit and you want a flexible schema. The cost is copies: embed what changes together, reference what is shared, because MongoDB-style joins are weaker than SQL joins. Multi-document transactions exist in MongoDB but are slower and less central than in Postgres, so money still belongs in a relational store.
 
 ## Replication
 
@@ -99,6 +227,36 @@ Replicas scale reads only. If writes are the bottleneck, more replicas make it w
 
 Most setups have one leader that takes all writes. Multi-leader and leaderless setups add conflicts to resolve; see [Consistency and CAP](/learn/consistency-cap).
 
+Work the load. At 10,000 queries/s with 95% reads, one primary takes all 10,000. Add two replicas and it takes only the 500 writes, while each replica serves 4,750 reads and still replays the same 500 writes.
+
+<BarChart title="Queries per second on each node" unit="queries/s" data={[{ label: "One primary", value: 10000, display: "10,000" }, { label: "Primary + 2 replicas: primary", value: 500, display: "500" }, { label: "Primary + 2 replicas: each replica", value: 4750, display: "4,750" }]} />
+
+### Async: the default
+
+**Async** replication acknowledges a commit as soon as the primary has it on its own disk and ships the change afterwards. It is fastest and the default in Postgres and MySQL.
+
+<FlowDiagram spec={commitModes} scenario="async" />
+
+Use it when losing the last second of writes on a crash is acceptable, or when the data is rebuildable: feeds, profiles, most product data. Play it to the end: an acknowledged write that was not yet shipped dies with the primary.
+
+### Semi-sync: lose nothing, pay one round trip
+
+**Semi-sync** makes the primary wait until one replica has received the change. Nothing acknowledged is lost if that replica survives, and only one round trip is added.
+
+<FlowDiagram spec={commitModes} scenario="semi" />
+
+Use it for orders and payments where losing an acknowledged commit is not acceptable. Keep the waiting replica in the same region: a replica tens of milliseconds away adds that to every commit.
+
+### Sync: all replicas must confirm
+
+**Sync** waits for every replica, so commit latency equals the slowest replica and one failure stops all writes.
+
+<FlowDiagram spec={commitModes} scenario="sync" />
+
+Rarely the right answer for a general database. Prefer semi-sync (or a quorum of replicas) so a single slow node cannot stall the system.
+
+### What goes wrong: replica lag
+
 Lag breaks two promises:
 
 - **Read-your-writes**: you save, read a lagging replica, and your change seems lost. Read from the primary for a few seconds after a write.
@@ -112,6 +270,16 @@ Play **Stale read + fix**, then raise the lag in the simulator.
 
 <CodeBlock src="snippets/read-your-writes.js" />
 
+Normal lag is milliseconds. A bulk `UPDATE` of 10 million rows, or a long query on the replica, can push it to minutes, because a replica applies the change log mostly in order. Alert on replica lag in seconds, and route a lagging replica out of the read pool.
+
+### What goes wrong: time running backwards
+
+**Monotonic reads** fail when two reads by one user hit different replicas and the second is older. A comment appears and then vanishes on refresh, which looks like a bug in your product. Pick the **pinned to one** tab.
+
+<SequenceDiagram spec={monotonicReads} />
+
+Pin each user to one replica by hashing the user id, or read from the primary for sessions that just wrote. The pinning costs a little balance and gives you a consistent timeline.
+
 ## Failover
 
 The primary dies. Play **Failover** to watch a replica take over:
@@ -124,6 +292,22 @@ The primary dies. Play **Failover** to watch a replica take over:
 **RPO** (recovery point objective) is the data you lose: with async replication, writes that hadn't shipped. **RTO** (recovery time objective) is time down: tens of seconds with automated failover.
 
 <FlowDiagram spec={primaryReplica} scenario="failover" />
+
+### Where the time goes
+
+RTO is mostly waiting. With a heartbeat every 5 s and three misses to declare death, detection alone costs 15 s. Add 5 s to pick and promote a replica and about 10 s for DNS or a proxy to repoint, and writes fail for roughly 30 s. These are example numbers; yours depend on your timeouts.
+
+<Timeline spec={failoverTimeline} />
+
+Tune the trade-off, not just the number. Faster detection (fewer missed beats) shortens downtime but triggers more false failovers on a network blip. Use a proxy or a managed endpoint rather than raw DNS, because clients cache DNS answers and keep writing to the dead address.
+
+### What goes wrong: split brain
+
+**Split brain** is two nodes that both believe they are the primary. A network blip hides the old primary; the manager promotes a new one; app servers with a cached address keep writing to the old one. Now the same keys hold different data and nothing can merge them.
+
+<FlowDiagram spec={splitBrain} />
+
+Play **Split brain**, then **Fenced**. Fence before you redirect: power the old node off, revoke its storage or make it read-only, and let a majority of observers decide who is dead so a single flaky link cannot trigger a promotion. The managers that do this (Patroni, RDS, Orchestrator) exist because doing it by hand at 3 a.m. goes wrong.
 
 ## Sharding
 
@@ -141,7 +325,57 @@ A good shard key has **high cardinality** (`user_id`, not `country`) and matches
 
 Harder afterwards: cross-shard joins and transactions, hot keys, resharding. From 4 to 5 shards, `hash % N` moves about 80% of users. See the [sharding deep dive](/deep-dives/sharding-strategies).
 
+Size it with arithmetic. Say one primary tops out near 10,000 writes a second (an assumption; measure yours) and you expect 35,000. That needs at least 4 shards (35,000 / 10,000 = 3.5). Plan 8, so each takes about 4,400 writes a second and has room to grow.
+
 <CodeBlock src="snippets/shard-for.js" />
+
+### Hash sharding: the default
+
+**Hash sharding** applies a hash to the key and takes it modulo the shard count. Keys spread evenly, and a lookup by the key goes to one shard.
+
+<FlowDiagram spec={hashShards} />
+
+Use it when access is by id (users, orders, chats) and you rarely scan ranges. Play **Range scan** for the cost: neighbouring ids are scattered, so a range asks every shard.
+
+### Range sharding: scans stay local
+
+**Range sharding** gives each shard a contiguous slice of the key space, so a scan reads one shard in order and a shard can be split where it grows.
+
+<FlowDiagram spec={rangeShards} />
+
+Use it when queries scan ranges (a customer's orders A to F, a time window) and the key is not monotonic. Play **Rising key** for the trap, and fix it by leading with an id that spreads writes, then sorting by time inside it.
+
+### Directory sharding: control for a dependency
+
+**Directory sharding** keeps a lookup table that says which shard holds each key (often each tenant). You can place and move data however you like.
+
+<FlowDiagram spec={directoryShards} />
+
+Use it for multi-tenant products where a few big customers need their own shard. The directory sits on the path of every request, so cache it and replicate it.
+
+### Pick the key
+
+The shard key is the decision you cannot undo. Walk the questions with your main query in mind.
+
+<DecisionTree spec={shardKeyPick} />
+
+A key that matches your main query makes the common request a one-shard request. A key with few values (`country`, `status`) or a rising value (`created_at`, an auto-increment id) makes one shard hot. Test it: for the busiest hour, count requests per shard. If the hottest shard has more than about twice the average, change the key now.
+
+### What goes wrong: queries that cross shards
+
+A query that does not include the shard key must ask every shard (**scatter-gather**) and wait for the slowest. With 16 shards where each is slow 1% of the time, the chance that at least one is slow is 1 - 0.99 to the power 16, about 15%, so the tail latency of the whole query is far worse than any shard's.
+
+<FlowDiagram spec={scatterGather} />
+
+Fix it with a lookup table (email to user_id) so the common request hits one shard. Cross-shard joins move to the app or an analytics copy, and cross-shard transactions are best designed away: keep rows that change together on one shard (the order and its items share an `order_id` or `user_id`).
+
+### What goes wrong: resharding
+
+Adding a shard to `hash % N` is painful: going from 4 to 5 shards, only 20% of keys keep their shard, so 80% must move. The fix is to decouple keys from machines: hash into many **virtual shards** (say 1,024) and map those to machines. Adding a fifth machine then moves about 1,024 / 5 = 205 whole virtual shards, around 20%, never individual rows. Try the ring and add a node.
+
+<HashRing />
+
+Plan the shard count up front, move one virtual shard at a time, and keep a dual-write or a copy-then-switch step so reads stay correct during the move.
 
 ## Backups and point-in-time recovery
 
@@ -150,6 +384,24 @@ Harder afterwards: cross-shard joins and transactions, hot keys, resharding. Fro
 - **Base backups plus WAL archiving**: full backups plus every write-ahead log segment. Replay to any moment: "restore to 14:31:59, before the bad deploy".
 - **Restore drills**: an untested backup is a hope. Restore on a schedule and time it.
 - Keep copies in another region and account.
+
+### Replica vs backup
+
+A replica protects against a dead machine; a backup protects against a mistake. At 14:32 a bad migration drops `orders`; the replica copies the drop at once. Play **Bad deploy**, then **Restore to 14:31:59**.
+
+<FlowDiagram spec={pitrFlow} />
+
+### Point-in-time recovery
+
+**Point-in-time recovery** restores a nightly base backup, then replays archived log segments up to the target second. You lose at most the log not yet archived, which is a few minutes of changes or less, so the RPO is far better than a nightly dump.
+
+Use it on every production database. Cheaper than any outage, and many managed services (RDS, Cloud SQL) switch it on with one setting.
+
+### What goes wrong: the untested restore
+
+A backup is only real once you have restored it. A restore of a 2 TB database at 100 MB/s takes 2,000,000 MB / 100 = 20,000 s, about 5.5 hours, and that is before replaying log. Time it before you need it, because the number goes into your RTO.
+
+Keep one copy in another region and another account, so a leaked credential or a regional outage cannot take both the data and its backup. Restore into a scratch instance on a schedule and run a query against it.
 
 ## Place the read replica
 
@@ -161,6 +413,44 @@ One node is hidden: the one the app reads from.
 - Reading from a replica right after a write.
 - Choosing a monotonically increasing shard key.
 - Never testing a restore.
+</Callout>
+
+## Databases and scaling in the interview
+
+Bring the database up as soon as you list the entities, then choose the store, the indexes and the scaling move in that order. Naming the cheap moves before sharding is what interviewers listen for.
+
+<Steps>
+  <Step title="Choose the store by access pattern">
+    Say what you read and write: "Orders need transactions, so Postgres. Sessions are lookups by id, so Redis." Start relational unless a number or a shape says otherwise.
+  </Step>
+  <Step title="Name the indexes for the main queries">
+    Pick the two or three queries that matter and give each an index: "(user_id, created_at) for the order history page." Say what you will not index.
+  </Step>
+  <Step title="Scale reads before writes">
+    Put numbers on it. A cache first, then read replicas, with read-your-writes handled by reading the primary right after a write.
+  </Step>
+  <Step title="Shard only when the numbers force you">
+    Say the trigger (several TB, or writes beyond one primary) and the key: "hash on user_id, which matches the main query". Name the cost: cross-shard queries and resharding.
+  </Step>
+  <Step title="Cover failure and recovery">
+    State the replication mode (semi-sync for money), the failover plan with fencing, and backups with point-in-time recovery and a restore drill.
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "10x more reads than writes" | Cache, then read replicas with read-your-writes |
+| "Two users book the same seat" | A unique constraint, or SERIALIZABLE with retry |
+| "The table has 2 billion rows" | Indexes first, then shard by a high-cardinality key |
+| "What if the database dies?" | Semi-sync replica, fenced failover, RPO and RTO |
+| "Someone ran a bad migration" | Point-in-time recovery from a backup, not a replica |
+
+<Callout kind="interview" title="Say it out loud">
+"I'd start with Postgres for orders and index the order-history query on user and date. Reads outnumber writes ten to one, so I'd add a cache and two replicas, and read my own writes from the primary for a few seconds. I wouldn't shard yet; at several terabytes I'd hash on user_id, which matches the main query. For failure, semi-sync replication, fenced failover and point-in-time recovery."
+</Callout>
+
+<Callout kind="warning">
+Do not shard on day one. It makes every query, join and transaction harder, and is costly to undo. Exhaust indexes, a cache and replicas first, and say so.
 </Callout>
 
 ## Interview questions
@@ -180,6 +470,9 @@ One node is hidden: the one the app reads from.
   </FollowUp>
   <FollowUp q="How do you add an index to a 500M-row table without downtime?">
     `CREATE INDEX CONCURRENTLY`. If it fails, drop the invalid index and retry.
+  </FollowUp>
+  <FollowUp q="Your app opens 1,000 connections and Postgres refuses new ones. Now what?">
+    Put a pooler such as PgBouncer in front, so about 40 real connections serve all clients.
   </FollowUp>
 </FollowUps>
 

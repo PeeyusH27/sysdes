@@ -7,21 +7,21 @@ Union-find keeps each group as a tree whose **root is the group's name**, so "ar
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- The answer is a number of **groups**: components, provinces, friend circles.
-- Links **arrive one at a time** and you need connectivity after each.
-- "Does this edge **create a cycle**?" in an **undirected** graph.
-- Items **equivalent** through chains of links: shared emails, `a == b` constraints.
-
-</Callout>
-
-| Variant | What you watch | Classic problem |
-|---|---|---|
-| Count groups | `count` drops per merge | number of provinces |
-| Cycle detection | `union` returns `false` | redundant connection |
-| Keyed groups | roots in a `Map` | accounts merge |
-| Kruskal's MST | edges that join two groups | min cost to connect points |
+<ReachFor
+  signals={[
+    "The answer is a number of **groups**: components, provinces, friend circles.",
+    "Links **arrive one at a time** and you need connectivity after each.",
+    "\"Does this edge **create a cycle**?\" in an **undirected** graph.",
+    "Items **equivalent** through chains of links: shared emails, `a == b` constraints.",
+  ]}
+  variants={[
+    {"name": "Count groups", "how": "`count` drops per merge", "extra": "number of provinces"},
+    {"name": "Cycle detection", "how": "`union` returns `false`", "extra": "redundant connection"},
+    {"name": "Keyed groups", "how": "roots in a `Map`", "extra": "accounts merge"},
+    {"name": "Kruskal's MST", "how": "edges that join two groups", "extra": "min cost to connect points"},
+  ]}
+  howLabel="What you watch"
+/>
 
 ## The core idea: one root per group
 

@@ -1,4 +1,4 @@
-import { realtimeTechniques, wsScaling, webhookDelivery } from './diagrams'
+import { realtimeTechniques, wsScaling, webhookDelivery, transportPicker, shortPolling, longPolling, sseStream, wsLifecycle, roomFanout, stickySockets, webhookRetries, reconnectStorm, lostEvents } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
@@ -24,7 +24,18 @@ The diagram sends three events through each technique. Switch tabs: when does th
 
 **Long polling** holds each request open until there is news. **Webhooks** are server to server and have their own section.
 
-Start with plain polling. Move only when users notice the delay, or the request count hurts. Pick by product:
+**Start with plain polling.** Move only when users notice the delay, or the request count hurts. The table prices each option at 100K clients, and the tree picks one.
+
+| Technique | Use it when | At 100K clients |
+|---|---|---|
+| Short polling | Seconds of delay are fine | 20,000 req/s at 5 s, 3,333 req/s at 30 s |
+| Long polling | Near real time, but streaming is blocked | 3,333 req/s idle (30 s timeout), one held request each |
+| SSE | The server talks, the client rarely does | 100K open streams: 2 nodes at 50K each, plus headroom |
+| WebSocket | The client sends often too | 100K sockets, plus a pub/sub backplane |
+
+<DecisionTree spec={transportPicker} />
+
+Pick by product:
 
 | Product | Pick | Why |
 |---|---|---|
@@ -39,18 +50,41 @@ Four techniques race on one event stream. Raise the poll interval: short polling
 
 <PollingRace />
 
-Do the sum. 1,000 dashboards polling every 30 s is about 33 requests per second: trivial, so keep polling. 100K clients polling every 5 s make **20,000 requests per second**, mostly empty, so switch to SSE. The cost moves to memory: each open stream holds a socket, and one node holds roughly 50K.
+Do the sum. Requests per second is clients divided by the interval, and the average wait is half the interval.
+
+- 1,000 dashboards every 30 s: 1,000 ÷ 30 is about **33 requests per second**, with a 15 s average delay. Trivial, so keep polling.
+- 100K clients every 5 s: 100,000 ÷ 5 is **20,000 requests per second**, with a 2.5 s average delay and mostly empty replies. Switch to SSE.
+
+The cost moves to memory: each open stream holds a socket, and one node holds roughly 50K. That is the planning number used on this page.
 
 ## Short and long polling
 
-**Short polling** is a timer and a `fetch`. Schedule the next poll *after* the reply, and answer unchanged data with `304 Not Modified`. Fine for a 30 s dashboard.
+Both are plain request and response: short polling asks on a timer, long polling asks and waits. Each gets its own picture below.
 
-**Long polling** holds the request until there is news or about 30 s pass; the client re-asks with a cursor (`?since=41`). Two classic bugs:
+### Short polling
 
-- **The gap:** subscribe *after* reading the backlog and an event in between is lost. Subscribe first, then read.
+**Short polling** is a timer and a `fetch`. Schedule the next poll *after* the reply (not with `setInterval`), pause hidden tabs, and answer unchanged data with `304 Not Modified`. Play **Nothing changed**, **Something changed** and **Polls in lockstep**.
+
+<FlowDiagram spec={shortPolling} />
+
+**Use it when** a delay of up to one interval is acceptable and the clients are few: 1,000 dashboards on a 30 s timer cost about 33 requests per second. It is the default because it needs no new infrastructure, works through every proxy, and is trivial to debug.
+
+**What it costs:** most replies are empty, and the delay is up to a full interval. Start each client at a random offset, or 100,000 tabs scheduled on the clock minute all fire in the same second.
+
+### Long polling
+
+**Long polling** holds the request until there is news or about 30 s pass, then the client re-asks with a cursor (`?since=41`). Walk the four tabs: an event, a timeout, the gap bug and its fix.
+
+<SequenceDiagram spec={longPolling} />
+
+**Use it when** you need near-real-time delivery but streaming responses are blocked by a proxy or a legacy client. Idle clients still cost a request every 30 s: 100,000 ÷ 30 is about 3,300 requests per second, against 20,000 for 5 s short polling. Every event also costs a full request and response, so a busy stream is expensive.
+
+Two classic bugs:
+
+- **The gap:** subscribe *after* reading the backlog and an event in between is lost. Subscribe first, then read, then drop buffered events already in the backlog.
 - **The tight loop:** instant re-polls after an error flood a down server. Back off with jitter.
 
-Use an async server (Node, Go), not a thread per request.
+Use an async server (Node, Go), not a thread per request: 100K held requests would mean 100K parked threads.
 
 ## Server-Sent Events
 
@@ -64,14 +98,33 @@ data: {"home":2,"away":1}
 : ping
 ```
 
-- **Connection limits.** HTTP/1.1 allows about 6 connections per origin, so a seventh tab hangs. HTTP/2 shares one.
-- **Proxies.** Some buffer the stream. Send `X-Accel-Buffering: no` (nginx) and a `: ping` every 15 s.
+Play **Live stream**, then **Drop and resume**.
+
+<FlowDiagram spec={sseStream} />
+
+**Use it when** the server talks and the client mostly listens: scores, order status, progress bars, notifications, live dashboards. It is the right default once polling hurts. One node holds about 50K streams, so 100K viewers need 2 nodes plus headroom.
+
+**What it costs:** one-way only (the client sends ordinary requests), text only, and every stream holds a socket. Two limits to know:
+
+### Connection limits
+
+Browsers allow about 6 HTTP/1.1 connections per origin, and each SSE stream holds one, so a seventh tab hangs. HTTP/2 shares one connection and allows many streams, so serve SSE over HTTP/2.
+
+### Proxies
+
+Some proxies buffer the stream, and most close idle connections after about 60 s. Send `X-Accel-Buffering: no` (nginx) and a `: ping` every 15 s. The picture of this failure is in **What goes wrong**.
 
 ## WebSockets
 
 A **WebSocket** starts as an HTTP request, then upgrades the same connection into a two-way channel of small messages. Use it when the client sends often too, like chat. The price is **state**: each socket lives on one server, and reconnect and resume are yours to write.
 
-Picture a chat app on a train. The tunnel kills the connection silently, and without a heartbeat the server keeps writing to nobody. Messages with ids let the client resume where it stopped.
+Picture a chat app on a train. The tunnel kills the connection silently, and without a heartbeat the server keeps writing to nobody. Messages with ids let the client resume where it stopped. Play **Connect and talk**, then **Drop and resume**.
+
+<SequenceDiagram spec={wsLifecycle} />
+
+**Use it when** the client sends often too (chat, cursors, multiplayer) or messages are tiny and frequent. A chat server with 50K sockets per node needs 20 nodes for 1M users. If only the server talks, SSE is simpler.
+
+**What it costs:** every socket is pinned to one node, you write heartbeats, reconnect and resume yourself, and scaling needs a pub/sub backplane. Plan for all four before you pick it.
 
 ### Scaling WebSockets
 
@@ -91,9 +144,42 @@ Browsers can't set an `Authorization` header on a WebSocket, so authenticate the
 - Or a short-lived **token** in the first message, never in the URL, which lands in logs.
 - Sockets outlive tokens, so re-authenticate before expiry.
 
+## Scaling the connection tier
+
+A connection tier is a fleet of servers whose only job is to hold sockets, so size it by connections and route messages with pub/sub. The same tier serves SSE and WebSockets.
+
+### Sizing the fleet
+
+Divide sockets by what one node holds, then leave room for a node dying. With a planning figure of 50K sockets per node:
+
+- 1M sockets ÷ 50K is **20 nodes**, but at 100% load a lost node pushes its 50K onto 19 others, which then hold 52.6K each.
+- Plan for about 70% load: 1M ÷ 35K is about **29 nodes**, so one failure adds under 2K sockets per survivor.
+
+Why not push one node harder? File descriptors, memory per socket, and the roughly 64K source ports one load balancer address can use toward one backend address and port all cap you.
+
+### Fan-out through pub/sub
+
+A **message reaches many sockets** by being published once. Each node subscribes to the channels its sockets care about (`user:bob`, `room:7`), and Redis hands one copy to each subscribed node. Play **Room message**, then **Node misses it**.
+
+<FlowDiagram spec={roomFanout} />
+
+**Use it when** sockets for one audience live on many nodes. For a room of 10,000 split over two nodes, one publish becomes 2 deliveries and 10,000 local writes, not 10,000 lookups. Use one channel per user for direct messages and one per room for groups.
+
+**What it costs:** Redis pub/sub is at most once. A node that is disconnected for 4 s misses everything published in that window, so keep a log with ids and let clients resume (see **Lost events**). In Redis Cluster, plain pub/sub is broadcast to every node; sharded pub/sub (Redis 7) keeps a channel on one shard.
+
+### Sticky sessions or not
+
+A WebSocket is one TCP connection, so it stays on its node without sticky routing. Stickiness only matters for HTTP long-polling fallbacks (Socket.IO's polling transport needs it until the upgrade) and for state kept in node memory. Play **State in memory**, then **State in Redis**.
+
+<FlowDiagram spec={stickySockets} />
+
+**Use it when** you cannot move state yet: pin by cookie or IP hash as a stopgap. The better design keeps rooms and sessions in Redis, so any node takes a reconnect and a deploy drains cleanly.
+
 ## Webhooks
 
 Stripe and GitHub `POST` to your endpoint when something happens, sometimes twice, and retry until you answer `2xx`. Try all three branches.
+
+**Use it when** the receiver is a server and the event happens outside your system: a payment settles, a pull request opens. It costs nothing while idle, unlike polling the provider every minute.
 
 <SequenceDiagram spec={webhookDelivery} />
 
@@ -101,6 +187,55 @@ Stripe and GitHub `POST` to your endpoint when something happens, sometimes twic
 - **Reject old timestamps.** Anything older than about 5 minutes is a replay.
 - **Acknowledge fast.** Enqueue, then return `200` quickly.
 - **Process idempotently.** A unique constraint on the event id makes a duplicate a no-op.
+
+### When a webhook goes missing
+
+A webhook can be late or never arrive, so treat it as a hint and keep a way to ask. Stripe retries for up to three days with growing delays; GitHub does not redeliver failed deliveries on its own. Play **Endpoint down, retried**, then **Retries run out**.
+
+<FlowDiagram spec={webhookRetries} />
+
+Run an hourly **reconcile job** that lists recent events from the provider API and enqueues any you lack. The unique event id keeps it safe to run twice.
+
+## What goes wrong
+
+Real-time systems fail at the edges: when many clients drop together, when a middlebox interferes, and when a gap opens between two events. Plan for each before launch.
+
+| Failure | Scene | Fix |
+|---|---|---|
+| **Reconnect storm** | A node dies and 50K clients return in one second | Full jitter, wider first window |
+| **Proxy buffering** | The SSE feed freezes behind nginx | Disable buffering, ping every 15 s |
+| **Lost events** | A 6 s drop skips two messages | Ids, a log, resume by last id |
+| **Slow consumer** | One phone on a bad network | Cap its queue, then drop or close |
+
+### Reconnect storm
+
+A **reconnect storm** is every dropped client coming back at the same moment. Friday 20:00, kickoff: one node holding 50,000 sockets crashes. Play **No jitter**, then **Full jitter**.
+
+<FlowDiagram spec={reconnectStorm} />
+
+Without jitter, 50,000 clients retry after 1 s, which is 50,000 ÷ 19 survivors, about 2,600 handshakes each in one second. Assume a node accepts about 1,000 per second and it falls over, then the timeouts retry in sync and the storm repeats.
+
+With **full jitter** (a random wait between 0 and the cap) over 30 s, the same 50,000 arrive at about 1,700 per second, around 90 per survivor. Note that attempt 0 of `backoffDelay` only spreads over its base (1 s). For a mass drop, make the first window wide, or have the server send a hint (`retry:` in SSE, a close reason in WebSockets).
+
+### Proxy buffering and idle timeouts
+
+A **buffering proxy** holds the stream until its buffer fills, so the feed looks frozen, and an idle timeout (often 60 s) then closes it. Play **Buffering proxy**.
+
+<FlowDiagram spec={sseStream} scenario="buffering" />
+
+The fix is three lines of config: `X-Accel-Buffering: no` on the response, buffering off on the route, and a `: ping` or WebSocket ping every 15 to 30 s, well under the shortest idle timeout on the path. Check every hop: CDN, load balancer, ingress, then app.
+
+### Lost events
+
+An event is lost when it happens while the socket is down and nothing records it. Play **No ids: events lost**, then **Ids and replay**.
+
+<SequenceDiagram spec={lostEvents} />
+
+Give every message a monotonically increasing id, append it to a log before you publish it, and have the client send its last id on reconnect. Delivery becomes **at least once**, so clients dedupe by id. SSE does the id and header part for you; with WebSockets you write it.
+
+### Slow consumers
+
+A **slow consumer** is a client that cannot drain its socket, such as a phone on a weak network. The server's send buffer for it grows until memory is gone. Cap the queue per socket, then drop old messages or close the socket and let the client resume by id.
 
 ## Code
 
@@ -140,6 +275,44 @@ Stripe and GitHub `POST` to your endpoint when something happens, sometimes twic
 - Reconnecting after a fixed delay with no jitter: every dropped client comes back in the same second.
 </Callout>
 
+## Real-time delivery in the interview
+
+Bring this up the moment a requirement says live, instant, or notify, and say the cheapest option that meets the delay. Walk through five decisions in order.
+
+<Steps>
+  <Step title="Ask how fresh and in which direction">
+    "Is 10 to 30 seconds fine? Does the client talk back?" The answers pick the technique, so ask them first.
+  </Step>
+  <Step title="Default to polling, upgrade with a number">
+    Poll when delay is fine. Switch when the arithmetic says so: 100K clients at 5 s is 20,000 requests per second.
+  </Step>
+  <Step title="Pick SSE or WebSocket by direction">
+    SSE for server-only push with free resume. WebSocket when the client sends often. Webhooks when the receiver is a server.
+  </Step>
+  <Step title="Scale the connection tier">
+    About 50K sockets per node, sized at 70% load, with pub/sub routing and no sticky sessions. 1M sockets is about 29 nodes.
+  </Step>
+  <Step title="Own the failure modes">
+    Reconnect storms, lost events and proxy buffering. Say full jitter, message ids with a log, and disabled buffering with pings.
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "Live sports scores for millions" | SSE, fan-out through pub/sub, resume with Last-Event-ID |
+| "Chat or collaborative editing" | WebSockets with ids, a pub/sub backplane and a log |
+| "A dashboard that updates" | Poll every 30 s, add a 304 |
+| "A payment provider tells us" | A webhook with signature check, queue and reconcile job |
+| "What if a server restarts?" | Drain, jittered reconnect, resume by last id |
+
+<Callout kind="interview" title="Say it out loud">
+"Live scores flow one way, so I'd use SSE behind an HTTP/2 load balancer, about 50K streams per node. Events get ids in a log, so a dropped client resumes with Last-Event-ID, and nodes fan out through Redis pub/sub. On a restart clients reconnect with jitter, so we don't get a storm."
+</Callout>
+
+<Callout kind="warning">
+Do not reach for WebSockets everywhere. A socket is state you must heartbeat, scale and resume. If a 30 s poll meets the requirement, the poll is the better design.
+</Callout>
+
 ## Interview questions
 
 <FollowUps>
@@ -154,6 +327,12 @@ Stripe and GitHub `POST` to your endpoint when something happens, sometimes twic
   </FollowUp>
   <FollowUp q="SSE or WebSocket for a chat app?">
     Usually WebSocket, since messages flow both ways. Give messages ids so clients can resume.
+  </FollowUp>
+  <FollowUp q="How do you avoid losing messages when a socket drops?">
+    Give every message an id and append it to a log first. The client sends its last id on reconnect and the server replays the gap. Dedupe by id.
+  </FollowUp>
+  <FollowUp q="Do WebSockets need sticky sessions?">
+    Not once connected: the socket is one TCP connection. Only long-poll fallbacks and in-memory state need stickiness. Keep state in Redis instead.
   </FollowUp>
   <FollowUp q="How do you notify a mobile user whose app is in the background?">
     Use push (APNs or FCM), since the OS kills background sockets. On open, reconnect and sync.

@@ -25,4 +25,10 @@ export const quiz: QuizItem[] = [
     answer: 1,
     explain: "Browsers allow about 6 HTTP/1.1 connections per origin, and each SSE stream holds one. HTTP/2 shares one connection, so serve SSE over HTTP/2.",
   },
+  {
+    q: "A gateway node loses its Redis connection for 4 s. Redis pub/sub messages sent in that window are:",
+    options: ["Replayed on reconnect", "Lost to that node's sockets", "Queued for up to a minute"],
+    answer: 1,
+    explain: "Redis pub/sub is at most once and stores nothing for absent subscribers. Write messages to a log with ids so clients can resume.",
+  },
 ];

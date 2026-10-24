@@ -7,21 +7,21 @@ A grid is a graph in disguise: every cell is a node joined to its neighbours. **
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- A **grid** of cells (land and water, walls and corridors) where you move up, down, left and right.
-- **Islands, regions, connected** groups to count, measure or fill.
-- The **fewest steps** when every step costs the same.
-- Something **spreads** from several places: rot, fire, "how many minutes until…".
-
-</Callout>
-
-| Variant | Nodes wait in | Classic problems |
-|---|---|---|
-| DFS | the call stack, or an array used as one | flood fill, number of islands, max area of island |
-| BFS | an array queue with a head index | shortest path in a grid, word ladder |
-| Multi-source BFS | one queue seeded with every source | rotting oranges, distance to the nearest exit |
-| Search back from the targets | either | Pacific Atlantic water flow, surrounded regions |
+<ReachFor
+  signals={[
+    "A **grid** of cells (land and water, walls and corridors) where you move up, down, left and right.",
+    "**Islands, regions, connected** groups to count, measure or fill.",
+    "The **fewest steps** when every step costs the same.",
+    "Something **spreads** from several places: rot, fire, \"how many minutes until…\".",
+  ]}
+  variants={[
+    {"name": "DFS", "how": "the call stack, or an array used as one", "extra": "flood fill, number of islands, max area of island"},
+    {"name": "BFS", "how": "an array queue with a head index", "extra": "shortest path in a grid, word ladder"},
+    {"name": "Multi-source BFS", "how": "one queue seeded with every source", "extra": "rotting oranges, distance to the nearest exit"},
+    {"name": "Search back from the targets", "how": "either", "extra": "Pacific Atlantic water flow, surrounded regions"},
+  ]}
+  howLabel="Nodes wait in"
+/>
 
 ## The core idea: visit every node once
 

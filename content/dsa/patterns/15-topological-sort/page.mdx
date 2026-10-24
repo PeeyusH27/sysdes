@@ -7,21 +7,21 @@ A **topological order** lists a directed graph's nodes so every edge points forw
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- **Prerequisites, dependencies, "must happen before"**: courses, build steps.
-- "Return **an order** in which…", "is it **possible to finish**…", "does this **directed** graph have a **cycle**?"
-- The **minimum number of rounds** when independent tasks run in parallel.
-- An order **inferred** from comparisons: an alien alphabet.
-
-</Callout>
-
-| Variant | Reports a cycle when | Classic problems |
-|---|---|---|
-| Kahn's algorithm (BFS) | fewer than V nodes are placed | course schedule, alien dictionary |
-| Kahn's, level by level | same | parallel courses, build stages |
-| DFS with three colours | an edge reaches a gray node | course schedule II, cycle detection |
-| Kahn's on reversed edges | leftovers are on, or lead into, a cycle | eventual safe states |
+<ReachFor
+  signals={[
+    "**Prerequisites, dependencies, \"must happen before\"**: courses, build steps.",
+    "\"Return **an order** in which…\", \"is it **possible to finish**…\", \"does this **directed** graph have a **cycle**?\"",
+    "The **minimum number of rounds** when independent tasks run in parallel.",
+    "An order **inferred** from comparisons: an alien alphabet.",
+  ]}
+  variants={[
+    {"name": "Kahn's algorithm (BFS)", "how": "fewer than V nodes are placed", "extra": "course schedule, alien dictionary"},
+    {"name": "Kahn's, level by level", "how": "same", "extra": "parallel courses, build stages"},
+    {"name": "DFS with three colours", "how": "an edge reaches a gray node", "extra": "course schedule II, cycle detection"},
+    {"name": "Kahn's on reversed edges", "how": "leftovers are on, or lead into, a cycle", "extra": "eventual safe states"},
+  ]}
+  howLabel="Reports a cycle when"
+/>
 
 ## The core idea: start with something that has no prerequisites
 

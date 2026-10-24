@@ -23,4 +23,24 @@ export const quiz: QuizItem[] = [
     answer: 1,
     explain: "Requirements, Architecture, Data model, Interface, Optimizations. Performance, accessibility and security come last.",
   },
+  {
+    q: "At minute 25 you are still drawing the design. What is the best move?",
+    options: [
+      "Speed through everything that remains",
+      "Say so, finish fast, take one deep dive and name the second",
+      "Skip the deep dives and wrap up early",
+    ],
+    answer: 1,
+    explain: "Naming the gap and compressing keeps the part that scores most. One deep dive plus a one-line mention of the second shows you know it is there.",
+  },
+  {
+    q: "Your estimate shows 40 writes a second. What do you say about sharding?",
+    options: [
+      "Shard now so we are ready for growth",
+      "One database is enough; I would shard if writes reach about 40,000 a second",
+      "Skip the topic so the answer stays short",
+    ],
+    answer: 1,
+    explain: "Name the choice and the load that would change it. At 40 writes a second a single Postgres is far below its limit, and sharding would only add cost.",
+  },
 ];

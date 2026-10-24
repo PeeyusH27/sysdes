@@ -23,7 +23,7 @@ const widgetExports = [...readFileSync(path.join(root, "src/components/widgets/i
 const allowed = new Set([
   "TLDR", "Callout", "Requirements", "Steps", "Step", "FollowUps", "FollowUp", "Quiz", "CodeBlock", "CodeTabs",
   "StatTiles", "BarChart", "LineChart", "FlowDiagram", "SequenceDiagram", "ClassDiagram", "DecisionTree", "Timeline",
-  "AlgoViz", "JsRef", "ProblemLink", "RunCode", "Doodle",
+  "AlgoViz", "JsRef", "ProblemLink", "RunCode", "Doodle", "ReachFor",
   ...widgetExports,
 ]);
 const dsaRegistry = readFileSync(path.join(root, "content/dsa/registry.ts"), "utf8");

@@ -80,7 +80,8 @@ test("reduced motion renders no travelling packets", async ({ page }) => {
 
 test("lesson sections are cards you can tick off and flip through", async ({ page }) => {
   await page.goto("/learn/caching");
-  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("sds-view", "read"); });
+  // Cards is the default; this spec counts the cards of the scrolling page first, so it asks for Scroll.
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("sds-view", "read"); localStorage.setItem("sds-progress", JSON.stringify({ state: { readerMode: "scroll" }, version: 2 })); });
   await page.reload();
   const bar = page.locator(".rail");
   // The page opens on its core: six sections, with the other six one click away.

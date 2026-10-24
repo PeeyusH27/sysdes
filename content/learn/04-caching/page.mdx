@@ -1,4 +1,4 @@
-import { cacheAside, cacheLayers } from './diagrams'
+import { cacheAside, cacheLayers, cdnEdge, twoLevel, browserRevalidate, readThrough, writeThrough, writeBehind, hotKey } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
@@ -30,6 +30,40 @@ The fastest query never reaches the database. Play **A cold request** to watch a
 | Redis / Memcached | Shared per-entity data: products, sessions, counters |
 | Database buffer pool | Hot pages, automatically |
 
+In an interview, say **Redis first**. Add the others only when the problem calls for them.
+
+### External cache: Redis or Memcached
+
+An **external cache** is a shared service in front of the database, and it is the default answer. Every app server reads the same copy, so the data is consistent across servers, and the cache survives app restarts.
+
+<FlowDiagram spec={cacheAside} />
+
+Use it for per-entity data that many requests share: products, profiles, sessions, counters. A hit costs about 1 ms against about 50 ms for the database.
+
+### CDN: cache near the user
+
+A **CDN** keeps copies of public content on edge servers around the world. A user in Mumbai reaches a nearby edge in about 20 ms instead of an origin in Virginia in about 250 ms.
+
+<FlowDiagram spec={cdnEdge} />
+
+Use it for images, video, scripts and any response that is identical for everyone. Never put per-user data in a shared CDN cache. Reach for it when users are spread across regions, or when media dominates the bytes.
+
+### Browser cache: the free one
+
+The **browser** is a cache you do not pay for. `Cache-Control: max-age` makes a repeat visit skip the network entirely, and an `ETag` turns a stale copy into a cheap `304` with no body.
+
+<SequenceDiagram spec={browserRevalidate} />
+
+Fingerprint your assets (`app.3f9a1c.js`) and cache them for a year. The catch: you cannot reach into a user's browser and delete a copy, so you can only change the URL.
+
+### In-process cache: fastest, smallest
+
+An **in-process cache** lives in the app server's own memory, so a hit costs microseconds and no network. It is also private to that server, so ten servers hold ten copies that can disagree.
+
+<FlowDiagram spec={twoLevel} />
+
+Use it as an optimization layer on top of Redis, for tiny and hot read-only data (feature flags, config, a celebrity profile), with a TTL of a few seconds. Do not use it for data that must be the same everywhere.
+
 ## What to cache and how to name it
 
 Cache what is **read often and changes rarely**.
@@ -40,28 +74,43 @@ Cache what is **read often and changes rarely**.
 
 ## Caching patterns
 
-Six ways to fill a cache. One is the default.
+Six ways to fill a cache, and one is the default: **cache-aside**. Pick by asking what happens when the cache dies, and how stale you can afford to be.
 
-<Steps>
-  <Step title="Cache-aside (lazy loading)">
-    Check the cache. On a miss, read the database and fill the cache. If the cache dies, you only get slower. **The default.**
-  </Step>
-  <Step title="Read-through">
-    The same, but the cache loads from the origin itself.
-  </Step>
-  <Step title="Write-through">
-    Write the database and cache together. Always fresh, but writes cost double.
-  </Step>
-  <Step title="Write-behind (write-back)">
-    Write the cache now, the database later. Fast, but a crash loses data: fine for view counts, never for payments.
-  </Step>
-  <Step title="Write-around">
-    Writes skip the cache. For data written once and rarely read.
-  </Step>
-  <Step title="Refresh-ahead">
-    Reload hot keys before they expire.
-  </Step>
-</Steps>
+### Cache-aside (the default)
+
+The app owns the logic: check the cache, and on a miss read the database and fill the cache. If the cache dies, you only get slower.
+
+<FlowDiagram spec={cacheAside} />
+
+Use it for almost everything read-heavy. The cost is one slow request per cold key, and a short window where the copy can be stale.
+
+### Read-through
+
+Read-through is cache-aside with the loading moved into the cache. The app only ever calls `get(key)`; the cache layer fetches from the database on a miss.
+
+<FlowDiagram spec={readThrough} />
+
+Use it when you want the loading code in one place, for example with a managed cache or a library. The behaviour is the same as cache-aside. The difference is who writes the code.
+
+### Write-through
+
+Write-through writes the cache and the database together, and only then confirms. Reads are always fresh, but every write pays for two stores.
+
+<FlowDiagram spec={writeThrough} />
+
+Use it when stale reads are unacceptable and writes are modest: account balances shown right after a change, profile settings. Avoid it for write-heavy data.
+
+### Write-behind (write-back)
+
+Write-behind writes the cache now and the database later, in batches. Writes are very fast and the database load drops, but a crash before the flush loses data.
+
+<FlowDiagram spec={writeBehind} />
+
+Use it for data you can afford to lose a few seconds of: view counts, metrics, likes. Never use it for payments or orders.
+
+### Write-around and refresh-ahead
+
+**Write-around** sends writes straight to the database and skips the cache. It suits data that is written once and rarely read, like logs and uploads, so it does not push hot keys out. **Refresh-ahead** reloads hot keys shortly before they expire, so users never pay for a miss. It costs extra reads for keys nobody asks for again.
 
 All six, with code: [caching techniques](/deep-dives/caching-techniques).
 
@@ -98,9 +147,27 @@ Four classic failures, all landing on your database. A Monday 9:00 stampede: the
 | **Avalanche** | Many keys expire together | Jittered TTLs |
 | **Hot key** | One key gets 100K+ reads/s | In-process cache; copies `key#1…#N` |
 
-Play **Stampede** to see it.
+### Stampede
+
+A **stampede** is a thundering herd on one expired key. Every request misses at the same moment, so all of them rebuild the same value from the database. Play **Stampede**.
 
 <FlowDiagram spec={cacheAside} scenario="stampede" />
+
+Fix it with a per-key lock so one request rebuilds while the rest wait, and serve the stale value while you refresh it (`stale-while-revalidate`). Add jitter to the TTL so unrelated keys do not expire in the same second (an **avalanche**).
+
+### Penetration
+
+**Penetration** is a flood of lookups for ids that do not exist, such as a scraper trying random user ids. A miss is never filled, so every request reaches the database.
+
+Cache the "not found" answer for a short time (30 to 60 s). For a very large id space, put a **Bloom filter** in front: it says "definitely not here" without a lookup.
+
+### Hot key
+
+A **hot key** is one key so popular that a single cache node cannot serve it, even though the cluster is idle. Play **The problem**, then **The fix**.
+
+<FlowDiagram spec={hotKey} />
+
+Keep a tiny in-process copy on every app server for a few seconds, or store `key#1` to `key#N` on different nodes and read a random one. A hot key is also a good reason to bring up hot-shard monitoring in an interview.
 
 ## The numbers: hit ratio vs latency
 
@@ -137,6 +204,44 @@ Size for the **working set**: often 20% of keys serve 80% of reads. A falling hi
 - Caching without a TTL.
 - Caching per-user responses at the CDN.
 - Treating the cache as the source of truth.
+</Callout>
+
+## Caching in the interview
+
+Bring caching up the moment the database becomes the bottleneck, then walk through five decisions in order. The order is what shows you have done this before.
+
+<Steps>
+  <Step title="Name the bottleneck">
+    Say what is slow and prove it with numbers: "100K reads per second against a database that handles about 5K."
+  </Step>
+  <Step title="Decide what to cache">
+    Data that is read often and changes rarely. Say what you will not cache: per-user, write-heavy, or must-be-exact data.
+  </Step>
+  <Step title="Pick the layer and the pattern">
+    Redis with cache-aside by default. Add a CDN for media and an in-process cache for hot keys only if the problem needs them.
+  </Step>
+  <Step title="Set eviction and TTL">
+    LRU for what to drop, and a TTL sized by the cost of a stale read, with jitter so keys do not expire together.
+  </Step>
+  <Step title="Own the downsides">
+    Name staleness and invalidation first, then stampede and hot keys. Interviewers listen for this step.
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "Reads are 100x writes" | Cache-aside with Redis |
+| "Users are worldwide" | A CDN for media, regional caches for data |
+| "The same page is requested constantly" | HTTP caching, then a CDN |
+| "What if the cache goes down?" | Cache-aside degrades to slower, not broken; protect the database from the herd |
+| "Updating a profile must show instantly" | Delete on write, or write-through |
+
+<Callout kind="interview" title="Say it out loud">
+"Reads dominate, so I'd put Redis in front of Postgres with cache-aside and a five-minute TTL with jitter. On writes I'd delete the key, not update it. The risk is a stampede on a hot key, so I'd add a per-key lock."
+</Callout>
+
+<Callout kind="warning">
+Do not cache everything. Every cache adds staleness, a failure mode and something to monitor. Say which data you leave uncached, and why.
 </Callout>
 
 ## Interview questions

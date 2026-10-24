@@ -1,5 +1,6 @@
 import { BookOpen, Code2, MessageSquare, Sparkles } from "lucide-react";
 import { SectionDone, SectionTick } from "@/components/layout/Reader";
+import { CardCheck } from "./CardCheck";
 
 const KINDS = {
   read: { label: "Read", Icon: BookOpen },
@@ -46,6 +47,7 @@ export function LessonSection({
         <SectionTick id={id} />
       </div>
       {children}
+      <CardCheck id={id} />
       <SectionDone id={id} />
     </section>
   );

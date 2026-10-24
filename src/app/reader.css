@@ -314,6 +314,27 @@
 /* The card replaces the 30-second answer at the top of the page's text. */
 .doc:has(.saycard) .tldr { display: none; }
 @media print { .saycard { break-inside: avoid; } }
+.saycard-more { margin-top: 2px; }
+.saycard-more > summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--accent); padding: 4px 0; list-style: none; }
+.saycard-more > summary::-webkit-details-marker { display: none; }
+.saycard-more > summary::before { content: "+ "; }
+.saycard-more[open] > summary::before { content: "\2212  "; }
+.saycard-more[open] > summary { margin-bottom: 8px; }
+
+/* The check at the foot of a section card: one question, answered with a tap. */
+.cardcheck { margin: 18px 0 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card-2); display: grid; gap: 10px; }
+.cardcheck-q { margin: 0; font-weight: 600; line-height: 1.4; display: grid; gap: 2px; }
+.cardcheck-q .eyebrow { margin: 0; }
+.cardcheck-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.cardcheck-opt { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: inherit; font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+.cardcheck-opt:not(:disabled):hover { border-color: var(--accent); }
+.cardcheck-opt:disabled { cursor: default; }
+.cardcheck-opt[data-state="right"] { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--card)); }
+.cardcheck-opt[data-state="wrong"] { border-color: var(--critical); background: color-mix(in srgb, var(--critical) 12%, var(--card)); }
+.cardcheck-opt[data-state="idle"] { opacity: .55; }
+.cardcheck-why { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); min-height: 0; }
+.cardcheck-why:empty { display: none; }
+@media print { .cardcheck { display: none; } }
 
 /* ------------------------------------------------------------------ explain it back */
 .ex { max-width: 760px; padding-block: 28px 48px; }
@@ -337,3 +358,83 @@
 .ex-checklist li { margin: 0; }
 .ex-checklist label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); cursor: pointer; }
 .ex-score { font-size: 17px; margin: 10px 0 18px; }
+
+/* Cards mode is a deck: the card comes first and the extras (the "What is X?" box, the 30-second card) follow it, so
+   the first card is on screen when the page opens. The page-level blocks after the cards (patterns behind this,
+   practice problems) show only on the last card instead of sitting under every card. */
+.reader[data-mode="cards"] .doc { display: flex; flex-direction: column; }
+.reader[data-mode="cards"] .doc > .doc-cols { order: 1; }
+.reader[data-mode="cards"] .doc > .primer-fold { order: 2; margin-top: 24px; }
+.reader[data-mode="cards"] .doc .saycard { order: 3; }
+.reader[data-mode="cards"] .lesson-hero .lede { display: none; }
+.reader[data-mode="cards"]:not([data-last]) .prose > :not(.sec-card) { display: none; }
+@media (max-width: 640px) {
+  .reader[data-mode="cards"] .lesson-hero .meta-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .reader[data-mode="cards"] .lesson-hero .meta-row > * { flex: none; }
+  .reader[data-mode="cards"] .lesson-hero .hero-doodle { display: none; }
+}
+
+
+
+/* The top of every detail page: the hero, "Start here" (a rail of four tabs and the text beside it), a slim "Say it" strip,
+   and a full-width switch between the walkthrough and the full lesson. Everything shares the page's left and right edges. */
+.basics { margin: 20px 0 0; display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 0; border: 1px solid var(--border); border-radius: var(--radius-lg, 16px); background: var(--card); border-left: 4px solid var(--accent); overflow: hidden; }
+.basics-side { padding: 16px 14px 16px 18px; border-right: 1px solid var(--border); background: var(--card-2); display: grid; gap: 10px; align-content: start; }
+.basics-side .eyebrow { margin: 0; }
+.basics-tabs { display: grid; gap: 4px; }
+.basics-tabs button { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; font-size: 15px; font-weight: 600; text-align: left; cursor: pointer; }
+.basics-tabs button:hover { background: var(--card); color: var(--fg); }
+.basics-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.basics-tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow-sm, none); }
+.basics-main { padding: 18px 24px 16px; display: grid; gap: 14px; align-content: space-between; min-width: 0; }
+.basics-panels { display: grid; }
+.basics-panel { grid-area: 1 / 1; visibility: hidden; }
+.basics-panel[data-active] { visibility: visible; }
+.basics-panel h3 { margin: 0 0 6px; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent-2); }
+.basics-panel p { margin: 0; font-size: 19px; line-height: 1.6; max-width: 66ch; text-wrap: pretty; }
+.basics-step { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font: 600 13px var(--font-mono); color: var(--muted); }
+.basics-step span { margin-right: auto; }
+@media (max-width: 760px) {
+  .basics { grid-template-columns: minmax(0, 1fr); }
+  .basics-side { padding: 12px 14px 10px 18px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .basics-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .basics-tabs button { flex: none; min-height: 40px; padding: 6px 12px; font-size: 14px; border-color: var(--border); }
+  .basics-main { padding: 14px 18px 14px; }
+  .basics-panel p { font-size: 17px; }
+}
+@media print { .basics-side, .basics-step { display: none; } .basics { display: block; } .basics-panel { visibility: visible; grid-area: auto; } .basics-panels { display: block; } }
+
+/* "Say it in 30 seconds": the three numbers on one slim strip, the sentence behind a tap. */
+.doc > .saycard { margin: 12px 0 0; padding: 12px 20px 10px 24px; border-radius: var(--radius-lg, 16px); }
+.doc > .saycard .saycard-head { margin-bottom: 8px; }
+.doc > .saycard .saycard-numbers { margin: 0 0 4px; gap: 8px; }
+.doc > .saycard .saycard-numbers li { padding: 6px 12px; }
+.doc > .saycard .saycard-numbers b { font-size: 17px; }
+.doc > .saycard .saycard-more > summary { padding: 6px 0 2px; }
+
+/* The switch between the walkthrough and the full lesson: two equal halves across the page. */
+.story-shell .view-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; margin: 16px 0 14px; }
+.story-shell .view-tabs button { justify-content: center; min-height: 46px; font-size: 15px; }
+
+/* The chips under the title: two tidy rows, not one run-on line. */
+.lesson-hero .meta-row { margin-top: 12px; gap: 8px 10px; }
+.lesson-hero .meta-row + .meta-row { margin-top: 10px; }
+
+/* ------------------------------------------------------------------ the intro band: "Start here" beside "Say it in 30 seconds"
+   One row from 1080 px instead of two full-width cards stacked, so the first section card is on screen sooner. Below that
+   width (and in Cards mode, whose ordering rules address the cards directly) the wrapper dissolves and they stack as before. */
+.doc-top { display: contents; }
+.doc-top > .saycard { margin: 20px 0 0; }
+@media (min-width: 1080px) {
+  .reader[data-mode=scroll] .doc:not([data-view=story]) .doc-top[data-pair] { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 18px; margin-top: 20px; align-items: stretch; }
+  .doc-top[data-pair] > :is(.basics, .saycard) { margin: 0; }
+  .doc-top[data-pair] .basics-main { padding: 16px 22px 14px; }
+  .doc-top[data-pair] .basics-panel p { font-size: 17.5px; }
+  .doc-top[data-pair] > .saycard { padding: 16px 20px 14px 24px; display: flex; flex-direction: column; }
+  .doc-top[data-pair] .saycard-numbers { grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 10px; }
+  .doc-top[data-pair] .saycard-numbers li { grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 12px; padding: 8px 12px; }
+  .doc-top[data-pair] .saycard-numbers b { font-size: 16.5px; white-space: nowrap; }
+  .doc-top[data-pair] .saycard-cols { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .doc-top[data-pair] .saycard-answer { font-size: 16px; margin-bottom: 14px; }
+  .doc-top[data-pair] .saycard-more { margin-top: auto; }
+}

@@ -12,6 +12,8 @@
 //   doodle   the picture at the top of the page
 import type { DoodleName } from "@/components/doodle/names";
 import type { PrimerId } from "../primers/types";
+import type { Basics } from "../basics/types";
+import type { PageChecks } from "../checks/types";
 import type { Story } from "../stories/types";
 
 export interface SayIt {
@@ -52,6 +54,10 @@ export interface PageExtras {
   story?: Story;
   /** The "What is X?" primer shown at the top of the page, for pages about one core idea. */
   primer?: PrimerId;
+  /** One tap-to-answer question per section card (content/checks). Filled in by getExtras, never written here. */
+  checks?: PageChecks;
+  /** The "Start here" card: what it is, why, an example and when (content/basics). Filled in by getExtras. */
+  basics?: Basics;
 }
 
 export const EXPLAIN_STEPS: ExplainStepId[] = ["clarify", "estimate", "interface", "design", "deepdive"];

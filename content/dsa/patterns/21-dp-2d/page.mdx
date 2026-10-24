@@ -7,21 +7,21 @@ When one index can't describe a subproblem, use two: a grid cell, a prefix of **
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- **Two strings** are compared: common subsequence, edit distance.
-- **A grid** you cross only right and down, counting paths or minimising cost.
-- **Items under a budget**: a subset that fits a capacity or hits an exact sum.
-- `dp[i]` needs a second number to make sense (remaining capacity, a position in the other string).
-
-</Callout>
-
-| Variant | `dp[i][j]` means | Classic problem |
-|---|---|---|
-| Grid paths | answer for reaching `(i, j)` | Unique Paths |
-| Two strings | answer for the first `i` and `j` letters | Edit Distance |
-| Knapsack | best from the first `i` items, capacity `j` | Partition Equal Subset Sum |
-| Intervals | answer for the slice `a[i..j]` | Burst Balloons |
+<ReachFor
+  signals={[
+    "**Two strings** are compared: common subsequence, edit distance.",
+    "**A grid** you cross only right and down, counting paths or minimising cost.",
+    "**Items under a budget**: a subset that fits a capacity or hits an exact sum.",
+    "`dp[i]` needs a second number to make sense (remaining capacity, a position in the other string).",
+  ]}
+  variants={[
+    {"name": "Grid paths", "how": "answer for reaching `(i, j)`", "extra": "Unique Paths"},
+    {"name": "Two strings", "how": "answer for the first `i` and `j` letters", "extra": "Edit Distance"},
+    {"name": "Knapsack", "how": "best from the first `i` items, capacity `j`", "extra": "Partition Equal Subset Sum"},
+    {"name": "Intervals", "how": "answer for the slice `a[i..j]`", "extra": "Burst Balloons"},
+  ]}
+  howLabel="`dp[i][j]` means"
+/>
 
 ## The core idea: a cell, its neighbours, and a fill order
 

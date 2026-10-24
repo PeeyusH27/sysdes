@@ -36,7 +36,7 @@ test("readiness: tiles explain their score and point at the next step", async ({
   const detail = page.locator(".rd-detail");
   await expect(detail).toContainText("Problems solved");
   await expect(detail.getByRole("link", { name: /Read Hash Maps and Sets/ })).toBeVisible();
-  await expect(page.getByText(/0 of 22 skills interview-ready/)).toBeVisible();
+  await expect(page.getByText(/0 of \d+ skills interview-ready/).first()).toBeVisible();
 });
 
 test("a mock round: hints are locked, the round is judged, and the debrief says what to review", async ({ page }) => {

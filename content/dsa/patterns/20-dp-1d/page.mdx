@@ -7,23 +7,23 @@ Dynamic programming is recursion that **never solves the same question twice**. 
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- It asks for **the number of ways**, or the **minimum or maximum** over a series of choices.
-- It asks **"is it possible?"** when choices combine in many orders.
-- Your brute-force recursion keeps calling itself with the **same arguments**.
-- n (or an amount) is up to about 10^4.
-
-</Callout>
+<ReachFor
+  signals={[
+    "It asks for **the number of ways**, or the **minimum or maximum** over a series of choices.",
+    "It asks **\"is it possible?\"** when choices combine in many orders.",
+    "Your brute-force recursion keeps calling itself with the **same arguments**.",
+    "n (or an amount) is up to about 10^4.",
+  ]}
+  variants={[
+    {"name": "Fixed look-back", "how": "answer for step `i`", "extra": "Climbing Stairs"},
+    {"name": "Ending at `i`", "how": "best answer ending at `nums[i]`", "extra": "Longest Increasing Subsequence"},
+    {"name": "Over an amount", "how": "answer for total `a`", "extra": "Coin Change"},
+    {"name": "Prefix with a cut", "how": "answer for `s.slice(0, i)`", "extra": "Word Break"},
+  ]}
+  howLabel="`dp[i]` means"
+/>
 
 Listing every solution is [Backtracking](/dsa/patterns/backtracking). DP is for when [Greedy](/dsa/patterns/greedy) has a counterexample.
-
-| Variant | `dp[i]` means | Classic problem |
-|---|---|---|
-| Fixed look-back | answer for step `i` | Climbing Stairs |
-| Ending at `i` | best answer ending at `nums[i]` | Longest Increasing Subsequence |
-| Over an amount | answer for total `a` | Coin Change |
-| Prefix with a cut | answer for `s.slice(0, i)` | Word Break |
 
 ## The core idea: solve each subproblem once
 

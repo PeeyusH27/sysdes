@@ -22,4 +22,18 @@ export const quiz: QuizItem[] = [
     explain:
       "The worker id bits stop two generators making the same id, so no coordination per id is needed. You assign worker ids once, at startup.",
   },
+  {
+    q: "Each shard is slow 1% of the time. A query that fans out to 64 shards is slow about…",
+    options: ["1% of the time", "47% of the time", "64% of the time"],
+    answer: 1,
+    explain:
+      "It is slow if any shard is slow. The chance that none is slow is 0.99 to the 64th power, about 53%, so about 47% of queries are slow.",
+  },
+  {
+    q: "Which shard key sends every new write to one shard?",
+    options: ["created_at with range sharding", "user_id, hashed", "tenant_id through a directory"],
+    answer: 0,
+    explain:
+      "New rows always carry the largest timestamp, so they all fall into the newest range. Hashing the id scatters them; a directory places tenants by choice.",
+  },
 ];

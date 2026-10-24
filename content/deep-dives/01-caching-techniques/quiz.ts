@@ -26,4 +26,18 @@ export const quiz: QuizItem[] = [
     explain:
       "A Bloom filter can say 'maybe' wrongly, but never 'no' wrongly. 'No' means skip the lookup; 'maybe' means look it up as usual.",
   },
+  {
+    q: "A slow reader refills the old price after your delete. Which fix is exact?",
+    options: ["Fill only if the version is newer", "A longer TTL", "Delete the key twice"],
+    answer: 0,
+    explain:
+      "A conditional fill rejects an older version outright. A TTL and a second delete only shrink the stale window.",
+  },
+  {
+    q: "50 instances each use single flight. A hot key expires. How many rebuilds can run?",
+    options: ["Exactly 1", "5,000", "Up to 50, one per instance"],
+    answer: 2,
+    explain:
+      "Single flight collapses misses inside one process only. A Redis lock across instances brings it down to one.",
+  },
 ];

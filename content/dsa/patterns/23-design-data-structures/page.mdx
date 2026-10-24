@@ -7,22 +7,22 @@ A "design a class" question asks you to **pick the structures so that every meth
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- The statement says **"design a class"** and lists methods like `get`, `put`, `insert`, `remove`.
-- Each method must run in **O(1)** (or O(log n)) time, so scanning is not allowed.
-- It mentions **eviction**: drop the least recently or least frequently used item.
-- It asks for **history** ("the value at time t") or a **random** member.
-
-</Callout>
-
-| Need | Pair | Classic problems |
-|---|---|---|
-| Find fast, evict the oldest | map + doubly linked list | LRU cache |
-| Evict the least used | map + buckets by count | LFU cache |
-| Value at a past time | map of sorted histories + binary search | time-based store |
-| Pick a random member | array + map of positions | insert delete getrandom |
-| Extra answer on every push | stack of (value, answer so far) | min stack |
+<ReachFor
+  signals={[
+    "The statement says **\"design a class\"** and lists methods like `get`, `put`, `insert`, `remove`.",
+    "Each method must run in **O(1)** (or O(log n)) time, so scanning is not allowed.",
+    "It mentions **eviction**: drop the least recently or least frequently used item.",
+    "It asks for **history** (\"the value at time t\") or a **random** member.",
+  ]}
+  variants={[
+    {"name": "Find fast, evict the oldest", "how": "map + doubly linked list", "extra": "LRU cache"},
+    {"name": "Evict the least used", "how": "map + buckets by count", "extra": "LFU cache"},
+    {"name": "Value at a past time", "how": "map of sorted histories + binary search", "extra": "time-based store"},
+    {"name": "Pick a random member", "how": "array + map of positions", "extra": "insert delete getrandom"},
+    {"name": "Extra answer on every push", "how": "stack of (value, answer so far)", "extra": "min stack"},
+  ]}
+  howLabel="Pair"
+/>
 
 ## The core idea: pair a structure that finds with one that orders
 

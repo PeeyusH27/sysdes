@@ -19,4 +19,16 @@ export const quiz: QuizItem[] = [
     answer: 0,
     explain: "Postgres defaults to READ COMMITTED: each statement sees only data committed before it started. MySQL InnoDB defaults to REPEATABLE READ.",
   },
+  {
+    q: "You shard orders by created_at. What happens to writes?",
+    options: ["They spread evenly", "Every new write hits the newest shard", "They need a directory"],
+    answer: 1,
+    explain: "Time rises, so new rows always fall in the latest range and one shard takes all the writes while the others idle. Lead with a spread-out id (customer_id) and sort by time inside it.",
+  },
+  {
+    q: "Two requests read stock 10, subtract 1, and write 9. How do you fix the oversell?",
+    options: ["Add an index on stock", "Add a read replica", "One statement: SET stock = stock - 1"],
+    answer: 2,
+    explain: "The database applies the subtraction under a row lock, so both decrements count and stock ends at 8. Read-modify-write in the app loses one update.",
+  },
 ];

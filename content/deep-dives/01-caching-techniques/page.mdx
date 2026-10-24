@@ -1,13 +1,15 @@
-import { cacheAsideSequence, writeInvalidate } from './diagrams'
+import { cacheAsideSequence, writeInvalidate, overwriteRace, asideWrite, asideFlow, readThroughSeq, writeThroughSeq, writeBehindBuffer, writeAroundFlow, refreshAheadTimeline, choosePattern, slowReaderSeq, doubleDeleteTimeline, versionedKeys, fillIfNewerSeq, l1l2Read, l1Invalidation, stampedeFlow, redisLockSeq, penetrationFlow, coldStartFlow } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
-Pick a caching pattern by what you can live with when the cache is **stale, cold or down**. Start with cache-aside.
+Pick a caching pattern by what you can live with when the cache is **stale, cold or down**. Start with cache-aside, delete on write, and add a fix only for the failure you can name.
 </TLDR>
 
 ## Why the technique matters
 
 A cache is a copy, and copies drift. Each pattern decides **who updates the copy, and when**. That sets how stale readers can be, what an empty cache does after a restart, and what you lose if it dies. More in the [Caching lesson](/learn/caching).
+
+The lesson names the patterns and the failures. This page draws the exact read and write path of each one, then the races, the two-level cache, the Bloom filter and the lock, with code.
 
 ## The read path: cache-aside
 
@@ -37,9 +39,21 @@ When data changes, the notepad is wrong. Update the database, then **delete** th
 
 <SequenceDiagram spec={writeInvalidate} />
 
-Why not overwrite it? Two writers at once can reach the cache in the opposite order to the database and pin the old value until the TTL. A delete can't be out of order.
+### Why delete beats overwrite
 
-Even a delete has a rare race. A slow reader loads the old price, the admin sets 12 and deletes the key, then the reader saves the old price. Shoppers see it until the TTL ends, so always set one.
+Overwriting the cache on write is unsafe because two writers can reach the cache in the opposite order to the database. Writer A sets the price to 10, writer B sets it to 12, and the database ends at 12. If B's cache write lands first and A's lands late, Redis keeps 10 until the TTL.
+
+<SequenceDiagram spec={overwriteRace} />
+
+A delete cannot be out of order: whichever delete lands last, the key is empty and the next read loads 12. Use it as the default. Overwrite only when a single writer owns the key.
+
+### Where the delete can still fail
+
+The delete itself can be lost if the app dies after the database write and before the `DEL`. The old value then stays until the TTL, so **every cached key needs a TTL**, and a 300 s TTL puts a hard ceiling on the damage.
+
+<SequenceDiagram spec={asideWrite} />
+
+Move the delete out of the request when a lost delete is costly: write a change event in the same transaction as the row (an outbox), and let a worker delete the key and retry until it works.
 
 ## Six patterns compared
 
@@ -52,16 +66,61 @@ Each pattern answers one question: who keeps the copy fresh?
 | Write-behind | Writes the cache now, the DB later | **Unflushed writes are lost** |
 | Write-around | Writes the DB only | Still correct |
 
-Two more: **read-through** is cache-aside where the cache itself loads misses. **Refresh-ahead** reloads hot keys before they expire.
+Two more: **read-through** is cache-aside where the cache itself loads misses. **Refresh-ahead** reloads hot keys before they expire. The next six subsections draw each one.
 
-In a flash sale, 20,000 order writes a second land in the cache. If it dies before it flushes, those orders are gone. Fine for view counts, never for orders.
+### Cache-aside: the default answer
 
-**Start with cache-aside.** Losing the cache only costs speed. Switch only when:
+Cache-aside makes the app the only one who knows both stores: read the cache, load on a miss, delete on write. Play **Cache down** to see what losing Redis does.
 
-- users must see their own write: write-through;
-- the database can't keep up and losing a few seconds is fine (counters): write-behind;
-- data is written once and rarely read (audit logs): write-around;
-- a few hot keys hurt when they expire: refresh-ahead.
+<FlowDiagram spec={asideFlow} />
+
+**Use it when** reads outnumber writes about 10 to 1 or more, which is almost every product, profile and catalog read. Losing the cache only costs speed. **It costs** one slow request per cold key and a stale window as long as the TTL when a delete is lost.
+
+### Read-through: the same path, run by the cache
+
+Read-through moves the miss path out of your code: the app calls `get(key)` and the cache layer loads the row itself. Its real gain is that a good loader runs once per key, even when 100 callers ask at once.
+
+<SequenceDiagram spec={readThroughSeq} />
+
+Plain Redis has no loader, so with Redis you write cache-aside. Read-through comes from libraries (Caffeine and Guava loading caches) and from products such as Amazon DAX in front of DynamoDB. **Use it when** you want the loading code in one place. **It costs** a cache that must know how to reach your database, and a library tied to your language.
+
+### Write-through: pay twice so reads are fresh
+
+Write-through writes the database first, then the cache, and only then tells the caller it worked. A read right after a write is always a hit on the new value, at the cost of two stores per write: about 51 ms instead of 50 ms.
+
+<SequenceDiagram spec={writeThroughSeq} />
+
+Order matters: write the database first, so a rejected write never reaches the cache. **Use it when** a user must see their own change at once (a profile bio, a setting) and writes are modest. **It costs** cache space for rows nobody reads again, so skip it for write-heavy data.
+
+### Write-behind: fast writes, a window of loss
+
+Write-behind acknowledges the write from the cache and flushes to the database later, in batches. Repeated writes to one key collapse: 1,000 view-count updates a second flushed every 5 s become one `UPDATE` per 5 s. Play **Writes collapse**, then **Crash before flush**.
+
+<FlowDiagram spec={writeBehindBuffer} />
+
+In a flash sale, 20,000 order writes a second land in the cache. If it dies 4 s into a 5 s window, about 80,000 orders are gone. **Use it when** losing a few seconds is fine and the same keys are hit over and over: view counts, likes, metrics. **Never** use it for orders or money. The mitigation is a persisted buffer (an append-only log) and a short flush interval, which narrows the window and never closes it.
+
+### Write-around: skip the cache on write
+
+Write-around sends writes straight to the database and lets reads fill the cache. Data written once and rarely read, such as logs, audit rows and uploads, then never pushes hot keys out of memory.
+
+<FlowDiagram spec={writeAroundFlow} />
+
+**Use it when** the first read is far from the write, or may never come. **It costs** one slow first read, and a trap: if the key was already cached, the write leaves a stale copy. Play **Already cached**, and delete the key on write whenever it can exist.
+
+### Refresh-ahead: never let a hot key expire
+
+Refresh-ahead reloads a hot key in the background once most of its TTL is gone, so readers never wait on a rebuild. With a 300 s TTL, the first read after 240 s (80%) starts the reload while the old value keeps serving.
+
+<Timeline spec={refreshAheadTimeline} />
+
+**Use it when** a few keys are expensive to rebuild and read constantly: a homepage query that takes 800 ms at 5,000 reads a second would otherwise stall about 4,000 requests at each expiry. **It costs** extra reloads for keys nobody asks for again, so keep it to the top handful, and let only one instance reload (a `SET ... NX` flag), as the refresh-ahead snippet in the Code section does.
+
+### Choosing in one pass
+
+Start at cache-aside and leave it only when a question is a firm yes. Walk the tree for your data, one question at a time.
+
+<DecisionTree spec={choosePattern} />
 
 ## Watch the patterns side by side
 
@@ -70,6 +129,135 @@ Each tab writes price = 12, then reads it twice. The bar shows how long a reader
 <PatternComparator />
 
 Only write-behind leaves the database behind the cache.
+
+## Races the delete does not fix
+
+Deleting on write is the right default, but a reader that was already in flight can undo it. The window is small and the bug is invisible in tests, which is why it ships.
+
+### The slow reader
+
+A reader that loaded the old row before the write can put it into the cache after the delete. Reader A misses, reads price 10 from the database, then pauses (a GC pause, a slow network hop). The admin sets 12 and deletes the key. A wakes and runs `SET price = 10`, and shoppers see 10 for up to the whole TTL.
+
+<SequenceDiagram spec={slowReaderSeq} />
+
+How likely is it? On a cold hot key with 5,000 misses a second and a 50 ms load, about 5,000 x 0.05 = 250 loads are in flight at any moment, and any that began before the write can refill the old value.
+
+### Fix one: a TTL and a second delete
+
+A TTL bounds the damage, and a delayed second delete shrinks it. Always set the TTL. Then, for data where stale is embarrassing but not wrong (a price shown in a list), delete again about 1 s after the write.
+
+<Timeline spec={doubleDeleteTimeline} />
+
+The delay must be longer than your slowest load, and a pause longer than the delay still beats it. It needs a delayed job (a queue with a delay). It narrows the race and does not close it.
+
+### Fix two: versioned keys
+
+A versioned key puts the row version into the key, so a write moves every reader to a new key and the old one is never read again. Keep a counter (`ver:user:42`), bump it with `INCR` on each write, and read `user:42:v7` after reading the counter.
+
+<FlowDiagram spec={versionedKeys} />
+
+A slow reader holding v7 can only write to the dead v7 key. **Use it when** a stale value is a bug, not a blemish: permissions, prices at checkout, feature flags. **It costs** a second Redis round trip per read (about 1 ms more) and orphaned old keys, which the TTL removes.
+
+### Fix three: fill only if newer
+
+The exact fix is a conditional fill: the cache refuses a value whose version is older than what it has seen. The writer leaves a tombstone at the new version, so a fill carrying v1 is rejected and one carrying v2 is accepted. In Redis, run the compare and the set as one Lua script so they cannot interleave.
+
+<SequenceDiagram spec={fillIfNewerSeq} />
+
+<CodeBlock src="snippets/versioned-cache.js" />
+
+**Which one:** always the TTL. Add the second delete when a short stale window is acceptable. Use versions when it is not. Do not stack all three on every key.
+
+## Two levels of cache
+
+A two-level cache puts a tiny map inside each app instance (L1) in front of Redis (L2), and it pays off only for the hottest keys. A hit in L1 costs microseconds and no network at all. Play **L1 hit**, **L2 hit** and **Both miss**.
+
+<FlowDiagram spec={l1l2Read} />
+
+### Why L1 saves Redis
+
+With a short L1 TTL, each instance asks Redis for a key only once per TTL, however many requests it serves. A key read 100,000 times a second across 50 instances, with a 5 s L1 TTL, costs Redis 50 / 5 = 10 reads a second instead of 100,000. That is the cure for a hot key that saturates the one Redis node owning it.
+
+**Use it when** a few keys are read thousands of times a second and a stale copy of up to 5 s is fine: feature flags, config, a celebrity profile. **Do not use it** for balances, stock counts or permissions.
+
+### Keeping the copies honest
+
+Every instance holds its own copy, so a write must tell all of them. The writer deletes the Redis key and publishes the key name; each instance drops its L1 entry when the message arrives.
+
+<SequenceDiagram spec={l1Invalidation} />
+
+Pub/sub is fire and forget: an instance that is reconnecting misses the message and keeps the old copy. That is why L1 entries also expire in seconds. **The L1 TTL is your staleness bound**, so choose it as the longest wrong answer you accept. Redis 6 and later can also push invalidations to clients (client-side caching with tracking), which removes the hand-rolled channel.
+
+Cap the size of L1 as well (an LRU of a few thousand entries), because 50 copies of a large map are 50 times the memory.
+
+## Stampede: one rebuild, many waiters
+
+A stampede is a hot key that expires while thousands of requests want it, and every one of them rebuilds the same value. If the rebuild takes 800 ms and 5,000 requests arrive each second, 5,000 x 0.8 = 4,000 requests all run the same heavy query. Play the three scenarios in order.
+
+<FlowDiagram spec={stampedeFlow} />
+
+### Inside one process: single flight
+
+Single flight lets the first miss start the rebuild and every concurrent caller wait on the same promise. It is a few lines (the Code section has it), costs nothing and fixes the worst case inside one instance. It does not help across instances: 50 instances still send 50 rebuilds.
+
+### Across instances: a Redis lock
+
+A short Redis lock makes exactly one instance rebuild. `SET lock:home token NX PX 5000` succeeds for one caller; the rest retry the cache after about 50 ms. The timeout means a crashed holder frees the lock after 5 s, and releasing only if the token still matches stops a slow holder from deleting someone else's lock.
+
+<SequenceDiagram spec={redisLockSeq} />
+
+**Use it when** a rebuild is expensive (hundreds of ms or a heavy query) and the key is hot. For cheap rebuilds, single flight is enough.
+
+### Serve stale, and spread the expiries
+
+Two cheap helpers sit beside the lock. **Serve stale while you rebuild:** keep the old value for a grace period and hand it out while one request refreshes it, so nobody waits. **Jitter the TTL:** 1,000 keys loaded together with a 300 s TTL all expire in the same second, while a random 270 to 330 s spreads the same expiries over about 60 s, roughly 17 a second. That is the cure for an avalanche.
+
+## Penetration: ids that do not exist
+
+Penetration is a stream of lookups for ids that do not exist, so the cache can never answer them and the database takes every one. A scraper tries random user ids at 10,000 a second; every request misses Redis and finds nothing in the database. Play **No defence**.
+
+<FlowDiagram spec={penetrationFlow} />
+
+### First, cache the not-found
+
+Cache a not-found answer for 30 to 60 s, and the same missing id is answered by Redis after the first lookup. This is cheap and right for ordinary mistakes: a deleted product, a mistyped link.
+
+It fails against a scraper that never repeats an id. At 10,000 unique ids a second and a 60 s TTL, you would store up to 600,000 empty keys a minute, which pushes real data out of memory. Play **Cache the null**.
+
+### Then, a Bloom filter of real ids
+
+A Bloom filter is a bit array in app memory that answers "definitely not present" or "maybe present". Fill it with every real id; a "definitely not" is a 404 with no Redis and no database. A "maybe" goes on to the normal path. It never says "no" wrongly, and sometimes says "maybe" wrongly: that false-positive rate is the one number to choose.
+
+Size it from the item count n and the rate p: bits = -n x ln(p) / (ln 2) squared, and hashes = bits / n x ln 2.
+
+| Target rate | Bits per id | Hashes | 100K ids need |
+|---|---|---|---|
+| 1% | 9.6 | 7 | about 120 KB |
+| 0.1% | 14.4 | 10 | about 180 KB |
+
+A 120 KB filter in every app instance can stop nearly all of a random-id attack. The snippet computes these sizes, and the Code section has the filter itself.
+
+<CodeBlock src="snippets/bloom-size.js" />
+
+### What goes wrong with a Bloom filter
+
+The filter must learn a new id before anyone can read it, or the real user gets a wrong 404. Add the id to the filter before (or in the same step as) inserting the row. Two more limits: you cannot delete from a plain filter (clearing a bit may erase another id), and it does not grow, so it is rebuilt from the table on a schedule, sized for the final count. Play **A false positive** to see the cost of a wrong "maybe": one wasted lookup.
+
+## When the cache dies or restarts
+
+Cache-aside stays correct when Redis dies, but the database then takes the full read load, and that is where outages start. The cache was not only faster; it was a shield.
+
+### A cold cache after a restart
+
+An empty cache removes the shield. At 10,000 reads a second and a 90% hit ratio the database sees 1,000. After a restart the hit ratio is 0%, so it sees 10,000: ten times its normal load, at the moment it is slowest because every load also refills the cache. Play **Restart, no warm-up**, then **Warmed and capped**.
+
+<FlowDiagram spec={coldStartFlow} />
+
+Four defences, in order of cost: persistence (an RDB snapshot or AOF) so Redis restarts with data; a warm-up script that loads the top 1,000 keys before traffic returns; a cap on concurrent database loads with a bounded queue; and a replica to fail over to, so a node loss is not a cold start.
+
+### Redis is slow, not down
+
+A sick Redis is worse than a dead one, because every request waits on it. Set a client timeout of a few tens of ms, then skip the cache and read the database under the same concurrency cap. A circuit breaker stops the app from trying a failing cache on every request. Fail open for reads; for writes you must not lose, never depend on the cache to accept them.
 
 ## Code
 
@@ -132,6 +320,44 @@ maxmemory-policy allkeys-lru
 - Adding a cache without measuring the hit ratio before and after: a low ratio adds a hop and saves nothing.
 </Callout>
 
+## Caching techniques in the interview
+
+Bring these techniques up after you have said "Redis with cache-aside", when the interviewer pushes on what could go wrong. Say the decisions in this order.
+
+<Steps>
+  <Step title="Start with cache-aside and delete on write">
+    "Read Redis, load on a miss, TTL with jitter. On a write I update the database and delete the key, never overwrite it."
+  </Step>
+  <Step title="Change the pattern only for a reason">
+    Write-through if users must read their own write, write-behind for counters you can lose seconds of, write-around for write-once data.
+  </Step>
+  <Step title="Name the race">
+    A slow reader can refill the old value after the delete. A TTL bounds it; versioned keys or a fill-only-if-newer script close it.
+  </Step>
+  <Step title="Protect the database">
+    Single flight plus a Redis lock for a hot key, a Bloom filter or cached not-found for missing ids, jittered TTLs against avalanche.
+  </Step>
+  <Step title="Say what happens when the cache dies">
+    Reads fall back to the database under a concurrency cap. Warm the hot keys before traffic returns.
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "Users must see their own edit" | Write-through, or delete on write and read your own write |
+| "50,000 counter updates a second" | Write-behind, flushed every few seconds, loss accepted |
+| "One key gets 100K reads a second" | L1 per instance with a 5 s TTL and pub/sub invalidation |
+| "Lookups for ids that don't exist" | Cache not-found, then a Bloom filter of real ids |
+| "Redis restarts" | Warm the top keys, cap database loads, persist or fail over |
+
+<Callout kind="interview" title="Say it out loud">
+"I'd use cache-aside: read Redis, load on a miss, and on a write update the database and delete the key. Deleting avoids two writers pinning the older value. A slow reader can still refill the old value, so every key has a TTL, and versioned keys for anything money-related. For a hot key I'd add single flight and a Redis lock, and for missing ids a Bloom filter of real ids."
+</Callout>
+
+<Callout kind="warning">
+Do not stack every technique on every key. An L1, a Bloom filter, versioned keys and a lock each add a failure mode. Add one when you can name the failure it prevents, and say which data you leave plain.
+</Callout>
+
 ## Interview questions
 
 <FollowUps>
@@ -149,6 +375,15 @@ maxmemory-policy allkeys-lru
   </FollowUp>
   <FollowUp q="Requests for non-existent ids are hammering your database. What do you do?">
     Cache "not found" briefly, add a Bloom filter of real ids, and rate-limit callers.
+  </FollowUp>
+  <FollowUp q="You delete on write, yet a stale price appears. How?">
+    A slow reader loaded the old row before the write and refilled it after the delete. Fix with a TTL, a delayed second delete, or versioned keys.
+  </FollowUp>
+  <FollowUp q="How does a Bloom filter stay correct as new ids are created?">
+    Add the id to the filter before or with the row insert, since a late add gives the real user a 404. Rebuild it on a schedule because it cannot delete.
+  </FollowUp>
+  <FollowUp q="Redis restarts empty. What protects the database?">
+    Persistence or a replica, a warm-up of the hottest keys, and a cap on concurrent loads.
   </FollowUp>
 </FollowUps>
 

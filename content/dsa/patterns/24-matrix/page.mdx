@@ -7,22 +7,22 @@ A grid problem is usually **index arithmetic in disguise**: rotate with two swap
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- You **rotate, flip or transpose** a grid, or read it in a **spiral** or along **diagonals**.
-- The statement says **"in place"** or "with O(1) extra space" on a 2D array.
-- Every cell updates **at the same time** (a generation, a flood).
-- Rows and columns are **sorted**, and you must search it fast.
-
-</Callout>
-
-| Variant | Key move | Classic problems |
-|---|---|---|
-| Rotate / transpose | swap `(i, j)` with `(j, i)`, reverse rows | rotate image |
-| Layers and boundaries | four walls that move inward | spiral matrix |
-| Marker row and column | store flags in the grid itself | set matrix zeroes |
-| Simulation | encode old and new state in one cell | game of life |
-| Sorted grid / diagonals | position to (row, column), or `r + c` | search a 2D matrix, diagonal traverse |
+<ReachFor
+  signals={[
+    "You **rotate, flip or transpose** a grid, or read it in a **spiral** or along **diagonals**.",
+    "The statement says **\"in place\"** or \"with O(1) extra space\" on a 2D array.",
+    "Every cell updates **at the same time** (a generation, a flood).",
+    "Rows and columns are **sorted**, and you must search it fast.",
+  ]}
+  variants={[
+    {"name": "Rotate / transpose", "how": "swap `(i, j)` with `(j, i)`, reverse rows", "extra": "rotate image"},
+    {"name": "Layers and boundaries", "how": "four walls that move inward", "extra": "spiral matrix"},
+    {"name": "Marker row and column", "how": "store flags in the grid itself", "extra": "set matrix zeroes"},
+    {"name": "Simulation", "how": "encode old and new state in one cell", "extra": "game of life"},
+    {"name": "Sorted grid / diagonals", "how": "position to (row, column), or `r + c`", "extra": "search a 2D matrix, diagonal traverse"},
+  ]}
+  howLabel="Key move"
+/>
 
 ## The core idea: a grid is a set of coordinates
 

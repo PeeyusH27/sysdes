@@ -1,4 +1,4 @@
-import { notificationPipeline } from './diagrams'
+import { notificationPipeline, singleQueue, perChannelQueues, channelPriorityQueues, onePriorityQueue, delayedSortedSet, delayedDbPoll, errorTree, apiIdempotency, markAfterSend, campaignBatches, silentFailure, poisonMessage } from './diagrams'
 import { quiz } from './quiz'
 
 <TLDR>
@@ -8,6 +8,8 @@ Accept the request with `202`, then put one message per channel on **queues spli
 ## Why it matters
 
 Unlike the URL shortener, this system is **write-heavy and asynchronous**. The hard parts: one slow channel must not hurt the rest, no duplicates, and providers you do not control.
+
+Skip all of this for a small app: at 100K users and 5 messages a day, about 6 sends a second, one worker and a retry loop are enough. The pipeline pays off when a provider slows down or a campaign lands.
 
 Play all four scenarios, from **Normal fan-out** to **Quiet hours**.
 
@@ -29,7 +31,9 @@ Ask early which types exist and how urgent each is. That drives the key decision
 
 Campaigns burst to **50K+ a second**, far above what providers accept. Queues absorb the burst, and you slow the campaign down on purpose.
 
-Small teams can skip it: 100K users at 5 messages a day is about 6 a second, so one worker does. Queues pay off when a provider slows or a burst lands.
+The arithmetic: 50M users times 10 is 500M a day, and 500M divided by 86,400 seconds is about 5,800 a second. A worker with 100 provider calls in flight at 100 ms each sends about 1,000 a second, so the average needs about 6 workers and a 50K burst would need 50. You do not buy 50 workers for a burst; you throttle it.
+
+The log: 500M rows at about 200 bytes each is **100 GB a day**, which is why `deliveries` is partitioned by day.
 
 <StatTiles items={[
   { label: "Average", value: "5.8K/s", sub: "500M a day" },
@@ -63,7 +67,29 @@ Preferences are read for **every** notification: cache them. `deliveries` is the
 
 ## Fan-out with queues
 
-A queue per channel means slow SMS never blocks push. Better still, split by **channel and priority**.
+One event becomes one message per channel, and the queue layout decides what can hurt what. There are three layouts; the third is the default.
+
+### One queue for everything
+
+A single shared queue is the simplest layout, and the worst: one slow provider or one big campaign delays every message. Play **SMS slows down** and **Campaign ahead**.
+
+<FlowDiagram spec={singleQueue} />
+
+Use it only for a prototype under about 10 messages a second, where everything has the same urgency. Its cost shows up the first time SMS is slow: workers stuck on 2 s calls leave push waiting.
+
+### One queue per channel
+
+A queue per channel stops a slow provider from blocking the other channels. Play **Slow SMS, push fine**, then **Campaign in one channel**.
+
+<FlowDiagram spec={perChannelQueues} />
+
+Use it when all messages in a channel share one urgency. It does not help when an OTP and a promo are both SMS: they still share a queue, so the OTP waits behind the blast.
+
+### One queue per channel and priority (the default)
+
+Split by **channel and priority**, with separate workers, and a campaign can only fill its own lane. Start here for any system that sends both codes and marketing.
+
+<FlowDiagram spec={channelPriorityQueues} scenario="campaign-and-otp" />
 
 | Queue | Messages | Workers |
 |---|---|---|
@@ -71,7 +97,7 @@ A queue per channel means slow SMS never blocks push. Better still, split by **c
 | `notif.push.high` | Order updates | Scaled on queue depth |
 | `notif.push.low` | Marketing, digests | Throttled, paused first |
 
-A message that keeps failing lands in a **dead-letter queue**, with an alert.
+The cost is more queues and idle capacity in the critical lane, which is the price of a fast OTP. A message that keeps failing lands in a **dead-letter queue**, with an alert.
 
 ## Priorities: the OTP never waits
 
@@ -83,6 +109,22 @@ Choose **Shared queue**, press **Launch 1M campaign**, and watch logins stall. T
 
 <PriorityLanes />
 
+### Dedicated lanes (the default answer)
+
+Give each priority its own queue **and its own workers**, and reserve provider capacity for the critical lane. The workers matter as much as the queues: a separate queue drained by the same busy workers is still a shared bottleneck.
+
+<FlowDiagram spec={channelPriorityQueues} scenario="reserved-rate" />
+
+Use it whenever one message type is time-boxed (an OTP lives about 5 minutes) and another comes in bursts. Keep it to two or three lanes: critical, high, low. Ten lanes are ten things to scale and monitor. If the provider allows 5,000 SMS a second, cap the low lane at 4,000 and the critical lane keeps 1,000 for traffic that is a few dozen a second.
+
+### Priority levels in one queue
+
+Some brokers can order one queue by message priority, which gives lanes without extra workers. Play **High jumps ahead**, then **Starvation**.
+
+<FlowDiagram spec={onePriorityQueue} />
+
+Use it when volume is low and you already run a broker with priorities (RabbitMQ has them; Kafka and standard SQS queues do not). Its risk is starvation: while high messages keep arriving, low ones may never leave. Add dedicated workers for the low lane or age messages upward.
+
 ## Templates and localisation
 
 Copy changes weekly; deploys should not have to.
@@ -93,38 +135,95 @@ Copy changes weekly; deploys should not have to.
 
 ## Scheduling and quiet hours
 
-A scheduled send and a 3 a.m. marketing push need the same fix: a **`notBefore`** time.
+A scheduled send and a 3 a.m. marketing push need the same fix: a **`notBefore`** time and somewhere to park the message until then.
 
 - Store an **IANA time zone** per user (`Asia/Kolkata`, not `+05:30`, which breaks with daylight saving).
 - Check quiet hours **at send time, in the user's zone**. Low priority waits; **critical ignores quiet hours**.
-- Waiting messages sit in a **delayed queue**: a Redis sorted set scored by `notBefore`.
+- In a zone with daylight saving, 02:30 may not exist on the day the clocks jump, so re-check when the message is due rather than trusting the stored time.
+
+Play **Quiet hours** to see a Mumbai user's 23:30 promo wait until 08:00.
+
+<FlowDiagram spec={notificationPipeline} scenario="quiet" />
+
+A campaign set for 9:00 local time also spreads itself out. If 10M users are spread over 24 zones, about 417K go out each hour, roughly 115 a second, instead of 10M at once.
+
+### Delayed queue in a Redis sorted set (the default)
+
+A **sorted set scored by `notBefore`** is the usual delayed queue: add the message, and a scheduler moves whatever is due onto the real queue. Play **Park and release**, then **Two schedulers race**.
+
+<FlowDiagram spec={delayedSortedSet} />
+
+Use it for millions of waiting messages that nobody needs to edit. The scheduler claims a member by removing it and enqueues only if the removal returned 1, so two schedulers never send the same message. The cost: Redis memory, and a restart without persistence loses the parked messages.
+
+### Delayed queue in a database table
+
+A **jobs table** with a send time and a status trades speed for durability and control. Play **Poll and claim**, then **Restart and cancel**.
+
+<FlowDiagram spec={delayedDbPoll} />
+
+Use it when scheduled sends are user-visible and must survive anything: a "schedule for Friday 9:00" feature that users can list and cancel, at up to a few thousand a second. Claim rows with `SKIP LOCKED` so pollers do not collide. Past that rate, parking in Redis is cheaper.
+
+### Delay built into the broker
+
+Some brokers delay delivery themselves, with no scheduler to run. Standard SQS queues can delay a message by at most 15 minutes, which covers retry backoff but not "tomorrow at 08:00". RabbitMQ needs a plugin, and Kafka has no per-message delay. Use broker delay for short retry waits, and a sorted set or a table for anything longer.
 
 ## Reliability: providers fail
 
 <Doodle name="circuit-breaker" size={150} caption />
 
-Every provider will be slow or go down. Without a breaker, each OTP waits out a long timeout on a dead SMS provider, then fails. Hide each provider behind a `send(msg)` call, give it a **circuit breaker**, and list a backup: after a few failures, traffic goes straight to the backup.
+Every provider will be slow or go down, so hide each one behind a `send(msg)` call, a **circuit breaker**, and a backup. Without a breaker, each OTP waits out a long timeout on a dead SMS provider, then fails. With one, after a few failures traffic goes straight to the backup.
 
-Not every error deserves a retry:
+Raise the error rate in the simulator until the breaker opens, then lower it and watch a trial request close it.
 
-| Error | What to do |
-|---|---|
-| Temporary (timeout, `429`, `5xx`) | Try the next provider; retry with backoff |
-| Permanent (bad number, dead device token) | Never retry; mark failed, remove the token |
+<CircuitBreakerSim />
 
-Track **delivery rate per provider**: one that accepts but silently does not deliver is worse than one that errors. See the [reliability lesson](/learn/reliability-observability).
+### Breaker plus failover (the default)
+
+After about five failures in a row the breaker opens for 30 s, and workers send through the next provider in the failover order. Play **SMS provider down**.
+
+<FlowDiagram spec={notificationPipeline} scenario="failover" />
+
+Use it for every channel that has a second provider: SMS and email for sure, push rarely (there is one push service per platform). The cost is a second contract and a second sender id, and a periodic check that the backup still works.
+
+### Retry or give up
+
+Not every error deserves a retry, and the wrong choice either floods a dead number or loses a good message. Click through the questions in order.
+
+<DecisionTree spec={errorTree} />
+
+Track **delivery rate per provider** as well: one that accepts but silently does not deliver is worse than one that errors. See the [reliability lesson](/learn/reliability-observability).
 
 ## Dedupe and idempotency
 
 <Doodle name="idempotency" size={150} caption />
 
-Duplicates come from client retries and redelivery after a crash. Defend in layers:
+Duplicates come from client retries and from redelivery after a crash, so defend in three layers, each catching a different source. Use all three; none is enough alone.
 
-1. **API key.** A retry gets the same `notificationId`.
-2. **Deterministic ids.** Name each message `eventId:channel`, so reprocessing makes the same id.
-3. **Check before sending.** Skip ids already marked `sent`, and mark only **after** the provider accepts.
+### 1. API idempotency key
 
-A crash in between can still resend. Exactly-once to a phone is impossible. Aim for **effectively once** ([async messaging lesson](/learn/async-messaging)).
+The first layer stops a retried request from creating a second notification. The caller sends a key; the API stores it with `SET NX`, and a retry gets the same `notificationId` back.
+
+<SequenceDiagram spec={apiIdempotency} />
+
+Use it on every write endpoint a service may retry, which is every one of them. Keep keys for about a day. It does not help when the same event is emitted twice with two different keys.
+
+### 2. Deterministic message ids
+
+The second layer makes reprocessing produce the same id. Name each message `eventId:channel`, so event 812 always yields 812:push, 812:email and 812:sms, however many times it is processed.
+
+<FlowDiagram spec={notificationPipeline} scenario="duplicate" />
+
+Use it as the dedupe key for everything downstream: sent markers, the `deliveries` primary key, and the provider's idempotency key. Do not use a random id or a timestamp; those change on each retry and defeat the check.
+
+### 3. Check before sending, mark after
+
+The third layer is the worker's check: skip ids already marked `sent`, and write the marker **only after** the provider accepts. Play **mark after**, **crash before marking** and **mark before (wrong)**.
+
+<SequenceDiagram spec={markAfterSend} />
+
+Marking after can resend if the worker crashes between acceptance and the marker, which is a rare duplicate. Marking before can lose a message when the send fails, which is a worse outcome. Pass the id as the provider's own idempotency key, where it has one, and the rare duplicate disappears too.
+
+Exactly-once to a phone is impossible. Aim for **effectively once** ([async messaging lesson](/learn/async-messaging)).
 
 ## Protecting users
 
@@ -153,11 +252,57 @@ Providers report back by **webhook** (delivered, bounced, opened). Update the de
 
 ## Large campaigns
 
-A 10M-user campaign is a batch job, not 10M API calls:
+A 10M-user campaign is a batch job, not 10M API calls, and it must run on its own lanes with its own workers. Play **Run in pages**, then **Pause a typo**.
 
-- **Read the segment in pages** and enqueue in batches on low-priority lanes and **separate workers**.
-- **Throttle to provider limits**: at 5,000 a second, 10M take about 33 minutes.
-- **Pause and cancel**: workers check campaign status before sending, so a typo can be stopped.
+<FlowDiagram spec={campaignBatches} />
+
+### Page the audience
+
+Read the segment in pages of about 1,000 and enqueue each page as a batch on the low lanes. Never load 10M ids into memory or into one queue write. Keep a cursor, so a crashed job resumes at the last page instead of starting over, and the deterministic ids make a repeated page harmless.
+
+### Throttle to the provider limit
+
+The provider sets the speed, not your queue. At 5,000 a second, 10M messages take 2,000 s, about **33 minutes**. At 1,000 a second the same campaign takes nearly 3 hours.
+
+<BarChart title="Minutes to send 10M messages" data={[{ label: "1,000 a second", value: 167, display: "167" }, { label: "5,000 a second", value: 33, display: "33" }, { label: "50,000 a second", value: 3.3, display: "3.3" }]} unit="min" scale="log" />
+
+Use a throttle on the low-lane workers and leave headroom for critical traffic. Spreading a time-zone campaign across a day (about 115 a second) needs no throttle at all.
+
+### Pause and cancel
+
+Workers read the campaign status before each send, so one write stops a typo within a second or two. Play **Pause a typo** in the diagram above. Use pause when the copy is wrong but fixable, and cancel when the campaign should never finish; on cancel, workers drop what is left in the queue as they see the status.
+
+## Failure modes
+
+Three things go wrong in production that the happy path never shows: a provider that lies, a recovery that overloads it, and a message that cannot be sent. Each has a scene and a fix.
+
+### Accepted, but not delivered
+
+A provider can return success and still not deliver, so error rates stay green while users wait for codes. Say provider A accepts every SMS, but only 40 percent of receipts come back where 95 percent is normal. Play **Silent drop**, then **Caught by delivery rate**.
+
+<FlowDiagram spec={silentFailure} />
+
+The fix is to count delivery receipts per provider over the last 5 minutes, alert below a threshold, and route that traffic to the backup. Do this before you add more retries; retries cannot fix a provider that quietly drops messages.
+
+### Retry storm after recovery
+
+When a provider comes back, every worker that was waiting retries at the same moment, and the provider falls over again. Switch the retry policy in the simulator between fixed delays and full jitter, and watch the peak after the 10 s recovery.
+
+<RetryStorm />
+
+Use exponential backoff with **jitter** on every retry, and let the breaker send only one trial request when half-open. This is the same fix as for any dependency; see the reliability lesson.
+
+### Poison message
+
+One message that fails every time must not block the lane. Retry it a few times with growing delays, then move it to the **dead-letter queue** and page someone. Play **Poison message**, then **Fix and replay**.
+
+<FlowDiagram spec={poisonMessage} />
+
+A non-empty dead-letter queue with no alert is a silent loss. Replay is safe because deterministic ids and sent markers skip anything already delivered.
+
+### Everyone opens the app at once
+
+A push to 2M users at 9:00:00 sends them all to your own API in the same minute. If 5 percent tap it within a minute, that is 100K opens, about 1,700 a second of extra traffic, mostly in the first seconds. Spread large sends over minutes, or by time zone, and cache what the landing screen loads.
 
 ## Code
 
@@ -175,6 +320,44 @@ Try the [notification system challenge](/playground/notification-system): build 
 - Evaluating quiet hours in UTC, or when the event is created.
 </Callout>
 
+## Notification system in the interview
+
+Bring this up the moment you are asked for a notification, alert or messaging system, and say first that you are separating urgent traffic from bulk. Spend your 45 minutes in five steps, in this order.
+
+<Steps>
+  <Step title="0 to 8 min: name the types and their urgency">
+    Ask which channels exist and which messages are time-boxed. An OTP is critical and lives about 5 minutes; a promo can wait. This answer drives every later choice.
+  </Step>
+  <Step title="8 to 15 min: put numbers on it">
+    50M users at 10 a day is 500M, about 5,800 a second on average, with campaign bursts above 50K. Then give the API: `202 Accepted`, a retry-safe idempotency key.
+  </Step>
+  <Step title="15 to 25 min: draw the pipeline">
+    Accept, check preferences, publish one message per channel onto queues split by channel and priority, with dedicated workers per lane, then providers.
+  </Step>
+  <Step title="25 to 40 min: take two deep dives">
+    Take dedupe (`eventId:channel`, mark sent after acceptance) and provider failure (breakers, failover, delivery rate). Offer campaigns and quiet hours if there is time.
+  </Step>
+  <Step title="40 to 45 min: own the trade-offs">
+    Say what you accept: at-least-once delivery with effectively-once results, extra idle capacity in the critical lane, and a delayed queue to run.
+  </Step>
+</Steps>
+
+| If the interviewer says | You raise |
+|---|---|
+| "An OTP must arrive in seconds" | Priority lanes with dedicated workers and reserved provider rate |
+| "Do not send it twice" | Deterministic ids, sent marker after acceptance, provider idempotency key |
+| "The SMS provider is down" | Circuit breaker, failover order, delivery rate per provider |
+| "Send to 10M users tomorrow at 9:00 local" | Paged batch job, throttle, delayed queue per time zone, pause |
+| "Users complain about too many pings" | Daily caps, digests, quiet hours, one-click unsubscribe |
+
+<Callout kind="interview" title="Say it out loud">
+"I'd accept the request with a 202 and publish one message per channel onto queues split by channel and priority, so a campaign can only fill the low lane. Workers dedupe on event id and channel, call providers through circuit breakers with a backup, and failures end in a dead-letter queue with an alert. Quiet hours are checked at send time in the user's time zone."
+</Callout>
+
+<Callout kind="warning">
+Do not build six lanes and two brokers for 100K users. Start with critical and low lanes, say when you would add more, and use a Redis sorted set for delays.
+</Callout>
+
 ## Interview questions
 
 <FollowUps>
@@ -189,6 +372,9 @@ Try the [notification system challenge](/playground/notification-system): build 
   </FollowUp>
   <FollowUp q="How do quiet hours work across time zones?">
     Store a time zone per user and check at send time. Low priority waits in a delayed queue; critical never does.
+  </FollowUp>
+  <FollowUp q="The SMS provider returns success, but users say no code arrives. What do you check?">
+    Delivery receipts per provider. A falling delivery rate over 5 minutes means it accepts but drops, so alert and route traffic to the backup.
   </FollowUp>
   <FollowUp q="How do you send 10M campaign notifications without hurting the system?">
     As a throttled batch job on separate workers, with a way to pause.

@@ -7,20 +7,20 @@ A trie stores words **letter by letter along paths from the root**, so words wit
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- Many **prefix** questions: "does any word start with…", autocomplete.
-- A **dictionary** matched against a sentence, a grid or a stream, giving up when no word can match.
-- **Wildcards** such as `.` for "any letter".
-
-</Callout>
-
-| Variant | What you do |
-|---|---|
-| Basic trie | `children` + an end flag; insert, search, startsWith |
-| Prefix walk, early stop | stop at the first end flag or missing edge |
-| Wildcard DFS | a `.` tries every child |
-| Trie-guided backtracking | a grid DFS moves a trie pointer in step |
+<ReachFor
+  signals={[
+    "Many **prefix** questions: \"does any word start with…\", autocomplete.",
+    "A **dictionary** matched against a sentence, a grid or a stream, giving up when no word can match.",
+    "**Wildcards** such as `.` for \"any letter\".",
+  ]}
+  variants={[
+    {"name": "Basic trie", "how": "`children` + an end flag; insert, search, startsWith"},
+    {"name": "Prefix walk, early stop", "how": "stop at the first end flag or missing edge"},
+    {"name": "Wildcard DFS", "how": "a `.` tries every child"},
+    {"name": "Trie-guided backtracking", "how": "a grid DFS moves a trie pointer in step"},
+  ]}
+  howLabel="What you do"
+/>
 
 ## The core idea: a prefix is a path
 

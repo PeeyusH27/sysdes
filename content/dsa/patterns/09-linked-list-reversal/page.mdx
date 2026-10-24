@@ -7,22 +7,23 @@ Linked list problems are solved by **rewiring `next` pointers**. **Save `curr.ne
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- **Reverse** a list, part of it, or every group of k nodes.
-- **Merge**, **reorder** or **remove** nodes in place, where the head might go.
-- Pair the front with the **back read backwards**: reorder, palindrome.
-- "O(1) extra memory" or "change the links, not the values".
-
-</Callout>
-
-| Technique | Pointers | Use it when |
-|---|---|---|
-| Reverse in place | `prev`, `curr`, `next` | every arrow turns around |
-| Dummy head | `dummy`, plus `tail` or `prev` | the head may change |
-| Reverse a sublist and splice | `before`, `first`, plus the trio | only part of the list flips |
-| Split, reverse, weave | `slow`/`fast`, the trio, `a`/`b` | the back half is needed backwards |
-| Fixed gap | `fast` n + 1 ahead of `slow` | you count from the end |
+<ReachFor
+  signals={[
+    "**Reverse** a list, part of it, or every group of k nodes.",
+    "**Merge**, **reorder** or **remove** nodes in place, where the head might go.",
+    "Pair the front with the **back read backwards**: reorder, palindrome.",
+    "\"O(1) extra memory\" or \"change the links, not the values\".",
+  ]}
+  variants={[
+    {"name": "Reverse in place", "how": "`prev`, `curr`, `next`", "extra": "every arrow turns around"},
+    {"name": "Dummy head", "how": "`dummy`, plus `tail` or `prev`", "extra": "the head may change"},
+    {"name": "Reverse a sublist and splice", "how": "`before`, `first`, plus the trio", "extra": "only part of the list flips"},
+    {"name": "Split, reverse, weave", "how": "`slow`/`fast`, the trio, `a`/`b`", "extra": "the back half is needed backwards"},
+    {"name": "Fixed gap", "how": "`fast` n + 1 ahead of `slow`", "extra": "you count from the end"},
+  ]}
+  howLabel="Pointers"
+  extraLabel="Use it when"
+/>
 
 ## The core idea: save the link before you cut it
 

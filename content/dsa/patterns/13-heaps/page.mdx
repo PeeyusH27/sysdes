@@ -7,20 +7,20 @@ A **binary heap** keeps the best item at its root: **peek** in O(1), **push** an
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- "The **k** largest, smallest, most frequent or closest", or "the **kth** largest".
-- **Merge k sorted** lists, arrays or streams.
-- A **running** answer over a stream: the median so far.
-
-</Callout>
-
-| Variant | The heap holds | Classic problems |
-|---|---|---|
-| Top k | the best k so far | kth largest, top k frequent, k closest points |
-| K-way merge | one head per sorted input | merge k sorted lists, kth smallest in a sorted matrix |
-| Two heaps | the lower and upper halves | running median, sliding window median |
-| Best first | every pending item, **cheapest** first | task scheduling, meeting rooms, Dijkstra |
+<ReachFor
+  signals={[
+    "\"The **k** largest, smallest, most frequent or closest\", or \"the **kth** largest\".",
+    "**Merge k sorted** lists, arrays or streams.",
+    "A **running** answer over a stream: the median so far.",
+  ]}
+  variants={[
+    {"name": "Top k", "how": "the best k so far", "extra": "kth largest, top k frequent, k closest points"},
+    {"name": "K-way merge", "how": "one head per sorted input", "extra": "merge k sorted lists, kth smallest in a sorted matrix"},
+    {"name": "Two heaps", "how": "the lower and upper halves", "extra": "running median, sliding window median"},
+    {"name": "Best first", "how": "every pending item, **cheapest** first", "extra": "task scheduling, meeting rooms, Dijkstra"},
+  ]}
+  howLabel="The heap holds"
+/>
 
 ## The core idea: a tree that is only half sorted
 

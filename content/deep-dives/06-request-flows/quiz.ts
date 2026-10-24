@@ -25,4 +25,10 @@ export const quiz: QuizItem[] = [
     answer: 1,
     explain: "SET … NX is atomic, so exactly one request claims the key and charges. The other sees 'pending' and gets 409. Once the first finishes, a retry gets the stored result.",
   },
+  {
+    q: "A client, a gateway and a service each retry a failing call 3 times. How many attempts can reach the database for one user action?",
+    options: ["9", "12", "27"],
+    answer: 2,
+    explain: "Retries multiply across layers: 3 x 3 x 3 = 27. Retry in one layer only, with jitter and a budget such as 10% of calls, so a struggling database can recover.",
+  },
 ];

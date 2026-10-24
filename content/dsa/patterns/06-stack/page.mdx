@@ -7,20 +7,20 @@ A stack is a pile of plates: the **last one on is the first one off**, the order
 
 ## When to reach for it
 
-<Callout kind="tip" title="Spot it in the problem statement">
-
-- Things **open and close** in a nested way: brackets, tags, `..` in a path.
-- You **undo** the latest action (backspaces), or an operator takes the **latest** operands.
-- For each element, the **next (or previous) greater or smaller** element.
-
-</Callout>
-
-| Variant | The stack holds | Classic problems |
-|---|---|---|
-| Matching and nesting | openers still waiting | valid parentheses |
-| Expression evaluation | operands waiting | reverse Polish notation |
-| Monotonic decreasing | indices waiting for a **greater** value | daily temperatures |
-| Monotonic increasing | indices waiting for a **smaller** value | largest rectangle in histogram |
+<ReachFor
+  signals={[
+    "Things **open and close** in a nested way: brackets, tags, `..` in a path.",
+    "You **undo** the latest action (backspaces), or an operator takes the **latest** operands.",
+    "For each element, the **next (or previous) greater or smaller** element.",
+  ]}
+  variants={[
+    {"name": "Matching and nesting", "how": "openers still waiting", "extra": "valid parentheses"},
+    {"name": "Expression evaluation", "how": "operands waiting", "extra": "reverse Polish notation"},
+    {"name": "Monotonic decreasing", "how": "indices waiting for a **greater** value", "extra": "daily temperatures"},
+    {"name": "Monotonic increasing", "how": "indices waiting for a **smaller** value", "extra": "largest rectangle in histogram"},
+  ]}
+  howLabel="The stack holds"
+/>
 
 ## The core idea: the most recent open item closes first
 
